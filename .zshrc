@@ -58,9 +58,11 @@ function cd() {
   builtin cd $@ && ls;
 }
 
+export XDG_CONFIG_HOME=$HOME/.config
+
 TERM=xterm-256color
 
-source ~/.pve/python27/bin/activate
+pyenv shell python3.5.1
 
 export NVM_DIR="/home/daisuke/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
