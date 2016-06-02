@@ -6,6 +6,7 @@ call plug#begin('~/.vim/plugged')
 
 Plug 'a.vim'
 Plug 'Align'
+Plug 'ctrlpvim/ctrlp.vim'
 Plug 'itchyny/lightline.vim'
 Plug 'kannokanno/previm'
 Plug 'mrtazz/simplenote.vim'
@@ -30,10 +31,10 @@ Plug 'Shougo/vimproc.vim', {
 Plug 'Shougo/vimshell.vim'
 Plug 'snipMate'
 Plug 'thinca/vim-qfreplace'
+Plug 'thinca/vim-quickrun'
 Plug 'tomasr/molokai'
 Plug 'tpope/vim-fugitive'
 Plug 'tyru/open-browser.vim'
-Plug 'ctrlpvim/ctrlp.vim'
 
 call plug#end()
 
@@ -136,6 +137,16 @@ let g:lightline = {
 "-------------------------------------------------------------------------------
 " plasticboy/vim-markdown
 "-------------------------------------------------------------------------------
+autocmd BufRead,BufNewFile *.{mkd,md} set filetype=markdown
+autocmd! FileType markdown hi! def link markdownItalic Normal
+autocmd FileType markdown set commentstring=<\!--\ %s\ -->
+
+" for plasticboy/vim-markdown
+let g:vim_markdown_no_default_key_mappings = 1
+let g:vim_markdown_math = 1
+let g:vim_markdown_frontmatter = 1
+let g:vim_markdown_toc_autofit = 1
+let g:vim_markdown_folding_style_pythonic = 1
 let g:vim_markdown_folding_disabled = 1
 
 if has('nvim')
@@ -219,3 +230,13 @@ else
     " https://github.com/c9s/perlomni.vim
     let g:neocomplete#sources#omni#input_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
 endif
+
+"-------------------------------------------------------------------------------
+" 'thinca/vim-quickrun'
+"-------------------------------------------------------------------------------
+let g:quickrun_config = {}
+let g:quickrun_config['markdown'] = {
+    \ 'type': 'markdown/pandoc',
+    \ 'outputter': 'browser',
+    \ 'args': '--mathjax -s -c ~/github.css'
+    \ }
