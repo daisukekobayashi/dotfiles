@@ -58,12 +58,18 @@ function cd() {
   builtin cd $@ && ls;
 }
 
+if [ -z $TMUX ]; then
+  # tmuxのオプションに-2を付けないとubuntuのtmux上でvimがカラーにならない
+  tmux -2
+fi
+
 export XDG_CONFIG_HOME=$HOME/.config
 
-TERM=xterm-256color
+pyenv shell python2.7.11
 
-pyenv shell python3.5.1
+TERM=xterm-256color
+alias nvim='pyenv shell python3.5.1 && nvim'
 
 export NVM_DIR="/home/daisuke/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
-nvm use 5.9.1
+nvm use 6.4.0
