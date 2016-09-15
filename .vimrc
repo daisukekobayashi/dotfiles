@@ -7,19 +7,21 @@ call plug#begin('~/.vim/plugged')
 Plug 'a.vim'
 Plug 'Align'
 Plug 'ctrlpvim/ctrlp.vim'
-Plug 'itchyny/lightline.vim'
-Plug 'kannokanno/previm'
-Plug 'leafgarland/typescript-vim'
-Plug 'mrtazz/simplenote.vim'
-Plug 'plasticboy/vim-markdown'
-Plug 'rhysd/vim-clang-format'
 function! DoRemote(arg)
   UpdateRemotePlugins
 endfunction
 Plug 'Shougo/deoplete.nvim', { 'do': function('DoRemote') }
+Plug 'itchyny/lightline.vim'
+Plug 'tomasr/molokai'
 Plug 'Shougo/neocomplete.vim'
+Plug 'tyru/open-browser.vim'
+Plug 'kannokanno/previm'
+Plug 'mrtazz/simplenote.vim'
+Plug 'snipMate'
+Plug 'leafgarland/typescript-vim'
 Plug 'Shougo/unite.vim'
 Plug 'Shougo/vimfiler.vim'
+Plug 'Shougo/vimshell.vim'
 Plug 'Shougo/vimproc.vim', {
 \ 'build' : {
 \     'windows' : 'tools\\update-dll-mingw',
@@ -29,13 +31,12 @@ Plug 'Shougo/vimproc.vim', {
 \     'unix' : 'gmake',
 \    },
 \ }
-Plug 'Shougo/vimshell.vim'
-Plug 'snipMate'
+Plug 'altercation/vim-colors-solarized'
+Plug 'rhysd/vim-clang-format'
+Plug 'tpope/vim-fugitive'
+Plug 'plasticboy/vim-markdown'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
-Plug 'tomasr/molokai'
-Plug 'tpope/vim-fugitive'
-Plug 'tyru/open-browser.vim'
 
 call plug#end()
 
@@ -106,15 +107,21 @@ if &t_Co > 2 || has('gui_running')
 endif
 
 set t_Co=256
-colorscheme molokai
+call togglebg#map("<F5>")
+syntax enable
+set background=dark
+colorscheme solarized
+let g:solarized_termcolors=256
+
+"colorscheme molokai
 "let g:molokai_original=1
-let g:rehash256=1
+"let g:rehash256=1
 hi Normal ctermfg=252 ctermbg=none
 
 "------------------------------------------------------------------------------
 " clang-format
 "------------------------------------------------------------------------------
-let g:clang_format#command="clang-format-3.6"
+let g:clang_format#command="clang-format"
 let g:clang_format#style_options = {
       \ "BasedOnStyle" : "Google",
       \ "Standard" : "C++03",}
@@ -132,7 +139,7 @@ source ~/.simplenoterc
 " itchyny/lightline.vim
 "-------------------------------------------------------------------------------
 let g:lightline = {
-      \ 'colorscheme': 'wombat',
+      \ 'colorscheme': 'solarized',
       \ }
 
 "-------------------------------------------------------------------------------
