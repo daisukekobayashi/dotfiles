@@ -12,10 +12,20 @@ if [ ! -f "${VIM_PLUG}" ]; then
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 fi
 
+if [ ! -d "${HOME}/.vim/undo" ]; then
+  mkdir -p "${HOME}/.vim/undo"
+fi
+
+if [ ! -d "${HOME}/.vim/tmp" ]; then
+  mkdir -p "${HOME}/.vim/tmp"
+fi
+
 for f in .??*
 do
   [[ "$f" == ".git" ]] && continue
   [[ "$f" == ".DS_Store" ]] && continue
 
-  ln -s "$(pwd)/$f" "${HOME}/$f"
+  if [ ! -f "${HOME}/$f" ]; then
+    ln -s "$(pwd)/$f" "${HOME}/$f"
+  fi
 done

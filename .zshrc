@@ -63,13 +63,23 @@ if [ -z $TMUX ]; then
   tmux -2
 fi
 
-export XDG_CONFIG_HOME=$HOME/.config
-
-pyenv shell python2.7.11
-
 TERM=xterm-256color
-alias nvim='pyenv shell python3.5.1 && nvim'
 
-export NVM_DIR="/home/daisuke/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
+unamestr="$(uname)"
+if [[ "${unamestr}" == 'MSYS_NT-6.1' ]]; then
+  WIN_HOME="$(cygpath ${USERPROFILE})"
+  source ${HOME}/.mintty/sol.dark
+  source ${WIN_HOME}/.pve/python27/Scripts/activate
+  alias nvm=${WIN_HOME}/AppData/Roaming/nvm/nvm.exe
+elif [[ "${unamestr}" == 'Linux' ]]; then
+  export XDG_CONFIG_HOME=$HOME/.config
+
+  pyenv shell python2.7.11
+
+  alias nvim='pyenv shell python3.5.1 && nvim'
+
+  export NVM_DIR="/home/daisuke/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
+fi
+
 nvm use 6.4.0
