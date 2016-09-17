@@ -12,6 +12,12 @@ if [ ! -f "${VIM_PLUG}" ]; then
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 fi
 
+# mintty-colors-solarized
+MINTTY_HOME="${HOME}/.mintty"
+if [ ! -d "${MINTTY_HOME}" ]; then
+  git clone https://github.com/mavnn/mintty-colors-solarized "${MINTTY_HOME}"
+fi
+
 if [ ! -d "${HOME}/.vim/undo" ]; then
   mkdir -p "${HOME}/.vim/undo"
 fi
@@ -26,6 +32,7 @@ do
   [[ "$f" == ".DS_Store" ]] && continue
 
   if [ ! -f "${HOME}/$f" ]; then
+    rm "${HOME}/$f"
     ln -s "$(pwd)/$f" "${HOME}/$f"
   fi
 done
