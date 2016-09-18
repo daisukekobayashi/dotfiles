@@ -58,11 +58,6 @@ function cd() {
   builtin cd $@ && ls;
 }
 
-if [ -z $TMUX ]; then
-  # tmuxのオプションに-2を付けないとubuntuのtmux上でvimがカラーにならない
-  tmux -2
-fi
-
 TERM=xterm-256color
 
 unamestr="$(uname)"
@@ -83,3 +78,7 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
 fi
 
 nvm use 6.4.0
+
+if [ -z $TMUX ]; then
+  tmux -2
+fi
