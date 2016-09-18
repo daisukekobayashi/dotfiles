@@ -32,6 +32,9 @@ do
   [[ "$f" == ".DS_Store" ]] && continue
 
   if [ ! -f "${HOME}/$f" ]; then
+    ln -s "$(pwd)/$f" "${HOME}/$f"
+  else
+    echo "$f"
     rm "${HOME}/$f"
     ln -s "$(pwd)/$f" "${HOME}/$f"
   fi
