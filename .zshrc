@@ -62,6 +62,7 @@ TERM=xterm-256color
 
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]]; then
+  export CHERE_INVOKING=1
   WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
   source ${WIN_HOME}/.pve/python27/Scripts/activate
