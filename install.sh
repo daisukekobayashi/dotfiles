@@ -1,5 +1,7 @@
 #!/bin/bash
 
+unamestr="$(uname)"
+
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
 if [ ! -d "${TPM_DIR}" ]; then
   git clone http://github.com/tmux-plugins/tpm "${TPM_DIR}"
@@ -16,6 +18,19 @@ fi
 MINTTY_HOME="${HOME}/.mintty"
 if [ ! -d "${MINTTY_HOME}" ]; then
   git clone https://github.com/mavnn/mintty-colors-solarized "${MINTTY_HOME}"
+fi
+
+if [[ "${unamestr}" == 'Linux' ]]; then
+  PYENV_HOME="${HOME}/.pyenv"
+  PYENV_VIRTUALENV_HOME="${HOME}/.pyenv/plugins/pyenv-virtualenv"
+  if [ ! -d "${PYENV_HOME}" ]; then
+    git clone https://github.com/yyuu/pyenv.git "${PYENV_HOME}"
+  fi
+
+  if [ ! -d "${PYENV_VIRTUALENV_HOME}" ]; then
+    git clone https://github.com/yyuu/pyenv-virtualenv.git \
+      "${PYENV_VIRTUALENV_HOME}"
+  fi
 fi
 
 if [ ! -d "${HOME}/.vim/undo" ]; then
