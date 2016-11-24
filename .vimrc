@@ -16,7 +16,6 @@ Plug 'tomasr/molokai'
 Plug 'Shougo/neocomplete.vim'
 Plug 'tyru/open-browser.vim'
 Plug 'kannokanno/previm'
-Plug 'mrtazz/simplenote.vim'
 Plug 'snipMate'
 Plug 'leafgarland/typescript-vim'
 Plug 'Shougo/unite.vim'
@@ -66,7 +65,11 @@ endif
 set directory=$HOME/.vim/tmp
 
 set noswapfile
-set clipboard+=unnamedplus
+if has('nvim')
+  set clipboard+=unnamedplus
+else
+  set clipboard+=unnamed
+endif
 set nrformats-=octal
 set timeout timeoutlen=3000 ttimeoutlen=100
 set hidden
@@ -129,11 +132,6 @@ let g:clang_format#style_options = {
 " kannokanno/previm
 "-------------------------------------------------------------------------------
 autocmd BufNewFile,BufRead *.{md,mark*} set filetype=markdown
-
-"-------------------------------------------------------------------------------
-" mrtazz/simplenote.vim
-"-------------------------------------------------------------------------------
-source ~/.simplenoterc
 
 "-------------------------------------------------------------------------------
 " itchyny/lightline.vim
