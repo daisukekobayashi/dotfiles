@@ -20,13 +20,26 @@ if [ ! -d "${MINTTY_HOME}" ]; then
   git clone https://github.com/mavnn/mintty-colors-solarized "${MINTTY_HOME}"
 fi
 
+# solarized-mate-terminal
+SOLARIZED_MATE_HOME="${HOME}/.solarized-mate-terminal"
+if [ ! -d "${SOLARIZED_MATE_HOME}" ]; then
+  git clone https://github.com/oz123/solarized-mate-terminal \
+    "${SOLARIZED_MATE_HOME}"
+fi
+
 if [[ "${unamestr}" == 'Linux' ]]; then
+  NVM_HOME="${HOME}/.nvm"
+  if [ ! -d "${NVM_HOME}" ]; then
+    wget -qO- \
+      https://raw.githubusercontent.com/creationix/nvm/v0.32.1/install.sh | bash
+  fi
+
   PYENV_HOME="${HOME}/.pyenv"
-  PYENV_VIRTUALENV_HOME="${HOME}/.pyenv/plugins/pyenv-virtualenv"
   if [ ! -d "${PYENV_HOME}" ]; then
     git clone https://github.com/yyuu/pyenv.git "${PYENV_HOME}"
   fi
 
+  PYENV_VIRTUALENV_HOME="${HOME}/.pyenv/plugins/pyenv-virtualenv"
   if [ ! -d "${PYENV_VIRTUALENV_HOME}" ]; then
     git clone https://github.com/yyuu/pyenv-virtualenv.git \
       "${PYENV_VIRTUALENV_HOME}"
