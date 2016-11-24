@@ -70,15 +70,15 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]]; then
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
 
-  pyenv shell python2.7.11
+  pyenv shell python2.7.12
 
-  alias nvim='pyenv shell python3.5.1 && nvim'
+  alias nvim="(pyenv shell python3.5.2 && nvim)"
 
   export NVM_DIR="/home/daisuke/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 fi
 
-nvm use 6.4.0
+nvm use 6.9.1
 
 if [ -z $TMUX ]; then
   tmux -2
