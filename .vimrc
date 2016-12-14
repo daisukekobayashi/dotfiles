@@ -42,6 +42,13 @@ call plug#end()
 " Required:
 filetype plugin indent on
 
+if has('nvim')
+  set clipboard+=unnamedplus
+  let g:python3_host_prog=$PYENV_ROOT . '/shims/python3'
+else
+  set clipboard+=unnamed
+endif
+
 set number
 set tabstop=2
 set softtabstop=2
@@ -65,11 +72,6 @@ endif
 set directory=$HOME/.vim/tmp
 
 set noswapfile
-if has('nvim')
-  set clipboard+=unnamedplus
-else
-  set clipboard+=unnamed
-endif
 set nrformats-=octal
 set timeout timeoutlen=3000 ttimeoutlen=100
 set hidden

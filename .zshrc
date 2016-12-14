@@ -69,11 +69,7 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]]; then
   alias nvm=${WIN_HOME}/AppData/Roaming/nvm/nvm.exe
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
-
   pyenv shell python2.7.12
-
-  alias nvim="(pyenv shell python3.5.2 && nvim)"
-
   export NVM_DIR="/home/daisuke/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 fi
