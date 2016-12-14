@@ -44,7 +44,8 @@ filetype plugin indent on
 
 if has('nvim')
   set clipboard+=unnamedplus
-  let g:python3_host_prog=$PYENV_ROOT . '/shims/python3'
+  let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.12/bin/python'
+  let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.5.2/bin/python'
 else
   set clipboard+=unnamed
 endif
