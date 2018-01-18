@@ -4,9 +4,8 @@ set fileencodings=utf-8,cp932,sjis,euc-jp
 
 call plug#begin('~/.vim/plugged')
 
-Plug 'a.vim'
-Plug 'Align'
-Plug 'ctrlpvim/ctrlp.vim'
+Plug 'vim-scripts/a.vim'
+Plug 'kien/ctrlp.vim'
 function! DoRemote(arg)
   UpdateRemotePlugins
 endfunction
@@ -16,11 +15,9 @@ Plug 'tomasr/molokai'
 Plug 'Shougo/neocomplete.vim'
 Plug 'tyru/open-browser.vim'
 Plug 'kannokanno/previm'
-Plug 'snipMate'
 Plug 'leafgarland/typescript-vim'
 Plug 'Shougo/unite.vim'
 Plug 'Shougo/vimfiler.vim'
-Plug 'Shougo/vimshell.vim'
 Plug 'Shougo/vimproc.vim', {
 \ 'build' : {
 \     'windows' : 'tools\\update-dll-mingw',
@@ -30,12 +27,17 @@ Plug 'Shougo/vimproc.vim', {
 \     'unix' : 'gmake',
 \    },
 \ }
-Plug 'altercation/vim-colors-solarized'
+Plug 'Shougo/vimshell.vim'
 Plug 'rhysd/vim-clang-format'
+Plug 'altercation/vim-colors-solarized'
+Plug 'junegunn/vim-easy-align'
 Plug 'tpope/vim-fugitive'
 Plug 'plasticboy/vim-markdown'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
+Plug 'tomtom/tlib_vim'
+Plug 'MarcWeber/vim-addon-mw-utils'
+Plug 'garbas/vim-snipmate'
 
 call plug#end()
 
