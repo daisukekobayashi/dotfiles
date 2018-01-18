@@ -18,15 +18,7 @@ Plug 'kannokanno/previm'
 Plug 'leafgarland/typescript-vim'
 Plug 'Shougo/unite.vim'
 Plug 'Shougo/vimfiler.vim'
-Plug 'Shougo/vimproc.vim', {
-\ 'build' : {
-\     'windows' : 'tools\\update-dll-mingw',
-\     'cygwin' : 'make -f make_cygwin.mak',
-\     'mac' : 'make',
-\     'linux' : 'make',
-\     'unix' : 'gmake',
-\    },
-\ }
+Plug 'Shougo/vimproc.vim', {'do' : 'make' }
 Plug 'Shougo/vimshell.vim'
 Plug 'rhysd/vim-clang-format'
 Plug 'altercation/vim-colors-solarized'
