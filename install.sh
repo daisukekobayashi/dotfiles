@@ -7,6 +7,12 @@ if [ ! -d "${TPM_DIR}" ]; then
   git clone http://github.com/tmux-plugins/tpm "${TPM_DIR}"
 fi
 
+# Vundle
+VUNDLE="${HOME}/.vim/bundle/Vundle.vim"
+if [ ! -f "${VUNDLE}" ]; then
+  git clone https://github.com/VundleVim/Vundle.vim.git "${VUNDLE}"
+fi
+
 # vim-plug
 VIM_PLUG="${HOME}/.vim/autoload/plug.vim"
 if [ ! -f "${VIM_PLUG}" ]; then

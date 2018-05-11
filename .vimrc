@@ -1,6 +1,6 @@
 set nocompatible
 set encoding=utf-8
-set fileencodings=utf-8,cp932,sjis,euc-jp
+set fileencodings=cp932,utf-8,sjis,euc-jp
 
 call plug#begin('~/.vim/plugged')
 
