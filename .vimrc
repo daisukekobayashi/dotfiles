@@ -1,35 +1,51 @@
 set nocompatible
 set encoding=utf-8
-set fileencodings=cp932,utf-8,sjis,euc-jp
+if has("windows")
+  set fileencodings=cp932,utf-8,sjis,euc-jp
+else
+  set fileencodings=utf-8,cp932,sjis,euc-jp
+endif
+
+filetype off
+
+set rtp+=~/.vim/bundle/Vundle.vim
+call vundle#begin()
+
+Plugin 'VundleVim/Vundle.vim'
+
+call vundle#end()
+filetype plugin indent on
 
 call plug#begin('~/.vim/plugged')
 
-Plug 'vim-scripts/a.vim'
-Plug 'kien/ctrlp.vim'
-function! DoRemote(arg)
-  UpdateRemotePlugins
-endfunction
-Plug 'Shougo/deoplete.nvim', { 'do': function('DoRemote') }
-Plug 'itchyny/lightline.vim'
-Plug 'tomasr/molokai'
-Plug 'Shougo/neocomplete.vim'
 Plug 'tyru/open-browser.vim'
 Plug 'kannokanno/previm'
-Plug 'leafgarland/typescript-vim'
 Plug 'Shougo/unite.vim'
 Plug 'Shougo/vimfiler.vim'
 Plug 'Shougo/vimproc.vim', {'do' : 'make' }
 Plug 'Shougo/vimshell.vim'
 Plug 'rhysd/vim-clang-format'
 Plug 'altercation/vim-colors-solarized'
+Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
+Plug 'junegunn/fzf.vim'
 Plug 'junegunn/vim-easy-align'
 Plug 'tpope/vim-fugitive'
-Plug 'plasticboy/vim-markdown'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
 Plug 'tomtom/tlib_vim'
 Plug 'MarcWeber/vim-addon-mw-utils'
 Plug 'garbas/vim-snipmate'
+Plug 'mileszs/ack.vim'
+Plug 'airblade/vim-gitgutter'
+Plug 'sheerun/vim-polyglot'
+Plug 'majutsushi/tagbar'
+Plug 'vim-airline/vim-airline'
+Plug 'vim-airline/vim-airline-themes'
+Plug 'nathanaelkane/vim-indent-guides'
+Plug 'Valloric/YouCompleteMe'
+Plug 'w0rp/ale'
+Plug 'mattn/emmet-vim'
+Plug 'skywind3000/asyncrun.vim'
 
 call plug#end()
 
@@ -131,110 +147,6 @@ let g:clang_format#style_options = {
 autocmd BufNewFile,BufRead *.{md,mark*} set filetype=markdown
 
 "-------------------------------------------------------------------------------
-" itchyny/lightline.vim
-"-------------------------------------------------------------------------------
-let g:lightline = {
-      \ 'colorscheme': 'solarized',
-      \ }
-
-"-------------------------------------------------------------------------------
-" plasticboy/vim-markdown
-"-------------------------------------------------------------------------------
-autocmd BufRead,BufNewFile *.{mkd,md} set filetype=markdown
-autocmd! FileType markdown hi! def link markdownItalic Normal
-autocmd FileType markdown set commentstring=<\!--\ %s\ -->
-
-" for plasticboy/vim-markdown
-let g:vim_markdown_no_default_key_mappings = 1
-let g:vim_markdown_math = 1
-let g:vim_markdown_frontmatter = 1
-let g:vim_markdown_toc_autofit = 1
-let g:vim_markdown_folding_style_pythonic = 1
-let g:vim_markdown_folding_disabled = 1
-
-if has('nvim')
-    "---------------------------------------------------------------------------
-    " Shougo/deoplete.nvim'
-    "---------------------------------------------------------------------------
-    let g:deoplete#enable_at_startup = 1
-else
-    "---------------------------------------------------------------------------
-    " Shougo/neocomplete.vim
-    "---------------------------------------------------------------------------
-    "Note: This option must set it in .vimrc(_vimrc).  NOT IN .gvimrc(_gvimrc)!
-    " Disable AutoComplPop.
-    let g:acp_enableAtStartup = 0
-    " Use neocomplete.
-    let g:neocomplete#enable_at_startup = 1
-    " Use smartcase.
-    let g:neocomplete#enable_smart_case = 1
-    " Set minimum syntax keyword length.
-    let g:neocomplete#sources#syntax#min_keyword_length = 3
-    let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
-
-    " Define dictionary.
-    let g:neocomplete#sources#dictionary#dictionaries = {
-        \ 'default' : '',
-        \ 'vimshell' : $HOME.'/.vimshell_hist',
-        \ 'scheme' : $HOME.'/.gosh_completions'
-            \ }
-
-    " Define keyword.
-    if !exists('g:neocomplete#keyword_patterns')
-        let g:neocomplete#keyword_patterns = {}
-    endif
-    let g:neocomplete#keyword_patterns['default'] = '\h\w*'
-
-    " Plugin key-mappings.
-    inoremap <expr><C-g>     neocomplete#undo_completion()
-    inoremap <expr><C-l>     neocomplete#complete_common_string()
-
-    " Recommended key-mappings.
-    " <CR>: close popup and save indent.
-    inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-    function! s:my_cr_function()
-      return (pumvisible() ? "\<C-y>" : "" ) . "\<CR>"
-      " For no inserting <CR> key.
-      "return pumvisible() ? "\<C-y>" : "\<CR>"
-    endfunction
-    " <TAB>: completion.
-    inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
-    " <C-h>, <BS>: close popup and delete backword char.
-    inoremap <expr><C-h> neocomplete#smart_close_popup()."\<C-h>"
-    inoremap <expr><BS> neocomplete#smart_close_popup()."\<C-h>"
-    " Close popup by <Space>.
-    "inoremap <expr><Space> pumvisible() ? "\<C-y>" : "\<Space>"
-
-    " AutoComplPop like behavior.
-    "let g:neocomplete#enable_auto_select = 1
-
-    " Shell like behavior(not recommended).
-    "set completeopt+=longest
-    "let g:neocomplete#enable_auto_select = 1
-    "let g:neocomplete#disable_auto_complete = 1
-    "inoremap <expr><TAB>  pumvisible() ? "\<Down>" : "\<C-x>\<C-u>"
-
-    " Enable omni completion.
-    autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
-    autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
-    autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
-    autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
-    autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
-
-    " Enable heavy omni completion.
-    if !exists('g:neocomplete#sources#omni#input_patterns')
-      let g:neocomplete#sources#omni#input_patterns = {}
-    endif
-    "let g:neocomplete#sources#omni#input_patterns.php = '[^. \t]->\h\w*\|\h\w*::'
-    "let g:neocomplete#sources#omni#input_patterns.c = '[^.[:digit:] *\t]\%(\.\|->\)'
-    "let g:neocomplete#sources#omni#input_patterns.cpp = '[^.[:digit:] *\t]\%(\.\|->\)\|\h\w*::'
-
-    " For perlomni.vim setting.
-    " https://github.com/c9s/perlomni.vim
-    let g:neocomplete#sources#omni#input_patterns.perl = '\h\w*->\h\w*\|\h\w*::'
-endif
-
-"-------------------------------------------------------------------------------
 " 'thinca/vim-quickrun'
 "-------------------------------------------------------------------------------
 let g:quickrun_config = {}
@@ -243,3 +155,32 @@ let g:quickrun_config['markdown'] = {
     \ 'outputter': 'browser',
     \ 'args': '--mathjax -s -c ~/github.css'
     \ }
+
+"-------------------------------------------------------------------------------
+" 'vim-airline/vim-airline'
+"-------------------------------------------------------------------------------
+let g:airline_theme='solarized'
+let g:airline_solarized_bg='dark'
+let g:airline#extensions#ale#enabled = 1
+
+if has("windows")
+  let g:ycm_server_python_interpreter = $HOME . '/.pve/python27/Scripts/python.exe'
+endif
+
+"-------------------------------------------------------------------------------
+" ack.vim
+"-------------------------------------------------------------------------------
+if executable('ag')
+  let g:ackprg = 'ag --vimgrep'
+endif
+
+"-------------------------------------------------------------------------------
+" ale
+"-------------------------------------------------------------------------------
+let g:ale_linters = {
+    \ 'c': ['clang'],
+    \ 'cpp': ['clang'],
+\}
+
+nmap <silent> <C-k> <Plug>(ale_previous_wrap)
+nmap <silent> <C-j> <Plug>(ale_next_wrap)
