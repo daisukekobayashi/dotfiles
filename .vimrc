@@ -1,6 +1,6 @@
 set nocompatible
 set encoding=utf-8
-if has("windows")
+if has('win32')
   set fileencodings=cp932,utf-8,sjis,euc-jp
 else
   set fileencodings=utf-8,cp932,sjis,euc-jp

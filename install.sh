@@ -33,7 +33,7 @@ if [ ! -d "${SOLARIZED_MATE_HOME}" ]; then
     "${SOLARIZED_MATE_HOME}"
 fi
 
-if [[ "${unamestr}" == 'Linux' ]]; then
+if [[ "${unamestr}" == 'Linux' ]] || [ "${unamestr}" == 'Darwin' ]; then
   NVM_HOME="${HOME}/.nvm"
   if [ ! -d "${NVM_HOME}" ]; then
     wget -qO- \
