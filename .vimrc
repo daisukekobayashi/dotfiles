@@ -46,6 +46,9 @@ Plug 'Valloric/YouCompleteMe'
 Plug 'w0rp/ale'
 Plug 'mattn/emmet-vim'
 Plug 'skywind3000/asyncrun.vim'
+Plug 'vim-scripts/DrawIt'
+Plug 'scrooloose/nerdtree'
+Plug 'Xuyuanp/nerdtree-git-plugin'
 
 call plug#end()
 

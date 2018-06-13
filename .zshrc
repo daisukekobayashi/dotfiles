@@ -66,7 +66,8 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]]; then
   WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
   source ${HOME}/.pve/python27/Scripts/activate
-  alias nvm=${WIN_HOME}/AppData/Roaming/nvm/nvm.exe
+  alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
+  nvm use 8.11.2
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
   pyenv shell python2.7.12
