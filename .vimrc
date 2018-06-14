@@ -20,10 +20,6 @@ call plug#begin('~/.vim/plugged')
 
 Plug 'tyru/open-browser.vim'
 Plug 'kannokanno/previm'
-Plug 'Shougo/unite.vim'
-Plug 'Shougo/vimfiler.vim'
-Plug 'Shougo/vimproc.vim', {'do' : 'make' }
-Plug 'Shougo/vimshell.vim'
 Plug 'rhysd/vim-clang-format'
 Plug 'altercation/vim-colors-solarized'
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
