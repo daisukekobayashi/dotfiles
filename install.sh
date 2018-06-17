@@ -37,7 +37,7 @@ if [[ "${unamestr}" == 'Linux' ]] || [ "${unamestr}" == 'Darwin' ]; then
   NVM_HOME="${HOME}/.nvm"
   if [ ! -d "${NVM_HOME}" ]; then
     wget -qO- \
-      https://raw.githubusercontent.com/creationix/nvm/v0.32.1/install.sh | bash
+      https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
   fi
 
   PYENV_HOME="${HOME}/.pyenv"

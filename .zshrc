@@ -79,8 +79,9 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   pyenv shell python3.6.4
+  export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
-  nvm use 8.9.4
+  nvm use 8.11.2
 fi
 
 if [ -z $TMUX ]; then
