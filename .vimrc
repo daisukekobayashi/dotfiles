@@ -1,6 +1,15 @@
 set nocompatible
 set encoding=utf-8
-if has('win32')
+
+if !exists("g:os")
+  if has("win64") || has("win32") || has("win16")
+    let g:os = "Windows"
+  else
+    let g:os = substitute(system('uname'), '\n', '', '')
+  endif
+endif
+
+if g:os == "Windows"
   set fileencodings=cp932,utf-8,sjis,euc-jp
 else
   set fileencodings=utf-8,cp932,sjis,euc-jp
@@ -53,8 +62,8 @@ filetype plugin indent on
 
 if has('nvim')
   set clipboard+=unnamedplus
-  let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.12/bin/python'
-  let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.5.2/bin/python'
+  let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.15/bin/python'
+  let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
 else
   set clipboard+=unnamed
 endif
@@ -162,7 +171,7 @@ let g:airline_theme='solarized'
 let g:airline_solarized_bg='dark'
 let g:airline#extensions#ale#enabled = 1
 
-if has("windows")
+if g:os == "Windows"
   let g:ycm_server_python_interpreter = $HOME . '/.pve/python27/Scripts/python.exe'
 endif
 
