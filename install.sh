@@ -7,12 +7,6 @@ if [ ! -d "${TPM_DIR}" ]; then
   git clone http://github.com/tmux-plugins/tpm "${TPM_DIR}"
 fi
 
-# Vundle
-VUNDLE="${HOME}/.vim/bundle/Vundle.vim"
-if [ ! -f "${VUNDLE}" ]; then
-  git clone https://github.com/VundleVim/Vundle.vim.git "${VUNDLE}"
-fi
-
 # vim-plug
 VIM_PLUG="${HOME}/.vim/autoload/plug.vim"
 if [ ! -f "${VIM_PLUG}" ]; then
@@ -52,6 +46,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   fi
 fi
 
+# vim
 if [ ! -d "${HOME}/.vim/undo" ]; then
   mkdir -p "${HOME}/.vim/undo"
 fi
@@ -60,10 +55,25 @@ if [ ! -d "${HOME}/.vim/tmp" ]; then
   mkdir -p "${HOME}/.vim/tmp"
 fi
 
+# neovim
+NEOVIM_HOME="${HOME}/.config/nvim"
+if [ ! -d "${NEOVIM_HOME}" ]; then
+  mkdir -p "${NEOVIM_HOME}"
+fi
+
+if [ ! -f "${NEOVIM_HOME}/init.vim" ]; then
+  ln -s "$(pwd)/.config/nvim/init.vim" "${NEOVIM_HOME}/init.vim"
+else
+  echo "init.vim"
+  rm "${NEOVIM_HOME}/init.vim"
+  ln -s "$(pwd)/.config/nvim/init.vim" "${NEOVIM_HOME}/init.vim"
+fi
+
 for f in .??*
 do
   [[ "$f" == ".git" ]] && continue
   [[ "$f" == ".DS_Store" ]] && continue
+  [[ -d "$f" ]] && continue
 
   if [ ! -f "${HOME}/$f" ]; then
     ln -s "$(pwd)/$f" "${HOME}/$f"

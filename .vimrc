@@ -9,23 +9,19 @@ if !exists("g:os")
   endif
 endif
 
-if g:os == "Windows"
+if g:os == "Windows" || g:os == "MSYS_NT-6.1"
   set fileencodings=cp932,utf-8,sjis,euc-jp
 else
   set fileencodings=utf-8,cp932,sjis,euc-jp
 endif
 
-filetype off
+if g:os == "Windows"
+  let $VIMHOME = $HOME . "/vimfiles"
+else
+  let $VIMHOME = $HOME . "/.vim"
+endif
 
-set rtp+=~/.vim/bundle/Vundle.vim
-call vundle#begin()
-
-Plugin 'VundleVim/Vundle.vim'
-
-call vundle#end()
-filetype plugin indent on
-
-call plug#begin('~/.vim/plugged')
+call plug#begin($VIMHOME . "/plugged")
 
 Plug 'tyru/open-browser.vim'
 Plug 'kannokanno/previm'
@@ -85,10 +81,10 @@ set nowritebackup
 set nobackup
 if version >= 703
   set undofile
-  set undodir=$HOME/.vim/undo
+  set undodir=$VIMHOME/undo
 endif
 
-set directory=$HOME/.vim/tmp
+set directory=$VIMHOME/tmp
 
 set noswapfile
 set nrformats-=octal
@@ -171,7 +167,7 @@ let g:airline_theme='solarized'
 let g:airline_solarized_bg='dark'
 let g:airline#extensions#ale#enabled = 1
 
-if g:os == "Windows"
+if g:os == "Windows" || g:os == "MSYS_NT-6.1"
   let g:ycm_server_python_interpreter = $HOME . '/.pve/python27/Scripts/python.exe'
 endif
 
