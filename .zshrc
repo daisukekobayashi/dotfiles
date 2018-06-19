@@ -65,7 +65,7 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]]; then
   export CHERE_INVOKING=1
   WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
-  source ${HOME}/.pve/python27/Scripts/activate
+  source ${WIN_HOME}/.pve/python27/Scripts/activate
   alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
   nvm use 8.11.2
 elif [[ "${unamestr}" == 'Linux' ]]; then

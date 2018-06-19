@@ -21,6 +21,12 @@ else
   let $VIMHOME = $HOME . "/.vim"
 endif
 
+if g:os == "Windows"
+  let $WIN_HOME = $HOME
+elseif g:os == "MSYS_NT-6.1"
+  let $WIN_HOME = substitute(system('cygpath $USERPROFILE'), '\n', '', '')
+endif
+
 call plug#begin($VIMHOME . "/plugged")
 
 Plug 'tyru/open-browser.vim'
@@ -168,7 +174,7 @@ let g:airline_solarized_bg='dark'
 let g:airline#extensions#ale#enabled = 1
 
 if g:os == "Windows" || g:os == "MSYS_NT-6.1"
-  let g:ycm_server_python_interpreter = $HOME . '/.pve/python27/Scripts/python.exe'
+  let g:ycm_server_python_interpreter = $WIN_HOME . '/.pve/python27/Scripts/python.exe'
 endif
 
 "-------------------------------------------------------------------------------
