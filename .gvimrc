@@ -31,8 +31,8 @@ elseif has('mac')
   " set guifont=Osaka-Mono:h14
 elseif has('win32') || has('win64')
   highlight Cursor guifg=NONE guibg=Green
-  set guifont=Ricty:h11
-  set guifontwide=Ricty:h11
+  set guifont=Ricty:h10
+  set guifontwide=Ricty:h10
   "set guifont=Osaka|“™•:h11
   "set guifontwide=Osaka|“™•:h11
   "set guifont=MS_Mincho:h10:cSHIFTJIS

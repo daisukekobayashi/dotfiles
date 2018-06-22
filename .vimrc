@@ -64,8 +64,13 @@ filetype plugin indent on
 
 if has('nvim')
   set clipboard+=unnamedplus
-  let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.15/bin/python'
-  let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
+  if g:os == "Windows" || g:os == "MSYS_NT-6.1"
+    let g:python_host_prog=$WIN_HOME . "/.pve/python27/Scripts/python.exe"
+    "let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
+  elseif
+    let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.15/bin/python'
+    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
+  endif
 else
   set clipboard+=unnamed
 endif
@@ -194,6 +199,13 @@ let g:ale_linters = {
 
 nmap <silent> <C-k> <Plug>(ale_previous_wrap)
 nmap <silent> <C-j> <Plug>(ale_next_wrap)
+
+" Write this in your vimrc file
+let g:ale_lint_on_text_changed = 'never'
+" You can disable this option too
+" if you don't want linters to run on opening a file
+let g:ale_lint_on_enter = 0
+let g:ale_lint_on_save = 0
 
 "-------------------------------------------------------------------------------
 " NERDTree
