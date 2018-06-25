@@ -56,6 +56,7 @@ Plug 'skywind3000/asyncrun.vim'
 Plug 'vim-scripts/DrawIt'
 Plug 'scrooloose/nerdtree'
 Plug 'Xuyuanp/nerdtree-git-plugin'
+Plug 'bronson/vim-trailing-whitespace'
 
 call plug#end()
 
