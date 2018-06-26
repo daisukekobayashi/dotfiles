@@ -68,7 +68,7 @@ if has('nvim')
   if g:os == "Windows" || g:os == "MSYS_NT-6.1"
     let g:python_host_prog=$WIN_HOME . "/.pve/python27/Scripts/python.exe"
     "let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
-  elseif
+  else
     let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.15/bin/python'
     let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
   endif
