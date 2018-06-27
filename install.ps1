@@ -15,7 +15,7 @@ if (Get-Command scoop -eq $False) {
                 oraclejdk-lts python python27 `
                 jruby ruby19 ruby nvm go `
                 vscode atom sublime-text notepadplusplus `
-                conemu msys2 f.lux 7zip unrar `
+                conemu msys2 flux 7zip unrar `
                 chromium firefox ccleaner winmerge `
                 gimp inkscape
 }
