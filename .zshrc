@@ -63,11 +63,14 @@ TERM=xterm-256color
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MINGW32_NT-6.1' ]]; then
+   [[ "${unamestr}" == 'MINGW32_NT-6.1' ]]
+   [[ "${unamestr}" == 'MSYS_NT-10.0' ]] ||
+   [[ "${unamestr}" == 'MINGW64_NT-10.0' ]] ||
+   [[ "${unamestr}" == 'MINGW32_NT-10.0' ]];then
   export CHERE_INVOKING=1
   WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
-  source ${WIN_HOME}/.pve/python27/Scripts/activate
+  source ${WIN_HOME}/.pve/python2.7.15/Scripts/activate
   alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
   nvm use 8.11.2
 elif [[ "${unamestr}" == 'Linux' ]]; then

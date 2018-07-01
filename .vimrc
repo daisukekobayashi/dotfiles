@@ -10,6 +10,8 @@ if !exists("g:os")
 endif
 
 if g:os == "MSYS_NT-6.1" || g:os == "MINGW64_NT-6.1" || g:os == "MINGW32_NT-6.1"
+      \ || g:os == "MSYS_NT-10.0" || g:os == "MINGW64_NT-10.0"
+      \ || g:os == "MINGW32_NT-10.0"
   let g:msys = 1
 endif
 
