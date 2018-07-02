@@ -50,6 +50,7 @@ Plug 'kannokanno/previm'
 Plug 'godlygeek/tabular'
 Plug 'majutsushi/tagbar'
 Plug 'tomtom/tlib_vim'
+Plug 'SirVer/ultisnips'
 Plug 'MarcWeber/vim-addon-mw-utils'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
@@ -62,7 +63,8 @@ Plug 'nathanaelkane/vim-indent-guides'
 Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
-Plug 'garbas/vim-snipmate'
+Plug 'honza/vim-snippets'
+Plug 'tpope/vim-surround'
 Plug 'bronson/vim-trailing-whitespace'
 Plug 'Valloric/YouCompleteMe'
 
@@ -233,3 +235,14 @@ let g:ale_lint_on_save = 0
 " NERDTree
 "-------------------------------------------------------------------------------
 let NERDTreeShowHidden=1
+
+"-------------------------------------------------------------------------------
+" ultisnips
+"-------------------------------------------------------------------------------
+" Trigger configuration. Do not use <tab> if you use https://github.com/Valloric/YouCompleteMe.
+let g:UltiSnipsExpandTrigger="<c-j>"
+let g:UltiSnipsJumpForwardTrigger="<c-j>"
+let g:UltiSnipsJumpBackwardTrigger="<c-k>"
+
+" If you want :UltiSnipsEdit to split your window.
+let g:UltiSnipsEditSplit="vertical"
