@@ -63,10 +63,10 @@ TERM=xterm-256color
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MINGW32_NT-6.1' ]]
+   [[ "${unamestr}" == 'MINGW32_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MSYS_NT-10.0' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-10.0' ]] ||
-   [[ "${unamestr}" == 'MINGW32_NT-10.0' ]];then
+   [[ "${unamestr}" == 'MINGW32_NT-10.0' ]]; then
   export CHERE_INVOKING=1
   WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
