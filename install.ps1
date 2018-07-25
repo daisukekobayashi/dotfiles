@@ -28,6 +28,10 @@ if ((Test-Path "$HOME\.gvimrc") -eq $False) {
   New-Item -ItemType SymbolicLink -Path $HOME -Name ".gvimrc" -Value ".gvimrc"
 }
 
+if ((Test-Path "$HOME\vimfiles") -eq $False) {
+  New-Item -ItemType SymbolicLink -Path $HOME -NAME "vimfiles" -Value "..\.vim"
+}
+
 $nvim_home = "$HOME\AppData\Local\nvim"
 if ((Test-Path $nvim_home) -eq $False) {
   New-Item $nvim_home -ItemType Directory
