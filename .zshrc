@@ -84,11 +84,15 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH="$PYENV_ROOT/bin:$PATH"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
-  pyenv shell python3.6.5
+  pyenv shell python3.6.7
   export NVM_DIR="$HOME/.nvm"
+  export PATH=$PATH:~/projects/open-source/depot_tools
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
   [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
   nvm use 8.11.3
+  export PATH=~/development/flutter/bin:$PATH
+  source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
+  source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
 fi
 
 if [ -z $TMUX ]; then
