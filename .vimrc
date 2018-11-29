@@ -77,10 +77,10 @@ if has('nvim')
   set clipboard+=unnamedplus
   if g:os == "Windows" || g:msys == 1
     let g:python_host_prog=$WIN_HOME . "/.pve/python2.7.15/Scripts/python.exe"
-    "let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
+    let g:python3_host_prog=$PYENV_ROOT . '/.pve/python3.6.7/Scripts/python.exe'
   else
     let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.15/bin/python'
-    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.5/bin/python'
+    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.7/bin/python'
   endif
 else
   set clipboard+=unnamed
