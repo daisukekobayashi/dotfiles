@@ -70,12 +70,12 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   export CHERE_INVOKING=1
   WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
-  source ${WIN_HOME}/.pve/python2.7.15/Scripts/activate
+  source ${WIN_HOME}/.pve/python3.6.7/Scripts/activate
   alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
   nvm use 8.11.2
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
-  pyenv shell python2.7.12
+  pyenv shell python3.6.7
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion

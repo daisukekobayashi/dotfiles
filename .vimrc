@@ -46,7 +46,7 @@ Plug 'junegunn/fzf.vim'
 Plug 'scrooloose/nerdtree'
 Plug 'Xuyuanp/nerdtree-git-plugin'
 Plug 'tyru/open-browser.vim'
-Plug 'kannokanno/previm'
+Plug 'previm/previm'
 Plug 'godlygeek/tabular'
 Plug 'majutsushi/tagbar'
 Plug 'tomtom/tlib_vim'
@@ -202,7 +202,7 @@ let g:airline_solarized_bg='dark'
 let g:airline#extensions#ale#enabled = 1
 
 if g:os == "Windows" || g:msys == 1
-  let g:ycm_server_python_interpreter = $WIN_HOME . '/.pve/python2.7.15/Scripts/python.exe'
+  let g:ycm_server_python_interpreter = $WIN_HOME . '/.pve/python3.6.7/Scripts/python.exe'
 endif
 
 "-------------------------------------------------------------------------------
