@@ -89,15 +89,17 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH=$PATH:~/projects/open-source/depot_tools
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
   [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
-  nvm use 8.11.3
+  nvm use 10.15.0
+  eval "$(rbenv init -)"
   export PATH="$HOME/.cargo/bin:$PATH"
+  export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
 fi
 
-if [ -z $TMUX ]; then
-  tmux -2
-fi
+#if [ -z $TMUX ]; then
+#  tmux -2
+#fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
