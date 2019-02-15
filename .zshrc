@@ -72,13 +72,14 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   source ${HOME}/.mintty/sol.dark
   source ${WIN_HOME}/.pve/python3.6.7/Scripts/activate
   alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
-  nvm use 8.11.2
+  ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use 8.11.2
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
-  pyenv shell python3.6.7
+  pyenv shell python3.6.8
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+  nvm use 10.15.0
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
