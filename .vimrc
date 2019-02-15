@@ -67,7 +67,7 @@ Plug 'thinca/vim-quickrun'
 Plug 'honza/vim-snippets'
 Plug 'tpope/vim-surround'
 Plug 'bronson/vim-trailing-whitespace'
-Plug 'Valloric/YouCompleteMe', { 'do': './install.py --all' }
+Plug 'Valloric/YouCompleteMe', { 'do': 'python ./install.py --all' }
 
 call plug#end()
 
@@ -81,7 +81,7 @@ if has('nvim')
     let g:python3_host_prog=$PYENV_ROOT . '/.pve/python3.6.7/Scripts/python.exe'
   else
     let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.15/bin/python'
-    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.7/bin/python'
+    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.6.8/bin/python'
   endif
 else
   set clipboard+=unnamed

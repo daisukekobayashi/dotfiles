@@ -85,7 +85,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH="$PYENV_ROOT/bin:$PATH"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
-  pyenv shell python3.6.7
+  pyenv shell python3.6.8
   export NVM_DIR="$HOME/.nvm"
   export PATH=$PATH:~/projects/open-source/depot_tools
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
