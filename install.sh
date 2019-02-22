@@ -44,6 +44,18 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     git clone https://github.com/yyuu/pyenv-virtualenv.git \
       "${PYENV_VIRTUALENV_HOME}"
   fi
+
+  RBENV_HOME="${HOME}/.rbenv"
+  if [ ! -d "${RBENV_HOME}" ]; then
+    git clone https://github.com/rbenv/rbenv.git "${RBENV_HOME}"
+  fi
+
+  RBENV_BUILD_HOME="${HOME}/.rbenv/plugins"
+  if [ ! -d "${RBENV_BUILD_HOME}" ]; then
+    mkdir "${RBENV_BUILD_HOME}"
+    git clone https://github.com/rbenv/ruby-build.git "${RBENV_BUILD_HOME}"
+  fi
+
 fi
 
 # vim
