@@ -95,6 +95,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
   nvm use 10.15.0
   eval "$(rbenv init -)"
+  rbenv shell 2.6.1
   export PATH="$HOME/.cargo/bin:$PATH"
   export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH
