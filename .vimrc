@@ -60,7 +60,6 @@ Plug 'junegunn/vim-easy-align'
 Plug 'tpope/vim-fugitive'
 Plug 'airblade/vim-gitgutter'
 Plug 'nathanaelkane/vim-indent-guides'
-Plug 'fatih/vim-go'
 Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
@@ -93,12 +92,7 @@ set softtabstop=2
 set shiftwidth=2
 set expandtab
 
-set textwidth=0
-if exists('&colorcolumn')
-  set colorcolumn=+1
-  autocmd FileType sh,md,markdown,c,cc,cpp,java,scala,perl,vim,ruby,python,
-\haskell,scheme setlocal textwidth=80
-endif
+let &colorcolumn=join(range(81,9999),",")
 
 set nowritebackup
 set nobackup
