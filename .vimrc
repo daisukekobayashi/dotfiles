@@ -145,10 +145,10 @@ if &t_Co > 2 || has('gui_running')
 endif
 
 set t_Co=256
-call togglebg#map("<F5>")
+silent! call togglebg#map("<F5>")
 syntax enable
 set background=dark
-colorscheme solarized
+silent! colorscheme solarized
 let g:solarized_termcolors=256
 
 "colorscheme molokai
