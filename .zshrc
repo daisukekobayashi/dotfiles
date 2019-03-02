@@ -21,15 +21,14 @@ if zplug check "zsh-uses/zsh-history-substring-search"; then
 fi
 
 zplug "plugins/colored-man-pages", from:oh-my-zsh
+zplug "plugins/tmux", from:oh-my-zsh
 zplug "plugins/vi-mode", from:oh-my-zsh
 
+zplug "joel-porquet/zsh-dircolors-solarized"
 zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
 zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
-
 zplug "mollifier/anyframe"
-
 zplug "b4b4r07/enhancd", use:init.sh
-
 zplug "peterhurford/git-aliases.zsh"
 
 if ! zplug check --verbose; then
@@ -55,7 +54,7 @@ setopt auto_pushd
 setopt brace_ccl
 setopt correct
 setopt correct
-setopt extended_glob
+#setopt extended_glob
 setopt extended_history
 setopt hist_ignore_dups
 setopt hist_ignore_space
@@ -89,6 +88,8 @@ export EDITOR=vim
 export LANG=en_US.UTF-8
 export LC_CTYPE=en_US.UTF-8
 export AUTOFEATURE=true
+
+alias ls='ls --color=auto'
 
 TERM=xterm-256color
 
@@ -124,7 +125,8 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   pyenv shell python3.6.8
   export NVM_DIR="$HOME/.nvm"
-  export PATH=$PATH:~/projects/open-source/depot_tools
+  export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+  export PATH="~/projects/open-source/depot_tools:$PATH"
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
   [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
   nvm use 10.15.0
