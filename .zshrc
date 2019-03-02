@@ -1,39 +1,3 @@
-# Use modern completion system
-autoload -Uz compinit && compinit
-autoload -U promptinit; promptinit
-
-setopt auto_cd
-setopt auto_param_keys
-setopt auto_param_slash
-setopt auto_pushd
-setopt brace_ccl
-setopt correct
-setopt correct
-setopt extended_glob
-setopt extended_history
-setopt hist_ignore_dups
-setopt hist_ignore_space
-setopt list_packed
-setopt magic_equal_subst
-setopt mark_dirs
-setopt nolistbeep
-setopt prompt_subst
-setopt pushd_ignore_dups
-setopt share_history
-
-zstyle ':chpwd:*' recent-dirs-max 500
-zstyle ':completion:*' matcher-list '' 'm:{a-zA-Z-_}={A-Za-z_-}'
-zstyle ':completion:*:default' menu select=1
-zstyle ':filter-select' case-insensitive yes
-zstyle ':filter-select' extended-search yes
-zstyle ':filter-select' hist-find-no-dups yes
-zstyle ':filter-select' rotate-list yes
-
-export HISTFILE=~/.zsh_history
-export HISTSIZE=1000
-export LISTMAX=0
-export SAVEHIST=100000
-
 export ZPLUG_HOME=${HOME}/.zplug
 if [[ ! -d $ZPLUG_HOME ]]; then
   git clone https://github.com/zplug/zplug $ZPLUG_HOME
@@ -74,8 +38,47 @@ if ! zplug check --verbose; then
   fi
 fi
 
-zplug load
-#zplug load --verbose
+zplug load # --verbose
+
+# Use modern completion system
+autoload -Uz compinit && compinit
+autoload -U promptinit; promptinit
+
+bindkey -e
+bindkey '^P' history-beginning-search-backward
+bindkey '^N' history-beginning-search-forward
+
+setopt auto_cd
+setopt auto_param_keys
+setopt auto_param_slash
+setopt auto_pushd
+setopt brace_ccl
+setopt correct
+setopt correct
+setopt extended_glob
+setopt extended_history
+setopt hist_ignore_dups
+setopt hist_ignore_space
+setopt list_packed
+setopt magic_equal_subst
+setopt mark_dirs
+setopt nolistbeep
+setopt prompt_subst
+setopt pushd_ignore_dups
+setopt share_history
+
+zstyle ':chpwd:*' recent-dirs-max 500
+zstyle ':completion:*' matcher-list '' 'm:{a-zA-Z-_}={A-Za-z_-}'
+zstyle ':completion:*:default' menu select=1
+zstyle ':filter-select' case-insensitive yes
+zstyle ':filter-select' extended-search yes
+zstyle ':filter-select' hist-find-no-dups yes
+zstyle ':filter-select' rotate-list yes
+
+export HISTFILE=~/.zsh_history
+export HISTSIZE=1000
+export LISTMAX=0
+export SAVEHIST=100000
 
 function cd() {
   builtin cd $@ && ls;

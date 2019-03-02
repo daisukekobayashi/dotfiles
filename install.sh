@@ -2,20 +2,19 @@
 
 unamestr="$(uname)"
 
-# vim
-if [ ! -d "${HOME}/.vim/undo" ]; then
-  mkdir -p "${HOME}/.vim/undo"
-fi
+make_directory() {
+  if [ ! -d "$1" ]; then
+    mkdir -p "$1"
+  fi
+}
 
-if [ ! -d "${HOME}/.vim/tmp" ]; then
-  mkdir -p "${HOME}/.vim/tmp"
-fi
+# vim
+make_directory "${HOME}/.vim/undo"
+make_directory "${HOME}/.vim/tmp"
 
 # neovim
 NEOVIM_HOME="${HOME}/.config/nvim"
-if [ ! -d "${NEOVIM_HOME}" ]; then
-  mkdir -p "${NEOVIM_HOME}"
-fi
+make_directory "${NEOVIM_HOME}"
 
 if [ ! -f "${NEOVIM_HOME}/init.vim" ]; then
   ln -s "$(pwd)/.config/nvim/init.vim" "${NEOVIM_HOME}/init.vim"
