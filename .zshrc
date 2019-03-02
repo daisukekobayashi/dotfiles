@@ -20,7 +20,8 @@ if zplug check "zsh-uses/zsh-history-substring-search"; then
   bindkey '^N' history-beginning-search-down
 fi
 
-zplug "plugins/git", from:oh-my-zsh
+zplug "plugins/colored-man-pages", from:oh-my-zsh
+zplug "plugins/vi-mode", from:oh-my-zsh
 
 zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
 zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
@@ -44,7 +45,6 @@ zplug load # --verbose
 autoload -Uz compinit && compinit
 autoload -U promptinit; promptinit
 
-bindkey -e
 bindkey '^P' history-beginning-search-backward
 bindkey '^N' history-beginning-search-forward
 
