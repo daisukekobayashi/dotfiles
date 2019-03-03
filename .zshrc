@@ -1,45 +1,3 @@
-export ZPLUG_HOME=${HOME}/.zplug
-if [[ ! -d $ZPLUG_HOME ]]; then
-  git clone https://github.com/zplug/zplug $ZPLUG_HOME
-fi
-
-source $ZPLUG_HOME/init.zsh
-
-zplug "zplug/zplug", hook-build:'zplug --self-manage'
-
-#zplug "bhilburn/powerlevel9k", use:powerlevel9k.zsh-theme
-zplug "mafredri/zsh-async", from:github
-zplug "sindresorhus/pure", use:pure.zsh, from:github, as:theme
-
-zplug "zsh-users/zsh-autosuggestions"
-zplug "zsh-users/zsh-completions"
-zplug "zsh-users/zsh-syntax-highlighting", defer:2
-zplug "zsh-users/zsh-history-substring-search"
-if zplug check "zsh-uses/zsh-history-substring-search"; then
-  bindkey '^P' history-beginning-search-up
-  bindkey '^N' history-beginning-search-down
-fi
-
-zplug "plugins/colored-man-pages", from:oh-my-zsh
-zplug "plugins/tmux", from:oh-my-zsh
-zplug "plugins/vi-mode", from:oh-my-zsh
-
-zplug "joel-porquet/zsh-dircolors-solarized"
-zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
-zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
-zplug "mollifier/anyframe"
-zplug "b4b4r07/enhancd", use:init.sh
-zplug "peterhurford/git-aliases.zsh"
-
-if ! zplug check --verbose; then
-  printf "Install? [y/N]: "
-  if read -q; then
-    echo; zplug install
-  fi
-fi
-
-zplug load # --verbose
-
 # Use modern completion system
 autoload -Uz compinit && compinit
 autoload -U promptinit; promptinit
@@ -140,3 +98,45 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
 fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+export ZPLUG_HOME=${HOME}/.zplug
+if [[ ! -d $ZPLUG_HOME ]]; then
+  git clone https://github.com/zplug/zplug $ZPLUG_HOME
+fi
+
+source $ZPLUG_HOME/init.zsh
+
+zplug "zplug/zplug", hook-build:'zplug --self-manage'
+
+#zplug "bhilburn/powerlevel9k", use:powerlevel9k.zsh-theme
+zplug "mafredri/zsh-async", from:github
+zplug "sindresorhus/pure", use:pure.zsh, from:github, as:theme
+
+zplug "zsh-users/zsh-autosuggestions"
+zplug "zsh-users/zsh-completions"
+zplug "zsh-users/zsh-syntax-highlighting", defer:2
+zplug "zsh-users/zsh-history-substring-search"
+if zplug check "zsh-uses/zsh-history-substring-search"; then
+  bindkey '^P' history-beginning-search-up
+  bindkey '^N' history-beginning-search-down
+fi
+
+zplug "plugins/colored-man-pages", from:oh-my-zsh
+zplug "plugins/tmux", from:oh-my-zsh
+zplug "plugins/vi-mode", from:oh-my-zsh
+
+zplug "joel-porquet/zsh-dircolors-solarized"
+zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
+zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
+zplug "mollifier/anyframe"
+zplug "b4b4r07/enhancd", use:init.sh
+zplug "peterhurford/git-aliases.zsh"
+
+if ! zplug check --verbose; then
+  printf "Install? [y/N]: "
+  if read -q; then
+    echo; zplug install
+  fi
+fi
+
+zplug load # --verbose
