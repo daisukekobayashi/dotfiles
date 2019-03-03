@@ -2,8 +2,7 @@
 autoload -Uz compinit && compinit
 autoload -U promptinit; promptinit
 
-bindkey '^P' history-beginning-search-backward
-bindkey '^N' history-beginning-search-forward
+bindkey -e
 
 setopt auto_cd
 setopt auto_param_keys
@@ -95,10 +94,11 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH=~/development/flutter/bin:$PATH
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
-  ZSH_TMUX_AUTOSTART=true
 fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+ZSH_TMUX_AUTOSTART=true
 
 export ZPLUG_HOME=${HOME}/.zplug
 if [[ ! -d $ZPLUG_HOME ]]; then
@@ -116,15 +116,13 @@ zplug "sindresorhus/pure", use:pure.zsh, from:github, as:theme
 zplug "zsh-users/zsh-autosuggestions"
 zplug "zsh-users/zsh-completions"
 zplug "zsh-users/zsh-syntax-highlighting", defer:2
-zplug "zsh-users/zsh-history-substring-search"
-if zplug check "zsh-uses/zsh-history-substring-search"; then
-  bindkey '^P' history-beginning-search-up
-  bindkey '^N' history-beginning-search-down
-fi
+zplug "zsh-users/zsh-history-substring-search", defer:3
+bindkey -M emacs '^P' history-substring-search-up
+bindkey -M emacs '^N' history-substring-search-down
 
 zplug "plugins/colored-man-pages", from:oh-my-zsh
 zplug "plugins/tmux", from:oh-my-zsh
-zplug "plugins/vi-mode", from:oh-my-zsh
+#zplug "plugins/vi-mode", from:oh-my-zsh
 
 zplug "joel-porquet/zsh-dircolors-solarized"
 zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
@@ -141,3 +139,7 @@ if ! zplug check --verbose; then
 fi
 
 zplug load # --verbose
+
+if [[ ! -d ${HOME}/.zsh-dircolors.config ]]; then
+  setupsolarized dircolors.ansi-universal
+fi
