@@ -130,6 +130,7 @@ zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
 zplug "mollifier/anyframe"
 zplug "b4b4r07/enhancd", use:init.sh
 zplug "peterhurford/git-aliases.zsh"
+zplug "supercrabtree/k"
 
 if ! zplug check --verbose; then
   printf "Install? [y/N]: "
