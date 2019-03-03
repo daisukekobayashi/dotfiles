@@ -99,6 +99,7 @@ fi
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 ZSH_TMUX_AUTOSTART=true
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=242'
 
 export ZPLUG_HOME=${HOME}/.zplug
 if [[ ! -d $ZPLUG_HOME ]]; then
@@ -139,7 +140,7 @@ if ! zplug check --verbose; then
   fi
 fi
 
-zplug load # --verbose
+zplug load #--verbose
 
 if [[ ! -d ${HOME}/.zsh-dircolors.config ]]; then
   setupsolarized dircolors.ansi-universal
