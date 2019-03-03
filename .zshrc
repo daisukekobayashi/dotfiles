@@ -95,6 +95,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH=~/development/flutter/bin:$PATH
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
+  ZSH_TMUX_AUTOSTART=true
 fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
