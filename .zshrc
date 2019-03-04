@@ -98,6 +98,9 @@ fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+PURE_PROMPT_SYMBOL='»'
+PURE_GIT_DOWN_ARROW='↓'
+PURE_GIT_UP_ARROW='↑'
 ZSH_TMUX_AUTOSTART=true
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=242'
 
