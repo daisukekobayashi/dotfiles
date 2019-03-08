@@ -124,7 +124,6 @@ zplug "zsh-users/zsh-history-substring-search", defer:3
 bindkey -M emacs '^P' history-substring-search-up
 bindkey -M emacs '^N' history-substring-search-down
 
-zplug "plugins/colored-man-pages", from:oh-my-zsh
 zplug "plugins/tmux", from:oh-my-zsh
 #zplug "plugins/vi-mode", from:oh-my-zsh
 
