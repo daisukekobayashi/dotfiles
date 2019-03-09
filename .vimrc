@@ -37,9 +37,9 @@ endif
 call plug#begin($VIMHOME . "/plugged")
 
 Plug 'mileszs/ack.vim'
+Plug 'slashmili/alchemist.vim'
 Plug 'w0rp/ale'
 Plug 'skywind3000/asyncrun.vim'
-Plug 'vim-scripts/DrawIt'
 Plug 'mattn/emmet-vim'
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
 Plug 'junegunn/fzf.vim'
