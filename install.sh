@@ -61,6 +61,8 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     export PATH="$PYENV_ROOT/bin:$PATH"
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)"
+    env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 2.7.15 \
+      && pyenv virtualenv 2.7.15 python2.7.15
     env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.6.8 \
       && pyenv virtualenv 3.6.8 python3.6.8
   fi
