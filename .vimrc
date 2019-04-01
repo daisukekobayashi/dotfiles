@@ -67,6 +67,7 @@ Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
 Plug 'honza/vim-snippets'
 Plug 'tpope/vim-surround'
+Plug 'dhruvasagar/vim-table-mode'
 Plug 'bronson/vim-trailing-whitespace'
 Plug 'Valloric/YouCompleteMe', { 'do': 'python ./install.py --all' }
 
