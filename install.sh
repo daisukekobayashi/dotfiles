@@ -63,8 +63,8 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     eval "$(pyenv virtualenv-init -)"
     env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 2.7.16 \
       && pyenv virtualenv 2.7.16 python2.7.16
-    env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 3.6.8 \
-      && pyenv virtualenv 3.6.8 python3.6.8
+    env PYTHON_CONFIGURE_OPTS="--enable-shared --enable-optimizations" pyenv install 3.7.3 \
+      && pyenv virtualenv 3.7.3 python3.7.3
   fi
 
   RBENV_HOME="${HOME}/.rbenv"

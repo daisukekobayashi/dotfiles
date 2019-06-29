@@ -66,7 +66,7 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
   export VIRTUAL_ENV_DISABLE_PROMPT=1
-  pyenv shell python3.6.8
+  pyenv shell python3.7.3
   export PATH="$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init -)"
   rbenv shell 2.6.1
@@ -80,7 +80,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
-  pyenv shell python3.6.8
+  pyenv shell python3.7.3
   export NVM_DIR="$HOME/.nvm"
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="~/projects/open-source/depot_tools:$PATH"
