@@ -221,10 +221,6 @@ let g:airline_theme='solarized'
 let g:airline_solarized_bg='dark'
 let g:airline#extensions#ale#enabled = 1
 
-if g:os == "Windows" || g:msys == 1
-  let g:ycm_server_python_interpreter = $WIN_HOME . '/.pve/python3.6.7/Scripts/python.exe'
-endif
-
 "-------------------------------------------------------------------------------
 " ack.vim
 "-------------------------------------------------------------------------------
