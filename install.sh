@@ -95,6 +95,15 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     git -C ${RBENV_PLUGIN_HOME}/ruby-build pull
   fi
   ${HOME}/.rbenv/bin/rbenv install ${ruby_version}
+
+elif [[ "${unamestr}" == 'Darwin' ]]; then
+  [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
+  nvm install ${nodejs_version}
+  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
+    && pyenv virtualenv ${python2_version} python${python2_version}
+  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
+    && pyenv virtualenv ${python3_version} python${python3_version}
+  rbenv install ${ruby_version}
 fi
 
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
