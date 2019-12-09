@@ -66,29 +66,29 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
   export VIRTUAL_ENV_DISABLE_PROMPT=1
-  pyenv shell python3.7.3
-  export PATH="$HOME/.rbenv/bin:$PATH"
+  pyenv shell python3.7.5
+  export PATH="$HOME/bin/neovim/bin:$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init -)"
-  rbenv shell 2.6.1
+  rbenv shell 2.6.5
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-  nvm use 10.15.0
+  nvm use 12.13.0
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
-  pyenv shell python3.7.3
+  pyenv shell python3.7.5
   export NVM_DIR="$HOME/.nvm"
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="~/projects/open-source/depot_tools:$PATH"
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
   [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
-  nvm use 10.15.0
+  nvm use 12.13.0
   eval "$(rbenv init -)"
-  rbenv shell 2.6.1
+  rbenv shell 2.6.5
   export PATH="$HOME/.cargo/bin:$PATH"
   export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH

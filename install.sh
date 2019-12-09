@@ -1,6 +1,11 @@
 #!/bin/bash
 
 unamestr="$(uname)"
+nvm_version="0.35.1"
+python2_version="2.7.17"
+python3_version="3.7.5"
+nodejs_version="12.13.0"
+ruby_version="2.6.5"
 
 make_directory() {
   if [ ! -d "$1" ]; then
@@ -42,61 +47,73 @@ done
 if [[ "${unamestr}" == 'Linux' ]]; then
   NVM_HOME="${HOME}/.nvm"
   if [ ! -d "${NVM_HOME}" ]; then
-    wget -qO- \
-      https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
-    source ${HOME}/.nvm/nvm.sh \
-      && nvm install 10.15.0
+    git clone https://github.com/nvm-sh/nvm.git ${HOME}/.nvm
+  else
+    git -C ${HOME}/.nvm pull
+    git -C ${HOME}/.nvm checkout v${nvm_version}
   fi
+  source ${HOME}/.nvm/nvm.sh \
+    && nvm install ${nodejs_version}
 
   PYENV_HOME="${HOME}/.pyenv"
   if [ ! -d "${PYENV_HOME}" ]; then
     git clone https://github.com/yyuu/pyenv.git "${PYENV_HOME}"
+  else
+    git -C ${PYENV_HOME} pull
   fi
 
   PYENV_VIRTUALENV_HOME="${HOME}/.pyenv/plugins/pyenv-virtualenv"
   if [ ! -d "${PYENV_VIRTUALENV_HOME}" ]; then
     git clone https://github.com/yyuu/pyenv-virtualenv.git \
       "${PYENV_VIRTUALENV_HOME}"
-    export PYENV_ROOT="$HOME/.pyenv"
-    export PATH="$PYENV_ROOT/bin:$PATH"
-    eval "$(pyenv init -)"
-    eval "$(pyenv virtualenv-init -)"
-    env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install 2.7.16 \
-      && pyenv virtualenv 2.7.16 python2.7.16
-    env PYTHON_CONFIGURE_OPTS="--enable-shared --enable-optimizations" pyenv install 3.7.3 \
-      && pyenv virtualenv 3.7.3 python3.7.3
+  else
+    git -C ${PYENV_VIRTUALENV_HOME} pull
   fi
+
+  export PYENV_ROOT="$HOME/.pyenv"
+  export PATH="$PYENV_ROOT/bin:$PATH"
+  eval "$(pyenv init -)"
+  eval "$(pyenv virtualenv-init -)"
+
+  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
+    && pyenv virtualenv ${python2_version} python${python2_version}
+  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
+    && pyenv virtualenv ${python3_version} python${python3_version}
 
   RBENV_HOME="${HOME}/.rbenv"
   if [ ! -d "${RBENV_HOME}" ]; then
     git clone https://github.com/rbenv/rbenv.git "${RBENV_HOME}"
+  else
+    git -C ${RBENV_HOME} pull
   fi
 
   RBENV_PLUGIN_HOME="${HOME}/.rbenv/plugins"
   if [ ! -d "${RBENV_PLUGIN_HOME}" ]; then
     mkdir "${RBENV_PLUGIN_HOME}"
     git clone https://github.com/rbenv/ruby-build.git "${RBENV_PLUGIN_HOME}/ruby-build"
-    ${HOME}/.rbenv/bin/rbenv install 2.6.1
+  else
+    git -C ${RBENV_PLUGIN_HOME}/ruby-build pull
   fi
-
+  ${HOME}/.rbenv/bin/rbenv install ${ruby_version}
 fi
-
 
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
 if [ ! -d "${TPM_DIR}" ]; then
   git clone http://github.com/tmux-plugins/tpm "${TPM_DIR}"
-  tmux start-server \
-    && tmux new-session -d \
-    && ${HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh \
-    && tmux kill-server
+else
+  git -C ${TPM_DIR} pull
 fi
+
+tmux start-server \
+  && tmux new-session -d \
+  && ${HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh
 
 # vim-plug
 VIM_PLUG="${HOME}/.vim/autoload/plug.vim"
 if [ ! -f "${VIM_PLUG}" ]; then
   curl -fLo "${VIM_PLUG}" --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-  pyenv shell python3.6.8 && vim +'PlugInstall --sync' +qall
+  pyenv shell python${python3_version} && vim +'PlugInstall --sync' +qall
 fi
 
 # mintty-colors-solarized
