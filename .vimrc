@@ -40,11 +40,13 @@ Plug 'mileszs/ack.vim'
 Plug 'slashmili/alchemist.vim'
 Plug 'w0rp/ale'
 Plug 'skywind3000/asyncrun.vim'
+Plug 'jiangmiao/auto-pairs'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'mattn/emmet-vim'
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
 Plug 'junegunn/fzf.vim'
 Plug 'junegunn/gv.vim'
+Plug 'Yggdroot/indentLine'
 Plug 'scrooloose/nerdtree'
 Plug 'Xuyuanp/nerdtree-git-plugin'
 Plug 'tyru/open-browser.vim'
@@ -56,9 +58,11 @@ Plug 'SirVer/ultisnips'
 Plug 'MarcWeber/vim-addon-mw-utils'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
+Plug 'alvan/vim-closetag'
 Plug 'altercation/vim-colors-solarized'
 Plug 'rhysd/vim-clang-format'
 Plug 'junegunn/vim-easy-align'
+Plug 'tpope/vim-commentary'
 Plug 'elixir-editors/vim-elixir'
 Plug 'tpope/vim-fugitive'
 Plug 'airblade/vim-gitgutter'
@@ -67,6 +71,7 @@ Plug 'fatih/vim-go'
 Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
+Plug 'tpope/vim-repeat'
 Plug 'honza/vim-snippets'
 Plug 'tpope/vim-surround'
 Plug 'dhruvasagar/vim-table-mode'
@@ -390,3 +395,8 @@ nnoremap <silent> <space>k  :<C-u>CocPrev<CR>
 nnoremap <silent> <space>p  :<C-u>CocListResume<CR>
 
 command! -nargs=0 Prettier :CocCommand prettier.formatFile
+
+"-------------------------------------------------------------------------------
+" alvan/vim-closetag
+"-------------------------------------------------------------------------------
+let g:closetag_filenames = '*.html,*.xhtml,*.jsx,*.tsx'
