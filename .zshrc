@@ -92,6 +92,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH="$HOME/.cargo/bin:$PATH"
   export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH
+  export CLOUDSDK_PYTHON="~/.pyenv/versions/2.7.17/bin/python"
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
 fi
