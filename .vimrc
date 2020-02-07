@@ -42,6 +42,7 @@ Plug 'w0rp/ale'
 Plug 'skywind3000/asyncrun.vim'
 Plug 'jiangmiao/auto-pairs'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'editorconfig/editorconfig-vim'
 Plug 'mattn/emmet-vim'
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
 Plug 'junegunn/fzf.vim'
@@ -60,15 +61,16 @@ Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'alvan/vim-closetag'
 Plug 'altercation/vim-colors-solarized'
-Plug 'ryanoasis/vim-devicons'
 Plug 'rhysd/vim-clang-format'
-Plug 'junegunn/vim-easy-align'
 Plug 'tpope/vim-commentary'
+Plug 'ryanoasis/vim-devicons'
+Plug 'junegunn/vim-easy-align'
 Plug 'elixir-editors/vim-elixir'
 Plug 'tpope/vim-fugitive'
+Plug 'fatih/vim-go'
 Plug 'airblade/vim-gitgutter'
 Plug 'nathanaelkane/vim-indent-guides'
-Plug 'fatih/vim-go'
+Plug 'thinca/vim-localrc'
 Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
@@ -361,9 +363,9 @@ xmap af <Plug>(coc-funcobj-a)
 omap if <Plug>(coc-funcobj-i)
 omap af <Plug>(coc-funcobj-a)
 
-" Use <C-d> for select selections ranges, needs server support, like: coc-tsserver, coc-python
-nmap <silent> <C-d> <Plug>(coc-range-select)
-xmap <silent> <C-d> <Plug>(coc-range-select)
+" Use <TAB> for select selections ranges, needs server support, like: coc-tsserver, coc-python
+nmap <silent> <TAB> <Plug>(coc-range-select)
+xmap <silent> <TAB> <Plug>(coc-range-select)
 
 " Use `:Format` to format current buffer
 command! -nargs=0 Format :call CocAction('format')
