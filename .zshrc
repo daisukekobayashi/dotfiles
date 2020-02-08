@@ -105,46 +105,47 @@ PURE_GIT_UP_ARROW='↑'
 ZSH_TMUX_AUTOSTART=true
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=242'
 
-export ZPLUG_HOME=${HOME}/.zplug
-if [[ ! -d $ZPLUG_HOME ]]; then
-  git clone https://github.com/zplug/zplug $ZPLUG_HOME
+### Added by Zinit's installer
+if [[ ! -f $HOME/.zinit/bin/zinit.zsh ]]; then
+    print -P "%F{33}▓▒░ %F{220}Installing DHARMA Initiative Plugin Manager (zdharma/zinit)…%f"
+    command mkdir -p "$HOME/.zinit" && command chmod g-rwX "$HOME/.zinit"
+    command git clone https://github.com/zdharma/zinit "$HOME/.zinit/bin" && \
+        print -P "%F{33}▓▒░ %F{34}Installation successful.%f" || \
+        print -P "%F{160}▓▒░ The clone has failed.%f"
 fi
+source "$HOME/.zinit/bin/zinit.zsh"
+autoload -Uz _zinit
+(( ${+_comps} )) && _comps[zinit]=_zinit
+### End of Zinit installer's chunk
 
-source $ZPLUG_HOME/init.zsh
+zinit light zsh-users/zsh-autosuggestions
+zinit light zdharma/fast-syntax-highlighting
 
-zplug "zplug/zplug", hook-build:'zplug --self-manage'
+zinit light zdharma/history-search-multi-word
 
-#zplug "bhilburn/powerlevel9k", use:powerlevel9k.zsh-theme
-zplug "mafredri/zsh-async", from:github
-zplug "sindresorhus/pure", use:pure.zsh, from:github, as:theme
+zinit ice pick"async.sh" src"pure.zsh"
+zinit light sindresorhus/pure
 
-zplug "zsh-users/zsh-autosuggestions"
-zplug "zsh-users/zsh-completions"
-zplug "zsh-users/zsh-syntax-highlighting", defer:2
-zplug "zsh-users/zsh-history-substring-search", defer:3
+zinit ice from"gh-r" as"program"
+zinit load junegunn/fzf-bin
+zinit load junegunn/fzf
+
+zinit light zsh-users/zsh-completions
+zinit light zsh-users/zsh-history-substring-search
 bindkey -M emacs '^P' history-substring-search-up
 bindkey -M emacs '^N' history-substring-search-down
 
-zplug "plugins/tmux", from:oh-my-zsh
-#zplug "plugins/vi-mode", from:oh-my-zsh
+zinit snippet OMZ::plugins/tmux/tmux.plugin.zsh
+zinit snippet OMZ::plugins/git/git.plugin.zsh
 
-zplug "joel-porquet/zsh-dircolors-solarized"
-zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
-zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
-zplug "mollifier/anyframe"
-zplug "b4b4r07/enhancd", use:init.sh
-zplug "peterhurford/git-aliases.zsh"
-zplug "supercrabtree/k"
+zinit light joel-porquet/zsh-dircolors-solarized
+zinit light mollifier/anyframe
+zinit light b4b4r07/enhancd
 
-if ! zplug check --verbose; then
-  printf "Install? [y/N]: "
-  if read -q; then
-    echo; zplug install
-  fi
-fi
-
-zplug load #--verbose
+zinit ice pick'k.sh'
+zinit light supercrabtree/k
 
 if [[ ! -d ${HOME}/.zsh-dircolors.config ]]; then
   setupsolarized dircolors.ansi-universal
 fi
+
