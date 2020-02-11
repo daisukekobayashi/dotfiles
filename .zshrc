@@ -1,4 +1,4 @@
-# Use modern completion system
+#zmodload zsh/zprof && zprof
 autoload -Uz compinit && compinit
 autoload -U promptinit; promptinit
 
@@ -36,10 +36,6 @@ export HISTSIZE=1000
 export LISTMAX=0
 export SAVEHIST=100000
 
-function cd() {
-  builtin cd $@ && ls;
-}
-
 export EDITOR=vim
 #export LANG=ja_JP.UTF-8
 export LANG=en_US.UTF-8
@@ -70,10 +66,6 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/bin/neovim/bin:$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init -)"
   rbenv shell 2.6.5
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
-  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-  nvm use 12.13.0
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
@@ -81,12 +73,8 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   pyenv shell python3.7.5
-  export NVM_DIR="$HOME/.nvm"
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="~/projects/open-source/depot_tools:$PATH"
-  [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
-  [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
-  nvm use 12.13.0
   eval "$(rbenv init -)"
   rbenv shell 2.6.5
   export PATH="$HOME/.cargo/bin:$PATH"
@@ -96,6 +84,37 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
 fi
+
+function cd() {
+  builtin cd $@ && ls;
+}
+
+function _install_nvm() {
+  unset -f nvm npm node
+  export NVM_DIR="$HOME/.nvm"
+  if [[ "${unamestr}" == 'Linux' ]]; then
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This sets up nvm
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # nvm bash_completion
+    nvm use 12.13.0
+  elif [[ "${unamestr}" == 'Darwin' ]]; then
+    [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh" # This loads nvm
+    [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
+    nvm use 12.13.0
+  fi
+  "$@"
+}
+
+function nvm() {
+    _install_nvm nvm "$@"
+}
+
+function npm() {
+    _install_nvm npm "$@"
+}
+
+function node() {
+    _install_nvm node "$@"
+}
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
@@ -149,3 +168,6 @@ if [[ ! -d ${HOME}/.zsh-dircolors.config ]]; then
   setupsolarized dircolors.ansi-universal
 fi
 
+#if (which zprof > /dev/null 2>&1) ;then
+#  zprof
+#fi
