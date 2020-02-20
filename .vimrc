@@ -56,6 +56,7 @@ Plug 'godlygeek/tabular'
 Plug 'majutsushi/tagbar'
 Plug 'tomtom/tlib_vim'
 Plug 'SirVer/ultisnips'
+Plug 'vimwiki/vimwiki'
 Plug 'MarcWeber/vim-addon-mw-utils'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
@@ -71,6 +72,7 @@ Plug 'fatih/vim-go'
 Plug 'airblade/vim-gitgutter'
 Plug 'nathanaelkane/vim-indent-guides'
 Plug 'thinca/vim-localrc'
+Plug 'jceb/vim-orgmode'
 Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
@@ -403,3 +405,6 @@ command! -nargs=0 Prettier :CocCommand prettier.formatFile
 " alvan/vim-closetag
 "-------------------------------------------------------------------------------
 let g:closetag_filenames = '*.html,*.xhtml,*.jsx,*.tsx'
+
+packloadall
+silent! helptags ALL
