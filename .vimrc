@@ -408,3 +408,8 @@ let g:closetag_filenames = '*.html,*.xhtml,*.jsx,*.tsx'
 
 packloadall
 silent! helptags ALL
+
+augroup disableIndentLine
+  autocmd!
+  autocmd BufRead,BufNewFile *.md,*.markdown IndentLinesDisable
+augroup END
