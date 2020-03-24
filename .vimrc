@@ -40,7 +40,7 @@ Plug 'mileszs/ack.vim'
 Plug 'slashmili/alchemist.vim'
 Plug 'w0rp/ale'
 Plug 'skywind3000/asyncrun.vim'
-Plug 'jiangmiao/auto-pairs'
+"Plug 'jiangmiao/auto-pairs'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'editorconfig/editorconfig-vim'
 Plug 'mattn/emmet-vim'
@@ -67,6 +67,7 @@ Plug 'tpope/vim-commentary'
 Plug 'ryanoasis/vim-devicons'
 Plug 'junegunn/vim-easy-align'
 Plug 'elixir-editors/vim-elixir'
+Plug 'mhinz/vim-mix-format'
 Plug 'tpope/vim-fugitive'
 Plug 'fatih/vim-go'
 Plug 'airblade/vim-gitgutter'
@@ -233,6 +234,11 @@ let g:airline_solarized_bg='dark'
 let g:airline#extensions#ale#enabled = 1
 
 "-------------------------------------------------------------------------------
+" mhinz/vim-mix-format
+"-------------------------------------------------------------------------------
+let g:mix_format_on_save = 1
+
+"-------------------------------------------------------------------------------
 " ack.vim
 "-------------------------------------------------------------------------------
 if executable('ag')
@@ -278,7 +284,7 @@ let g:UltiSnipsEditSplit="vertical"
 " ultisnips
 "-------------------------------------------------------------------------------
 " Better display for messages
-set cmdheight=2
+set cmdheight=1
 
 " You will have bad experience for diagnostic messages when it's default 4000.
 set updatetime=300
