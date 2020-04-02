@@ -41,6 +41,7 @@ Plug 'slashmili/alchemist.vim'
 Plug 'w0rp/ale'
 Plug 'skywind3000/asyncrun.vim'
 "Plug 'jiangmiao/auto-pairs'
+Plug 'psf/black', { 'tag': '19.10b0' }
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'editorconfig/editorconfig-vim'
 Plug 'mattn/emmet-vim'
