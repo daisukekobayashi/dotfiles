@@ -420,3 +420,7 @@ augroup disableIndentLine
   autocmd!
   autocmd BufRead,BufNewFile *.md,*.markdown IndentLinesDisable
 augroup END
+
+let g:vimwiki_list = [{'path': '~/.vimwiki',
+                    \ 'syntax': 'markdown', 'ext': '.md'}]
+:map <Leader>tl <Plug>VimwikiToggleListItem
