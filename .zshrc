@@ -64,6 +64,10 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   pyenv shell python3.7.5
   export PATH="$HOME/bin/neovim/bin:$HOME/.rbenv/bin:$PATH"
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This sets up nvm
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # nvm bash_completion
+  nvm use 12.13.0
   eval "$(rbenv init -)"
   rbenv shell 2.6.5
 elif [[ "${unamestr}" == 'Darwin' ]]; then
@@ -73,8 +77,12 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   pyenv shell python3.7.5
+  export NVM_DIR="$HOME/.nvm"
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="~/projects/open-source/depot_tools:$PATH"
+  [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh" # This loads nvm
+  [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
+  nvm use 12.13.0
   eval "$(rbenv init -)"
   rbenv shell 2.6.5
   export PATH="$HOME/.cargo/bin:$PATH"
@@ -87,33 +95,6 @@ fi
 
 function cd() {
   builtin cd $@ && ls;
-}
-
-function _install_nvm() {
-  unset -f nvm npm node
-  export NVM_DIR="$HOME/.nvm"
-  if [[ "${unamestr}" == 'Linux' ]]; then
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This sets up nvm
-    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # nvm bash_completion
-    nvm use 12.13.0
-  elif [[ "${unamestr}" == 'Darwin' ]]; then
-    [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh" # This loads nvm
-    [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
-    nvm use 12.13.0
-  fi
-  "$@"
-}
-
-function nvm() {
-    _install_nvm nvm "$@"
-}
-
-function npm() {
-    _install_nvm npm "$@"
-}
-
-function node() {
-    _install_nvm node "$@"
 }
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
