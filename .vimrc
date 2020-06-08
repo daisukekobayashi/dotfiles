@@ -416,7 +416,10 @@ let g:closetag_filenames = '*.html,*.xhtml,*.jsx,*.tsx'
 packloadall
 silent! helptags ALL
 
-let g:vim_markdown_conceal=0
+augroup disableIndentLine
+  autocmd!
+  autocmd BufRead,BufNewFile *.md,*.markdown IndentLinesDisable
+augroup END
 
 let g:vimwiki_global_ext=0
 let g:vimwiki_list = [{'path': '~/.vimwiki',
