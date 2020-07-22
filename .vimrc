@@ -72,7 +72,7 @@ Plug 'elixir-editors/vim-elixir'
 Plug 'mhinz/vim-mix-format'
 Plug 'tpope/vim-fugitive'
 Plug 'fatih/vim-go'
-Plug 'airblade/vim-gitgutter'
+"Plug 'airblade/vim-gitgutter'
 Plug 'nathanaelkane/vim-indent-guides'
 Plug 'thinca/vim-localrc'
 Plug 'jceb/vim-orgmode'
@@ -80,6 +80,11 @@ Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
 Plug 'tpope/vim-repeat'
+if has('nvim') || has('patch-8.0.902')
+  Plug 'mhinz/vim-signify'
+else
+  Plug 'mhinz/vim-signify', { 'branch': 'legacy' }
+endif
 Plug 'honza/vim-snippets'
 Plug 'tpope/vim-surround'
 Plug 'dhruvasagar/vim-table-mode'
@@ -430,3 +435,8 @@ let g:vimwiki_global_ext=0
 let g:vimwiki_list = [{'path': '~/.vimwiki',
                     \ 'syntax': 'markdown', 'ext': '.md'}]
 :map <Leader>tl <Plug>VimwikiToggleListItem
+
+"-------------------------------------------------------------------------------
+" mhinz/vim-signify
+"-------------------------------------------------------------------------------
+set updatetime=100
