@@ -70,6 +70,10 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   nvm use 12.13.0
   eval "$(rbenv init -)"
   rbenv shell 2.6.5
+  alias pbcopy='xclip -selection clipboard'
+  alias pbpaste='xclip -selection clipboard -o'
+  #alias pbcopy='xsel --clipboard --input'
+  #alias pbpaste='xsel --clipboard --output'
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
