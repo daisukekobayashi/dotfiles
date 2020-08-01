@@ -1,11 +1,11 @@
 #!/bin/bash
 
 unamestr="$(uname)"
-nvm_version="0.35.1"
-python2_version="2.7.17"
-python3_version="3.7.5"
-nodejs_version="12.13.0"
-ruby_version="2.6.5"
+nvm_version="0.35.3"
+python2_version="2.7.18"
+python3_version="3.8.5"
+nodejs_version="12.18.3"
+ruby_version="2.6.6"
 
 make_directory() {
   if [ ! -d "$1" ]; then
