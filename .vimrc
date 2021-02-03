@@ -38,7 +38,7 @@ call plug#begin($VIMHOME . "/plugged")
 
 Plug 'mileszs/ack.vim'
 Plug 'slashmili/alchemist.vim'
-Plug 'w0rp/ale'
+Plug 'dense-analysis/ale'
 Plug 'skywind3000/asyncrun.vim'
 "Plug 'jiangmiao/auto-pairs'
 Plug 'psf/black', { 'tag': '19.10b0' }
