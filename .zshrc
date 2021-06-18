@@ -62,6 +62,8 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
   export VIRTUAL_ENV_DISABLE_PROMPT=1
+  eval "$(pyenv init -)"
+  eval "$(pyenv virtualenv-init -)"
   pyenv shell python3.8.5
   export PATH="$HOME/bin/neovim/bin:$HOME/.rbenv/bin:$PATH"
   export NVM_DIR="$HOME/.nvm"
