@@ -1,11 +1,11 @@
 #!/bin/bash
 
 unamestr="$(uname)"
-nvm_version="0.35.3"
+nvm_version="0.39.0"
 python2_version="2.7.18"
-python3_version="3.8.5"
-nodejs_version="14.15.4"
-ruby_version="2.6.6"
+python3_version="3.9.7"
+nodejs_version="16.13.0"
+ruby2_version="2.7.4"
 
 make_directory() {
   if [ ! -d "$1" ]; then
@@ -94,7 +94,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   else
     git -C ${RBENV_PLUGIN_HOME}/ruby-build pull
   fi
-  ${HOME}/.rbenv/bin/rbenv install ${ruby_version}
+  ${HOME}/.rbenv/bin/rbenv install ${ruby2_version}
 
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
@@ -103,7 +103,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
     && pyenv virtualenv ${python2_version} python${python2_version}
   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
     && pyenv virtualenv ${python3_version} python${python3_version}
-  rbenv install ${ruby_version}
+  rbenv install ${ruby2_version}
 fi
 
 TPM_DIR="${HOME}/.tmux/plugins/tpm"

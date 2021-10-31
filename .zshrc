@@ -45,6 +45,10 @@ export AUTOFEATURE=true
 alias ls='ls --color=auto'
 
 TERM=xterm-256color
+NODEJS_VERSION=16.13.0
+PYTHON3_VERSION=3.9.7
+PYTHON2_VERSION=2.7.18
+RUBY2_VERSION=2.7.4
 
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
@@ -56,22 +60,22 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   export CHERE_INVOKING=1
   WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
-  source ${WIN_HOME}/.pve/python3.8.5/Scripts/activate
+  source ${WIN_HOME}/.pve/python${PYTHON3_VERSION}/Scripts/activate
   alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
-  ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use 12.18.3
+  ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
-  pyenv shell python3.8.5
+  pyenv shell python${PYTHON3_VERSION}
   export PATH="$HOME/bin/neovim/bin:$HOME/.rbenv/bin:$PATH"
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This sets up nvm
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # nvm bash_completion
-  nvm use 14.15.4
+  nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
-  rbenv shell 2.6.6
+  rbenv shell ${RUBY2_VERSION}
   alias pbcopy='xclip -selection clipboard'
   alias pbpaste='xclip -selection clipboard -o'
   #alias pbcopy='xsel --clipboard --input'
@@ -80,19 +84,19 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
-  pyenv shell python3.8.5
+  pyenv shell python${PYTHON3_VERSION}
   export NVM_DIR="$HOME/.nvm"
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="~/projects/open-source/depot_tools:$PATH"
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh" # This loads nvm
   [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
-  nvm use 14.15.4
+  nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
-  rbenv shell 2.6.6
+  rbenv shell ${RUBY2_VERSION}
   export PATH="$HOME/.cargo/bin:$PATH"
   export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH
-  export CLOUDSDK_PYTHON="~/.pyenv/versions/2.7.18/bin/python"
+  export CLOUDSDK_PYTHON="~/.pyenv/versions/${PYTHON2_VERSION}/bin/python"
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
   source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
 fi
