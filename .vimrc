@@ -41,7 +41,7 @@ Plug 'slashmili/alchemist.vim'
 Plug 'dense-analysis/ale'
 Plug 'skywind3000/asyncrun.vim'
 "Plug 'jiangmiao/auto-pairs'
-Plug 'psf/black', { 'tag': '19.10b0' }
+Plug 'psf/black'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'editorconfig/editorconfig-vim'
 Plug 'mattn/emmet-vim'
@@ -102,7 +102,7 @@ if has('nvim')
     let g:python3_host_prog=$WIN_HOME . '/.pve/python3.7.5/Scripts/python.exe'
   else
     let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.18/bin/python'
-    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.8.5/bin/python'
+    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.9.7/bin/python'
   endif
 else
   set clipboard+=unnamed
