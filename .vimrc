@@ -58,10 +58,8 @@ Plug 'majutsushi/tagbar'
 Plug 'tomtom/tlib_vim'
 Plug 'vimwiki/vimwiki'
 Plug 'MarcWeber/vim-addon-mw-utils'
-Plug 'vim-airline/vim-airline'
-Plug 'vim-airline/vim-airline-themes'
 Plug 'alvan/vim-closetag'
-Plug 'altercation/vim-colors-solarized'
+Plug 'lifepillar/vim-solarized8'
 Plug 'rhysd/vim-clang-format'
 Plug 'tpope/vim-commentary'
 Plug 'ryanoasis/vim-devicons'
@@ -103,6 +101,12 @@ if has('nvim')
   " For vsnip users.
   Plug 'hrsh7th/cmp-vsnip'
   Plug 'hrsh7th/vim-vsnip'
+
+  Plug 'nvim-lualine/lualine.nvim'
+  Plug 'kyazdani42/nvim-web-devicons'
+else
+  Plug 'vim-airline/vim-airline'
+  Plug 'vim-airline/vim-airline-themes'
 endif
 
 call plug#end()
@@ -180,12 +184,9 @@ if &t_Co > 2 || has('gui_running')
   syntax on
 endif
 
-set t_Co=256
-silent! call togglebg#map("<F5>")
-syntax enable
+set termguicolors
 set background=dark
-silent! colorscheme solarized
-let g:solarized_termcolors=256
+colorscheme solarized8
 
 "colorscheme molokai
 "let g:molokai_original=1
