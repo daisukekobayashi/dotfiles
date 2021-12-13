@@ -69,7 +69,7 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   pyenv shell python${PYTHON3_VERSION}
-  export PATH="$HOME/bin/neovim/bin:$HOME/.rbenv/bin:$PATH"
+  export PATH="$HOME/bin/nvim/bin:$HOME/.rbenv/bin:$PATH"
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This sets up nvm
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # nvm bash_completion
