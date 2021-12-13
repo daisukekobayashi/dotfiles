@@ -127,6 +127,8 @@ else
   set clipboard+=unnamed
 endif
 
+let mapleader="\<Space>"
+
 set number
 set tabstop=2
 set softtabstop=2
