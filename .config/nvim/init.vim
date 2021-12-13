@@ -16,6 +16,15 @@ source ~/.vimrc
 
 " nvim-lspconfig
 lua << EOF
+
+vim.diagnostic.config({
+  virtual_text = true,
+  signs = true,
+  underline = true,
+  update_in_insert = true,
+  severity_sort = false,
+})
+
 local nvim_lsp = require('lspconfig')
 
 -- Use an on_attach function to only map the following keys
@@ -50,7 +59,6 @@ local on_attach = function(client, bufnr)
   buf_set_keymap('n', '<space>f', '<cmd>lua vim.lsp.buf.formatting()<CR>', opts)
 
 end
-
 -- Use a loop to conveniently call 'setup' on multiple servers and
 -- map buffer local keybindings when the language server attaches
 -- local servers = { 'pyright', 'rust_analyzer', 'tsserver' }
@@ -191,10 +199,10 @@ lspsaga.setup { -- defaults ...
   -- warn_sign = "",
   -- hint_sign = "",
   -- infor_sign = "",
-  error_sign = '',
-  warn_sign = '',
-  hint_sign = '',
-  infor_sign = '',
+  error_sign = 'E',
+  warn_sign = 'W',
+  hint_sign = 'H',
+  infor_sign = 'I',
   diagnostic_header_icon = "   ",
   -- code action title icon
   -- code_action_icon = " ",
