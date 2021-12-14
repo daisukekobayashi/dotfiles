@@ -17,14 +17,6 @@ source ~/.vimrc
 " nvim-lspconfig
 lua << EOF
 
-vim.diagnostic.config({
-  virtual_text = true,
-  signs = true,
-  underline = true,
-  update_in_insert = false,
-  severity_sort = false,
-})
-
 local nvim_lsp = require('lspconfig')
 
 -- Use an on_attach function to only map the following keys
