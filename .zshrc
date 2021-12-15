@@ -81,15 +81,16 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   #alias pbcopy='xsel --clipboard --input'
   #alias pbpaste='xsel --clipboard --output'
 elif [[ "${unamestr}" == 'Darwin' ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   pyenv shell python${PYTHON3_VERSION}
-  export NVM_DIR="$HOME/.nvm"
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="~/projects/open-source/depot_tools:$PATH"
-  [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh" # This loads nvm
-  [ -s "/usr/local/etc/bash_completion.d" ] && \. "/usr/local/etc/bash_completion.d"  # This loads nvm bash_completion
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
   nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
   rbenv shell ${RUBY2_VERSION}
@@ -97,8 +98,9 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH
   export CLOUDSDK_PYTHON="~/.pyenv/versions/${PYTHON2_VERSION}/bin/python"
-  source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
-  source '/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
+  source '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
+  source '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
+
 fi
 
 function cd() {
