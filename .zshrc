@@ -1,6 +1,7 @@
 #zmodload zsh/zprof && zprof
 autoload -Uz compinit && compinit
 autoload -U promptinit; promptinit
+typeset -U PATH
 
 bindkey -e
 
@@ -66,6 +67,9 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
   export VIRTUAL_ENV_DISABLE_PROMPT=1
+  export PYENV_ROOT="$HOME/.pyenv"
+  export PATH="$PYENV_ROOT/bin:$PATH"
+  eval "$(pyenv init --path)"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   pyenv shell python${PYTHON3_VERSION}
@@ -82,6 +86,9 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   #alias pbpaste='xsel --clipboard --output'
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
+  export PYENV_ROOT="$HOME/.pyenv"
+  export PATH="$PYENV_ROOT/bin:$PATH"
+  eval "$(pyenv init --path)"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
