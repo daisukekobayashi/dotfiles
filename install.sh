@@ -6,6 +6,7 @@ python2_version="2.7.18"
 python3_version="3.9.7"
 nodejs_version="16.13.0"
 ruby2_version="2.7.4"
+go_version="1.18.0"
 
 make_directory() {
   if [ ! -d "$1" ]; then
@@ -96,6 +97,14 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   fi
   ${HOME}/.rbenv/bin/rbenv install ${ruby2_version}
 
+  GOENV_HOME="${HOME}/.goenv"
+  if [ ! -d "${GOENV_HOME}" ]; then
+    git clone https://github.com/syndbg/goenv.git "${GOENV_HOME}"
+  else
+    git -C ${GOENV_HOME} pull
+  fi
+  ${GOENV_HOME}/bin/goenv install ${go_version}
+
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
   nvm install ${nodejs_version}
@@ -104,6 +113,14 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
     && pyenv virtualenv ${python3_version} python${python3_version}
   rbenv install ${ruby2_version}
+
+  GOENV_HOME="${HOME}/.goenv"
+  if [ ! -d "${GOENV_HOME}" ]; then
+    git clone https://github.com/syndbg/goenv.git "${GOENV_HOME}"
+  else
+    git -C ${GOENV_HOME} pull
+  fi
+  ${GOENV_HOME}/bin/goenv install ${go_version}
 fi
 
 TPM_DIR="${HOME}/.tmux/plugins/tpm"

@@ -50,6 +50,7 @@ NODEJS_VERSION=16.13.0
 PYTHON3_VERSION=3.9.7
 PYTHON2_VERSION=2.7.18
 RUBY2_VERSION=2.7.4
+GO_VERSION=1.18.0
 
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
@@ -80,6 +81,14 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
   rbenv shell ${RUBY2_VERSION}
+  # goenv
+  export GOENV_ROOT="$HOME/.goenv"
+  export PATH="$GOENV_ROOT/bin:$PATH"
+  eval "$(goenv init -)"
+  export PATH="$GOROOT/bin:$PATH"
+  export PATH="$PATH:$GOPATH/bin"
+  goenv shell ${GO_VERSION}
+
   alias pbcopy='xclip -selection clipboard'
   alias pbpaste='xclip -selection clipboard -o'
   #alias pbcopy='xsel --clipboard --input'
@@ -101,6 +110,14 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
   rbenv shell ${RUBY2_VERSION}
+  # goenv
+  export GOENV_ROOT="$HOME/.goenv"
+  export PATH="$GOENV_ROOT/bin:$PATH"
+  eval "$(goenv init -)"
+  export PATH="$GOROOT/bin:$PATH"
+  export PATH="$PATH:$GOPATH/bin"
+  goenv shell ${GO_VERSION}
+
   export PATH="$HOME/.cargo/bin:$PATH"
   export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH
