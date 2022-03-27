@@ -88,6 +88,8 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$GOROOT/bin:$PATH"
   export PATH="$PATH:$GOPATH/bin"
   goenv shell ${GO_VERSION}
+  # rust
+  export PATH="$HOME/.cargo/bin:$PATH"
 
   alias pbcopy='xclip -selection clipboard'
   alias pbpaste='xclip -selection clipboard -o'
@@ -118,6 +120,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH="$PATH:$GOPATH/bin"
   goenv shell ${GO_VERSION}
 
+  # rust
   export PATH="$HOME/.cargo/bin:$PATH"
   export PATH=~/Library/Android/sdk/platform-tools:$PATH
   export PATH=~/development/flutter/bin:$PATH

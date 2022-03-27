@@ -104,6 +104,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     git -C ${GOENV_HOME} pull
   fi
   ${GOENV_HOME}/bin/goenv install ${go_version}
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
@@ -121,6 +122,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
     git -C ${GOENV_HOME} pull
   fi
   ${GOENV_HOME}/bin/goenv install ${go_version}
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 fi
 
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
