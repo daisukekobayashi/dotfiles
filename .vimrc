@@ -143,11 +143,16 @@ let &colorcolumn=join(range(81,9999),",")
 set nowritebackup
 set nobackup
 if version >= 703
+  if has('nvim')
+    set undodir=$VIMHOME/nvim/undo
+    set directory=$VIMHOME/nvim/tmp
+  else
+    set undodir=$VIMHOME/vim/undo
+    set directory=$VIMHOME/vim/tmp
+  endif
   set undofile
-  set undodir=$VIMHOME/undo
 endif
 
-set directory=$VIMHOME/tmp
 
 set noswapfile
 set nrformats-=octal

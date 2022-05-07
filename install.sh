@@ -15,12 +15,14 @@ make_directory() {
 }
 
 # vim
-make_directory "${HOME}/.vim/undo"
-make_directory "${HOME}/.vim/tmp"
+make_directory "${HOME}/.vim/vim/undo"
+make_directory "${HOME}/.vim/vim/tmp"
 
 # neovim
 NEOVIM_HOME="${HOME}/.config/nvim"
 make_directory "${NEOVIM_HOME}"
+make_directory "${HOME}/.vim/nvim/undo"
+make_directory "${HOME}/.vim/nvim/tmp"
 
 if [ ! -f "${NEOVIM_HOME}/init.vim" ]; then
   ln -s "$(pwd)/.config/nvim/init.vim" "${NEOVIM_HOME}/init.vim"
