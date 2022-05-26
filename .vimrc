@@ -84,6 +84,7 @@ Plug 'honza/vim-snippets'
 Plug 'tpope/vim-surround'
 Plug 'dhruvasagar/vim-table-mode'
 Plug 'bronson/vim-trailing-whitespace'
+Plug 'Yggdroot/indentLine'
 
 if has('nvim')
   Plug 'neovim/nvim-lspconfig'
@@ -107,9 +108,8 @@ if has('nvim')
   Plug 'nvim-lua/plenary.nvim'
   Plug 'nvim-telescope/telescope.nvim'
 
-  Plug 'lukas-reineke/indent-blankline.nvim'
+  "Plug 'lukas-reineke/indent-blankline.nvim'
 else
-  Plug 'Yggdroot/indentLine'
   Plug 'vim-airline/vim-airline'
   Plug 'vim-airline/vim-airline-themes'
 endif
