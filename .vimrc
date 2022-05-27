@@ -285,9 +285,14 @@ endif
 "-------------------------------------------------------------------------------
 " ale
 "-------------------------------------------------------------------------------
+let g:ale_fixers = {
+\ 'python': ['black', 'isort'],
+\}
+
 let g:ale_linters = {
-    \ 'c': ['clang'],
-    \ 'cpp': ['clang'],
+\ 'c': ['clang'],
+\ 'cpp': ['clang'],
+\ 'python': ['flake8'],
 \}
 
 nmap <silent> <C-k> <Plug>(ale_previous_wrap)
