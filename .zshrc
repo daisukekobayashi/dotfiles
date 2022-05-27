@@ -70,6 +70,7 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
+  export PATH="$HOME/.local/bin:$PATH"
   eval "$(pyenv init --path)"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
