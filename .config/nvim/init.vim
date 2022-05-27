@@ -472,8 +472,6 @@ nnoremap <leader>n :NvimTreeFindFile<CR>
 " NvimTreeCollapse
 " NvimTreeCollapseKeepBuffers
 
-set termguicolors
-
 highlight NvimTreeFolderIcon guibg=blue
 
 "-------------------------------------------------------------------------------

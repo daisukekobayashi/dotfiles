@@ -196,7 +196,9 @@ if &t_Co > 2 || has('gui_running')
   syntax on
 endif
 
-set termguicolors
+if g:os != "Linux"
+  set termguicolors
+endif
 set background=dark
 colorscheme solarized8
 
