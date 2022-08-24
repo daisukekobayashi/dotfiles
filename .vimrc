@@ -106,6 +106,7 @@ if has('nvim')
   Plug 'kyazdani42/nvim-tree.lua'
 
   Plug 'nvim-lua/plenary.nvim'
+  Plug 'sindrets/diffview.nvim'
   Plug 'nvim-telescope/telescope.nvim'
 
   "Plug 'lukas-reineke/indent-blankline.nvim'
