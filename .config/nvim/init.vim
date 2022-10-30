@@ -30,26 +30,6 @@ local on_attach = function(client, bufnr)
 
   -- Mappings.
   local opts = { noremap=true, silent=true }
-
-  -- See `:help vim.lsp.*` for documentation on any of the below functions
-  buf_set_keymap('n', 'gD', '<cmd>lua vim.lsp.buf.declaration()<CR>', opts)
-  buf_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
-  buf_set_keymap('n', 'K', '<cmd>lua vim.lsp.buf.hover()<CR>', opts)
-  buf_set_keymap('n', 'gi', '<cmd>lua vim.lsp.buf.implementation()<CR>', opts)
-  buf_set_keymap('n', '<C-k>', '<cmd>lua vim.lsp.buf.signature_help()<CR>', opts)
-  buf_set_keymap('n', '<space>wa', '<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>', opts)
-  buf_set_keymap('n', '<space>wr', '<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>', opts)
-  buf_set_keymap('n', '<space>wl', '<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>', opts)
-  buf_set_keymap('n', '<space>D', '<cmd>lua vim.lsp.buf.type_definition()<CR>', opts)
-  buf_set_keymap('n', '<space>rn', '<cmd>lua vim.lsp.buf.rename()<CR>', opts)
-  buf_set_keymap('n', '<space>ca', '<cmd>lua vim.lsp.buf.code_action()<CR>', opts)
-  buf_set_keymap('n', 'gr', '<cmd>lua vim.lsp.buf.references()<CR>', opts)
-  buf_set_keymap('n', '<space>e', '<cmd>lua vim.diagnostic.open_float()<CR>', opts)
-  buf_set_keymap('n', '[d', '<cmd>lua vim.diagnostic.goto_prev()<CR>', opts)
-  buf_set_keymap('n', ']d', '<cmd>lua vim.diagnostic.goto_next()<CR>', opts)
-  buf_set_keymap('n', '<space>q', '<cmd>lua vim.diagnostic.setloclist()<CR>', opts)
-  buf_set_keymap('n', '<space>f', '<cmd>lua vim.lsp.buf.formatting()<CR>', opts)
-
 end
 -- Use a loop to conveniently call 'setup' on multiple servers and
 -- map buffer local keybindings when the language server attaches
@@ -64,45 +44,127 @@ end
 -- end
 EOF
 
-" nvim-lsp-installer
+" mason
 lua << EOF
-local lsp_installer = require "nvim-lsp-installer"
+local mason = require('mason')
 
--- Include the servers you want to have installed by default below
-local servers = {
-  "bashls",
-  "dockerls",
-  "elixirls",
-  "eslint",
-  "hls",
-  "pyright",
-  "rust_analyzer",
-  "sourcekit",
-  "tsserver",
-  "vimls",
-  "yamlls",
-}
+mason.setup({
+    ui = {
+        icons = {
+            package_installed = "✓",
+            package_pending = "➜",
+            package_uninstalled = "✗"
+        }
+    }
+})
 
-for _, name in pairs(servers) do
-  local server_is_found, server = lsp_installer.get_server(name)
-  if server_is_found then
-    if not server:is_installed() then
-      print("Installing " .. name)
-      server:install()
-    end
-  end
-end
-
-lsp_installer.on_server_ready(function(server)
+local nvim_lsp = require('lspconfig')
+local mason_lspconfig = require('mason-lspconfig')
+mason_lspconfig.setup_handlers({ function(server_name)
   local opts = {}
-  opts.on_attach = on_attach
-  opts.capabilities = require("cmp_nvim_lsp").update_capabilities(vim.lsp.protocol.make_client_capabilities())
+  opts.on_attach = function(_, bufnr)
+    local bufopts = { silent = true, buffer = bufnr }
 
-  server:setup(opts)
-  vim.cmd [[ do User LspAttachBuffers ]]
-end)
+    vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, bufopts)
+    vim.keymap.set('n', 'gd', vim.lsp.buf.definition, bufopts)
+    vim.keymap.set('n', 'K', vim.lsp.buf.hover, bufopts)
+    vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, bufopts)
+    vim.keymap.set('n', 'gtd', vim.lsp.buf.type_definition, bufopts)
+    vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, bufopts)
+    vim.keymap.set('n', '<space>wa', vim.lsp.buf.add_workspace_folder, bufopts)
+    vim.keymap.set('n', '<space>wr', vim.lsp.buf.remove_workspace_folder, bufopts)
+    vim.keymap.set('n', '<space>wl', function()
+      print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+    end, bufopts)
+    vim.keymap.set('n', '<space>rn', vim.lsp.buf.rename, bufopts)
+    vim.keymap.set('n', '<space>ca', vim.lsp.buf.code_action, bufopts)
+    vim.keymap.set('n', 'gr', vim.lsp.buf.references, bufopts)
+    vim.keymap.set('n', '<space>f', function() vim.lsp.buf.format { async = true } end, bufopts)
+ end
+  nvim_lsp[server_name].setup(opts)
+end })
 
 EOF
+
+" mason-tool-installer
+lua << EOF
+require('mason-tool-installer').setup {
+  ensure_installed = {
+    -- shell
+    'bash-language-server',
+    'shellcheck',
+    'shfmt',
+    -- c/cpp
+    'clangd',
+    'clang-format',
+    'cpplint',
+    -- csharp
+    'csharp-language-server',
+    -- docker
+    'dockerfile-language-server',
+    -- elixir
+    'elixir-ls',
+    -- go
+    'gopls',
+    'gofumpt',
+    'golines',
+    'gomodifytags',
+    'gotests',
+    'revive',
+    'staticcheck',
+    -- haskell
+    'haskell-language-server',
+    -- lua
+    'lua-language-server',
+    'luacheck',
+    'stylua',
+    -- powershell
+    'powershell-editor-services',
+    -- python
+    'pyright',
+    'black',
+    'flake8',
+    'isort',
+    -- ruby
+    'solargraph',
+    -- rust
+    'rust-analyzer',
+    -- typescript
+    'typescript-language-server',
+    'eslint_d',
+    'prettier',
+    -- vim
+    'vim-language-server',
+    'vint',
+    -- markdown
+    'marksman',
+    'markdownlint',
+    -- others
+    'misspell',
+  },
+  auto_update = false,
+  run_on_start = true,
+  start_delay = 3000, -- 3 second delay
+}
+EOF
+
+" null-ls
+lua << EOF
+require("null-ls").setup({
+  sources = {
+    require("null-ls").builtins.formatting.shfmt,
+    require("null-ls").builtins.formatting.stylua,
+    require("null-ls").builtins.formatting.black,
+    require("null-ls").builtins.formatting.isort,
+    require("null-ls").builtins.formatting.clang_format,
+    require("null-ls").builtins.formatting.mix,
+    require("null-ls").builtins.formatting.prettier,
+    require("null-ls").builtins.diagnostics.eslint_d,
+    require("null-ls").builtins.diagnostics.flake8,
+  }
+})
+EOF
+
 
 " nvim-cmp
 set completeopt=menu,menuone,noselect
@@ -302,119 +364,25 @@ require'lualine'.setup {
 EOF
 
 " nvim-tree
-lua <<EOF
-require'nvim-tree'.setup { -- BEGIN_DEFAULT_OPTS
-  auto_reload_on_write = true,
-  disable_netrw = false,
-  hijack_cursor = false,
-  hijack_netrw = true,
-  hijack_unnamed_buffer_when_opening = false,
-  ignore_buffer_on_setup = false,
+lua << EOF
+require("nvim-tree").setup({
+  sort_by = "case_sensitive",
   open_on_setup = true,
-  open_on_setup_file = false,
-  open_on_tab = false,
-  sort_by = "name",
-  update_cwd = false,
   view = {
-    width = 30,
-    height = 30,
-    hide_root_folder = false,
-    side = "left",
-    preserve_window_proportions = false,
-    number = false,
-    relativenumber = false,
-    signcolumn = "yes",
+    adaptive_size = true,
     mappings = {
-      custom_only = false,
       list = {
-        -- user mappings go here
+        { key = "u", action = "dir_up" },
       },
     },
   },
   renderer = {
-    indent_markers = {
-      enable = false,
-      icons = {
-        corner = "└ ",
-        edge = "│ ",
-        none = "  ",
-      },
-    },
-    icons = {
-      webdev_colors = true,
-    },
-  },
-  hijack_directories = {
-    enable = true,
-    auto_open = true,
-  },
-  update_focused_file = {
-    enable = false,
-    update_cwd = false,
-    ignore_list = {},
-  },
-  ignore_ft_on_setup = {},
-  system_open = {
-    cmd = "",
-    args = {},
-  },
-  diagnostics = {
-    enable = false,
-    show_on_dirs = false,
-    icons = {
-      hint = "",
-      info = "",
-      warning = "",
-      error = "",
-    },
+    group_empty = true,
   },
   filters = {
-    dotfiles = false,
-    custom = {},
-    exclude = {},
+    dotfiles = true,
   },
-  git = {
-    enable = true,
-    ignore = true,
-    timeout = 400,
-  },
-  actions = {
-    use_system_clipboard = true,
-    change_dir = {
-      enable = true,
-      global = false,
-      restrict_above_cwd = false,
-    },
-    open_file = {
-      quit_on_open = false,
-      resize_window = false,
-      window_picker = {
-        enable = true,
-        chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
-        exclude = {
-          filetype = { "notify", "packer", "qf", "diff", "fugitive", "fugitiveblame" },
-          buftype = { "nofile", "terminal", "help" },
-        },
-      },
-    },
-  },
-  trash = {
-    cmd = "trash",
-    require_confirm = true,
-  },
-  log = {
-    enable = false,
-    truncate = false,
-    types = {
-      all = false,
-      config = false,
-      copy_paste = false,
-      diagnostics = false,
-      git = false,
-      profile = false,
-    },
-  },
-}
+})
 EOF
 
 " diffview.nvim

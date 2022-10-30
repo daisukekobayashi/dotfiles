@@ -38,10 +38,8 @@ call plug#begin($VIMHOME . "/plugged")
 
 Plug 'mileszs/ack.vim'
 Plug 'slashmili/alchemist.vim'
-Plug 'dense-analysis/ale'
 Plug 'skywind3000/asyncrun.vim'
 "Plug 'jiangmiao/auto-pairs'
-Plug 'psf/black'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'mattn/emmet-vim'
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
@@ -88,7 +86,12 @@ Plug 'Yggdroot/indentLine'
 
 if has('nvim')
   Plug 'neovim/nvim-lspconfig'
-  Plug 'williamboman/nvim-lsp-installer'
+  Plug 'williamboman/mason.nvim'
+  Plug 'williamboman/mason-lspconfig.nvim'
+  Plug 'WhoIsSethDaniel/mason-tool-installer.nvim'
+  Plug 'mfussenegger/nvim-dap'
+  Plug 'jose-elias-alvarez/null-ls.nvim'
+
   Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
   Plug 'tami5/lspsaga.nvim'
 
@@ -113,6 +116,8 @@ if has('nvim')
 else
   Plug 'vim-airline/vim-airline'
   Plug 'vim-airline/vim-airline-themes'
+  Plug 'dense-analysis/ale'
+  Plug 'psf/black'
 endif
 
 call plug#end()
