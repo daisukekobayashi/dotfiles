@@ -1,11 +1,11 @@
 #!/bin/bash
 
 unamestr="$(uname)"
-nvm_version="0.39.0"
+nvm_version="0.39.2"
 python2_version="2.7.18"
-python3_version="3.9.7"
-nodejs_version="16.13.0"
-ruby2_version="2.7.4"
+python3_version="3.9.15"
+nodejs_version="18.12.1"
+ruby2_version="2.7.6"
 go_version="1.18.0"
 
 make_directory() {
