@@ -48,6 +48,14 @@ do
 done
 
 if [[ "${unamestr}" == 'Linux' ]]; then
+  if [ ! -f "${XDG_CONFIG_HOME}/alacritty/alacritty.yml" ]; then
+    make_directory "${XDG_CONFIG_HOME}/alacritty"
+    ln -s "$(pwd)/.config/alacritty/alacritty.yml" "${XDG_CONFIG_HOME}/alacritty/alacritty.yml"
+    git clone https://github.com/eendroroy/alacritty-theme.git ${HOME}/.alacritty-colorscheme
+  else
+    git -C ${HOME}/.alacritty-colorscheme pull
+  fi
+
   NVM_HOME="${HOME}/.nvm"
   if [ ! -d "${NVM_HOME}" ]; then
     git clone https://github.com/nvm-sh/nvm.git ${HOME}/.nvm
