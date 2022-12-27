@@ -105,8 +105,8 @@ if has('nvim')
   Plug 'hrsh7th/vim-vsnip'
 
   Plug 'nvim-lualine/lualine.nvim'
-  Plug 'kyazdani42/nvim-web-devicons'
-  Plug 'kyazdani42/nvim-tree.lua'
+  Plug 'nvim-tree/nvim-web-devicons'
+  Plug 'nvim-tree/nvim-tree.lua'
 
   Plug 'nvim-lua/plenary.nvim'
   Plug 'sindrets/diffview.nvim'
