@@ -113,6 +113,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
   rbenv shell ${RUBY2_VERSION}
+  export PATH="~/.local/bin:$PATH"
   # goenv
   export GOENV_ROOT="$HOME/.goenv"
   export PATH="$GOENV_ROOT/bin:$PATH"
