@@ -106,14 +106,14 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   pyenv shell python${PYTHON3_VERSION}
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
-  export PATH="~/projects/open-source/depot_tools:$PATH"
+  export PATH="${HOME}/projects/open-source/depot_tools:$PATH"
   export NVM_DIR="$HOME/.nvm"
   [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
   [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
   nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
   rbenv shell ${RUBY2_VERSION}
-  export PATH="~/.local/bin:$PATH"
+  export PATH="${HOME}/.local/bin:$PATH"
   # goenv
   export GOENV_ROOT="$HOME/.goenv"
   export PATH="$GOENV_ROOT/bin:$PATH"
@@ -124,9 +124,9 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
 
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
-  export PATH=~/Library/Android/sdk/platform-tools:$PATH
-  export PATH=~/development/flutter/bin:$PATH
-  export CLOUDSDK_PYTHON="~/.pyenv/versions/${PYTHON2_VERSION}/bin/python"
+  export PATH=${HOME}/Library/Android/sdk/platform-tools:$PATH
+  export PATH=${HOME}/development/flutter/bin:$PATH
+  export CLOUDSDK_PYTHON="${HOME}/.pyenv/versions/${PYTHON2_VERSION}/bin/python"
   source '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
   source '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
 
@@ -178,7 +178,7 @@ zinit snippet OMZ::plugins/git/git.plugin.zsh
 
 zinit light joel-porquet/zsh-dircolors-solarized
 zinit light mollifier/anyframe
-zinit light b4b4r07/enhancd
+#zinit light b4b4r07/enhancd
 
 zinit ice pick'k.sh'
 zinit light supercrabtree/k
