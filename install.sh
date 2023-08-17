@@ -24,13 +24,13 @@ make_directory "${NEOVIM_HOME}"
 make_directory "${HOME}/.vim/nvim/undo"
 make_directory "${HOME}/.vim/nvim/tmp"
 
-if [ ! -f "${NEOVIM_HOME}/init.vim" ]; then
-  ln -s "$(pwd)/.config/nvim/init.vim" "${NEOVIM_HOME}/init.vim"
+if [ ! -f "${NEOVIM_HOME}/init.lua" ]; then
+  ln -s "$(pwd)/.config/nvim/init.lua" "${NEOVIM_HOME}/init.lua"
   ln -s "$(pwd)/.config/nvim/lua" "${NEOVIM_HOME}/lua"
 else
-  echo "init.vim"
-  rm "${NEOVIM_HOME}/init.vim"
-  ln -s "$(pwd)/.config/nvim/init.vim" "${NEOVIM_HOME}/init.vim"
+  echo "init.lua"
+  rm "${NEOVIM_HOME}/init.lua"
+  ln -s "$(pwd)/.config/nvim/init.lua" "${NEOVIM_HOME}/init.lua"
   ln -s "$(pwd)/.config/nvim/lua" "${NEOVIM_HOME}/lua"
 fi
 

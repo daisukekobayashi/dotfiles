@@ -73,70 +73,23 @@ Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
 Plug 'tpope/vim-repeat'
-if has('nvim') || has('patch-8.0.902')
-  Plug 'mhinz/vim-signify'
-else
-  Plug 'mhinz/vim-signify', { 'branch': 'legacy' }
-endif
+Plug 'mhinz/vim-signify', { 'branch': 'legacy' }
 Plug 'honza/vim-snippets'
 Plug 'tpope/vim-surround'
 Plug 'dhruvasagar/vim-table-mode'
 Plug 'bronson/vim-trailing-whitespace'
 Plug 'Yggdroot/indentLine'
-
-if has('nvim')
-  Plug 'neovim/nvim-lspconfig'
-  Plug 'williamboman/mason.nvim'
-  Plug 'williamboman/mason-lspconfig.nvim'
-  Plug 'WhoIsSethDaniel/mason-tool-installer.nvim'
-  Plug 'mfussenegger/nvim-dap'
-  Plug 'jose-elias-alvarez/null-ls.nvim'
-
-  Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
-  Plug 'tami5/lspsaga.nvim'
-
-  Plug 'hrsh7th/cmp-nvim-lsp'
-  Plug 'hrsh7th/cmp-buffer'
-  Plug 'hrsh7th/cmp-path'
-  Plug 'hrsh7th/cmp-cmdline'
-  Plug 'hrsh7th/nvim-cmp'
-
-  Plug 'hrsh7th/cmp-vsnip'
-  Plug 'hrsh7th/vim-vsnip'
-
-  Plug 'nvim-lualine/lualine.nvim'
-  Plug 'nvim-tree/nvim-web-devicons'
-  Plug 'nvim-tree/nvim-tree.lua'
-
-  Plug 'nvim-lua/plenary.nvim'
-  Plug 'sindrets/diffview.nvim'
-  Plug 'nvim-telescope/telescope.nvim'
-
-  "Plug 'lukas-reineke/indent-blankline.nvim'
-else
-  Plug 'vim-airline/vim-airline'
-  Plug 'vim-airline/vim-airline-themes'
-  Plug 'dense-analysis/ale'
-  Plug 'psf/black'
-endif
+Plug 'vim-airline/vim-airline'
+Plug 'vim-airline/vim-airline-themes'
+Plug 'dense-analysis/ale'
+Plug 'psf/black'
 
 call plug#end()
 
 " Required:
 filetype plugin indent on
 
-if has('nvim')
-  set clipboard+=unnamedplus
-  if g:os == "Windows" || g:msys == 1
-    let g:python_host_prog=$WIN_HOME . "/.pve/python2.7.17/Scripts/python.exe"
-    let g:python3_host_prog=$WIN_HOME . '/.pve/python3.7.5/Scripts/python.exe'
-  else
-    let g:python_host_prog=$PYENV_ROOT . '/versions/python2.7.18/bin/python'
-    let g:python3_host_prog=$PYENV_ROOT . '/versions/python3.9.7/bin/python'
-  endif
-else
-  set clipboard+=unnamed
-endif
+set clipboard+=unnamed
 
 let mapleader="\<Space>"
 
@@ -151,13 +104,8 @@ let &colorcolumn=join(range(81,9999),",")
 set nowritebackup
 set nobackup
 if version >= 703
-  if has('nvim')
-    set undodir=$VIMHOME/nvim/undo
-    set directory=$VIMHOME/nvim/tmp
-  else
-    set undodir=$VIMHOME/vim/undo
-    set directory=$VIMHOME/vim/tmp
-  endif
+  set undodir=$VIMHOME/vim/undo
+  set directory=$VIMHOME/vim/tmp
   set undofile
 endif
 
@@ -202,9 +150,10 @@ if &t_Co > 2 || has('gui_running')
   syntax on
 endif
 
-if g:os != "Linux"
+if g:os != "Linux" && g:os != "Darwin"
   set termguicolors
 endif
+
 set background=dark
 colorscheme solarized8
 
