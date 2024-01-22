@@ -119,7 +119,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 elif [[ "${unamestr}" == 'Darwin' ]]; then
-  [ -s "/usr/local/opt/nvm/nvm.sh" ] && . "/usr/local/opt/nvm/nvm.sh"  # This loads nvm
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
   nvm install ${nodejs_version}
   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
     && pyenv virtualenv ${python2_version} python${python2_version}
