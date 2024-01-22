@@ -126,10 +126,8 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH="$HOME/.cargo/bin:$PATH"
   export PATH=${HOME}/Library/Android/sdk/platform-tools:$PATH
   export PATH=${HOME}/development/flutter/bin:$PATH
-  export CLOUDSDK_PYTHON="${HOME}/.pyenv/versions/${PYTHON2_VERSION}/bin/python"
-  source '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/path.zsh.inc'
-  source '/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/completion.zsh.inc'
-
+  source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
+  source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
 fi
 
 function cd() {
