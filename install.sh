@@ -5,8 +5,8 @@ nvm_version="0.39.7"
 python2_version="2.7.18"
 python3_version="3.9.15"
 nodejs_version="20.11.0"
-ruby2_version="2.7.6"
-go_version="1.18.0"
+ruby_version="3.3.0"
+go_version="1.21.6"
 
 make_directory() {
   if [ ! -d "$1" ]; then
@@ -107,7 +107,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   else
     git -C ${RBENV_PLUGIN_HOME}/ruby-build pull
   fi
-  ${HOME}/.rbenv/bin/rbenv install ${ruby2_version}
+  ${HOME}/.rbenv/bin/rbenv install ${ruby_version}
 
   GOENV_HOME="${HOME}/.goenv"
   if [ ! -d "${GOENV_HOME}" ]; then
@@ -125,7 +125,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
     && pyenv virtualenv ${python2_version} python${python2_version}
   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
     && pyenv virtualenv ${python3_version} python${python3_version}
-  rbenv install ${ruby2_version}
+  rbenv install ${ruby_version}
 
   GOENV_HOME="${HOME}/.goenv"
   if [ ! -d "${GOENV_HOME}" ]; then

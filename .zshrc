@@ -49,8 +49,8 @@ TERM=xterm-256color
 NODEJS_VERSION=20.11.0
 PYTHON3_VERSION=3.9.15
 PYTHON2_VERSION=2.7.18
-RUBY2_VERSION=2.7.6
-GO_VERSION=1.18.0
+RUBY_VERSION=3.3.0
+GO_VERSION=1.21.6
 
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
@@ -81,7 +81,7 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # nvm bash_completion
   nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
-  rbenv shell ${RUBY2_VERSION}
+  rbenv shell ${RUBY_VERSION}
   # goenv
   export GOENV_ROOT="$HOME/.goenv"
   export PATH="$GOENV_ROOT/bin:$PATH"
@@ -112,7 +112,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
   nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
-  rbenv shell ${RUBY2_VERSION}
+  rbenv shell ${RUBY_VERSION}
   export PATH="${HOME}/.local/bin:$PATH"
   # goenv
   export GOENV_ROOT="$HOME/.goenv"
