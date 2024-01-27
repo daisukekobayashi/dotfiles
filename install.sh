@@ -58,15 +58,11 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     git -C ${HOME}/.alacritty-colorscheme pull
   fi
 
-  NVM_HOME="${HOME}/.nvm"
-  if [ ! -d "${NVM_HOME}" ]; then
-    git clone https://github.com/nvm-sh/nvm.git ${HOME}/.nvm
-  else
-    git -C ${HOME}/.nvm pull
-    git -C ${HOME}/.nvm checkout v${nvm_version}
+  VOLTA_HOME="${HOME}/.volta"
+  if [ ! -d "${VOLTA_HOME}" ]; then
+    curl https://get.volta.sh | bash -s -- --skip-setup
   fi
-  source ${HOME}/.nvm/nvm.sh \
-    && nvm install ${nodejs_version}
+  volta install node@${nodejs_version}
 
   PYENV_HOME="${HOME}/.pyenv"
   if [ ! -d "${PYENV_HOME}" ]; then
@@ -119,8 +115,12 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 elif [[ "${unamestr}" == 'Darwin' ]]; then
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-  nvm install ${nodejs_version}
+  VOLTA_HOME="${HOME}/.volta"
+  if [ ! -d "${VOLTA_HOME}" ]; then
+    curl https://get.volta.sh | bash -s -- --skip-setup
+  fi
+  volta install node@${nodejs_version}
+
   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
     && pyenv virtualenv ${python2_version} python${python2_version}
   env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
