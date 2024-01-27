@@ -67,6 +67,10 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
+  export VOLTA_HOME="$HOME/.volta"
+  export PATH="$VOLTA_HOME/bin:$PATH"
+  volta install node@v${NODEJS_VERSION}
+
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
@@ -76,10 +80,6 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   eval "$(pyenv virtualenv-init -)"
   pyenv shell python${PYTHON3_VERSION}
   export PATH="$HOME/bin/nvim/bin:$HOME/.rbenv/bin:$PATH"
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This sets up nvm
-  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # nvm bash_completion
-  nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
   rbenv shell ${RUBY_VERSION}
   # goenv
@@ -98,6 +98,11 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   #alias pbpaste='xsel --clipboard --output'
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
+
+  export VOLTA_HOME="$HOME/.volta"
+  export PATH="$VOLTA_HOME/bin:$PATH"
+  volta install node@v${NODEJS_VERSION}
+
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
   eval "$(pyenv init --path)"
@@ -107,10 +112,6 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   pyenv shell python${PYTHON3_VERSION}
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="${HOME}/projects/open-source/depot_tools:$PATH"
-  export NVM_DIR="$HOME/.nvm"
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
-  nvm use ${NODEJS_VERSION}
   eval "$(rbenv init -)"
   rbenv shell ${RUBY_VERSION}
   export PATH="${HOME}/.local/bin:$PATH"
