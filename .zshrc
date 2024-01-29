@@ -3,7 +3,7 @@ autoload -Uz compinit && compinit
 autoload -U promptinit; promptinit
 typeset -U PATH
 
-bindkey -e
+#bindkey -e
 
 setopt auto_cd
 setopt auto_param_keys

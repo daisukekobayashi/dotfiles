@@ -16,6 +16,7 @@ inline = "autoload -Uz colors && zsh-defer colors"
 github = "ohmyzsh/ohmyzsh"
 dir = "plugins"
 use = ["{git,tmux}/*.plugin.zsh"]
+apply = ["defer"]
 
 [plugins.zsh-completions]
 github = "zsh-users/zsh-completions"
@@ -28,6 +29,11 @@ apply = ["defer"]
 
 [plugins.zsh-syntax-highlighting]
 github = "zsh-users/zsh-syntax-highlighting"
+apply = ["defer"]
+
+[plugins.zsh-vi-mode]
+github = "jeffreytse/zsh-vi-mode"
+use = ["{{ name }}.zsh"]
 apply = ["defer"]
 
 [plugins.pure]
