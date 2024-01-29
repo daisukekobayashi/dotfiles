@@ -144,47 +144,7 @@ ZSH_TMUX_FIXTERM=false
 ZSH_TMUX_AUTOSTART=true
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=242'
 
-### Added by Zinit's installer
-ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
-if [[ ! -f $ZINIT_HOME/zinit.zsh ]]; then
-  mkdir -p "$(dirname $ZINIT_HOME)"
-  git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
-fi
-source "${ZINIT_HOME}/zinit.zsh"
-autoload -Uz _zinit
-(( ${+_comps} )) && _comps[zinit]=_zinit
-### End of Zinit installer's chunk
-
-zinit light zsh-users/zsh-autosuggestions
-zinit light zdharma-continuum/fast-syntax-highlighting
-
-zinit light zdharma-continuum/history-search-multi-word
-
-zinit ice pick"async.sh" src"pure.zsh"
-zinit light sindresorhus/pure
-
-zinit ice from"gh-r" as"program"
-zinit load junegunn/fzf-bin
-zinit load junegunn/fzf
-
-zinit light zsh-users/zsh-completions
-zinit light zsh-users/zsh-history-substring-search
-bindkey -M emacs '^P' history-substring-search-up
-bindkey -M emacs '^N' history-substring-search-down
-
-zinit snippet OMZ::plugins/tmux/tmux.plugin.zsh
-zinit snippet OMZ::plugins/git/git.plugin.zsh
-
-zinit light joel-porquet/zsh-dircolors-solarized
-zinit light mollifier/anyframe
-#zinit light b4b4r07/enhancd
-
-zinit ice pick'k.sh'
-zinit light supercrabtree/k
-
-if [[ ! -d ${HOME}/.zsh-dircolors.config ]]; then
-  setupsolarized dircolors.ansi-universal
-fi
+eval "$(sheldon source)"
 
 #if (which zprof > /dev/null 2>&1) ;then
 #  zprof

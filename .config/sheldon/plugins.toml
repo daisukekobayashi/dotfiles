@@ -1,0 +1,45 @@
+shell = "zsh"
+
+[plugins.zsh-defer]
+github = "romkatv/zsh-defer"
+
+[templates]
+defer = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"
+
+[plugins.compinit]
+inline = "autoload -Uz compinit && zsh-defer compinit"
+
+[plugins.colors]
+inline = "autoload -Uz colors && zsh-defer colors"
+
+[plugins.oh-my-zsh]
+github = "ohmyzsh/ohmyzsh"
+dir = "plugins"
+use = ["{git,tmux}/*.plugin.zsh"]
+
+[plugins.zsh-completions]
+github = "zsh-users/zsh-completions"
+apply = ["defer"]
+
+[plugins.zsh-autosuggestions]
+github = "zsh-users/zsh-autosuggestions"
+use = ["{{ name }}.zsh"]
+apply = ["defer"]
+
+[plugins.zsh-syntax-highlighting]
+github = "zsh-users/zsh-syntax-highlighting"
+apply = ["defer"]
+
+[plugins.pure]
+github = "sindresorhus/pure"
+use = ["async.zsh", "pure.zsh"]
+
+#[plugins.dotfiles-sync]
+#local = "~/.dotfiles/zsh/sync"
+#use = ["*.zsh"]
+#apply = ["source"]
+#
+#[plugins.dotfiles-defer]
+#local = "~/.dotfiles/zsh/defer"
+#use = ["*.zsh"]
+#apply = ["defer"]
