@@ -38,8 +38,8 @@ use = ["async.zsh", "pure.zsh"]
 #local = "~/.dotfiles/zsh/sync"
 #use = ["*.zsh"]
 #apply = ["source"]
-#
-#[plugins.dotfiles-defer]
-#local = "~/.dotfiles/zsh/defer"
-#use = ["*.zsh"]
-#apply = ["defer"]
+
+[plugins.dotfiles-defer]
+local = "~/.dotfiles/zsh/defer"
+use = ["*.zsh"]
+apply = ["defer"]
