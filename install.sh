@@ -14,6 +14,17 @@ make_directory() {
   fi
 }
 
+# sheldon
+SHELDON_HOME="${HOME}/.config/sheldon"
+make_directory "${SHELDON_HOME}"
+if [ ! -f "${SHELDON_HOME}/plugins.toml" ]; then
+  ln -s "$(pwd)/.config/sheldon/plugins.toml" "${SHELDON_HOME}/plugins.toml"
+else
+  echo "plugins.toml"
+  rm "${SHELDON_HOME}/plugins.toml"
+  ln -s "$(pwd)/.config/sheldon/plugins.toml" "${SHELDON_HOME}/plugins.toml"
+fi
+
 # vim
 make_directory "${HOME}/.vim/vim/undo"
 make_directory "${HOME}/.vim/vim/tmp"
