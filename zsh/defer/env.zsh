@@ -18,22 +18,25 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
   ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
 elif [[ "${unamestr}" == 'Linux' ]]; then
-  export XDG_CONFIG_HOME=$HOME/.config
+  # volta
   export VOLTA_HOME="$HOME/.volta"
   export PATH="$VOLTA_HOME/bin:$PATH"
   volta install node@v${NODEJS_VERSION}
 
+  # pyenv
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
-  export PATH="$HOME/.local/bin:$PATH"
   eval "$(pyenv init --path)"
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
   pyenv shell python${PYTHON3_VERSION}
+
+  # rbenv
   export PATH="$HOME/bin/nvim/bin:$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init -)"
   rbenv shell ${RUBY_VERSION}
+
   # goenv
   export GOENV_ROOT="$HOME/.goenv"
   export PATH="$GOENV_ROOT/bin:$PATH"
@@ -41,6 +44,7 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$GOROOT/bin:$PATH"
   export PATH="$PATH:$GOPATH/bin"
   goenv shell ${GO_VERSION}
+
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
 
@@ -49,10 +53,12 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   #alias pbcopy='xsel --clipboard --input'
   #alias pbpaste='xsel --clipboard --output'
 elif [[ "${unamestr}" == 'Darwin' ]]; then
+  # volta
   export VOLTA_HOME="$HOME/.volta"
   export PATH="$VOLTA_HOME/bin:$PATH"
   volta install node@v${NODEJS_VERSION}
 
+  # pyenv
   export PYENV_ROOT="$HOME/.pyenv"
   export PATH="$PYENV_ROOT/bin:$PATH"
   eval "$(pyenv init --path)"
@@ -60,11 +66,15 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(pyenv virtualenv-init -)"
   export VIRTUAL_ENV_DISABLE_PROMPT=1
   pyenv shell python${PYTHON3_VERSION}
+
   export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
   export PATH="${HOME}/projects/open-source/depot_tools:$PATH"
+
+  # rbenv
   eval "$(rbenv init -)"
   rbenv shell ${RUBY_VERSION}
   export PATH="${HOME}/.local/bin:$PATH"
+
   # goenv
   export GOENV_ROOT="$HOME/.goenv"
   export PATH="$GOENV_ROOT/bin:$PATH"
@@ -75,8 +85,14 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
 
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
+
+  # android
   export PATH=${HOME}/Library/Android/sdk/platform-tools:$PATH
+
+  # flutter
   export PATH=${HOME}/development/flutter/bin:$PATH
+
+  # gcluod
   source "$(brew --prefix)/share/google-cloud-sdk/path.zsh.inc"
   source "$(brew --prefix)/share/google-cloud-sdk/completion.zsh.inc"
 fi

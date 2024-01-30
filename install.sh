@@ -61,6 +61,12 @@ do
 done
 
 if [[ "${unamestr}" == 'Linux' ]]; then
+
+  if [ ! -d "${HOME}/.local/bin/sheldon" ]; then
+    curl --proto '=https' -fLsS https://rossmacarthur.github.io/install/crate.sh \
+      | bash -s -- --repo rossmacarthur/sheldon --to ~/.local/bin
+  fi
+
   if [ ! -f "${XDG_CONFIG_HOME}/alacritty/alacritty.yml" ]; then
     make_directory "${XDG_CONFIG_HOME}/alacritty"
     ln -s "$(pwd)/.config/alacritty/alacritty.yml" "${XDG_CONFIG_HOME}/alacritty/alacritty.yml"
