@@ -41,6 +41,7 @@ if [ ! -f "${NEOVIM_HOME}/init.lua" ]; then
 else
   echo "init.lua"
   rm "${NEOVIM_HOME}/init.lua"
+  rm "${NEOVIM_HOME}/lua"
   ln -s "$(pwd)/.config/nvim/init.lua" "${NEOVIM_HOME}/init.lua"
   ln -s "$(pwd)/.config/nvim/lua" "${NEOVIM_HOME}/lua"
 fi
@@ -72,21 +73,14 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     ln -s "$(pwd)/.config/alacritty/alacritty.yml" "${HOME}/.config/alacritty/alacritty.yml"
     git clone https://github.com/eendroroy/alacritty-theme.git ${HOME}/.alacritty-colorscheme
   else
-    git -C ${HOME}/.alacritty-colorscheme pull
+    git -C ${HOME}/.alacritty-colorscheme pull --ff-only
   fi
-
-  export VOLTA_HOME="${HOME}/.volta"
-  if [ ! -d "${VOLTA_HOME}" ]; then
-    curl https://get.volta.sh | bash -s -- --skip-setup
-  fi
-  export PATH="$VOLTA_HOME/bin:$PATH"
-  volta install node@${nodejs_version}
 
   PYENV_HOME="${HOME}/.pyenv"
   if [ ! -d "${PYENV_HOME}" ]; then
     git clone https://github.com/yyuu/pyenv.git "${PYENV_HOME}"
   else
-    git -C ${PYENV_HOME} pull
+    git -C ${PYENV_HOME} pull --ff-only
   fi
 
   PYENV_VIRTUALENV_HOME="${HOME}/.pyenv/plugins/pyenv-virtualenv"
@@ -94,7 +88,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     git clone https://github.com/yyuu/pyenv-virtualenv.git \
       "${PYENV_VIRTUALENV_HOME}"
   else
-    git -C ${PYENV_VIRTUALENV_HOME} pull
+    git -C ${PYENV_VIRTUALENV_HOME} pull --ff-only
   fi
 
   export PYENV_ROOT="$HOME/.pyenv"
@@ -102,16 +96,11 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
 
-  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
-    && pyenv virtualenv ${python2_version} python${python2_version}
-  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
-    && pyenv virtualenv ${python3_version} python${python3_version}
-
   RBENV_HOME="${HOME}/.rbenv"
   if [ ! -d "${RBENV_HOME}" ]; then
     git clone https://github.com/rbenv/rbenv.git "${RBENV_HOME}"
   else
-    git -C ${RBENV_HOME} pull
+    git -C ${RBENV_HOME} pull --ff-only
   fi
 
   RBENV_PLUGIN_HOME="${HOME}/.rbenv/plugins"
@@ -119,52 +108,53 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     mkdir "${RBENV_PLUGIN_HOME}"
     git clone https://github.com/rbenv/ruby-build.git "${RBENV_PLUGIN_HOME}/ruby-build"
   else
-    git -C ${RBENV_PLUGIN_HOME}/ruby-build pull
+    git -C ${RBENV_PLUGIN_HOME}/ruby-build pull --ff-only
   fi
-  ${HOME}/.rbenv/bin/rbenv install ${ruby_version}
-
-  GOENV_HOME="${HOME}/.goenv"
-  if [ ! -d "${GOENV_HOME}" ]; then
-    git clone https://github.com/syndbg/goenv.git "${GOENV_HOME}"
-  else
-    git -C ${GOENV_HOME} pull
-  fi
-  ${GOENV_HOME}/bin/goenv install ${go_version}
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
+  export PATH="$HOME/.rbenv/bin:$PATH"
+  eval "$(rbenv init -)"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
-  VOLTA_HOME="${HOME}/.volta"
-  if [ ! -d "${VOLTA_HOME}" ]; then
-    curl https://get.volta.sh | bash -s -- --skip-setup
-  fi
-  volta install node@${nodejs_version}
-
-  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
-    && pyenv virtualenv ${python2_version} python${python2_version}
-  env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
-    && pyenv virtualenv ${python3_version} python${python3_version}
-  rbenv install ${ruby_version}
-
-  GOENV_HOME="${HOME}/.goenv"
-  if [ ! -d "${GOENV_HOME}" ]; then
-    git clone https://github.com/syndbg/goenv.git "${GOENV_HOME}"
-  else
-    git -C ${GOENV_HOME} pull
-  fi
-  ${GOENV_HOME}/bin/goenv install ${go_version}
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  :
 fi
 
+# volta
+export VOLTA_HOME="${HOME}/.volta"
+if [ ! -d "${VOLTA_HOME}" ]; then
+  curl https://get.volta.sh | bash -s -- --skip-setup
+fi
+export PATH="$VOLTA_HOME/bin:$PATH"
+volta install node@${nodejs_version}
+
+# pyenv
+env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
+  && pyenv virtualenv ${python2_version} python${python2_version}
+env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
+  && pyenv virtualenv ${python3_version} python${python3_version}
+
+# rbenv
+rbenv install ${ruby_version}
+
+# go
+GOENV_HOME="${HOME}/.goenv"
+if [ ! -d "${GOENV_HOME}" ]; then
+  git clone https://github.com/syndbg/goenv.git "${GOENV_HOME}"
+else
+  git -C ${GOENV_HOME} pull --ff-only
+fi
+${GOENV_HOME}/bin/goenv install ${go_version}
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# tmux
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
 if [ ! -d "${TPM_DIR}" ]; then
   git clone http://github.com/tmux-plugins/tpm "${TPM_DIR}"
 else
-  git -C ${TPM_DIR} pull
+  git -C ${TPM_DIR} pull --ff-only
 fi
 
 tmux start-server \
   && tmux new-session -d \
   && ${HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh
+
 
 # vim-plug
 VIM_PLUG="${HOME}/.vim/autoload/plug.vim"
