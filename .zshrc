@@ -1,9 +1,5 @@
 #zmodload zsh/zprof && zprof
-autoload -Uz compinit && compinit
-autoload -U promptinit; promptinit
 typeset -U PATH
-
-#bindkey -e
 
 setopt auto_cd
 setopt auto_param_keys
@@ -23,6 +19,7 @@ setopt nolistbeep
 setopt prompt_subst
 setopt pushd_ignore_dups
 setopt share_history
+setopt histignorespace
 
 zstyle ':chpwd:*' recent-dirs-max 500
 zstyle ':completion:*' matcher-list '' 'm:{a-zA-Z-_}={A-Za-z_-}'
@@ -60,9 +57,17 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MSYS_NT-10.0' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-10.0' ]] ||
    [[ "${unamestr}" == 'MINGW32_NT-10.0' ]]; then
+  export CHERE_INVOKING=1
+  WIN_HOME="$(cygpath ${USERPROFILE})"
+  alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/.local/bin:$PATH"
   export XDG_CONFIG_HOME=$HOME/.config
+  export PATH="$HOME/bin/nvim/bin:$PATH"
+  alias pbcopy='xclip -selection clipboard'
+  alias pbpaste='xclip -selection clipboard -o'
+  #alias pbcopy='xsel --clipboard --input'
+  #alias pbpaste='xsel --clipboard --output'
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
@@ -70,8 +75,6 @@ fi
 function cd() {
   builtin cd $@ && ls;
 }
-
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 eval "$(sheldon source)"
 
