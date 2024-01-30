@@ -15,66 +15,9 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   source ${WIN_HOME}/.pve/python${PYTHON3_VERSION}/Scripts/activate
   ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
 elif [[ "${unamestr}" == 'Linux' ]]; then
-  # volta
-  export VOLTA_HOME="$HOME/.volta"
-  export PATH="$VOLTA_HOME/bin:$PATH"
-  volta install node@v${NODEJS_VERSION}
-
-  # pyenv
-  export VIRTUAL_ENV_DISABLE_PROMPT=1
-  export PYENV_ROOT="$HOME/.pyenv"
-  export PATH="$PYENV_ROOT/bin:$PATH"
-  eval "$(pyenv init --path)"
-  eval "$(pyenv init -)"
-  eval "$(pyenv virtualenv-init -)"
-  pyenv shell python${PYTHON3_VERSION}
-
-  # rbenv
-  export PATH="$HOME/.rbenv/bin:$PATH"
-  eval "$(rbenv init -)"
-  rbenv shell ${RUBY_VERSION}
-
-  # goenv
-  export GOENV_ROOT="$HOME/.goenv"
-  export PATH="$GOENV_ROOT/bin:$PATH"
-  eval "$(goenv init -)"
-  export PATH="$GOROOT/bin:$PATH"
-  export PATH="$PATH:$GOPATH/bin"
-  goenv shell ${GO_VERSION}
-
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
-  # volta
-  export VOLTA_HOME="$HOME/.volta"
-  export PATH="$VOLTA_HOME/bin:$PATH"
-  volta install node@v${NODEJS_VERSION}
-
-  # pyenv
-  export PYENV_ROOT="$HOME/.pyenv"
-  export PATH="$PYENV_ROOT/bin:$PATH"
-  eval "$(pyenv init --path)"
-  eval "$(pyenv init -)"
-  eval "$(pyenv virtualenv-init -)"
-  export VIRTUAL_ENV_DISABLE_PROMPT=1
-  pyenv shell python${PYTHON3_VERSION}
-
-  export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
-  export PATH="${HOME}/projects/open-source/depot_tools:$PATH"
-
-  # rbenv
-  eval "$(rbenv init -)"
-  rbenv shell ${RUBY_VERSION}
-  export PATH="${HOME}/.local/bin:$PATH"
-
-  # goenv
-  export GOENV_ROOT="$HOME/.goenv"
-  export PATH="$GOENV_ROOT/bin:$PATH"
-  eval "$(goenv init -)"
-  export PATH="$GOROOT/bin:$PATH"
-  export PATH="$PATH:$GOPATH/bin"
-  goenv shell ${GO_VERSION}
-
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
 
