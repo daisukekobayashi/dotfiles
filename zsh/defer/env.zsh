@@ -11,11 +11,8 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MSYS_NT-10.0' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-10.0' ]] ||
    [[ "${unamestr}" == 'MINGW32_NT-10.0' ]]; then
-  export CHERE_INVOKING=1
-  WIN_HOME="$(cygpath ${USERPROFILE})"
   source ${HOME}/.mintty/sol.dark
   source ${WIN_HOME}/.pve/python${PYTHON3_VERSION}/Scripts/activate
-  alias nvm=${WIN_HOME}/scoop/apps/nvm/current/nvm.exe
   ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
 elif [[ "${unamestr}" == 'Linux' ]]; then
   # volta
@@ -33,7 +30,7 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   pyenv shell python${PYTHON3_VERSION}
 
   # rbenv
-  export PATH="$HOME/bin/nvim/bin:$HOME/.rbenv/bin:$PATH"
+  export PATH="$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init -)"
   rbenv shell ${RUBY_VERSION}
 
@@ -47,11 +44,6 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
 
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
-
-  alias pbcopy='xclip -selection clipboard'
-  alias pbpaste='xclip -selection clipboard -o'
-  #alias pbcopy='xsel --clipboard --input'
-  #alias pbpaste='xsel --clipboard --output'
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   # volta
   export VOLTA_HOME="$HOME/.volta"
