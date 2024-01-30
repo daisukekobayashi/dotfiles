@@ -113,7 +113,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init -)"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
-  :
+  eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
 # volta
