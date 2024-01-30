@@ -62,23 +62,24 @@ done
 
 if [[ "${unamestr}" == 'Linux' ]]; then
 
-  if [ ! -d "${HOME}/.local/bin/sheldon" ]; then
+  if [ ! -f "${HOME}/.local/bin/sheldon" ]; then
     curl --proto '=https' -fLsS https://rossmacarthur.github.io/install/crate.sh \
       | bash -s -- --repo rossmacarthur/sheldon --to ~/.local/bin
   fi
 
-  if [ ! -f "${XDG_CONFIG_HOME}/alacritty/alacritty.yml" ]; then
-    make_directory "${XDG_CONFIG_HOME}/alacritty"
-    ln -s "$(pwd)/.config/alacritty/alacritty.yml" "${XDG_CONFIG_HOME}/alacritty/alacritty.yml"
+  if [ ! -f "${HOME}/.config/alacritty/alacritty.yml" ]; then
+    make_directory "${HOME}/.config/alacritty"
+    ln -s "$(pwd)/.config/alacritty/alacritty.yml" "${HOME}/.config/alacritty/alacritty.yml"
     git clone https://github.com/eendroroy/alacritty-theme.git ${HOME}/.alacritty-colorscheme
   else
     git -C ${HOME}/.alacritty-colorscheme pull
   fi
 
-  VOLTA_HOME="${HOME}/.volta"
+  export VOLTA_HOME="${HOME}/.volta"
   if [ ! -d "${VOLTA_HOME}" ]; then
     curl https://get.volta.sh | bash -s -- --skip-setup
   fi
+  export PATH="$VOLTA_HOME/bin:$PATH"
   volta install node@${nodejs_version}
 
   PYENV_HOME="${HOME}/.pyenv"
