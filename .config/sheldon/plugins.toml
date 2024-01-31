@@ -39,13 +39,17 @@ github = "zsh-users/zsh-history-substring-search"
 use = ["{{ name }}.zsh"]
 apply = ["defer"]
 
-[plugins.zsh-history-substring-search.hooks]
-post = "bindkey '^P' history-substring-search-up && bindkey '^N' history-substring-search-down"
-
 [plugins.zsh-vi-mode]
 github = "jeffreytse/zsh-vi-mode"
 use = ["{{ name }}.zsh"]
 apply = ["defer"]
+
+[plugins.zsh-vi-mode.hooks]
+post = """
+zvm_after_init_commands+=(
+  \"bindkey '^P' history-substring-search-up\"
+  \"bindkey '^N' history-substring-search-down\"
+)"""
 
 [plugins.fzf]
 github = "junegunn/fzf"
