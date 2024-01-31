@@ -21,13 +21,22 @@ inline = "fuction cd() { builtin cd $@ && ls; }"
 [plugins.pure]
 github = "sindresorhus/pure"
 use = ["async.zsh", "pure.zsh"]
-apply = ["defer"]
+
+[plugins.pure.hooks]
+pre = "setopt prompt_subst"
 
 [plugins.oh-my-zsh]
 github = "ohmyzsh/ohmyzsh"
 dir = "plugins"
 use = ["{git,tmux}/*.plugin.zsh"]
 apply = ["defer"]
+
+[plugins.oh-my-zsh.hooks]
+pre = """
+TERM=xterm-256color
+ZSH_TMUX_FIXTERM=false
+ZSH_TMUX_AUTOSTART=true
+"""
 
 [plugins.zsh-completions]
 github = "zsh-users/zsh-completions"

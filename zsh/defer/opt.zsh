@@ -1,0 +1,16 @@
+setopt auto_cd
+setopt auto_param_keys
+setopt auto_param_slash
+setopt auto_pushd
+setopt brace_ccl
+setopt correct
+#setopt extended_glob
+setopt extended_history
+setopt hist_ignore_dups
+setopt hist_ignore_space
+setopt list_packed
+setopt magic_equal_subst
+setopt mark_dirs
+setopt nolistbeep
+setopt pushd_ignore_dups
+setopt share_history
