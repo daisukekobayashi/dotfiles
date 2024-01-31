@@ -45,7 +45,6 @@ alias ls='ls --color=auto'
 TERM=xterm-256color
 ZSH_TMUX_FIXTERM=false
 ZSH_TMUX_AUTOSTART=true
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=242'
 
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
