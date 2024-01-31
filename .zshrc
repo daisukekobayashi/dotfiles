@@ -72,10 +72,6 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
-function cd() {
-  builtin cd $@ && ls;
-}
-
 eval "$(sheldon source)"
 
 #if (which zprof > /dev/null 2>&1) ;then

@@ -15,6 +15,14 @@ inline = "autoload -Uz compinit && zsh-defer compinit"
 [plugins.colors]
 inline = "autoload -Uz colors && zsh-defer colors"
 
+[plugins.cd]
+inline = "fuction cd() { builtin cd $@ && ls; }"
+
+[plugins.pure]
+github = "sindresorhus/pure"
+use = ["async.zsh", "pure.zsh"]
+apply = ["defer"]
+
 [plugins.oh-my-zsh]
 github = "ohmyzsh/ohmyzsh"
 dir = "plugins"
@@ -54,10 +62,6 @@ zvm_after_init_commands+=(
 [plugins.fzf]
 github = "junegunn/fzf"
 apply = ["defer", "fzf-install", "fzf-source"]
-
-[plugins.pure]
-github = "sindresorhus/pure"
-use = ["async.zsh", "pure.zsh"]
 
 [plugins.forgit]
 github = "wfxr/forgit"
