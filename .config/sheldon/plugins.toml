@@ -34,6 +34,14 @@ apply = ["defer"]
 github = "zsh-users/zsh-syntax-highlighting"
 apply = ["defer"]
 
+[plugins.zsh-history-substring-search]
+github = "zsh-users/zsh-history-substring-search"
+use = ["{{ name }}.zsh"]
+apply = ["defer"]
+
+[plugins.zsh-history-substring-search.hooks]
+post = "bindkey '^P' history-substring-search-up && bindkey '^N' history-substring-search-down"
+
 [plugins.zsh-vi-mode]
 github = "jeffreytse/zsh-vi-mode"
 use = ["{{ name }}.zsh"]
