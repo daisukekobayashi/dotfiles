@@ -59,6 +59,10 @@ apply = ["defer", "fzf-install", "fzf-source"]
 github = "sindresorhus/pure"
 use = ["async.zsh", "pure.zsh"]
 
+[plugins.forgit]
+github = "wfxr/forgit"
+apply = ["defer"]
+
 #[plugins.dotfiles-sync]
 #local = "~/.dotfiles/zsh/sync"
 #use = ["*.zsh"]
