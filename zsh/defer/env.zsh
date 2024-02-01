@@ -22,8 +22,6 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   source ${WIN_HOME}/.pve/python${PYTHON3_VERSION}/Scripts/activate
   ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
 elif [[ "${unamestr}" == 'Linux' ]]; then
-  export PATH="$HOME/.local/bin:$PATH"
-  export XDG_CONFIG_HOME=$HOME/.config
   export PATH="$HOME/bin/nvim/bin:$PATH"
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
