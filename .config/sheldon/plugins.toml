@@ -6,7 +6,7 @@ github = "romkatv/zsh-defer"
 [templates]
 PATH = 'export PATH="$PATH:{{ dir }}"'
 defer = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"
-defer-with-delay = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer -t 1 source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"
+defer-with-delay = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer -t 0.1 source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"
 fzf-install = "{{ dir }}/install --bin > /dev/null \n[[ ! $PATH =~ {{ dir }} ]] && export PATH=\"$PATH:{{ dir }}/bin\"\n"
 fzf-source = "{% for file in files %}source \"{{ file }}\"\n{% endfor %}"
 
