@@ -16,13 +16,13 @@ inline = "autoload -Uz compinit && zsh-defer compinit"
 [plugins.colors]
 inline = "autoload -Uz colors && zsh-defer colors"
 
-#[plugins.dotfiles-sync]
-#local = "~/.dotfiles/zsh/sync"
-#use = ["*.zsh"]
-#apply = ["source"]
+[plugins.dotfiles-sync]
+local = "~/.dotfiles/zsh"
+use = ["sync.zsh"]
+apply = ["source"]
 
 [plugins.dotfiles-defer]
-local = "~/.dotfiles/zsh/defer"
+local = "~/.dotfiles/zsh"
 use = ["{alias,env,opt,style}.zsh"]
 apply = ["defer"]
 
@@ -88,7 +88,7 @@ github = "wfxr/forgit"
 apply = ["defer"]
 
 [plugins.dotfiles-defer-with-delay]
-local = "~/.dotfiles/zsh/defer"
+local = "~/.dotfiles/zsh"
 use = ["{gcloud,goenv,pyenv,rbenv,volta}.zsh"]
 apply = ["defer-with-delay"]
 
