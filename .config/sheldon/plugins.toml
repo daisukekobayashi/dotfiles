@@ -87,6 +87,10 @@ apply = ["defer", "fzf-install", "fzf-source"]
 github = "wfxr/forgit"
 apply = ["defer"]
 
+[plugins.fzf-tag]
+github = "Aloxaf/fzf-tab"
+apply = ["defer"]
+
 [plugins.dotfiles-defer-with-delay]
 local = "~/.dotfiles/zsh"
 use = ["{gcloud,goenv,pyenv,rbenv,volta}.zsh"]
