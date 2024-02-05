@@ -228,7 +228,6 @@ require('lazy').setup({
       'nvim-treesitter/nvim-treesitter',
     },
     opts = {
-      detect_cwd = true,
     },
   },
 
@@ -622,6 +621,11 @@ cmp.setup {
     { name = 'luasnip' },
   },
 }
+
+-- [[ Configure obsidian ]]
+require('obsidian').setup({
+  detect_cwd = true,
+})
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
