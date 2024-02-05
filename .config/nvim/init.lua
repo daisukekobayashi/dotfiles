@@ -214,6 +214,24 @@ require('lazy').setup({
     dependencies = { "nvim-tree/nvim-web-devicons" },
   },
 
+  {
+    "epwalsh/obsidian.nvim",
+    version = "*",
+    lazy = true,
+    ft = "markdown",
+    dependencies = {
+      -- Required
+      "nvim-lua/plenary.nvim",
+      -- Optional
+      "hrsh7th/nvim-cmp",
+      "nvim-telescope/telescope.nvim",
+      'nvim-treesitter/nvim-treesitter',
+    },
+    opts = {
+      detect_cwd = true,
+    },
+  },
+
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
   --    You can use this folder to prevent any conflicts with this init.lua if you're interested in keeping
   --    up-to-date with whatever is in the kickstart repo.
