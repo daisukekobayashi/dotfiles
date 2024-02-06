@@ -18,13 +18,8 @@ inline = "autoload -Uz colors && zsh-defer colors"
 
 [plugins.dotfiles-sync]
 local = "~/.dotfiles/zsh"
-use = ["sync.zsh"]
-apply = ["source"]
-
-[plugins.dotfiles-defer]
-local = "~/.dotfiles/zsh"
 use = ["{alias,env,opt,style}.zsh"]
-apply = ["defer"]
+apply = ["source"]
 
 [plugins.cd]
 inline = "fuction cd() { builtin cd $@ && ls --color=auto; }"
