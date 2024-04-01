@@ -200,11 +200,8 @@ require('lazy').setup({
   },
 
   {
-    "nvimtools/none-ls.nvim",
-    dependencies = {
-      "nvim-lua/plenary.nvim",
-      "vim-test/vim-test",
-    },
+    "stevearc/conform.nvim",
+    opts = {},
   },
 
   {
@@ -512,7 +509,8 @@ local on_attach = function(_, bufnr)
 
   -- Create a command `:Format` local to the LSP buffer
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
-    vim.lsp.buf.format()
+    -- vim.lsp.buf.format()
+    require("conform").format({ bufnr = bufnr })
   end, { desc = 'Format current buffer with LSP' })
 end
 
@@ -556,15 +554,14 @@ local servers = {
   },
 }
 
--- [[ Configure none-ls ]]
-local null_ls = require("null-ls")
-null_ls.setup({
-  sources = {
-    null_ls.builtins.formatting.black,
-    null_ls.builtins.formatting.isort,
+-- [[ Configure conform ]]
+local conform = require('conform')
+conform.setup({
+  formatters_by_ft = {
+    lua = {"stylua"},
+    python = {"isort", "black"},
   },
 })
-
 
 -- Setup neovim lua configuration
 require('neodev').setup()
