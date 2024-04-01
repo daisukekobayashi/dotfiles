@@ -569,6 +569,11 @@ conform.setup({
     lua = {"stylua"},
     python = {"isort", "black"},
   },
+  formatters = {
+    stylua = {
+      prepend_args = {"--indent-type", "Spaces", "--indent-width", "2"},
+    },
+  },
 })
 
 -- Setup neovim lua configuration
