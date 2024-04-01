@@ -210,6 +210,10 @@ require("lazy").setup({
   },
 
   {
+    "mfussenegger/nvim-lint",
+  },
+
+  {
     "stevearc/oil.nvim",
     opts = {},
     -- Optional dependencies
@@ -596,6 +600,12 @@ conform.setup({
     },
   },
 })
+
+-- [[ Configure nvim-lint ]]
+require("lint").linters_by_ft = {
+  lua = { "luacheck" },
+  python = { "flake8" },
+}
 
 -- Setup neovim lua configuration
 require("neodev").setup()
