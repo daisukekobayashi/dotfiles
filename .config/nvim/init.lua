@@ -215,6 +215,10 @@ require('lazy').setup({
   },
 
   {
+    "github/copilot.vim",
+  },
+
+  {
     "epwalsh/obsidian.nvim",
     version = "*",
     lazy = true,
