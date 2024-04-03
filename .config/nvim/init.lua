@@ -244,6 +244,19 @@ require("lazy").setup({
           path = "~/notes",
         },
       },
+      templates = {
+        subdir = "_templates",
+        date_format = "%Y-%m-%d",
+        time_format = "%H:%M:%S %z",
+        substitutions = {
+          noteid = function()
+            return os.date("%Y%m%d%H%M%S")
+          end,
+          tagdate = function()
+            return os.date("%Y/%m/%d")
+          end
+        },
+      },
     },
   },
 
