@@ -257,6 +257,7 @@ require("lazy").setup({
           end
         },
       },
+      disable_frontmatter = true,
     },
   },
 
