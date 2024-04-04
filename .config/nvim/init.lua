@@ -267,6 +267,12 @@ require("lazy").setup({
     build = function()
       vim.fn["mkdp#util#install"]()
     end,
+    config = function()
+      vim.g.mkdp_auto_close = false
+      vim.g.mkdp_open_to_the_world = true
+      vim.g.mkdp_echo_preview_url = true
+      vim.g.mkdp_combine_preview = true
+    end,
   },
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
