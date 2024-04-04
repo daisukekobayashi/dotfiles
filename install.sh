@@ -38,12 +38,15 @@ make_directory "${HOME}/.vim/nvim/tmp"
 if [ ! -f "${NEOVIM_HOME}/init.lua" ]; then
   ln -s "$(pwd)/.config/nvim/init.lua" "${NEOVIM_HOME}/init.lua"
   ln -s "$(pwd)/.config/nvim/lua" "${NEOVIM_HOME}/lua"
+  ln -s "$(pwd)/.config/nvim/after" "${NEOVIM_HOME}/after"
 else
   echo "init.lua"
   rm "${NEOVIM_HOME}/init.lua"
   rm "${NEOVIM_HOME}/lua"
+  rm "${NEOVIM_HOME}/after"
   ln -s "$(pwd)/.config/nvim/init.lua" "${NEOVIM_HOME}/init.lua"
   ln -s "$(pwd)/.config/nvim/lua" "${NEOVIM_HOME}/lua"
+  ln -s "$(pwd)/.config/nvim/after" "${NEOVIM_HOME}/after"
 fi
 
 for f in .??*
