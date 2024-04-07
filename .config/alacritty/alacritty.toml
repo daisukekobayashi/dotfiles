@@ -1,4 +1,4 @@
-import = ["/home/daisuke/.alacritty-colorscheme/themes/solarized_dark.toml"]
+import = ["/home/daisuke/.alacritty-colorscheme/themes/kanagawa.toml"]
 
 [font]
 size = 12.0

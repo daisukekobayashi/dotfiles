@@ -75,6 +75,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     make_directory "${HOME}/.config/alacritty"
     ln -s "$(pwd)/.config/alacritty/alacritty.toml" "${HOME}/.config/alacritty/alacritty.toml"
     git clone https://github.com/eendroroy/alacritty-theme.git ${HOME}/.alacritty-colorscheme
+    ln -s "$(pwd)/.config/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
   else
     git -C ${HOME}/.alacritty-colorscheme pull --ff-only
   fi
