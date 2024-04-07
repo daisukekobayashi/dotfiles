@@ -1,0 +1,24 @@
+import = ["/home/daisuke/.alacritty-colorscheme/themes/solarized_dark.toml"]
+
+[font]
+size = 12.0
+
+[font.bold]
+family = "Cica"
+style = "Bold"
+
+[font.bold_italic]
+family = "Cica"
+style = "Bold Italic"
+
+[font.italic]
+family = "Cica"
+style = "Italic"
+
+[font.normal]
+family = "Cica"
+style = "Regular"
+
+[window]
+opacity = 1.0
+startup_mode = "Maximized"
