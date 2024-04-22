@@ -49,6 +49,17 @@ else
   ln -s "$(pwd)/.config/nvim/after" "${NEOVIM_HOME}/after"
 fi
 
+# lazygit
+LAZYGIT_HOME="${HOME}/.config/lazygit"
+make_directory "${LAZYGIT_HOME}"
+if [ ! -f "${LAZYGIT_HOME}/config.yml" ]; then
+  ln -s "$(pwd)/.config/lazygit/config.yml" "${LAZYGIT_HOME}/config.yml"
+else
+  echo "config.yml"
+  rm "${LAZYGIT_HOME}/config.yml"
+  ln -s "$(pwd)/.config/lazygit/config.yml" "${LAZYGIT_HOME}/config.yml"
+fi
+
 for f in .??*
 do
   [[ "$f" == ".git" ]] && continue
