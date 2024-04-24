@@ -17,7 +17,7 @@ inline = "autoload -Uz compinit && zsh-defer compinit"
 inline = "autoload -Uz colors && zsh-defer colors"
 
 [plugins.dotfiles-sync]
-local = "~/.dotfiles/zsh"
+local = "~/.config/sheldon/zsh"
 use = ["{alias,env,opt,style}.zsh"]
 apply = ["source"]
 
@@ -91,7 +91,7 @@ github = "Aloxaf/fzf-tab"
 apply = ["defer"]
 
 [plugins.dotfiles-defer-with-delay]
-local = "~/.dotfiles/zsh"
+local = "~/.config/sheldon/zsh"
 use = ["{gcloud,goenv,pyenv,rbenv,volta}.zsh"]
 apply = ["defer-with-delay"]
 

@@ -20,9 +20,15 @@ make_directory "${SHELDON_HOME}"
 if [ ! -f "${SHELDON_HOME}/plugins.toml" ]; then
   ln -s "$(pwd)/.config/sheldon/plugins.toml" "${SHELDON_HOME}/plugins.toml"
 else
-  echo "plugins.toml"
   rm "${SHELDON_HOME}/plugins.toml"
   ln -s "$(pwd)/.config/sheldon/plugins.toml" "${SHELDON_HOME}/plugins.toml"
+fi
+
+if [ ! -d "${SHELDON_HOME}/zsh" ]; then
+  ln -s "$(pwd)/zsh" "${SHELDON_HOME}/zsh"
+else
+  rm "${SHELDON_HOME}/zsh"
+  ln -s "$(pwd)/zsh" "${SHELDON_HOME}/zsh"
 fi
 
 # vim
