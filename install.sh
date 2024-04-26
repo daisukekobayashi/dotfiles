@@ -1,6 +1,9 @@
 #!/bin/bash
 
 unamestr="$(uname)"
+archstr="$(uname -m)"
+neovim_version="stable"
+lazygit_version="0.41.0"
 nvm_version="0.39.7"
 python2_version="2.7.18"
 python3_version="3.9.15"
@@ -95,6 +98,25 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     ln -s "$(pwd)/.config/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
   else
     git -C ${HOME}/.alacritty-colorscheme pull --ff-only
+  fi
+
+  if [[ "${archstr}" == 'x86_64' ]]; then
+    if [ -d "${HOME}/bin/nvim" ]; then
+      rm -rf "${HOME}/bin/nvim"
+    fi
+    curl -fLo "${HOME}/bin/nvim.tar.gz" \
+      https://github.com/neovim/neovim/releases/download/${neovim_version}/nvim-linux64.tar.gz
+    tar xf "${HOME}/bin/nvim.tar.gz" -C "${HOME}/bin"
+    mv "${HOME}/bin/nvim-linux64" "${HOME}/bin/nvim"
+  fi
+
+  if [ -f "${HOME}/bin/lazygit" ]; then
+    rm -rf "${HOME}/bin/lazygit"
+    lazygit_targz_name="lazygit_${lazygit_version}_${unamestr}_${archstr}.tar.gz"
+    curl -fLo "${HOME}/bin/lazygit.tar.gz" \
+      "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/${lazygit_targz_name}"
+    tar xf "${HOME}/bin/lazygit.tar.gz" -C "${HOME}/bin"
+    rm "${HOME}/bin/lazygit.tar.gz"
   fi
 
   PYENV_HOME="${HOME}/.pyenv"
