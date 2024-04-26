@@ -4,7 +4,6 @@ unamestr="$(uname)"
 archstr="$(uname -m)"
 neovim_version="stable"
 lazygit_version="0.41.0"
-nvm_version="0.39.7"
 python2_version="2.7.18"
 python3_version="3.9.15"
 nodejs_version="20.11.0"
@@ -93,10 +92,10 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   if [ ! -f "${HOME}/.config/alacritty/alacritty.toml" ]; then
     make_directory "${HOME}/.config/alacritty"
     ln -s "$(pwd)/.config/alacritty/alacritty.toml" "${HOME}/.config/alacritty/alacritty.toml"
-    git clone https://github.com/eendroroy/alacritty-theme.git ${HOME}/.alacritty-colorscheme
+    git clone https://github.com/eendroroy/alacritty-theme.git "${HOME}/.alacritty-colorscheme"
     ln -s "$(pwd)/.config/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
   else
-    git -C ${HOME}/.alacritty-colorscheme pull --ff-only
+    git -C "${HOME}/.alacritty-colorscheme" pull --ff-only
   fi
 
   if [[ "${archstr}" == 'x86_64' ]]; then
@@ -122,7 +121,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   if [ ! -d "${PYENV_HOME}" ]; then
     git clone https://github.com/yyuu/pyenv.git "${PYENV_HOME}"
   else
-    git -C ${PYENV_HOME} pull --ff-only
+    git -C "${PYENV_HOME}" pull --ff-only
   fi
 
   PYENV_VIRTUALENV_HOME="${HOME}/.pyenv/plugins/pyenv-virtualenv"
@@ -130,7 +129,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     git clone https://github.com/yyuu/pyenv-virtualenv.git \
       "${PYENV_VIRTUALENV_HOME}"
   else
-    git -C ${PYENV_VIRTUALENV_HOME} pull --ff-only
+    git -C "${PYENV_VIRTUALENV_HOME}" pull --ff-only
   fi
 
   export PYENV_ROOT="$HOME/.pyenv"
@@ -142,7 +141,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   if [ ! -d "${RBENV_HOME}" ]; then
     git clone https://github.com/rbenv/rbenv.git "${RBENV_HOME}"
   else
-    git -C ${RBENV_HOME} pull --ff-only
+    git -C "${RBENV_HOME}" pull --ff-only
   fi
 
   RBENV_PLUGIN_HOME="${HOME}/.rbenv/plugins"
@@ -150,7 +149,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     mkdir "${RBENV_PLUGIN_HOME}"
     git clone https://github.com/rbenv/ruby-build.git "${RBENV_PLUGIN_HOME}/ruby-build"
   else
-    git -C ${RBENV_PLUGIN_HOME}/ruby-build pull --ff-only
+    git -C "${RBENV_PLUGIN_HOME}/ruby-build" pull --ff-only
   fi
   export PATH="$HOME/.rbenv/bin:$PATH"
   eval "$(rbenv init -)"
@@ -180,9 +179,9 @@ GOENV_HOME="${HOME}/.goenv"
 if [ ! -d "${GOENV_HOME}" ]; then
   git clone https://github.com/syndbg/goenv.git "${GOENV_HOME}"
 else
-  git -C ${GOENV_HOME} pull --ff-only
+  git -C "${GOENV_HOME}" pull --ff-only
 fi
-${GOENV_HOME}/bin/goenv install ${go_version}
+"${GOENV_HOME}/bin/goenv" install ${go_version}
 
 # rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -192,12 +191,12 @@ TPM_DIR="${HOME}/.tmux/plugins/tpm"
 if [ ! -d "${TPM_DIR}" ]; then
   git clone http://github.com/tmux-plugins/tpm "${TPM_DIR}"
 else
-  git -C ${TPM_DIR} pull --ff-only
+  git -C "${TPM_DIR}" pull --ff-only
 fi
 
 tmux start-server &&
   tmux new-session -d &&
-  ${HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh
+  "${HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
 
 # vim-plug
 VIM_PLUG="${HOME}/.vim/autoload/plug.vim"
