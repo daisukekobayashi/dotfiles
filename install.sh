@@ -69,8 +69,7 @@ else
   ln -s "$(pwd)/.config/lazygit/config.yml" "${LAZYGIT_HOME}/config.yml"
 fi
 
-for f in .??*
-do
+for f in .??*; do
   [[ "$f" == ".git" ]] && continue
   [[ "$f" == ".DS_Store" ]] && continue
   [[ -d "$f" ]] && continue
@@ -87,8 +86,8 @@ done
 if [[ "${unamestr}" == 'Linux' ]]; then
 
   if [ ! -f "${HOME}/.local/bin/sheldon" ]; then
-    curl --proto '=https' -fLsS https://rossmacarthur.github.io/install/crate.sh \
-      | bash -s -- --repo rossmacarthur/sheldon --to ~/.local/bin
+    curl --proto '=https' -fLsS https://rossmacarthur.github.io/install/crate.sh |
+      bash -s -- --repo rossmacarthur/sheldon --to ~/.local/bin
   fi
 
   if [ ! -f "${HOME}/.config/alacritty/alacritty.toml" ]; then
@@ -168,10 +167,10 @@ export PATH="$VOLTA_HOME/bin:$PATH"
 volta install node@${nodejs_version}
 
 # pyenv
-env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} \
-  && pyenv virtualenv ${python2_version} python${python2_version}
-env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} \
-  && pyenv virtualenv ${python3_version} python${python3_version}
+env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} &&
+  pyenv virtualenv ${python2_version} python${python2_version}
+env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} &&
+  pyenv virtualenv ${python3_version} python${python3_version}
 
 # rbenv
 rbenv install ${ruby_version}
@@ -196,10 +195,9 @@ else
   git -C ${TPM_DIR} pull --ff-only
 fi
 
-tmux start-server \
-  && tmux new-session -d \
-  && ${HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh
-
+tmux start-server &&
+  tmux new-session -d &&
+  ${HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh
 
 # vim-plug
 VIM_PLUG="${HOME}/.vim/autoload/plug.vim"
@@ -221,4 +219,3 @@ if [ ! -d "${SOLARIZED_MATE_HOME}" ]; then
   git clone https://github.com/oz123/solarized-mate-terminal \
     "${SOLARIZED_MATE_HOME}"
 fi
-
