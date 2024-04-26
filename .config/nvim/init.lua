@@ -625,7 +625,7 @@ require("mason-lspconfig").setup()
 --  define the property 'filetypes' to the map in question.
 local servers = {
   clangd = {},
-  -- gopls = {},
+  -- gopls = {}
   pyright = {},
   rust_analyzer = {},
   tsserver = {},
@@ -650,6 +650,9 @@ conform.setup({
   formatters = {
     stylua = {
       prepend_args = { "--indent-type", "Spaces", "--indent-width", "2" },
+    },
+    shfmt = {
+      prepend_args = { "-i", "2", "-ci" },
     },
   },
 })
