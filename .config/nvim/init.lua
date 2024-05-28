@@ -194,7 +194,7 @@ require("lazy").setup({
       "nvim-lua/plenary.nvim",
       "nvim-tree/nvim-web-devicons", -- not strictly required, but recommended
       "MunifTanjim/nui.nvim",
-      "3rd/image.nvim", -- Optional image support in preview window: See `# Preview Mode` for more information
+      "3rd/image.nvim",              -- Optional image support in preview window: See `# Preview Mode` for more information
     }
   },
 
@@ -231,7 +231,11 @@ require("lazy").setup({
     dependencies = { "nvim-tree/nvim-web-devicons" },
   },
 
-  { "akinsho/toggleterm.nvim", version = "*", config = true },
+  {
+    "akinsho/toggleterm.nvim",
+    version = "*",
+    config = true,
+  },
 
   {
     "kdheepak/lazygit.nvim",
@@ -254,6 +258,27 @@ require("lazy").setup({
     -- order to load the plugin when the command is run for the first time
     keys = {
       { "<leader>lg", "<cmd>LazyGit<cr>", desc = "LazyGit" }
+    }
+  },
+
+  {
+    "jackMort/ChatGPT.nvim",
+    event = "VeryLazy",
+    config = function()
+      require("chatgpt").setup({
+        api_host_cmd = 'echo -n ""',
+        api_key_cmd = 'echo $OPENAI_API_KEY',
+        api_type_cmd = 'echo $OPENAI_API_TYPE',
+        azure_api_base_cmd = 'echo $OPENAI_API_BASE',
+        azure_api_engine_cmd = 'echo $OPENAI_API_AZURE_ENGINE',
+        azure_api_version_cmd = 'echo $OPENAI_API_AZURE_VERSION'
+      })
+    end,
+    dependencies = {
+      "MunifTanjim/nui.nvim",
+      "nvim-lua/plenary.nvim",
+      "folke/trouble.nvim",
+      "nvim-telescope/telescope.nvim"
     }
   },
 
@@ -770,6 +795,10 @@ cmp.setup({
     { name = "luasnip" },
   },
 })
+
+-- [[ Configure copilot.lua ]]
+-- See `:help copilot.lua`
+--vim.cmd("Copilot disable")
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
