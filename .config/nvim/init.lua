@@ -225,6 +225,10 @@ require("lazy").setup({
   },
 
   {
+    "dhruvasagar/vim-table-mode",
+  },
+
+  {
     "stevearc/oil.nvim",
     opts = {},
     -- Optional dependencies
