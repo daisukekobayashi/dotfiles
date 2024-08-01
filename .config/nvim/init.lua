@@ -831,6 +831,17 @@ require('lazy').setup({
   },
 
   {
+    'mfussenegger/nvim-lint',
+    events = { 'BufWritePost', 'BufReadPost', 'InsertLeave' },
+    linters_by_ft = {
+      lua = { 'luacheck' },
+      markdown = { 'vale', 'markdownlint' },
+      python = { 'mypy', 'flake8' },
+      sh = { 'shellcheck' },
+    },
+  },
+
+  {
     -- Set lualine as statusline
     'nvim-lualine/lualine.nvim',
     -- See `:help lualine.txt`
