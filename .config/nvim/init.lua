@@ -1022,6 +1022,12 @@ require('lazy').setup({
           tagdate = function()
             return os.date('%Y/%m/%d')
           end,
+          daily_note_yesterday = function()
+            return os.date('daily/%Y/%m/%Y-%m-%d', os.time() - 24 * 60 * 60)
+          end,
+          daily_note_tomorrow = function()
+            return os.date('daily/%Y/%m/%Y-%m-%d', os.time() + 24 * 60 * 60)
+          end,
         },
       },
       wiki_link_func = 'prepend_note_path',
