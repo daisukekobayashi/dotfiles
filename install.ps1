@@ -1,31 +1,45 @@
-if ($PSVersionTable.PSVersion.Major -lt 5) {
-  Write-Host "You need to have powershell >= 5"
-  exit
+if (-not ($PSVersionTable.PSVersion.Major -gt 5 -or ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -ge 1))) {
+  Write-Output "You need to have PowerShell >= 5.1. Exiting script."
+  Exit
 }
 
-if (Get-Command scoop -eq $False) {
-  Set-ExecutionPolicy RemoteSigned -s CurrentUser
-  Invoke-Expression (New-Object Net.WebClient).DownloadString('https://get.scoop.sh')
-  scoop install git openssl
+if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+  Write-Output "Scoop is not installed. Installing Scoop..."
+  try {
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -ErrorAction Stop
+    Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+  } catch {
+    Write-Error "Failed to install Scoop. Exiting script."
+    Exit
+  }
+} else {
+  Write-Output "Scoop is already installed."
 }
 
-if ((Test-Path "$HOME\.vimrc") -eq $False) {
-  New-Item -ItemType SymbolicLink -Path $HOME -Name ".vimrc" -Value ".vimrc"
+function New-SymbolicLink {
+  param (
+    [string]$Path,
+    [string]$Name,
+    [string]$Value
+  )
+  if (-not (Test-Path "$Path\$Name")) {
+    New-Item -ItemType SymbolicLink -Path $Path -Name $Name -Value $Value
+    Write-Output "Created symbolic link: $Path\$Name -> $Value"
+  } else {
+    Write-Output "Symbolic link already exists: $Path\$Name"
+  }
 }
 
-if ((Test-Path "$HOME\.gvimrc") -eq $False) {
-  New-Item -ItemType SymbolicLink -Path $HOME -Name ".gvimrc" -Value ".gvimrc"
+New-SymbolicLink -Path $Env:USERPROFILE -Name ".vimrc" -Value ".dotfiles/.vimrc"
+
+New-SymbolicLink -Path $Env:USERPROFILE -Name ".gvimrc" -Value ".dotfiles/.gvimrc"
+
+New-SymbolicLink -Path $Env:USERPROFILE -Name "vimfiles" -Value ".dotfiles/.vim"
+
+$nvim_home = "$Env:USERPROFILE\AppData\Local\nvim"
+if (-not (Test-Path $nvim_home)) {
+  New-Item $nvim_home -ItemType Directory -Force
+  Write-Output "Created directory: $nvim_home"
 }
 
-if ((Test-Path "$HOME\vimfiles") -eq $False) {
-  New-Item -ItemType SymbolicLink -Path $HOME -NAME "vimfiles" -Value "..\.vim"
-}
-
-$nvim_home = "$HOME\AppData\Local\nvim"
-if ((Test-Path $nvim_home) -eq $False) {
-  New-Item $nvim_home -ItemType Directory
-}
-
-if ((Test-Path "$nvim_home\init.vim") -eq $False) {
-  New-Item -ItemType SymbolicLink -Path $nvim_home -Name "init.vim" -Value ".config\nvim\init.vim"
-}
+New-SymbolicLink -Path $nvim_home -Name "init.lua" -Value "$Env:USERPROFILE\.dotfiles\nvim\init.lua"
