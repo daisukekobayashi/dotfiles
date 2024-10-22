@@ -940,24 +940,33 @@ require('lazy').setup({
   },
 
   {
-    'jackMort/ChatGPT.nvim',
-    event = 'VeryLazy',
+    'robitx/gp.nvim',
     config = function()
-      require('chatgpt').setup({
-        api_host_cmd = 'echo -n ""',
-        api_key_cmd = 'echo $OPENAI_API_KEY',
-        api_type_cmd = 'echo $OPENAI_API_TYPE',
-        azure_api_base_cmd = 'echo $OPENAI_API_BASE',
-        azure_api_engine_cmd = 'echo $OPENAI_API_AZURE_ENGINE',
-        azure_api_version_cmd = 'echo $OPENAI_API_AZURE_VERSION',
-      })
+      local conf = {
+        providers = {
+          openai = {
+            disable = true,
+            endpoint = 'https://api.openai.com/v1/chat/completions',
+            secret = os.getenv('OPENAI_API_KEY'),
+          },
+          azure = {
+            disable = true,
+            endpoint = 'https://$URL.openai.azure.com/openai/deployments/{{model}}/chat/completions',
+            secret = os.getenv('AZURE_API_KEY'),
+          },
+          copilot = {
+            disable = false,
+            endpoint = 'https://api.githubcopilot.com/chat/completions',
+            secret = {
+              'bash',
+              '-c',
+              "cat ~/.config/github-copilot/hosts.json | sed -e 's/.*oauth_token...//;s/\".*//'",
+            },
+          },
+        },
+      }
+      require('gp').setup(conf)
     end,
-    dependencies = {
-      'MunifTanjim/nui.nvim',
-      'nvim-lua/plenary.nvim',
-      'folke/trouble.nvim',
-      'nvim-telescope/telescope.nvim',
-    },
   },
 
   --{
