@@ -910,6 +910,13 @@ require('lazy').setup({
   },
 
   {
+    'sindrets/diffview.nvim',
+    opts = {},
+    -- Optional dependencies
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+  },
+
+  {
     'akinsho/toggleterm.nvim',
     version = '*',
     config = true,
@@ -990,14 +997,12 @@ require('lazy').setup({
 
   {
     'CopilotC-Nvim/CopilotChat.nvim',
-    branch = 'canary',
     dependencies = {
       { 'zbirenbaum/copilot.lua' }, -- or github/copilot.vim
-      { 'nvim-lua/plenary.nvim' }, -- for curl, log wrapper
+      { 'nvim-lua/plenary.nvim', branch = 'master' }, -- for curl, log wrapper
     },
-    opts = {
-      debug = true,
-    },
+    build = 'make tiktoken',
+    opts = {},
   },
 
   {
@@ -1045,6 +1050,31 @@ require('lazy').setup({
   },
 
   {
+    'nvim-neorg/neorg',
+    lazy = false,
+    version = '*',
+    config = function()
+      require('neorg').setup({
+        load = {
+          ['core.defaults'] = {},
+          ['core.concealer'] = {},
+          ['core.dirman'] = {
+            config = {
+              workspaces = {
+                notes = '~/notes',
+              },
+              default_workspace = 'notes',
+            },
+          },
+        },
+      })
+
+      vim.wo.foldlevel = 99
+      vim.wo.conceallevel = 2
+    end,
+  },
+
+  {
     'iamcco/markdown-preview.nvim',
     cmd = { 'MarkdownPreviewToggle', 'MarkdownPreview', 'MarkdownPreviewStop' },
     ft = { 'markdown' },
@@ -1057,6 +1087,10 @@ require('lazy').setup({
       vim.g.mkdp_echo_preview_url = true
       vim.g.mkdp_combine_preview = true
     end,
+  },
+
+  {
+    'jbyuki/venn.nvim',
   },
 
   -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
