@@ -118,7 +118,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     curl -fLo "/tmp/nvim.tar.gz" \
       https://github.com/neovim/neovim/releases/download/${neovim_version}/nvim-linux64.tar.gz
     tar xf /tmp/nvim.tar.gz -C /tmp
-    mv /tmp/nvim-linux64/bin/nvim "${HOME}/.local/bin/nvim"
+    mv /tmp/nvim-linux64 "${HOME}/.local/bin/nvim"
     rm -rf /tmp/nvim-linux64
   fi
 
