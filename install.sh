@@ -199,7 +199,7 @@ fi
 "${GOENV_HOME}/bin/goenv" install ${go_version}
 
 # rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # tmux
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
