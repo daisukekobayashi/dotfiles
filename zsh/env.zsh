@@ -23,7 +23,7 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
   ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/bin:$PATH"
-  export PATH="$HOME/bin/nvim/bin:$PATH"
+  export PATH="$HOME/.local/bin/nvim/bin:$PATH"
   # rust
   export PATH="$HOME/.cargo/bin:$PATH"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
