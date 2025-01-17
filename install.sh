@@ -4,7 +4,7 @@ unamestr="$(uname)"
 archstr="$(uname -m)"
 tmux_version="3.5"
 neovim_version="stable"
-lazygit_version="0.41.0"
+lazygit_version="0.45.0"
 python2_version="2.7.18"
 python3_version="3.11.9"
 nodejs_version="20.11.0"
@@ -112,23 +112,25 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   fi
 
   if [[ "${archstr}" == 'x86_64' ]]; then
-    if [ -d "${HOME}/bin/nvim" ]; then
-      rm -rf "${HOME}/bin/nvim"
+    if [ -d "${HOME}/.local/bin/nvim" ]; then
+      rm -rf "${HOME}/.local/bin/nvim"
     fi
-    curl -fLo "${HOME}/bin/nvim.tar.gz" \
+    curl -fLo "/tmp/nvim.tar.gz" \
       https://github.com/neovim/neovim/releases/download/${neovim_version}/nvim-linux64.tar.gz
-    tar xf "${HOME}/bin/nvim.tar.gz" -C "${HOME}/bin"
-    mv "${HOME}/bin/nvim-linux64" "${HOME}/bin/nvim"
+    tar xf /tmp/nvim.tar.gz -C /tmp
+    mv /tmp/nvim-linux64/bin/nvim "${HOME}/.local/bin/nvim"
+    rm -rf /tmp/nvim-linux64
   fi
 
-  if [ -f "${HOME}/bin/lazygit" ]; then
-    rm -rf "${HOME}/bin/lazygit"
-    lazygit_targz_name="lazygit_${lazygit_version}_${unamestr}_${archstr}.tar.gz"
-    curl -fLo "${HOME}/bin/lazygit.tar.gz" \
-      "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/${lazygit_targz_name}"
-    tar xf "${HOME}/bin/lazygit.tar.gz" -C "${HOME}/bin"
-    rm "${HOME}/bin/lazygit.tar.gz"
+  if [ -f "${HOME}/.local/bin/lazygit" ]; then
+    rm -rf "${HOME}/.local/bin/lazygit"
   fi
+  lazygit_targz_name="lazygit_${lazygit_version}_${unamestr}_${archstr}.tar.gz"
+  echo $lazygit_targz_name
+  curl -fLo "/tmp/lazygit.tar.gz" \
+    "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/${lazygit_targz_name}"
+  tar xf "/tmp/lazygit.tar.gz" -C "${HOME}/.local/bin"
+  rm "/tmp/lazygit.tar.gz"
 
   PYENV_HOME="${HOME}/.pyenv"
   if [ ! -d "${PYENV_HOME}" ]; then
