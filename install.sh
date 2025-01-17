@@ -2,6 +2,7 @@
 
 unamestr="$(uname)"
 archstr="$(uname -m)"
+tmux_version="3.5"
 neovim_version="stable"
 lazygit_version="0.41.0"
 python2_version="2.7.18"
@@ -96,6 +97,18 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     ln -s "$(pwd)/.config/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
   else
     git -C "${HOME}/.alacritty-colorscheme" pull --ff-only
+  fi
+
+  if [[ "$(tmux -V | awk '{print $2}')" != "${tmux_version}" ]]; then
+    curl -fLo "/tmp/tmux-${tmux_version}.tar.gz" \
+      https://github.com/tmux/tmux/releases/download/${tmux_version}/tmux-${tmux_version}.tar.gz
+
+    tar -zxf /tmp/tmux-${tmux_version}.tar.gz -C /tmp
+    (
+      cd "/tmp/tmux-${tmux_version}" &&
+        ./configure --prefix="${HOME}/.local" &&
+        make && make install
+    )
   fi
 
   if [[ "${archstr}" == 'x86_64' ]]; then
