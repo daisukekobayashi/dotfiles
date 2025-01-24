@@ -834,12 +834,20 @@ require('lazy').setup({
   {
     'mfussenegger/nvim-lint',
     events = { 'BufWritePost', 'BufReadPost', 'InsertLeave' },
-    linters_by_ft = {
-      lua = { 'luacheck' },
-      markdown = { 'vale', 'markdownlint' },
-      python = { 'mypy', 'flake8' },
-      sh = { 'shellcheck' },
-    },
+    config = function()
+      local lint = require('lint')
+      lint.linters_by_ft = {
+        lua = { 'luacheck' },
+        markdown = { 'markdownlint', 'textlint' },
+        python = { 'mypy', 'flake8' },
+        sh = { 'shellcheck' },
+      }
+      vim.api.nvim_create_autocmd({ 'InsertLeave', 'BufWritePost' }, {
+        callback = function()
+          lint.try_lint()
+        end,
+      })
+    end,
   },
 
   {
