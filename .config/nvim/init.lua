@@ -528,7 +528,19 @@ require('lazy').setup({
       -- for you, so that they are available from within Neovim.
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
+        -- lua
+        'luacheck',
         'stylua', -- Used to format Lua code
+        -- markdown
+        'markdownlint',
+        -- python
+        'black',
+        'isort',
+        'flake8',
+        'mypy',
+        -- shell
+        'shfmt',
+        'shellcheck',
       })
       require('mason-tool-installer').setup({ ensure_installed = ensure_installed })
 
@@ -1043,6 +1055,7 @@ require('lazy').setup({
 
   {
     'CopilotC-Nvim/CopilotChat.nvim',
+    branch = 'main',
     dependencies = {
       { 'zbirenbaum/copilot.lua' }, -- or github/copilot.vim
       { 'nvim-lua/plenary.nvim', branch = 'master' }, -- for curl, log wrapper
