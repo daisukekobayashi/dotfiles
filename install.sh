@@ -10,6 +10,7 @@ python3_version="3.11.9"
 nodejs_version="20.11.0"
 ruby_version="3.3.0"
 go_version="1.21.6"
+luarocks_version="3.11.1"
 
 make_directory() {
   if [ ! -d "$1" ]; then
@@ -131,6 +132,23 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/${lazygit_targz_name}"
   tar xf "/tmp/lazygit.tar.gz" -C "${HOME}/.local/bin"
   rm "/tmp/lazygit.tar.gz"
+
+  if [ -f "${HOME}/.local/bin/luarocks" ]; then
+    rm -rf "${HOME}/.local/bin/luarocks"
+  fi
+  luarocks_targz_name="luarocks-${luarocks_version}.tar.gz"
+  echo $luarocks_targz_name
+  curl -fLo "/tmp/luarocks.tar.gz" \
+    "https://luarocks.github.io/luarocks/releases/${luarocks_targz_name}"
+  tar -zxf /tmp/luarocks.tar.gz -C /tmp
+  (
+    cd "/tmp/luarocks-${luarocks_version}" &&
+      ./configure --prefix="${HOME}/.local" &&
+      make && make install
+  )
+  rm -rf "/tmp/luarocks-${luarocks_version}"
+  rm "/tmp/luarocks.tar.gz"
+
 
   PYENV_HOME="${HOME}/.pyenv"
   if [ ! -d "${PYENV_HOME}" ]; then
