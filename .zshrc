@@ -17,6 +17,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
 fi
 
 eval "$(sheldon source)"
+eval "$(gh copilot alias -- zsh)"
 
 #if (which zprof > /dev/null 2>&1) ;then
 #  zprof

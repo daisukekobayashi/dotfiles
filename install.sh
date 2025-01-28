@@ -11,6 +11,7 @@ nodejs_version="20.11.0"
 ruby_version="3.3.0"
 go_version="1.21.6"
 luarocks_version="3.11.1"
+github_cli_version="2.65.0"
 
 make_directory() {
   if [ ! -d "$1" ]; then
@@ -149,6 +150,19 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   rm -rf "/tmp/luarocks-${luarocks_version}"
   rm "/tmp/luarocks.tar.gz"
 
+  if [[ "${archstr}" == 'x86_64' ]]; then
+    if [ -d "${HOME}/.local/bin/gh " ]; then
+      rm -rf "${HOME}/.local/bin/gh "
+      rm -rf "${HOME}/.local/bin/share/man/man1/gh*"
+    fi
+    curl -fLo /tmp/gh.tar.gz \
+      "https://github.com/cli/cli/releases/download/v${github_cli_version}/gh_${github_cli_version}_linux_amd64.tar.gz"
+    tar xf /tmp/gh.tar.gz -C /tmp
+    cp -r "/tmp/gh_${github_cli_version}_linux_amd64/bin/"* "${HOME}/.local/bin/"
+    cp -r "/tmp/gh_${github_cli_version}_linux_amd64/share/"* "${HOME}/.local/share/"
+    rm -rf "/tmp/gh_${github_cli_version}_linux_amd64"
+    rm -rf /tmp/gh.tar.gz
+  fi
 
   PYENV_HOME="${HOME}/.pyenv"
   if [ ! -d "${PYENV_HOME}" ]; then
