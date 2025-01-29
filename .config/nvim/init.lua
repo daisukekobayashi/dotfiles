@@ -641,6 +641,7 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
+        markdown = { 'markdownlint', 'textlint' },
         python = { 'isort', 'black' },
         sh = { 'shfmt' },
         --
