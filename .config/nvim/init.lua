@@ -624,7 +624,7 @@ require('lazy').setup({
       notify_on_error = false,
       format_on_save = function(bufnr)
         -- Disable autofromat on certain filetypes
-        local ignore_filetypes = { 'markdown' }
+        local ignore_filetypes = {}
         if vim.tbl_contains(ignore_filetypes, vim.bo[bufnr].filetype) then
           return
         end
@@ -928,15 +928,17 @@ require('lazy').setup({
         for _, linter_name in ipairs(linters) do
           for _, name in ipairs(running_linters) do
             if name == linter_name then
+              -- vim.notify('Linter ' .. linter_name .. ' is already running', vim.log.levels.INFO)
               return
             end
           end
 
+          -- vim.notify('Linter ' .. linter_name .. ' has started', vim.log.levels.INFO)
           lint.try_lint(linter_name)
         end
       end
 
-      vim.api.nvim_create_autocmd({ 'InsertLeave', 'BufWritePost' }, {
+      vim.api.nvim_create_autocmd({ 'BufWritePost', 'BufReadPost', 'InsertLeave' }, {
         callback = function()
           safe_try_lint()
         end,
