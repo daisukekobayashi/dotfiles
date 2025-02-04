@@ -1250,9 +1250,7 @@ require('lazy').setup({
     'iamcco/markdown-preview.nvim',
     cmd = { 'MarkdownPreviewToggle', 'MarkdownPreview', 'MarkdownPreviewStop' },
     ft = { 'markdown' },
-    build = function()
-      vim.fn['mkdp#util#install']()
-    end,
+    build = ':call mkdp#util#install()',
     config = function()
       vim.g.mkdp_auto_close = false
       vim.g.mkdp_open_to_the_world = true
@@ -1374,6 +1372,9 @@ require('lazy').setup({
       max_width_window_percentage = math.huge,
       window_overlap_clear_enabled = true, -- toggles images when windows are overlapped
       window_overlap_clear_ft_ignore = { 'cmp_menu', 'cmp_docs', '' },
+      rocks = {
+        hererocks = true,
+      },
     },
   },
 
