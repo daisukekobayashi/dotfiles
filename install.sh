@@ -12,6 +12,7 @@ ruby_version="3.3.0"
 go_version="1.21.6"
 luarocks_version="3.11.1"
 github_cli_version="2.65.0"
+quarto_version="1.6.40"
 
 make_directory() {
   if [ ! -d "$1" ]; then
@@ -46,19 +47,11 @@ make_directory "${NEOVIM_HOME}"
 make_directory "${HOME}/.vim/nvim/undo"
 make_directory "${HOME}/.vim/nvim/tmp"
 
-if [ ! -f "${NEOVIM_HOME}/init.lua" ]; then
-  ln -s "$(pwd)/.config/nvim/init.lua" "${NEOVIM_HOME}/init.lua"
-  ln -s "$(pwd)/.config/nvim/lua" "${NEOVIM_HOME}/lua"
-  ln -s "$(pwd)/.config/nvim/after" "${NEOVIM_HOME}/after"
-else
-  echo "init.lua"
-  rm "${NEOVIM_HOME}/init.lua"
-  rm "${NEOVIM_HOME}/lua"
-  rm "${NEOVIM_HOME}/after"
-  ln -s "$(pwd)/.config/nvim/init.lua" "${NEOVIM_HOME}/init.lua"
-  ln -s "$(pwd)/.config/nvim/lua" "${NEOVIM_HOME}/lua"
-  ln -s "$(pwd)/.config/nvim/after" "${NEOVIM_HOME}/after"
+if [ -e "${NEOVIM_HOME}" ]; then
+  rm -rf "${NEOVIM_HOME}"
 fi
+
+ln -s "$(pwd)/.config/nvim" "${NEOVIM_HOME}"
 
 # lazygit
 LAZYGIT_HOME="${HOME}/.config/lazygit"
@@ -162,6 +155,19 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     cp -r "/tmp/gh_${github_cli_version}_linux_amd64/share/"* "${HOME}/.local/share/"
     rm -rf "/tmp/gh_${github_cli_version}_linux_amd64"
     rm -rf /tmp/gh.tar.gz
+  fi
+
+  if [[ "${archstr}" == 'x86_64' ]]; then
+    if [ -d "${HOME}/.local/bin/quarto " ]; then
+      rm -rf "${HOME}/.local/bin/quarto "
+    fi
+    curl -fLo /tmp/quarto.tar.gz \
+      "https://github.com/quarto-dev/quarto-cli/releases/download/v${quarto_version}/quarto-${quarto_version}-linux-amd64.tar.gz"
+    tar xf /tmp/quarto.tar.gz -C /tmp
+    cp -r "/tmp/quarto-${quarto_version}/bin/"* "${HOME}/.local/bin/"
+    cp -r "/tmp/quarto-${quarto_version}/share/"* "${HOME}/.local/share/"
+    rm -rf "/tmp/quarto-${quarto_version}"
+    rm -rf /tmp/quarto.tar.gz
   fi
 
   PYENV_HOME="${HOME}/.pyenv"
