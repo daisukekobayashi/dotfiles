@@ -27,10 +27,11 @@ if [ -e "${SHELDON_HOME}" ]; then
 fi
 ln -s "$(pwd)/sheldon" "${SHELDON_HOME}"
 
-if [ -e "${SHELDON_HOME}/zsh" ]; then
-  rm -rf "${SHELDON_HOME}/zsh"
+ZSH_CONFIG="${HOME}/.config/zsh"
+if [ -e "${ZSH_CONFIG}" ]; then
+  rm -rf "${ZSH_CONFIG}"
 fi
-ln -s "$(pwd)/zsh" "${SHELDON_HOME}/zsh"
+ln -s "$(pwd)/zsh" "${ZSH_CONFIG}"
 
 # vim
 make_directory "${HOME}/.vim/vim/undo"
@@ -74,11 +75,17 @@ if [[ "${unamestr}" == 'Linux' ]]; then
       bash -s -- --repo rossmacarthur/sheldon --to ~/.local/bin
   fi
 
-  if [ ! -f "${HOME}/.config/alacritty/alacritty.toml" ]; then
-    make_directory "${HOME}/.config/alacritty"
-    ln -s "$(pwd)/alacritty/alacritty.toml" "${HOME}/.config/alacritty/alacritty.toml"
-    git clone https://github.com/eendroroy/alacritty-theme.git "${HOME}/.alacritty-colorscheme"
-    ln -s "$(pwd)/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
+  ALACRITTY_HOME="${HOME}/.config/alacritty"
+  if [ ! -e "${ALACRITTY_HOME}" ]; then
+    ln -s "$(pwd)/alacritty" "${ALACRITTY_HOME}"
+
+    if [ ! -e "${HOME}/.alacritty-colorscheme" ]; then
+      git clone https://github.com/eendroroy/alacritty-theme.git "${HOME}/.alacritty-colorscheme"
+    fi
+
+    if [ ! -e "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml" ]; then
+      ln -s "$(pwd)/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
+    fi
   else
     git -C "${HOME}/.alacritty-colorscheme" pull --ff-only
   fi
