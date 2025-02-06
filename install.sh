@@ -22,20 +22,15 @@ make_directory() {
 
 # sheldon
 SHELDON_HOME="${HOME}/.config/sheldon"
-make_directory "${SHELDON_HOME}"
-if [ ! -f "${SHELDON_HOME}/plugins.toml" ]; then
-  ln -s "$(pwd)/.config/sheldon/plugins.toml" "${SHELDON_HOME}/plugins.toml"
-else
-  rm "${SHELDON_HOME}/plugins.toml"
-  ln -s "$(pwd)/.config/sheldon/plugins.toml" "${SHELDON_HOME}/plugins.toml"
+if [ -e "${SHELDON_HOME}" ]; then
+  rm -rf "${SHELDON_HOME}"
 fi
+ln -s "$(pwd)/sheldon" "${SHELDON_HOME}"
 
-if [ ! -d "${SHELDON_HOME}/zsh" ]; then
-  ln -s "$(pwd)/zsh" "${SHELDON_HOME}/zsh"
-else
-  rm "${SHELDON_HOME}/zsh"
-  ln -s "$(pwd)/zsh" "${SHELDON_HOME}/zsh"
+if [ -e "${SHELDON_HOME}/zsh" ]; then
+  rm -rf "${SHELDON_HOME}/zsh"
 fi
+ln -s "$(pwd)/zsh" "${SHELDON_HOME}/zsh"
 
 # vim
 make_directory "${HOME}/.vim/vim/undo"
@@ -43,26 +38,20 @@ make_directory "${HOME}/.vim/vim/tmp"
 
 # neovim
 NEOVIM_HOME="${HOME}/.config/nvim"
-make_directory "${NEOVIM_HOME}"
 make_directory "${HOME}/.vim/nvim/undo"
 make_directory "${HOME}/.vim/nvim/tmp"
 
 if [ -e "${NEOVIM_HOME}" ]; then
   rm -rf "${NEOVIM_HOME}"
 fi
-
-ln -s "$(pwd)/.config/nvim" "${NEOVIM_HOME}"
+ln -s "$(pwd)/nvim" "${NEOVIM_HOME}"
 
 # lazygit
 LAZYGIT_HOME="${HOME}/.config/lazygit"
-make_directory "${LAZYGIT_HOME}"
-if [ ! -f "${LAZYGIT_HOME}/config.yml" ]; then
-  ln -s "$(pwd)/.config/lazygit/config.yml" "${LAZYGIT_HOME}/config.yml"
-else
-  echo "config.yml"
-  rm "${LAZYGIT_HOME}/config.yml"
-  ln -s "$(pwd)/.config/lazygit/config.yml" "${LAZYGIT_HOME}/config.yml"
+if [ -e "${LAZYGIT_HOME}" ]; then
+  rm -rf "${LAZYGIT_HOME}"
 fi
+ln -s "$(pwd)/lazygit" "${LAZYGIT_HOME}"
 
 for f in .??*; do
   [[ "$f" == ".git" ]] && continue
@@ -87,9 +76,9 @@ if [[ "${unamestr}" == 'Linux' ]]; then
 
   if [ ! -f "${HOME}/.config/alacritty/alacritty.toml" ]; then
     make_directory "${HOME}/.config/alacritty"
-    ln -s "$(pwd)/.config/alacritty/alacritty.toml" "${HOME}/.config/alacritty/alacritty.toml"
+    ln -s "$(pwd)/alacritty/alacritty.toml" "${HOME}/.config/alacritty/alacritty.toml"
     git clone https://github.com/eendroroy/alacritty-theme.git "${HOME}/.alacritty-colorscheme"
-    ln -s "$(pwd)/.config/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
+    ln -s "$(pwd)/alacritty/kanagawa.toml" "${HOME}/.alacritty-colorscheme/themes/kanagawa.toml"
   else
     git -C "${HOME}/.alacritty-colorscheme" pull --ff-only
   fi
