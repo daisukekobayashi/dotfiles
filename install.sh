@@ -107,10 +107,11 @@ if [[ "${unamestr}" == 'Linux' ]]; then
       rm -rf "${HOME}/.local/bin/nvim"
     fi
     curl -fLo "/tmp/nvim.tar.gz" \
-      https://github.com/neovim/neovim/releases/download/${neovim_version}/nvim-linux64.tar.gz
+      "https://github.com/neovim/neovim/releases/download/${neovim_version}/nvim-linux-${archstr}.tar.gz"
     tar xf /tmp/nvim.tar.gz -C /tmp
-    mv /tmp/nvim-linux64 "${HOME}/.local/bin/nvim"
-    rm -rf /tmp/nvim-linux64
+    mv "/tmp/nvim-linux-${archstr}" "${HOME}/.local/bin/nvim"
+    rm -rf "/tmp/nvim-linux-${archstr}"
+    rm -rf /tmp/nvim.tar.gz
   fi
 
   if [ -f "${HOME}/.local/bin/lazygit" ]; then
