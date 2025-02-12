@@ -9,6 +9,7 @@ return {
         lua = { 'luacheck' },
         markdown = { 'markdownlint', 'textlint' },
         python = { 'mypy', 'flake8' },
+        rust = { 'clippy' },
         sh = { 'shellcheck' },
       }
       local function safe_try_lint()
