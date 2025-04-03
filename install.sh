@@ -10,6 +10,7 @@ python3_version="3.11.9"
 nodejs_version="20.11.0"
 ruby_version="3.3.0"
 go_version="1.21.6"
+rust_version="1.86.0"
 luarocks_version="3.11.1"
 github_cli_version="2.65.0"
 quarto_version="1.6.40"
@@ -74,6 +75,11 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     curl --proto '=https' -fLsS https://rossmacarthur.github.io/install/crate.sh |
       bash -s -- --repo rossmacarthur/sheldon --to ~/.local/bin
   fi
+
+  if ! command -v mise &>/dev/null; then
+    curl https://mise.run | sh
+  fi
+  eval "$(~/.local/bin/mise activate zsh)"
 
   ALACRITTY_HOME="${HOME}/.config/alacritty"
   if [ ! -e "${ALACRITTY_HOME}" ]; then
@@ -167,74 +173,18 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     rm -rf /tmp/quarto.tar.gz
   fi
 
-  PYENV_HOME="${HOME}/.pyenv"
-  if [ ! -d "${PYENV_HOME}" ]; then
-    git clone https://github.com/yyuu/pyenv.git "${PYENV_HOME}"
-  else
-    git -C "${PYENV_HOME}" pull --ff-only
-  fi
-
-  PYENV_VIRTUALENV_HOME="${HOME}/.pyenv/plugins/pyenv-virtualenv"
-  if [ ! -d "${PYENV_VIRTUALENV_HOME}" ]; then
-    git clone https://github.com/yyuu/pyenv-virtualenv.git \
-      "${PYENV_VIRTUALENV_HOME}"
-  else
-    git -C "${PYENV_VIRTUALENV_HOME}" pull --ff-only
-  fi
-
-  export PYENV_ROOT="$HOME/.pyenv"
-  export PATH="$PYENV_ROOT/bin:$PATH"
-  eval "$(pyenv init -)"
-  eval "$(pyenv virtualenv-init -)"
-
-  RBENV_HOME="${HOME}/.rbenv"
-  if [ ! -d "${RBENV_HOME}" ]; then
-    git clone https://github.com/rbenv/rbenv.git "${RBENV_HOME}"
-  else
-    git -C "${RBENV_HOME}" pull --ff-only
-  fi
-
-  RBENV_PLUGIN_HOME="${HOME}/.rbenv/plugins"
-  if [ ! -d "${RBENV_PLUGIN_HOME}" ]; then
-    mkdir "${RBENV_PLUGIN_HOME}"
-    git clone https://github.com/rbenv/ruby-build.git "${RBENV_PLUGIN_HOME}/ruby-build"
-  else
-    git -C "${RBENV_PLUGIN_HOME}/ruby-build" pull --ff-only
-  fi
-  export PATH="$HOME/.rbenv/bin:$PATH"
-  eval "$(rbenv init -)"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
+  eval "$(mise activate zsh)"
 fi
 
-# volta
-export VOLTA_HOME="${HOME}/.volta"
-if [ ! -d "${VOLTA_HOME}" ]; then
-  curl https://get.volta.sh | bash -s -- --skip-setup
-fi
-export PATH="$VOLTA_HOME/bin:$PATH"
-volta install node@${nodejs_version}
-
-# pyenv
-env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python2_version} &&
-  pyenv virtualenv ${python2_version} python${python2_version}
-env PYTHON_CONFIGURE_OPTS="--enable-shared" pyenv install ${python3_version} &&
-  pyenv virtualenv ${python3_version} python${python3_version}
-
-# rbenv
-rbenv install ${ruby_version}
-
-# go
-GOENV_HOME="${HOME}/.goenv"
-if [ ! -d "${GOENV_HOME}" ]; then
-  git clone https://github.com/syndbg/goenv.git "${GOENV_HOME}"
-else
-  git -C "${GOENV_HOME}" pull --ff-only
-fi
-"${GOENV_HOME}/bin/goenv" install ${go_version}
-
-# rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# mise
+env PYTHON_CONFIGURE_OPTS="--enable-shared" mise install python@${python2_version}
+env PYTHON_CONFIGURE_OPTS="--enable-shared" mise install python@${python3_version}
+mise install node@${nodejs_version}
+mise install ruby@${ruby_version}
+mise install go@${go_version}
+mise install rust@${rust_version}
 
 # tmux
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
