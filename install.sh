@@ -79,7 +79,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   if ! command -v mise &>/dev/null; then
     curl https://mise.run | sh
   fi
-  eval "$(~/.local/bin/mise activate zsh)"
+  eval "$(~/.local/bin/mise activate bash)"
 
   ALACRITTY_HOME="${HOME}/.config/alacritty"
   if [ ! -e "${ALACRITTY_HOME}" ]; then
@@ -175,7 +175,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
 
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
-  eval "$(mise activate zsh)"
+  eval "$(mise activate bash)"
 fi
 
 # mise
