@@ -12,8 +12,10 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/.local/bin:$PATH"
   export XDG_CONFIG_HOME=$HOME/.config
+  eval "$(~/.local/bin/mise activate zsh)"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
+  eval "$(mise activate zsh)"
 fi
 
 eval "$(sheldon source)"

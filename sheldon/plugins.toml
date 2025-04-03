@@ -92,6 +92,6 @@ apply = ["defer"]
 
 [plugins.dotfiles-defer-with-delay]
 local = "~/.config/zsh"
-use = ["{gcloud,goenv,pyenv,rbenv,volta}.zsh"]
+use = ["{gcloud}.zsh"]
 apply = ["defer-with-delay"]
 
