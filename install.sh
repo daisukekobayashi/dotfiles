@@ -11,6 +11,8 @@ nodejs_version="20.11.0"
 ruby_version="3.3.0"
 go_version="1.21.6"
 rust_version="1.86.0"
+erlang_version="27.3.1"
+elixir_version="1.18.3-otp-27"
 luarocks_version="3.11.1"
 github_cli_version="2.65.0"
 quarto_version="1.6.40"
@@ -185,6 +187,8 @@ mise install node@${nodejs_version}
 mise install ruby@${ruby_version}
 mise install go@${go_version}
 mise install rust@${rust_version}
+mise install erlang@${erlang_version}
+mise install elixir@${elixir_version}
 
 # tmux
 TPM_DIR="${HOME}/.tmux/plugins/tpm"
