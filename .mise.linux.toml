@@ -1,0 +1,4 @@
+[tools]
+neovim = "stable"
+lazygit = "0.45.0"
+github-cli = "2.65.0"

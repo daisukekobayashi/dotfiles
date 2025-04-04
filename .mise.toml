@@ -6,9 +6,6 @@ go = "1.21.6"
 rust = "1.86.0"
 erlang = "27.3.1"
 elixir = "1.18.3-otp-27"
-neovim = "stable"
-lazygit = "0.45.0"
-github-cli = "2.65.0"
 
 [env]
 PYTHON_CONFIGURE_OPTS = "--enable-shared"

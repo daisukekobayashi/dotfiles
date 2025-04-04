@@ -10,8 +10,10 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW32_NT-10.0' ]]; then
   :
 elif [[ "${unamestr}" == 'Linux' ]]; then
+  export MISE_ENV=linux
   eval "$(~/.local/bin/mise activate zsh)"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
+  export MISE_ENV=macos
   eval "$(mise activate zsh)"
 fi
 
