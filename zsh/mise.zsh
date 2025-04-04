@@ -1,6 +1,19 @@
 source "${HOME}/.dotfiles/utils.sh"
 
-echo $(get_tool_version python)
+unamestr="$(uname)"
+echo $unamestr
+if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
+   [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
+   [[ "${unamestr}" == 'MINGW32_NT-6.1' ]] ||
+   [[ "${unamestr}" == 'MSYS_NT-10.0' ]] ||
+   [[ "${unamestr}" == 'MINGW64_NT-10.0' ]] ||
+   [[ "${unamestr}" == 'MINGW32_NT-10.0' ]]; then
+  :
+elif [[ "${unamestr}" == 'Linux' ]]; then
+  eval "$(~/.local/bin/mise activate zsh)"
+elif [[ "${unamestr}" == 'Darwin' ]]; then
+  eval "$(mise activate zsh)"
+fi
 
 mise shell python@$(get_tool_version python)
 mise shell node@$(get_tool_version node)
