@@ -90,8 +90,8 @@ apply = ["defer"]
 github = "Aloxaf/fzf-tab"
 apply = ["defer"]
 
-[plugins.dotfiles-defer-with-delay]
+[plugins.dotfiles-mise]
 local = "~/.config/zsh"
-use = ["{gcloud}.zsh"]
-apply = ["defer-with-delay"]
+use = ["mise.zsh"]
+apply = ["defer"]
 
