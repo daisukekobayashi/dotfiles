@@ -24,3 +24,5 @@ mise shell go@$(get_tool_version go)
 mise shell rust@$(get_tool_version rust)
 mise shell erlang@$(get_tool_version erlang)
 mise shell elixir@$(get_tool_version elixir)
+
+eval "$(gh copilot alias -- zsh)"
