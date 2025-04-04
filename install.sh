@@ -3,18 +3,7 @@
 unamestr="$(uname)"
 archstr="$(uname -m)"
 tmux_version="3.5"
-neovim_version="stable"
-lazygit_version="0.45.0"
-python2_version="2.7.18"
-python3_version="3.11.9"
-nodejs_version="20.11.0"
-ruby_version="3.3.0"
-go_version="1.21.6"
-rust_version="1.86.0"
-erlang_version="27.3.1"
-elixir_version="1.18.3-otp-27"
 luarocks_version="3.11.1"
-github_cli_version="2.65.0"
 quarto_version="1.6.40"
 
 make_directory() {
@@ -60,6 +49,7 @@ ln -s "$(pwd)/lazygit" "${LAZYGIT_HOME}"
 for f in .??*; do
   [[ "$f" == ".git" ]] && continue
   [[ "$f" == ".DS_Store" ]] && continue
+  [[ "$f" == ".tool-versions" ]] && continue
   [[ -d "$f" ]] && continue
 
   if [ ! -f "${HOME}/$f" ]; then
@@ -110,28 +100,6 @@ if [[ "${unamestr}" == 'Linux' ]]; then
     )
   fi
 
-  if [[ "${archstr}" == 'x86_64' ]]; then
-    if [ -d "${HOME}/.local/bin/nvim" ]; then
-      rm -rf "${HOME}/.local/bin/nvim"
-    fi
-    curl -fLo "/tmp/nvim.tar.gz" \
-      "https://github.com/neovim/neovim/releases/download/${neovim_version}/nvim-linux-${archstr}.tar.gz"
-    tar xf /tmp/nvim.tar.gz -C /tmp
-    mv "/tmp/nvim-linux-${archstr}" "${HOME}/.local/bin/nvim"
-    rm -rf "/tmp/nvim-linux-${archstr}"
-    rm -rf /tmp/nvim.tar.gz
-  fi
-
-  if [ -f "${HOME}/.local/bin/lazygit" ]; then
-    rm -rf "${HOME}/.local/bin/lazygit"
-  fi
-  lazygit_targz_name="lazygit_${lazygit_version}_${unamestr}_${archstr}.tar.gz"
-  echo $lazygit_targz_name
-  curl -fLo "/tmp/lazygit.tar.gz" \
-    "https://github.com/jesseduffield/lazygit/releases/download/v${lazygit_version}/${lazygit_targz_name}"
-  tar xf "/tmp/lazygit.tar.gz" -C "${HOME}/.local/bin"
-  rm "/tmp/lazygit.tar.gz"
-
   if [ -f "${HOME}/.local/bin/luarocks" ]; then
     rm -rf "${HOME}/.local/bin/luarocks"
   fi
@@ -147,20 +115,6 @@ if [[ "${unamestr}" == 'Linux' ]]; then
   )
   rm -rf "/tmp/luarocks-${luarocks_version}"
   rm "/tmp/luarocks.tar.gz"
-
-  if [[ "${archstr}" == 'x86_64' ]]; then
-    if [ -d "${HOME}/.local/bin/gh " ]; then
-      rm -rf "${HOME}/.local/bin/gh "
-      rm -rf "${HOME}/.local/bin/share/man/man1/gh*"
-    fi
-    curl -fLo /tmp/gh.tar.gz \
-      "https://github.com/cli/cli/releases/download/v${github_cli_version}/gh_${github_cli_version}_linux_amd64.tar.gz"
-    tar xf /tmp/gh.tar.gz -C /tmp
-    cp -r "/tmp/gh_${github_cli_version}_linux_amd64/bin/"* "${HOME}/.local/bin/"
-    cp -r "/tmp/gh_${github_cli_version}_linux_amd64/share/"* "${HOME}/.local/share/"
-    rm -rf "/tmp/gh_${github_cli_version}_linux_amd64"
-    rm -rf /tmp/gh.tar.gz
-  fi
 
   if [[ "${archstr}" == 'x86_64' ]]; then
     if [ -d "${HOME}/.local/bin/quarto " ]; then
@@ -181,14 +135,16 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
 fi
 
 # mise
-env PYTHON_CONFIGURE_OPTS="--enable-shared" mise install python@${python2_version}
-env PYTHON_CONFIGURE_OPTS="--enable-shared" mise install python@${python3_version}
-mise install node@${nodejs_version}
-mise install ruby@${ruby_version}
-mise install go@${go_version}
-mise install rust@${rust_version}
-mise install erlang@${erlang_version}
-mise install elixir@${elixir_version}
+mise plugins install neovim lazygit github-cli
+
+mise plugins install clojure
+mise plugins install haskell stack
+
+mise plugins install aws-cli
+mise plugins install azure
+mise plugins install gcloud
+
+mise install
 
 # tmux
 TPM_DIR="${HOME}/.tmux/plugins/tpm"

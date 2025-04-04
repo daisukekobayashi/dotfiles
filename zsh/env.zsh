@@ -9,22 +9,6 @@ export LANG=en_US.UTF-8
 export LC_CTYPE=en_US.UTF-8
 export AUTOFEATURE=true
 
-PYTHON3_VERSION=3.11.9
-RUBY_VERSION=3.3.0
-NODEJS_VERSION=20.11.0
-GO_VERSION=1.21.6
-RUST_VERSION=1.86.0
-ERLANG_VERSION=27.3.1
-ELIXIR_VERSION="1.18.3-otp-27"
-
-mise shell python@${PYTHON3_VERSION}
-mise shell node@${NODEJS_VERSION}
-mise shell ruby@${RUBY_VERSION}
-mise shell go@${GO_VERSION}
-mise shell rust@${RUST_VERSION}
-mise shell erlang@${ERLANG_VERSION}
-mise shell elixir@${ELIXIR_VERSION}
-
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
