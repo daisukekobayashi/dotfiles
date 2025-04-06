@@ -1,4 +1,5 @@
 source "${HOME}/.dotfiles/utils.sh"
+load_tool_versions
 
 unamestr="$(uname)"
 echo $unamestr
@@ -12,6 +13,9 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export MISE_ENV=linux
   eval "$(~/.local/bin/mise activate zsh)"
+  #mise shell neovim@$(get_tool_version neovim)
+  #mise shell lazygit@$(get_tool_version lazygit)
+  #mise shell github-cli@$(get_tool_version github-cli)
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   export MISE_ENV=macos
   eval "$(mise activate zsh)"
