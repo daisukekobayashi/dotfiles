@@ -25,6 +25,13 @@ if [ -e "${ZSH_CONFIG}" ]; then
 fi
 ln -s "$(pwd)/zsh" "${ZSH_CONFIG}"
 
+# mise
+MISE_HOME="${HOME}/.config/mise"
+if [ -e "${MISE_HOME}" ]; then
+  rm -rf "${MISE_HOME}"
+fi
+ln -s "$(pwd)/mise" "${MISE_HOME}"
+
 # vim
 make_directory "${HOME}/.vim/vim/undo"
 make_directory "${HOME}/.vim/vim/tmp"
@@ -36,7 +43,6 @@ make_directory "${HOME}/.vim/nvim/tmp"
 for f in .??*; do
   [[ "$f" == ".git" ]] && continue
   [[ "$f" == ".DS_Store" ]] && continue
-  [[ "$f" == ".mise.toml" ]] && continue
   [[ -d "$f" ]] && continue
 
   if [ ! -f "${HOME}/$f" ]; then
