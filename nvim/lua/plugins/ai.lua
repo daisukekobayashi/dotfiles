@@ -57,12 +57,11 @@ return {
 
   {
     'CopilotC-Nvim/CopilotChat.nvim',
-    branch = 'main',
     dependencies = {
-      { 'zbirenbaum/copilot.lua' }, -- or github/copilot.vim
-      { 'nvim-lua/plenary.nvim', branch = 'master' }, -- for curl, log wrapper
+      { 'zbirenbaum/copilot.lua' }, -- or github/copilot.vim,
+      { 'nvim-lua/plenary.nvim', branch = 'master' }, -- for curl, log and async functions
     },
-    build = 'make tiktoken',
+    build = 'make tiktoken', -- Only on MacOS or Linux
     opts = {},
   },
 
@@ -83,6 +82,20 @@ return {
         auto_apply_diff_after_generation = false,
         support_paste_from_clipboard = false,
         minimize_diff = true,
+      },
+
+      windows = {
+        position = 'right',
+        width = 30,
+        sidebar_header = {
+          align = 'center',
+          rounded = false,
+        },
+        ask = {
+          floating = true,
+          start_insert = True,
+          border = 'rounded',
+        },
       },
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
