@@ -97,6 +97,15 @@ return {
           border = 'rounded',
         },
       },
+      system_prompt = function()
+        local hub = require('mcphub').get_hub_instance()
+        return hub:get_active_servers_prompt()
+      end,
+      custom_tools = function()
+        return {
+          require('mcphub.extensions.avante').mcp_tool(),
+        }
+      end,
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
     build = 'make',
@@ -139,5 +148,27 @@ return {
         ft = { 'markdown', 'Avante' },
       },
     },
+  },
+
+  {
+    'ravitemer/mcphub.nvim',
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+    },
+    cmd = 'MCPHub',
+    -- build = "npm install -g mcp-hub@latest",  -- Installs required mcp-hub npm module
+    -- uncomment this if you don't want mcp-hub to be available globally or can't use -g
+    build = 'bundled_build.lua', -- Use this and set use_bundled_binary = true in opts  (see Advanced configuration)
+    config = function()
+      require('mcphub').setup({
+        auto_approve = true,
+        use_bundled_binary = true,
+        extensions = {
+          avante = {
+            make_slash_commands = true,
+          },
+        },
+      })
+    end,
   },
 }
