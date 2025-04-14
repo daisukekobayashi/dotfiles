@@ -40,6 +40,12 @@ make_directory "${HOME}/.vim/vim/tmp"
 make_directory "${HOME}/.vim/nvim/undo"
 make_directory "${HOME}/.vim/nvim/tmp"
 
+MCPHUB_CONFIG="${HOME}/.config/mcphub"
+if [ -e "${MCPHUB_CONFIG}" ]; then
+  rm -rf "${MCPHUB_CONFIG}"
+fi
+ln -s "$(pwd)/mcphub" "${MCPHUB_CONFIG}"
+
 for f in .??*; do
   [[ "$f" == ".git" ]] && continue
   [[ "$f" == ".DS_Store" ]] && continue
