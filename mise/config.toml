@@ -1,4 +1,6 @@
 [tools]
+java = "adoptopenjdk-21.0.6+7.0.LTS"
+dotnet-core = "9.0.203"
 python = "3.11.9"
 node = "20.11.0"
 ruby = "3.3.0"
@@ -6,6 +8,10 @@ go = "1.21.6"
 rust = "1.86.0"
 erlang = "27.3.1"
 elixir = "1.18.3-otp-27"
+haskell = "9.12.2"
+clojure = "1.11.4.1474"
+r = "4.5.0"
+kotlin = "2.1.20"
 
 [env]
 PYTHON_CONFIGURE_OPTS = "--enable-shared"
