@@ -7,12 +7,12 @@ elif [ -n "$ZSH_VERSION" ]; then
 fi
 
 load_tool_versions() {
-  local base_dir="${HOME}/.dotfiles"
+  local base_dir="${HOME}/.dotfiles/mise"
   local env_suffix=""
   [ -n "$MISE_ENV" ] && env_suffix=".$MISE_ENV"
 
-  local os_config_file="${base_dir}/.mise${env_suffix}.toml"
-  local common_config_file="${base_dir}/.mise.toml"
+  local os_config_file="${base_dir}/config.${env_suffix}.toml"
+  local common_config_file="${base_dir}/config.toml"
 
   for file in "$os_config_file" "$common_config_file"; do
     [ ! -f "$file" ] && continue
