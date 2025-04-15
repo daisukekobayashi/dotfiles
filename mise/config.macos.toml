@@ -1,0 +1,3 @@
+[env]
+CPPFLAGS = "-I/opt/homebrew/include -I/opt/X11/include"
+LDFLAGS = "-L/opt/homebrew/lib -L/opt/X11/lib"
