@@ -24,10 +24,16 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/bin:$PATH"
   export PATH="$HOME/.local/bin/nvim/bin:$PATH"
+
+  # ghcup
+  export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   # android
   export PATH=${HOME}/Library/Android/sdk/platform-tools:$PATH
 
   # flutter
   export PATH=${HOME}/development/flutter/bin:$PATH
+
+  # ghcup
+  export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
 fi
