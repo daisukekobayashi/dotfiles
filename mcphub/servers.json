@@ -6,6 +6,15 @@
         "@playwright/mcp@latest",
         "--headless"
       ]
+    },
+    "arxiv-mcp-server": {
+      "command": "uv",
+      "args": [
+        "tool",
+        "run",
+        "arxiv-mcp-server",
+        "--storage-path", "~/.arxiv"
+      ]
     }
   }
 }
