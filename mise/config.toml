@@ -1,6 +1,6 @@
 [tools]
 java = "adoptopenjdk-21.0.6+7.0.LTS"
-dotnet-core = "9.0.203"
+dotnet = "9.0.203"
 python = "3.11.9"
 node = "20.11.0"
 ruby = "3.3.0"

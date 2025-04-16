@@ -30,7 +30,7 @@ mise shell go@$(get_tool_version go)
 mise shell rust@$(get_tool_version rust)
 mise shell erlang@$(get_tool_version erlang)
 mise shell elixir@$(get_tool_version elixir)
-mise shell dotnet-core@$(get_tool_version dotnet-core)
+mise shell dotnet@$(get_tool_version dotnet)
 mise shell kotolin@$(get_tool_version kotlin)
 mise shell r@$(get_tool_version r)
 
