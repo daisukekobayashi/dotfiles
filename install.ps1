@@ -3,7 +3,10 @@ if (-not ($PSVersionTable.PSVersion.Major -gt 5 -or ($PSVersionTable.PSVersion.M
   Exit
 }
 
-if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+$HOME_DIR = if ($Env:CUSTOM_HOME) { $Env:CUSTOM_HOME } else { $Env:USERPROFILE }
+
+$scoop_shim = Join-Path $HOME_DIR "scoop\shims\scoop.ps1"
+if (-not (Test-Path $scoop_shim)) {
   Write-Output "Scoop is not installed. Installing Scoop..."
   try {
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -ErrorAction Stop
@@ -22,24 +25,31 @@ function New-SymbolicLink {
     [string]$Name,
     [string]$Value
   )
-  if (-not (Test-Path "$Path\$Name")) {
+
+  if (-not (Test-Path $Path)) {
+    New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    Write-Output "Created directory: $Path"
+  }
+
+  $fullLinkPath = Join-Path $Path $Name
+  if (-not (Test-Path $fullLinkPath)) {
     New-Item -ItemType SymbolicLink -Path $Path -Name $Name -Value $Value
-    Write-Output "Created symbolic link: $Path\$Name -> $Value"
+    Write-Output "Created symbolic link: $fullLinkPath -> $Value"
   } else {
-    Write-Output "Symbolic link already exists: $Path\$Name"
+    Write-Output "Symbolic link already exists: $fullLinkPath"
   }
 }
 
-New-SymbolicLink -Path $Env:USERPROFILE -Name ".vimrc" -Value ".dotfiles/.vimrc"
+$dotfiles = "$HOME_DIR\.dotfiles"
+New-SymbolicLink -Path $HOME_DIR -Name ".vimrc" -Value "$dotfiles\.vimrc"
+New-SymbolicLink -Path $HOME_DIR -Name ".gvimrc" -Value "$dotfiles\.gvimrc"
 
-New-SymbolicLink -Path $Env:USERPROFILE -Name ".gvimrc" -Value ".dotfiles/.gvimrc"
+$pwsh_home = "$HOME_DIR\Documents\PowerShell"
+New-SymbolicLink -Path $pwsh_home -Name "Microsoft.PowerShell_profile.ps1" -Value "$dotfiles\powershell\Microsoft.PowerShell_profile.ps1"
 
-New-SymbolicLink -Path $Env:USERPROFILE -Name "vimfiles" -Value ".dotfiles/.vim"
+$config_home = "$HOME_DIR\.config"
+New-SymbolicLink -Path $config_home -Name "mise" -Value "$dotfiles\mise"
 
-$nvim_home = "$Env:USERPROFILE\AppData\Local\nvim"
-if (-not (Test-Path $nvim_home)) {
-  New-Item $nvim_home -ItemType Directory -Force
-  Write-Output "Created directory: $nvim_home"
-}
+$nvim_home = "$HOME_DIR\AppData\Local"
+New-SymbolicLink -Path $nvim_home -Name "nvim" -Value "$dotfiles\nvim"
 
-New-SymbolicLink -Path $nvim_home -Name "init.lua" -Value "$Env:USERPROFILE\.dotfiles\nvim\init.lua"
