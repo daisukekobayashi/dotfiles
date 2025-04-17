@@ -21,6 +21,20 @@ vim.opt.showmode = false
 --  See `:help 'clipboard'`
 vim.schedule(function()
   vim.opt.clipboard = 'unnamedplus'
+  if vim.fn.has('win32') == 1 or vim.fn.has('win64') == 1 then
+    vim.g.clipboard = {
+      name = 'clip+pwsh hybrid',
+      copy = {
+        ['+'] = 'clip.exe',
+        ['*'] = 'clip.exe',
+      },
+      paste = {
+        ['+'] = 'pwsh.exe -NoProfile -Command Get-Clipboard',
+        ['*'] = 'pwsh.exe -NoProfile -Command Get-Clipboard',
+      },
+      cache_enabled = 1,
+    }
+  end
 end)
 
 -- Enable break indent
