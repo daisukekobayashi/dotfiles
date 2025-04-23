@@ -40,6 +40,23 @@ make_directory "${HOME}/.vim/vim/tmp"
 make_directory "${HOME}/.vim/nvim/undo"
 make_directory "${HOME}/.vim/nvim/tmp"
 
+NEOVIM_HOME="${HOME}/.config/nvim"
+make_directory "${HOME}/.vim/nvim/undo"
+make_directory "${HOME}/.vim/nvim/tmp"
+
+if [ -e "${NEOVIM_HOME}" ]; then
+  rm -rf "${NEOVIM_HOME}"
+fi
+ln -s "$(pwd)/nvim" "${NEOVIM_HOME}"
+
+# lazygit
+LAZYGIT_HOME="${HOME}/.config/lazygit"
+if [ -e "${LAZYGIT_HOME}" ]; then
+  rm -rf "${LAZYGIT_HOME}"
+fi
+ln -s "$(pwd)/lazygit" "${LAZYGIT_HOME}"
+
+# mcphub
 MCPHUB_CONFIG="${HOME}/.config/mcphub"
 if [ -e "${MCPHUB_CONFIG}" ]; then
   rm -rf "${MCPHUB_CONFIG}"
