@@ -118,10 +118,11 @@ return {
   {
     'mfussenegger/nvim-dap-python',
     config = function()
-      local venv = os.getenv('VIRTUAL_ENV')
-      command = string.format('%s/bin/python', venv)
+      --local venv = os.getenv('VIRTUAL_ENV')
+      --command = string.format('%s/bin/python', venv)
+      local python_path = vim.fn.systemlist('mise which python')[1]
 
-      require('dap-python').setup(command)
+      require('dap-python').setup(python_path)
     end,
   },
 }
