@@ -3,11 +3,9 @@ return {
     'mfussenegger/nvim-dap',
     config = function()
       local dap = require('dap')
-      local mason_registry = require('mason-registry')
-      local cpptools = mason_registry.get_package('cpptools')
 
       if vim.loop.os_uname().sysname == 'Windows_NT' then
-        local command_cppdbg = cpptools:get_install_path() .. '/extension/debugAdapters/bin/OpenDebugAD7.exe'
+        local command_cppdbg = vim.fn.exepath('OpenDebugAD7')
         dap.adapters.cppdbg = {
           id = 'cppdbg',
           type = 'executable',
@@ -17,7 +15,7 @@ return {
           },
         }
       else
-        local command_cppdbg = cpptools:get_install_path() .. '/extension/debugAdapters/bin/OpenDebugAD7'
+        local command_cppdbg = vim.fn.exepath('OpenDebugAD7')
         dap.adapters.cppdbg = {
           id = 'cppdbg',
           type = 'executable',
