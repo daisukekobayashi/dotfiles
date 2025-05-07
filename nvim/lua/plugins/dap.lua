@@ -114,6 +114,13 @@ return {
     end,
   },
   {
+    'theHamsta/nvim-dap-virtual-text',
+    config = function()
+      require('nvim-dap-virtual-text').setup()
+    end,
+    dependencies = { 'mfussenegger/nvim-dap' },
+  },
+  {
     'mfussenegger/nvim-dap-python',
     config = function()
       --local venv = os.getenv('VIRTUAL_ENV')
