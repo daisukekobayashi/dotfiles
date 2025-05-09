@@ -50,4 +50,13 @@ return {
       vim.api.nvim_set_hl(0, 'CmpItemKindCopilot', { fg = '#6CC644' })
     end,
   },
+
+  {
+    'stevearc/aerial.nvim',
+    opts = {},
+    dependencies = {
+      'nvim-treesitter/nvim-treesitter',
+      'nvim-tree/nvim-web-devicons',
+    },
+  },
 }
