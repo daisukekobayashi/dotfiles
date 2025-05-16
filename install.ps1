@@ -32,12 +32,12 @@ function New-SymbolicLink {
   }
 
   $fullLinkPath = Join-Path $Path $Name
-  if (-not (Test-Path $fullLinkPath)) {
-    New-Item -ItemType SymbolicLink -Path $Path -Name $Name -Value $Value
-    Write-Output "Created symbolic link: $fullLinkPath -> $Value"
-  } else {
-    Write-Output "Symbolic link already exists: $fullLinkPath"
+  if (Test-Path $fullLinkPath) {
+    Remove-Item -Path $fullLinkPath -Force -Recurse
+    Write-Output "Removed existing symbolic link: $fullLinkPath"
   }
+  New-Item -ItemType SymbolicLink -Path $Path -Name $Name -Value $Value
+  Write-Output "Created symbolic link: $fullLinkPath -> $Value"
 }
 
 $dotfiles = "$HOME_DIR\.dotfiles"
@@ -53,3 +53,5 @@ New-SymbolicLink -Path $config_home -Name "mise" -Value "$dotfiles\mise"
 $nvim_home = "$HOME_DIR\AppData\Local"
 New-SymbolicLink -Path $nvim_home -Name "nvim" -Value "$dotfiles\nvim"
 
+Write-Output "Press any key to exit..."
+[System.Console]::ReadKey() | Out-Null
