@@ -11,3 +11,10 @@ vim.api.nvim_create_autocmd('TextYankPost', {
     vim.highlight.on_yank()
   end,
 })
+
+vim.o.updatetime = 250
+vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
+  callback = function()
+    vim.diagnostic.open_float(nil, { focus = false })
+  end,
+})
