@@ -516,12 +516,18 @@ return {
           end
         end,
         rust = { 'rustfmt', lsp_format = 'fallback' },
+        elixir = { 'mix' },
         sh = { 'shfmt' },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
       },
       formatters = {
+        mix = {
+          command = 'mix',
+          args = { 'format', '-' },
+          stdin = true,
+        },
         stylua = {
           prepend_args = {
             '--indent-type',
