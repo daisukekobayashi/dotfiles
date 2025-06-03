@@ -523,11 +523,6 @@ return {
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
       },
       formatters = {
-        mix = {
-          command = 'mix',
-          args = { 'format', '-' },
-          stdin = true,
-        },
         stylua = {
           prepend_args = {
             '--indent-type',
