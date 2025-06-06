@@ -75,12 +75,14 @@ return {
       provider = 'copilot',
       auto_suggestions_provider = 'copilot',
 
-      openai = {
-        model = 'gpt-4.1',
-      },
-      azure = {
-        endpoint = 'https://<endpoint-name>.openai.azure.com/',
-        deployment = 'gpt-4.1',
+      providers = {
+        openai = {
+          model = 'gpt-4.1',
+        },
+        azure = {
+          endpoint = 'https://<endpoint-name>.openai.azure.com/',
+          deployment = 'gpt-4.1',
+        },
       },
 
       file_selector = {
