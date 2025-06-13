@@ -39,6 +39,13 @@ return {
   },
 
   {
+    'rcarriga/nvim-notify',
+    config = function()
+      vim.notify = require('notify')
+    end,
+  },
+
+  {
     'onsails/lspkind.nvim',
     config = function()
       local lspkind = require('lspkind')
