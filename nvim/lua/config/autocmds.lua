@@ -12,13 +12,6 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   end,
 })
 
-vim.o.updatetime = 250
-vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
-  callback = function()
-    vim.diagnostic.open_float(nil, { focus = false })
-  end,
-})
-
 vim.api.nvim_create_autocmd('User', {
   pattern = 'BlinkCmpMenuOpen',
   callback = function()
