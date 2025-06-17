@@ -125,14 +125,14 @@ return {
         }
       end,
     },
-    build = function()
+    build = (function()
       local os_name = vim.loop.os_uname().sysname
       if os_name == 'Windows_NT' then
         return 'powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false'
       else
         return 'make'
       end
-    end,
+    end)(),
     dependencies = {
       'nvim-treesitter/nvim-treesitter',
       'stevearc/dressing.nvim',
