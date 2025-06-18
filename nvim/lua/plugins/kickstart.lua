@@ -757,6 +757,8 @@ return {
         'c',
         'cpp',
         'diff',
+        'elixir',
+        'erlang',
         'html',
         'javascript',
         'latex',
