@@ -23,4 +23,8 @@ return {
       { '<c-\\>', '<cmd><C-U>TmuxNavigatePrevious<cr>' },
     },
   },
+
+  {
+    'rafcamlet/nvim-luapad',
+  },
 }
