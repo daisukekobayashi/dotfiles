@@ -40,4 +40,11 @@ return {
       'nvim-treesitter/nvim-treesitter',
     },
   },
+
+  {
+    'RRethy/nvim-treesitter-endwise',
+    dependencies = {
+      'nvim-treesitter/nvim-treesitter',
+    },
+  },
 }
