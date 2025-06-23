@@ -56,6 +56,13 @@ if [ -e "${LAZYGIT_HOME}" ]; then
 fi
 ln -s "$(pwd)/lazygit" "${LAZYGIT_HOME}"
 
+# gitui
+GITUI_HOME="${HOME}/.config/gitui"
+if [ -e "${GITUI_HOME}" ]; then
+  rm -rf "${GITUI_HOME}"
+fi
+ln -s "$(pwd)/gitui" "${GITUI_HOME}"
+
 # mcphub
 MCPHUB_CONFIG="${HOME}/.config/mcphub"
 if [ -e "${MCPHUB_CONFIG}" ]; then

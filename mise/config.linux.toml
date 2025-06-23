@@ -2,6 +2,7 @@
 neovim = "stable"
 ripgrep = "14.1.1"
 lazygit = "0.45.0"
+gitui = "0.27.0"
 github-cli = "2.65.0"
 ruff = "0.11.5"
 uv = "0.6.14"
