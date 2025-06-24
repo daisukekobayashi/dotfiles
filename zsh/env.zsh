@@ -24,7 +24,8 @@ if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
 elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/bin:$PATH"
   export PATH="$HOME/.local/bin/nvim/bin:$PATH"
-
+  # iex
+  export ERL_AFLAGS="-kernel shell_history enabled"
   # ghcup
   export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
 elif [[ "${unamestr}" == 'Darwin' ]]; then
@@ -33,6 +34,9 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
 
   # flutter
   export PATH=${HOME}/development/flutter/bin:$PATH
+
+  # iex
+  export ERL_AFLAGS="-kernel shell_history enabled"
 
   # ghcup
   export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
