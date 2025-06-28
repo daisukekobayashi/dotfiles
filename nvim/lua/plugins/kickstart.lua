@@ -754,11 +754,13 @@ return {
     opts = {
       ensure_installed = {
         'bash',
+        'bicep',
         'c',
         'cpp',
         'diff',
         'elixir',
         'erlang',
+        'heex',
         'html',
         'javascript',
         'latex',
