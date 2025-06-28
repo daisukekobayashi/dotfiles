@@ -47,4 +47,15 @@ return {
       'nvim-treesitter/nvim-treesitter',
     },
   },
+
+  {
+    'windwp/nvim-ts-autotag',
+    dependencies = {
+      'nvim-treesitter/nvim-treesitter',
+    },
+    event = { 'BufNewFile', 'BufReadPre' },
+    config = function()
+      require('nvim-ts-autotag').setup({})
+    end,
+  },
 }
