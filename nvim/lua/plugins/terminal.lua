@@ -34,6 +34,11 @@ return {
   },
 
   {
+    'stevearc/overseer.nvim',
+    opts = {},
+  },
+
+  {
     'rafcamlet/nvim-luapad',
   },
 }
