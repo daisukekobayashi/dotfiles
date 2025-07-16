@@ -44,7 +44,6 @@ return {
           markdown = true,
         },
       })
-      vim.cmd('Copilot disable')
     end,
   },
 
@@ -200,7 +199,11 @@ return {
       'nvim-lua/plenary.nvim',
     },
     config = function()
-      require('claude-code').setup()
+      require('claude-code').setup({
+        window = {
+          position = 'vertical',
+        },
+      })
     end,
   },
 }
