@@ -21,15 +21,15 @@ return {
       local vertical_term = Terminal:new({ direction = 'vertical' })
       local split_term = Terminal:new({ direction = 'horizontal' })
 
-      vim.keymap.set('n', '<leader>tf', function()
+      vim.keymap.set('n', '<leader>tp', function()
         float_term:toggle()
-      end, { desc = '[T]oggle [F]loating terminal' })
+      end, { desc = '[T]erminal [P]opup' })
       vim.keymap.set('n', '<leader>tv', function()
         vertical_term:toggle()
-      end, { desc = '[T]oggle [V]ertical terminal' })
+      end, { desc = '[T]erminal [V]ertical' })
       vim.keymap.set('n', '<leader>ts', function()
         split_term:toggle()
-      end, { desc = '[T]oggle [S]plit terminal' })
+      end, { desc = '[T]erminal [S]plit' })
     end,
   },
 
