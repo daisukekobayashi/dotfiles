@@ -177,24 +177,24 @@ return {
     dependencies = {
       'nvim-lua/plenary.nvim',
       'nvim-treesitter/nvim-treesitter',
+      'franco-ruggeri/codecompanion-spinner.nvim',
       'nvim-telescope/telescope.nvim',
       'ravitemer/mcphub.nvim',
     },
     config = function()
       require('codecompanion').setup({
+        opts = {
+          language = 'Japanese',
+          is_slash_command = true,
+        },
         strategies = {
           chat = {
             adapter = { name = 'copilot', model = 'gpt-4.1' },
-            slash_commands = {
-              ['file'] = {
-                -- Location to the slash command in CodeCompanion
-                callback = 'strategies.chat.slash_commands.file',
-                description = 'Select a file using Telescope',
-                opts = {
-                  provider = 'telescope', -- Can be "default", "telescope", "fzf_lua", "mini_pick" or "snacks"
-                  contains_code = true,
-                },
-              },
+            roles = {
+              llm = function(adapter)
+                return '  CodeCompanion (' .. adapter.formatted_name .. ')'
+              end,
+              user = '  User',
             },
           },
           inline = { adapter = { name = 'copilot', model = 'gpt-4.1' } },
@@ -213,6 +213,7 @@ return {
           },
         },
         extensions = {
+          spinner = {},
           mcphub = {
             callback = 'mcphub.extensions.codecompanion',
             opts = {
