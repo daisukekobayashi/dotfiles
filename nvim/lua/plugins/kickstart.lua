@@ -525,63 +525,67 @@ return {
         desc = '[F]ormat buffer',
       },
     },
-    opts = {
-      notify_on_error = false,
-      format_on_save = function(bufnr)
-        -- Disable autofromat on certain filetypes
-        local ignore_filetypes = { 'markdown' }
-        if vim.tbl_contains(ignore_filetypes, vim.bo[bufnr].filetype) then
-          return
-        end
-        -- Disable "format_on_save lsp_fallback" for languages that don't
-        -- have a well standardized coding style. You can add additional
-        -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true }
-        local lsp_format_opt
-        if disable_filetypes[vim.bo[bufnr].filetype] then
-          lsp_format_opt = 'never'
-        else
-          lsp_format_opt = 'fallback'
-        end
-        return {
-          timeout_ms = 500,
-          lsp_format = lsp_format_opt,
-        }
-      end,
-      formatters_by_ft = {
-        lua = { 'stylua' },
-        -- Conform can also run multiple formatters sequentially
-        markdown = { 'markdownlint', 'textlint' },
-        python = function(bufnr)
-          if require('conform').get_formatter_info('ruff_format', bufnr).available then
-            return { 'ruff_organize_imports', 'ruff_fix', 'ruff_format' }
-          else
-            return { 'isort', 'black' }
+    config = function()
+      local textlint = require('plugins.conform.formatters.textlint')
+      require('conform').setup({
+        notify_on_error = false,
+        format_on_save = function(bufnr)
+          -- Disable autofromat on certain filetypes
+          local ignore_filetypes = { 'markdown' }
+          if vim.tbl_contains(ignore_filetypes, vim.bo[bufnr].filetype) then
+            return
           end
+          -- Disable "format_on_save lsp_fallback" for languages that don't
+          -- have a well standardized coding style. You can add additional
+          -- languages here or re-enable it for the disabled ones.
+          local disable_filetypes = { c = true, cpp = true }
+          local lsp_format_opt
+          if disable_filetypes[vim.bo[bufnr].filetype] then
+            lsp_format_opt = 'never'
+          else
+            lsp_format_opt = 'fallback'
+          end
+          return {
+            timeout_ms = 500,
+            lsp_format = lsp_format_opt,
+          }
         end,
-        rust = { 'rustfmt', lsp_format = 'fallback' },
-        elixir = { 'mix' },
-        sh = { 'shfmt' },
-        --
-        -- You can use 'stop_after_first' to run the first available formatter from the list
-        -- javascript = { "prettierd", "prettier", stop_after_first = true },
-      },
-      formatters = {
-        stylua = {
-          prepend_args = {
-            '--indent-type',
-            'Spaces',
-            '--indent-width',
-            '2',
-            '--quote-style',
-            'AutoPreferSingle',
+        formatters_by_ft = {
+          lua = { 'stylua' },
+          -- Conform can also run multiple formatters sequentially
+          markdown = { 'markdownlint', 'textlint' },
+          python = function(bufnr)
+            if require('conform').get_formatter_info('ruff_format', bufnr).available then
+              return { 'ruff_organize_imports', 'ruff_fix', 'ruff_format' }
+            else
+              return { 'isort', 'black' }
+            end
+          end,
+          rust = { 'rustfmt', lsp_format = 'fallback' },
+          elixir = { 'mix' },
+          sh = { 'shfmt' },
+          --
+          -- You can use 'stop_after_first' to run the first available formatter from the list
+          -- javascript = { "prettierd", "prettier", stop_after_first = true },
+        },
+        formatters = {
+          stylua = {
+            prepend_args = {
+              '--indent-type',
+              'Spaces',
+              '--indent-width',
+              '2',
+              '--quote-style',
+              'AutoPreferSingle',
+            },
           },
+          shfmt = {
+            prepend_args = { '-i', '2', '-ci' },
+          },
+          textlint = textlint,
         },
-        shfmt = {
-          prepend_args = { '-i', '2', '-ci' },
-        },
-      },
-    },
+      })
+    end,
   },
 
   { -- Autocompletion
