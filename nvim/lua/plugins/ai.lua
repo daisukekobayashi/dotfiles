@@ -172,6 +172,61 @@ return {
   },
 
   {
+    'olimorris/codecompanion.nvim',
+    opts = {},
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'nvim-treesitter/nvim-treesitter',
+      'nvim-telescope/telescope.nvim',
+      'ravitemer/mcphub.nvim',
+    },
+    config = function()
+      require('codecompanion').setup({
+        strategies = {
+          chat = {
+            adapter = { name = 'copilot', model = 'gpt-4.1' },
+            slash_commands = {
+              ['file'] = {
+                -- Location to the slash command in CodeCompanion
+                callback = 'strategies.chat.slash_commands.file',
+                description = 'Select a file using Telescope',
+                opts = {
+                  provider = 'telescope', -- Can be "default", "telescope", "fzf_lua", "mini_pick" or "snacks"
+                  contains_code = true,
+                },
+              },
+            },
+          },
+          inline = { adapter = { name = 'copilot', model = 'gpt-4.1' } },
+          cmd = { adapter = { name = 'copilot', model = 'gpt-4.1' } },
+        },
+        display = {
+          action_palette = {
+            width = 95,
+            height = 10,
+            prompt = 'Prompt ', -- Prompt used for interactive LLM calls
+            provider = 'telescope', -- Can be "default", "telescope", "fzf_lua", "mini_pick" or "snacks". If not specified, the plugin will autodetect installed providers.
+            opts = {
+              show_default_actions = true, -- Show the default actions in the action palette?
+              show_default_prompt_library = true, -- Show the default prompt library in the action palette?
+            },
+          },
+        },
+        extensions = {
+          mcphub = {
+            callback = 'mcphub.extensions.codecompanion',
+            opts = {
+              make_vars = true,
+              make_slash_commands = true,
+              show_result_in_chat = true,
+            },
+          },
+        },
+      })
+    end,
+  },
+
+  {
     'ravitemer/mcphub.nvim',
     dependencies = {
       'nvim-lua/plenary.nvim',
