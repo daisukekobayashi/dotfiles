@@ -182,6 +182,7 @@ return {
       'ravitemer/mcphub.nvim',
     },
     config = function()
+      require('plugins.codecompanion.fidget-spinner').init()
       require('codecompanion').setup({
         opts = {
           language = 'Japanese',
