@@ -20,6 +20,9 @@ return {
               color = { fg = '#ff9e64' },
             },
           },
+          lualine_z = {
+            { require('plugins.lualine.component') },
+          },
         },
       })
     end,
