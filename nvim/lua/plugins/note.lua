@@ -40,6 +40,7 @@ return {
       },
       wiki_link_func = 'prepend_note_path',
       disable_frontmatter = true,
+      legacy_commands = false,
     },
   },
 
