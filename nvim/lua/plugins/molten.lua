@@ -19,7 +19,7 @@ return {
       vim.keymap.set('n', '<localleader>mi', ':MoltenInit<CR>', { silent = true, desc = 'Initialize the plugin' })
       vim.keymap.set(
         'n',
-        '<localleader>e',
+        '<localleader>me',
         ':MoltenEvaluateOperator<CR>',
         { silent = true, desc = 'run operator selection' }
       )
