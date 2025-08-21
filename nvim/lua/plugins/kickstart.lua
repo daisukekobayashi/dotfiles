@@ -428,7 +428,7 @@ return {
         ruff = {},
         rust_analyzer = {},
         ts_ls = {},
-        elixirls = {},
+        -- elixirls = {},
         bashls = {},
         html = {},
         cssls = {},
@@ -562,7 +562,7 @@ return {
             end
           end,
           rust = { 'rustfmt', lsp_format = 'fallback' },
-          elixir = { 'mix' },
+          -- elixir = { 'mix' },
           sh = { 'shfmt' },
           --
           -- You can use 'stop_after_first' to run the first available formatter from the list
