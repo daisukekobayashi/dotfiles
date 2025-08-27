@@ -32,6 +32,13 @@ if [ -e "${MISE_HOME}" ]; then
 fi
 ln -s "$(pwd)/mise" "${MISE_HOME}"
 
+# zellij
+ZELLIJ_HOME="${HOME}/.config/zellij"
+if [ -e "${ZELLIJ_HOME}" ]; then
+  rm -rf "${ZELLIJ_HOME}"
+fi
+ln -s "$(pwd)/zellij" "${ZELLIJ_HOME}"
+
 # vim
 make_directory "${HOME}/.vim/vim/undo"
 make_directory "${HOME}/.vim/vim/tmp"
