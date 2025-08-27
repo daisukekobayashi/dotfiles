@@ -2,7 +2,6 @@ source "${HOME}/.dotfiles/utils.sh"
 load_tool_versions
 
 unamestr="$(uname)"
-echo $unamestr
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW32_NT-6.1' ]] ||
