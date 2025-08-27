@@ -23,3 +23,4 @@ eval "$(sheldon source)"
 #fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+eval "$(zellij setup --generate-auto-start zsh)"
