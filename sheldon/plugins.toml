@@ -41,6 +41,7 @@ apply = ["defer"]
 pre = """
 TERM=xterm-256color
 ZSH_TMUX_FIXTERM=false
+ZSH_TMUX_AUTOSTART=true
 """
 
 [plugins.zsh-completions]
