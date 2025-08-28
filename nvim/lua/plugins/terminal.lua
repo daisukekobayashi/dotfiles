@@ -4,6 +4,7 @@ return {
     version = '*',
     config = function()
       require('toggleterm').setup({
+        open_mapping = [[<c-\>]],
         size = function(term)
           if term.direction == 'horizontal' then
             return 15
@@ -30,6 +31,18 @@ return {
       vim.keymap.set('n', '<leader>ts', function()
         split_term:toggle()
       end, { desc = '[T]erminal [S]plit' })
+
+      local codex = Terminal:new({
+        cmd = 'codex',
+        direction = 'vertical',
+        close_on_exit = false,
+      })
+
+      function _codex_toggle()
+        codex:toggle()
+      end
+
+      vim.keymap.set('n', '<leader>tc', _codex_toggle, { desc = '[T]erminal [C]odex' })
     end,
   },
 
