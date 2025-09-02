@@ -70,6 +70,11 @@ if [ -e "${GITUI_HOME}" ]; then
 fi
 ln -s "$(pwd)/gitui" "${GITUI_HOME}"
 
+# codex
+CODEX_HOME="${HOME}/.codex"
+make_directory "${CODEX_HOME}"
+ln -s "$(pwd)/codex/config.toml" "${CODEX_HOME}/config.toml"
+
 # mcphub
 MCPHUB_CONFIG="${HOME}/.config/mcphub"
 if [ -e "${MCPHUB_CONFIG}" ]; then

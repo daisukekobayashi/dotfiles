@@ -1,0 +1,16 @@
+model = "gpt-5"
+model_reasoning_effort = "high"
+model_reasoning_summary = "auto"
+
+approval_policy = "on-request"
+
+[model_providers.azure]
+name = "Azure"
+base_url = "https://{YOUR_RESOURCE_NAME}.openai.azure.com/openai"
+env_key = "AZURE_OPENAI_API_KEY"
+query_params = { api-version = "2025-04-01-preview" }
+wire_api = "responses"
+
+[profiles.azure]
+model = "gpt-5"
+model_provider = "azure"
