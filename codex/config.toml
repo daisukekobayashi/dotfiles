@@ -3,6 +3,10 @@ model_reasoning_effort = "high"
 model_reasoning_summary = "auto"
 
 approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
 
 [model_providers.azure]
 name = "Azure"
@@ -14,3 +18,8 @@ wire_api = "responses"
 [profiles.azure]
 model = "gpt-5"
 model_provider = "azure"
+
+[mcp_servers.context7]
+args = ["-y", "@upstash/context7-mcp", "--api-key", "CONTEXT7_API_KEY"]
+command = "npx"
+env = { "CONTEXT7_API_KEY" = "" }
