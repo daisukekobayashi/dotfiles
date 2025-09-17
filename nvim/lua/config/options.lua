@@ -3,6 +3,33 @@
 -- NOTE: You can change these options as you wish!
 --  For more options, you can see `:help option-list`
 
+-- Ensure cache/state directories exist before setting options
+local state = vim.fn.stdpath('state') -- e.g. ~/.local/state/nvim
+local dirs = {
+  backup = state .. '/backup',
+  swap = state .. '/swap',
+  undo = state .. '/undo',
+}
+
+for _, d in pairs(dirs) do
+  if vim.fn.isdirectory(d) == 0 then
+    vim.fn.mkdir(d, 'p')
+  end
+end
+
+-- Configure backup, swap, and undo options
+vim.opt.backupcopy = 'yes' -- Always overwrite the original file directly
+vim.opt.writebackup = true -- Create a backup file before overwriting
+vim.opt.backup = true -- Enable backup files
+vim.opt.swapfile = true -- Enable swap files
+vim.opt.undofile = true -- Enable persistent undo
+
+-- Set directories for backup, swap, and undo
+-- The trailing '//' means subdirectories will be mirrored automatically
+vim.opt.backupdir:prepend(dirs.backup .. '//')
+vim.opt.directory:prepend(dirs.swap .. '//')
+vim.opt.undodir:prepend(dirs.undo .. '//')
+
 -- Make line numbers default
 vim.opt.number = true
 -- You can also add relative line numbers, to help with jumping.
@@ -39,9 +66,6 @@ end)
 
 -- Enable break indent
 vim.opt.breakindent = true
-
--- Save undo history
-vim.opt.undofile = true
 
 -- Case-insensitive searching UNLESS \C or one or more capital letters in the search term
 vim.opt.ignorecase = true
