@@ -16,7 +16,7 @@ query_params = { api-version = "2025-04-01-preview" }
 wire_api = "responses"
 
 [profiles.azure]
-model = "gpt-5"
+model = "gpt-5-codex"
 model_provider = "azure"
 
 [mcp_servers.context7]
