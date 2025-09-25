@@ -14,38 +14,31 @@ make_directory() {
 
 link_file() {
   local src="$1" dst="$2"
+  mkdir -p "$(dirname "${dst}")"
   if [ -e "${dst}" ] || [ -L "${dst}" ]; then
     rm -rf "${dst}"
   fi
   ln -s "${src}" "${dst}"
 }
-
 # sheldon
 SHELDON_HOME="${HOME}/.config/sheldon"
-if [ -e "${SHELDON_HOME}" ]; then
-  rm -rf "${SHELDON_HOME}"
-fi
-ln -s "$(pwd)/sheldon" "${SHELDON_HOME}"
+link_file "$(pwd)/sheldon" "${SHELDON_HOME}"
 
+# zsh
 ZSH_CONFIG="${HOME}/.config/zsh"
-if [ -e "${ZSH_CONFIG}" ]; then
-  rm -rf "${ZSH_CONFIG}"
-fi
-ln -s "$(pwd)/zsh" "${ZSH_CONFIG}"
+link_file "$(pwd)/zsh" "${ZSH_CONFIG}"
 
 # mise
 MISE_HOME="${HOME}/.config/mise"
-if [ -e "${MISE_HOME}" ]; then
-  rm -rf "${MISE_HOME}"
-fi
-ln -s "$(pwd)/mise" "${MISE_HOME}"
+link_file "$(pwd)/mise" "${MISE_HOME}"
 
 # zellij
 ZELLIJ_HOME="${HOME}/.config/zellij"
-if [ -e "${ZELLIJ_HOME}" ]; then
-  rm -rf "${ZELLIJ_HOME}"
-fi
-ln -s "$(pwd)/zellij" "${ZELLIJ_HOME}"
+link_file "$(pwd)/zellij" "${ZELLIJ_HOME}"
+
+# neovim
+NEOVIM_HOME="${HOME}/.config/nvim"
+link_file "$(pwd)/nvim" "${NEOVIM_HOME}"
 
 # vim
 make_directory "${HOME}/.vim/vim/undo"
@@ -55,40 +48,22 @@ make_directory "${HOME}/.vim/vim/tmp"
 make_directory "${HOME}/.vim/nvim/undo"
 make_directory "${HOME}/.vim/nvim/tmp"
 
-NEOVIM_HOME="${HOME}/.config/nvim"
-make_directory "${HOME}/.vim/nvim/undo"
-make_directory "${HOME}/.vim/nvim/tmp"
-
-if [ -e "${NEOVIM_HOME}" ]; then
-  rm -rf "${NEOVIM_HOME}"
-fi
-ln -s "$(pwd)/nvim" "${NEOVIM_HOME}"
-
 # lazygit
 LAZYGIT_HOME="${HOME}/.config/lazygit"
-if [ -e "${LAZYGIT_HOME}" ]; then
-  rm -rf "${LAZYGIT_HOME}"
-fi
-ln -s "$(pwd)/lazygit" "${LAZYGIT_HOME}"
+link_file "$(pwd)/lazygit" "${LAZYGIT_HOME}"
 
 # gitui
 GITUI_HOME="${HOME}/.config/gitui"
-if [ -e "${GITUI_HOME}" ]; then
-  rm -rf "${GITUI_HOME}"
-fi
-ln -s "$(pwd)/gitui" "${GITUI_HOME}"
+link_file "$(pwd)/gitui" "${GITUI_HOME}"
+
+# mcphub
+MCPHUB_CONFIG="${HOME}/.config/mcphub"
+link_file "$(pwd)/mcphub" "${MCPHUB_CONFIG}"
 
 # codex
 CODEX_HOME="${HOME}/.codex"
 make_directory "${CODEX_HOME}"
-ln -s "$(pwd)/codex/config.toml" "${CODEX_HOME}/config.toml"
-
-# mcphub
-MCPHUB_CONFIG="${HOME}/.config/mcphub"
-if [ -e "${MCPHUB_CONFIG}" ]; then
-  rm -rf "${MCPHUB_CONFIG}"
-fi
-ln -s "$(pwd)/mcphub" "${MCPHUB_CONFIG}"
+link_file "$(pwd)/codex/config.toml" "${CODEX_HOME}/config.toml"
 
 # ipython
 IPY_HOME="${HOME}/.ipython"
@@ -108,17 +83,9 @@ for f in "${DOT_IPY_PROFILE}/startup/"*.py; do
 done
 
 for f in .??*; do
-  [[ "$f" == ".git" ]] && continue
-  [[ "$f" == ".DS_Store" ]] && continue
+  [[ "$f" == ".git" || "$f" == ".DS_Store" ]] && continue
   [[ -d "$f" ]] && continue
-
-  if [ ! -f "${HOME}/$f" ]; then
-    ln -s "$(pwd)/$f" "${HOME}/$f"
-  else
-    echo "$f"
-    rm "${HOME}/$f"
-    ln -s "$(pwd)/$f" "${HOME}/$f"
-  fi
+  link_file "$(pwd)/$f" "${HOME}/$f"
 done
 
 if [[ "${unamestr}" == 'Linux' ]]; then
