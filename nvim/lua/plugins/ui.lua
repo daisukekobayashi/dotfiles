@@ -20,6 +20,9 @@ return {
             },
           },
           lualine_x = {
+            { 'encoding' },
+            { 'fileformat' },
+            { 'filetype' },
             {
               require('noice').api.statusline.mode.get,
               cond = require('noice').api.statusline.mode.has,
