@@ -13,6 +13,12 @@ return {
           theme = 'auto',
         },
         sections = {
+          lualine_c = {
+            {
+              'filename',
+              path = 1,
+            },
+          },
           lualine_x = {
             {
               require('noice').api.statusline.mode.get,
@@ -22,6 +28,14 @@ return {
           },
           lualine_z = {
             { require('plugins.lualine.component') },
+          },
+        },
+        inactive_sections = {
+          lualine_c = {
+            {
+              'filename',
+              path = 1,
+            },
           },
         },
       })
