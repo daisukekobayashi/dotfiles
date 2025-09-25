@@ -12,6 +12,14 @@ make_directory() {
   fi
 }
 
+link_file() {
+  local src="$1" dst="$2"
+  if [ -e "${dst}" ] || [ -L "${dst}" ]; then
+    rm -rf "${dst}"
+  fi
+  ln -s "${src}" "${dst}"
+}
+
 # sheldon
 SHELDON_HOME="${HOME}/.config/sheldon"
 if [ -e "${SHELDON_HOME}" ]; then
@@ -81,6 +89,23 @@ if [ -e "${MCPHUB_CONFIG}" ]; then
   rm -rf "${MCPHUB_CONFIG}"
 fi
 ln -s "$(pwd)/mcphub" "${MCPHUB_CONFIG}"
+
+# ipython
+IPY_HOME="${HOME}/.ipython"
+IPY_PROFILE_DIR="${IPY_HOME}/profile_default"
+DOT_IPY_PROFILE="$(pwd)/ipython/profile_default"
+
+make_directory "${IPY_PROFILE_DIR}"
+make_directory "${IPY_PROFILE_DIR}/startup"
+
+link_file "${DOT_IPY_PROFILE}/ipython_config.py" "${IPY_PROFILE_DIR}/ipython_config.py"
+link_file "${DOT_IPY_PROFILE}/ipython_kernel_config.py" "${IPY_PROFILE_DIR}/ipython_kernel_config.py"
+
+for f in "${DOT_IPY_PROFILE}/startup/"*.py; do
+  [ -e "$f" ] || continue
+  base="$(basename "$f")"
+  link_file "$f" "${IPY_PROFILE_DIR}/startup/${base}"
+done
 
 for f in .??*; do
   [[ "$f" == ".git" ]] && continue
