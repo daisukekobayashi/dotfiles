@@ -428,7 +428,7 @@ return {
         ruff = {},
         rust_analyzer = {},
         ts_ls = {},
-        -- elixirls = {},
+        elixirls = {},
         bashls = {},
         html = {},
         cssls = {},
