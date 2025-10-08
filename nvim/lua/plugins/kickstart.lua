@@ -428,12 +428,15 @@ return {
         ruff = {},
         rust_analyzer = {},
         ts_ls = {},
+        prettier = {},
+        tailwindcss = {},
         elixirls = {},
         bashls = {},
         html = {},
         cssls = {},
         jsonls = {},
         yamlls = {},
+        taplo = {},
         marksman = {},
         dockerls = {},
         emmet_language_server = {},
@@ -564,6 +567,7 @@ return {
           rust = { 'rustfmt', lsp_format = 'fallback' },
           -- elixir = { 'mix' },
           sh = { 'shfmt' },
+          toml = { 'taplo' },
           --
           -- You can use 'stop_after_first' to run the first available formatter from the list
           -- javascript = { "prettierd", "prettier", stop_after_first = true },
