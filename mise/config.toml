@@ -2,7 +2,7 @@
 java = "adoptopenjdk-21.0.6+7.0.LTS"
 dotnet = "9.0.203"
 python = "3.11.9"
-node = "20.11.0"
+node = "22.20.0"
 ruby = "3.3.0"
 go = "1.21.6"
 rust = "1.86.0"
@@ -16,4 +16,3 @@ tree-sitter = "0.25.4"
 
 [env]
 PYTHON_CONFIGURE_OPTS = "--enable-shared"
-
