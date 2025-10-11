@@ -436,6 +436,7 @@ return {
         cssls = {},
         jsonls = {},
         yamlls = {},
+        yamlfmt = {},
         taplo = {},
         marksman = {},
         dockerls = {},
@@ -567,6 +568,7 @@ return {
           rust = { 'rustfmt', lsp_format = 'fallback' },
           -- elixir = { 'mix' },
           sh = { 'shfmt' },
+          yaml = { 'yamlfmt' },
           toml = { 'taplo' },
           --
           -- You can use 'stop_after_first' to run the first available formatter from the list
