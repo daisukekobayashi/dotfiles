@@ -437,6 +437,7 @@ return {
         jsonls = {},
         yamlls = {},
         yamlfmt = {},
+        prettier = {},
         taplo = {},
         marksman = {},
         dockerls = {},
@@ -587,6 +588,12 @@ return {
           },
           shfmt = {
             prepend_args = { '-i', '2', '-ci' },
+          },
+          yamlfmt = {
+            prepend_args = {
+              '-formatter',
+              'retain_line_breaks=true',
+            },
           },
           textlint = textlint,
         },
