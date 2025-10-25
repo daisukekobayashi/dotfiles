@@ -498,6 +498,8 @@ return {
         -- shell
         'shfmt',
         'shellcheck',
+        'tailwindcss',
+        'emmet_language_server',
       })
       require('mason-tool-installer').setup({ ensure_installed = ensure_installed })
 
@@ -679,7 +681,7 @@ return {
       },
 
       sources = {
-        default = { 'copilot', 'lsp', 'path', 'snippets', 'lazydev' },
+        default = { 'lsp', 'path', 'snippets', 'lazydev', 'copilot' },
         providers = {
           lazydev = { module = 'lazydev.integrations.blink', score_offset = 100 },
           copilot = {
