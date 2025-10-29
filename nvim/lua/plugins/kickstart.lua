@@ -450,6 +450,7 @@ return {
         gopls = {},
 
         -- web
+        prettierd = {},
         prettier = {},
         emmet_language_server = {},
         html = {},
@@ -577,6 +578,7 @@ return {
           end,
           rust = { 'rustfmt', lsp_format = 'fallback' },
           -- elixir = { 'mix' },
+          html = { 'prettierd', 'prettier' },
           sh = { 'shfmt' },
           yaml = { 'yamlfmt' },
           toml = { 'taplo' },
