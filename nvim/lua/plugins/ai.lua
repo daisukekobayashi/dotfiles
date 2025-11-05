@@ -56,6 +56,14 @@ return {
           backend = 'tmux',
           enabled = true,
         },
+        tools = {
+          codex_azure = {
+            cmd = { 'codex', '--profile', 'azure' },
+            env = {
+              AZURE_OPENAI_API_KEY = '',
+            },
+          },
+        },
       },
     },
     keys = {
