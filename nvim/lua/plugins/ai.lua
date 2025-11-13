@@ -51,6 +51,7 @@ return {
     'folke/sidekick.nvim',
     opts = {
       -- add any options here
+      nes = { enabled = true },
       cli = {
         mux = {
           backend = 'tmux',
@@ -66,6 +67,26 @@ return {
         },
       },
     },
+    config = function(_, opts)
+      require('sidekick').setup(opts)
+
+      vim.api.nvim_create_autocmd('User', {
+        pattern = 'SidekickNesHide',
+        callback = function()
+          if disabled then
+            disabled = false
+            require('tiny-inline-diagnostic').enable()
+          end
+        end,
+      })
+      vim.api.nvim_create_autocmd('User', {
+        pattern = 'SidekickNesShow',
+        callback = function()
+          disabled = true
+          require('tiny-inline-diagnostic').disable()
+        end,
+      })
+    end,
     keys = {
       {
         '<tab>',
