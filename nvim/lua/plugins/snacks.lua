@@ -7,7 +7,7 @@ return {
     opts = {
       bigfile = { enabled = true },
       dashboard = { enabled = true },
-      explorer = { enabled = true },
+      --explorer = { enabled = true },
       indent = { enabled = true },
       input = { enabled = true },
       notifier = {
@@ -63,13 +63,13 @@ return {
         end,
         desc = 'Notification History',
       },
-      {
-        '<leader>e',
-        function()
-          Snacks.explorer()
-        end,
-        desc = 'File Explorer',
-      },
+      --{
+      --  '<leader>e',
+      --  function()
+      --    Snacks.explorer()
+      --  end,
+      --  desc = 'File Explorer',
+      --},
       -- find
       {
         '<leader>fb',
@@ -464,13 +464,13 @@ return {
         desc = 'Git Browse',
         mode = { 'n', 'v' },
       },
-      {
-        '<leader>gg',
-        function()
-          Snacks.lazygit()
-        end,
-        desc = 'Lazygit',
-      },
+      --{
+      --  '<leader>gg',
+      --  function()
+      --    Snacks.lazygit()
+      --  end,
+      --  desc = 'Lazygit',
+      --},
       {
         '<leader>un',
         function()
