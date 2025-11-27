@@ -92,6 +92,7 @@ return {
       fyler.setup({
         views = {
           finder = {
+            close_on_select = false,
             default_explorer = true,
             win = {
               kinds = {
