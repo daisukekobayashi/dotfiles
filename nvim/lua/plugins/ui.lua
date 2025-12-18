@@ -94,6 +94,11 @@ return {
           finder = {
             close_on_select = false,
             default_explorer = true,
+            icon = {
+              directory_collapsed = '',
+              directory_expanded = '',
+              directory_empty = '',
+            },
             win = {
               kinds = {
                 split_left_most = {
