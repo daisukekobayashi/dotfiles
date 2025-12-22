@@ -298,6 +298,7 @@ return {
 
   {
     'olimorris/codecompanion.nvim',
+    version = '^18.0.0',
     opts = {},
     dependencies = {
       'nvim-lua/plenary.nvim',
@@ -313,7 +314,7 @@ return {
           language = 'Japanese',
           is_slash_command = true,
         },
-        strategies = {
+        interactions = {
           chat = {
             adapter = { name = 'copilot', model = 'gpt-4.1' },
             roles = {
