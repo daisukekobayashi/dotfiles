@@ -85,6 +85,9 @@ return {
     dependencies = { 'MunifTanjim/nui.nvim' },
     opts = {
       disable_mouse = false,
+      disabled_filetypes = {
+        ['fyler'] = true,
+      },
       restriction_mode = 'hint',
     },
   },
