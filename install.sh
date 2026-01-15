@@ -65,6 +65,11 @@ CODEX_HOME="${HOME}/.codex"
 make_directory "${CODEX_HOME}"
 link_file "$(pwd)/codex/config.toml" "${CODEX_HOME}/config.toml"
 
+# gemini
+GEMINI_HOME="${HOME}/.gemini"
+make_directory "${GEMINI_HOME}"
+link_file "$(pwd)/gemini/settings.json" "${GEMINI_HOME}/settings.json"
+
 # ipython
 IPY_HOME="${HOME}/.ipython"
 IPY_PROFILE_DIR="${IPY_HOME}/profile_default"
