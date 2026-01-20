@@ -290,6 +290,7 @@ return {
 
         -- c/cpp/rust
         cpptools = {},
+        ['clang-format'] = {},
         clangd = {},
         rust_analyzer = {},
 
@@ -434,6 +435,8 @@ return {
               return { 'isort', 'black' }
             end
           end,
+          c = { 'clang-format', lsp_format = 'fallback' },
+          cpp = { 'clang-format', lsp_format = 'fallback' },
           rust = { 'rustfmt', lsp_format = 'fallback' },
           -- elixir = { 'mix' },
           html = { 'prettierd', 'prettier', stop_afeter_first = true },
