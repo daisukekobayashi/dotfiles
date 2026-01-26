@@ -14,15 +14,20 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export XDG_CONFIG_HOME=$HOME/.config
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"
+  export PATH="/Users/daisuke/.antigravity/antigravity/bin:$PATH"
+fi
+
+if [ "$ANTIGRAVITY_AGENT" = "1" ] || [ "$TERM_PROGRAM" = "vscode" ]; then
+  return
 fi
 
 eval "$(sheldon source)"
 
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
 #if (which zprof > /dev/null 2>&1) ;then
 #  zprof
 #fi
-
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 #export ZELLIJ_AUTO_ATTACH=true
 #export ZELLIJ_AUTO_EXIT=true
