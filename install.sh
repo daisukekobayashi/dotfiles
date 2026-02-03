@@ -88,7 +88,7 @@ for f in "${DOT_IPY_PROFILE}/startup/"*.py; do
 done
 
 for f in .??*; do
-  [[ "$f" == ".git" || "$f" == ".DS_Store" ]] && continue
+  [[ "$f" == ".git" || "$f" == ".DS_Store" || "$f" == ".env" || "$f" == ".env.example" ]] && continue
   [[ -d "$f" ]] && continue
   link_file "$(pwd)/$f" "${HOME}/$f"
 done
