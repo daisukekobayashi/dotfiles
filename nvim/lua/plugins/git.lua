@@ -4,6 +4,13 @@ return {
     opts = {},
     -- Optional dependencies
     dependencies = { 'nvim-tree/nvim-web-devicons' },
+    keys = {
+      { '<leader>gD', '<cmd>DiffviewOpen<cr>', desc = 'Diffview: Open repo diff' },
+      { '<leader>gH', '<cmd>DiffviewFileHistory<cr>', desc = 'Diffview: File history (repo)' },
+      { '<leader>gF', '<cmd>DiffviewFileHistory %<cr>', desc = 'Diffview: File history (current file)' },
+      { '<leader>gT', '<cmd>DiffviewToggleFiles<cr>', desc = 'Diffview: Toggle files panel' },
+      { '<leader>gq', '<cmd>DiffviewClose<cr>', desc = 'Diffview: Close' },
+    },
   },
 
   {
