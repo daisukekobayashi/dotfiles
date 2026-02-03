@@ -1,1 +1,22 @@
 .config/nvim/lazy-lock.json
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Editor / OS junk
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.netrwhist
+
+# Python caches
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+
+# General caches
+.cache/
