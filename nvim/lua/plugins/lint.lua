@@ -1,7 +1,7 @@
 return {
   {
     'mfussenegger/nvim-lint',
-    events = { 'BufWritePost', 'BufReadPost', 'InsertLeave' },
+    event = { 'BufWritePost', 'BufReadPost', 'InsertLeave' },
     config = function()
       local lint = require('lint')
       lint.linters.textlint = require('plugins.lint.linters.textlint')
