@@ -1,3 +1,11 @@
+local function env_or_nil(name)
+  local value = vim.env[name]
+  if value == nil or value == '' then
+    return nil
+  end
+  return value
+end
+
 return {
   {
     'robitx/gp.nvim',
@@ -12,7 +20,7 @@ return {
           azure = {
             disable = true,
             endpoint = 'https://$URL.openai.azure.com/openai/deployments/{{model}}/chat/completions',
-            secret = os.getenv('AZURE_API_KEY'),
+            secret = os.getenv('AZURE_OPENAI_API_KEY'),
           },
           copilot = {
             disable = false,
@@ -49,24 +57,26 @@ return {
 
   {
     'folke/sidekick.nvim',
-    opts = {
-      -- add any options here
-      nes = { enabled = true },
-      cli = {
-        mux = {
-          backend = 'tmux',
-          enabled = true,
-        },
-        tools = {
-          codex_azure = {
-            cmd = { 'codex', '--profile', 'azure' },
-            env = {
-              AZURE_OPENAI_API_KEY = '',
+    opts = (function()
+      local azure_key = env_or_nil('AZURE_OPENAI_API_KEY')
+
+      return {
+        -- add any options here
+        nes = { enabled = true },
+        cli = {
+          mux = {
+            backend = 'tmux',
+            enabled = true,
+          },
+          tools = {
+            codex_azure = {
+              cmd = { 'codex', '--profile', 'azure' },
+              env = azure_key and { AZURE_OPENAI_API_KEY = azure_key } or nil,
             },
           },
         },
-      },
-    },
+      }
+    end)(),
     config = function(_, opts)
       require('sidekick').setup(opts)
 
@@ -201,11 +211,11 @@ return {
 
       providers = {
         openai = {
-          model = 'gpt-4.1',
+          model = 'gpt-5.2-codex',
         },
         azure = {
-          endpoint = 'https://<endpoint-name>.openai.azure.com/',
-          deployment = 'gpt-4.1',
+          endpoint = env_or_nil('AZURE_OPENAI_ENDPOINT'),
+          deployment = 'gpt-5.2-codex',
         },
       },
 
