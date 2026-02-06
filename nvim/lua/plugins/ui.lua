@@ -102,7 +102,7 @@ return {
             win = {
               kinds = {
                 split_left_most = {
-                  width = '20%',
+                  width = '30',
                 },
               },
             },
