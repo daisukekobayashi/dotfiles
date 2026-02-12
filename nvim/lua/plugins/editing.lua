@@ -87,8 +87,18 @@ return {
       disable_mouse = false,
       disabled_filetypes = {
         ['fyler'] = true,
+        ['qf'] = true,
+        ['lazy'] = true,
+        ['mason'] = true,
+        ['snacks_picker_input'] = true,
+        ['help'] = true,
+        ['DiffviewFiles'] = true,
       },
       restriction_mode = 'hint',
+      disabled_keys = {
+        ['j'] = {},
+        ['k'] = {},
+      },
     },
   },
 
