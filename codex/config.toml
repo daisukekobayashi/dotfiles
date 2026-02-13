@@ -47,6 +47,7 @@ args = [
   "--project",
   "$(pwd)",
 ]
+startup_timeout_sec = 30
 
 [mcp_servers.context7]
 command = "npx"
