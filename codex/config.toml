@@ -1,4 +1,4 @@
-model = "gpt-5.2-codex"
+model = "gpt-5.3-codex"
 model_reasoning_effort = "high"
 model_reasoning_summary = "auto"
 
@@ -13,7 +13,7 @@ rmcp_client = true
 
 [model_providers.azure]
 name = "Azure"
-base_url = "https://{YOUR_RESOURCE_NAME}.openai.azure.com/openai"
+base_url = "https://<YOUR_RESOURCE_NAME>.openai.azure.com/openai"
 env_key = "AZURE_OPENAI_API_KEY"
 query_params = { api-version = "2025-04-01-preview" }
 wire_api = "responses"
@@ -49,5 +49,15 @@ args = [
 ]
 
 [mcp_servers.context7]
-args = ["-y", "@upstash/context7-mcp", "--api-key", "CONTEXT7_API_KEY"]
 command = "npx"
+args = ["-y", "@upstash/context7-mcp", "--api-key", "<CONTEXT7_API_KEY>"]
+[mcp_servers.azure-devops]
+command = "npx"
+args = [
+  "-y",
+  "@azure-devops/mcp",
+  "--authentication",
+  "envvar",
+  "<YOUR_ORG_NAME>",
+[mcp_servers.azure-devops.env]
+ADO_MCP_AUTH_TOKEN = "<YOUR_PERSONAL_ACCESS_TOKEN>"
