@@ -70,6 +70,22 @@ GEMINI_HOME="${HOME}/.gemini"
 make_directory "${GEMINI_HOME}"
 link_file "$(pwd)/gemini/settings.json" "${GEMINI_HOME}/settings.json"
 
+# claude
+CLAUDE_HOME="${HOME}/.claude"
+make_directory "${CLAUDE_HOME}"
+link_file "$(pwd)/claude/settings.json" "${CLAUDE_HOME}/settings.json"
+link_file "$(pwd)/claude/.mcp.json" "${CLAUDE_HOME}/.mcp.json"
+
+# agent instruction markdowns (generated copies)
+RULES_COMPOSER="$(pwd)/ai-rules/scripts/compose-rules.sh"
+if [ ! -f "${RULES_COMPOSER}" ]; then
+  echo "compose script not found: ${RULES_COMPOSER}"
+  exit 1
+fi
+bash "${RULES_COMPOSER}" codex "${CODEX_HOME}/AGENTS.md"
+bash "${RULES_COMPOSER}" gemini "${GEMINI_HOME}/GEMINI.md"
+bash "${RULES_COMPOSER}" claude "${CLAUDE_HOME}/CLAUDE.md"
+
 # ipython
 IPY_HOME="${HOME}/.ipython"
 IPY_PROFILE_DIR="${IPY_HOME}/profile_default"
