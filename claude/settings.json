@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "DISABLE_AUTOUPDATER": "1",
+    "MCP_TIMEOUT": "30000"
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "github",
+    "playwright",
+    "markitdown",
+    "serena",
+    "context7"
+  ]
+}

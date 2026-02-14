@@ -21,6 +21,13 @@ This document defines the universal standard operating procedures for all AI-ass
 - **Issue Integration**: If a tracking issue or work item (e.g., Azure DevOps, GitHub) exists, place its ID immediately after the slash.
 - **Example**: `fix/47-description-of-change`
 
+### Mainline Sync Before Branch/Worktree Creation
+- **Mandatory Sequence**: Before creating a new branch or git worktree from `main`, always run the following sequence and verify each command succeeds:
+  1. `git fetch origin --prune`
+  2. `git switch main`
+  3. `git pull --ff-only`
+- **Failure Handling**: If any step fails, stop and report the reason before proceeding.
+
 ## 2. Context & State Management
 
 - **Local Overrides**: You were invoked via a tool-specific configuration file in the project root (e.g., `AGENTS.md`, `AGENT.md`, `GEMINI.md`, `CLAUDE.md`, or `.cursorrules`). **Always prioritize any project-specific architecture, tech stack, and local rules defined in that invoking file over these global rules.**
@@ -44,6 +51,11 @@ This document defines the universal standard operating procedures for all AI-ass
 - **Plan before Act**: Before making complex changes, briefly outline your step-by-step execution plan. This ensures alignment and prevents unnecessary code churn.
 - **Informed Planning**: Always perform a thorough investigation of the codebase (using grep, read tools, etc.) before proposing or implementing changes.
 - **Verification**: Ensure all changes are validated through existing project standards and tests before finalizing a task.
+
+### README-First Execution Policy
+- **Source of Truth**: Before running tests, builds, or local services, first check `README.md` and documents explicitly linked from it.
+- **Project-Specific Commands First**: If `README.md` defines commands (including `docker compose` workflows), use those commands as the default path.
+- **Fallback Rule**: Use generic fallback commands only when no project-specific instructions are documented.
 
 ### Security
 - **Zero Secrets**: Never hardcode API keys, passwords, or sensitive credentials in source code, logs, or commit messages. Always use environment variables or appropriate secret management tools.
