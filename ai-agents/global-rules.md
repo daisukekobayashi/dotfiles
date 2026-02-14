@@ -6,8 +6,9 @@ This document defines the universal standard operating procedures for all AI-ass
 ## 1. Git Workflow & Version Control
 
 ### Atomic Commits
-- **Focus**: Every commit must be atomic. Include only the files and changes directly relevant to the specific task or fix.
-- **Exclusion**: Avoid mixing unrelated refactors, formatting changes, or multiple fixes into a single commit.
+- **Focus**: Every commit must be atomic.
+- **Explicit Staging**: **Never use `git add .` or `git add -A`.** You must strictly stage only the specific files you modified (e.g., `git add path/to/file.py`).
+- **Exclusion**: Strictly avoid mixing unrelated refactors, formatting changes, or untracked files into a single commit.
 
 ### Commit Message Standards
 - **Format**: Adhere to the [Conventional Commits](https://www.conventionalcommits.org/) specification.
