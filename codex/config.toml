@@ -60,5 +60,6 @@ args = [
   "--authentication",
   "envvar",
   "<YOUR_ORG_NAME>",
+]
 [mcp_servers.azure-devops.env]
 ADO_MCP_AUTH_TOKEN = "<YOUR_PERSONAL_ACCESS_TOKEN>"
