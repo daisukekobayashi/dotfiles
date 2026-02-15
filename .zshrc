@@ -13,6 +13,7 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/.local/bin:$PATH"
   export XDG_CONFIG_HOME=$HOME/.config
 elif [[ "${unamestr}" == 'Darwin' ]]; then
+  export PATH="$HOME/.local/bin:$PATH"
   eval "$(/opt/homebrew/bin/brew shellenv)"
   export PATH="/Users/daisuke/.antigravity/antigravity/bin:$PATH"
 fi

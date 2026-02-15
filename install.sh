@@ -74,7 +74,7 @@ link_file "$(pwd)/gemini/settings.json" "${GEMINI_HOME}/settings.json"
 CLAUDE_HOME="${HOME}/.claude"
 make_directory "${CLAUDE_HOME}"
 link_file "$(pwd)/claude/settings.json" "${CLAUDE_HOME}/settings.json"
-link_file "$(pwd)/claude/.mcp.json" "${CLAUDE_HOME}/.mcp.json"
+link_file "$(pwd)/claude/.claude.json" "${HOME}/.claude.json"
 
 # agent instruction markdowns (generated copies)
 RULES_COMPOSER="$(pwd)/ai-rules/scripts/compose-rules.sh"
