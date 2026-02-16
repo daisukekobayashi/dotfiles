@@ -1,4 +1,6 @@
 # User-managed execution policy rules.
+# Intent: speed up read-only inspection and test runs, keep mutation and
+# network/publish/destructive actions behind confirmation prompts.
 
 # Read-only git and shell inspection commands.
 prefix_rule(
@@ -20,6 +22,31 @@ prefix_rule(
     pattern = ["git", "diff"],
     decision = "allow",
     justification = "Read-only comparison",
+)
+prefix_rule(
+    pattern = ["git", "branch"],
+    decision = "allow",
+    justification = "Read-only branch inspection",
+)
+prefix_rule(
+    pattern = ["git", "rev-parse"],
+    decision = "allow",
+    justification = "Read-only revision inspection",
+)
+prefix_rule(
+    pattern = ["git", "remote"],
+    decision = "allow",
+    justification = "Read-only remote inspection",
+)
+prefix_rule(
+    pattern = ["git", "ls-files"],
+    decision = "allow",
+    justification = "Read-only tracked file listing",
+)
+prefix_rule(
+    pattern = ["git", "tag"],
+    decision = "allow",
+    justification = "Read-only tag inspection",
 )
 prefix_rule(
     pattern = ["ls"],
@@ -56,8 +83,160 @@ prefix_rule(
     decision = "allow",
     justification = "Read-only code and file search",
 )
+prefix_rule(
+    pattern = ["find"],
+    decision = "allow",
+    justification = "Read-only path search",
+)
+prefix_rule(
+    pattern = ["sed"],
+    decision = "allow",
+    justification = "Read-only text inspection",
+)
+prefix_rule(
+    pattern = ["awk"],
+    decision = "allow",
+    justification = "Read-only text inspection",
+)
+prefix_rule(
+    pattern = ["sort"],
+    decision = "allow",
+    justification = "Read-only text processing",
+)
+prefix_rule(
+    pattern = ["uniq"],
+    decision = "allow",
+    justification = "Read-only text processing",
+)
+prefix_rule(
+    pattern = ["cut"],
+    decision = "allow",
+    justification = "Read-only text processing",
+)
+prefix_rule(
+    pattern = ["xargs"],
+    decision = "allow",
+    justification = "Read-only command composition",
+)
+prefix_rule(
+    pattern = ["which"],
+    decision = "allow",
+    justification = "Read-only command lookup",
+)
+prefix_rule(
+    pattern = ["type"],
+    decision = "allow",
+    justification = "Read-only command lookup",
+)
+prefix_rule(
+    pattern = ["file"],
+    decision = "allow",
+    justification = "Read-only file metadata inspection",
+)
+prefix_rule(
+    pattern = ["stat"],
+    decision = "allow",
+    justification = "Read-only file metadata inspection",
+)
+prefix_rule(
+    pattern = ["dirname"],
+    decision = "allow",
+    justification = "Read-only path parsing",
+)
+prefix_rule(
+    pattern = ["basename"],
+    decision = "allow",
+    justification = "Read-only path parsing",
+)
+prefix_rule(
+    pattern = ["realpath"],
+    decision = "allow",
+    justification = "Read-only path resolution",
+)
+prefix_rule(
+    pattern = ["env"],
+    decision = "allow",
+    justification = "Read-only environment inspection",
+)
+prefix_rule(
+    pattern = ["printenv"],
+    decision = "allow",
+    justification = "Read-only environment inspection",
+)
+prefix_rule(
+    pattern = ["ps"],
+    decision = "allow",
+    justification = "Read-only process inspection",
+)
+prefix_rule(
+    pattern = ["date"],
+    decision = "allow",
+    justification = "Read-only system time inspection",
+)
+prefix_rule(
+    pattern = ["du"],
+    decision = "allow",
+    justification = "Read-only disk usage inspection",
+)
+prefix_rule(
+    pattern = ["df"],
+    decision = "allow",
+    justification = "Read-only filesystem usage inspection",
+)
+prefix_rule(
+    pattern = ["tree"],
+    decision = "allow",
+    justification = "Read-only directory tree inspection",
+)
 
-# Network/publish/destructive actions should always be reviewed.
+# Local test execution commands (no dependency changes).
+prefix_rule(
+    pattern = ["pytest"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["go", "test"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["cargo", "test"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["npm", "test"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["pnpm", "test"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["yarn", "test"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["bun", "test"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["vitest"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+prefix_rule(
+    pattern = ["jest"],
+    decision = "allow",
+    justification = "Local test execution",
+)
+
+# Network/publish/destructive/mutating actions should always be reviewed.
 prefix_rule(
     pattern = ["git", "push"],
     decision = "prompt",
@@ -66,7 +245,67 @@ prefix_rule(
 prefix_rule(
     pattern = ["git", "pull"],
     decision = "prompt",
-    justification = "Syncing from remote can change local state",
+    justification = "Syncing from remote changes local state",
+)
+prefix_rule(
+    pattern = ["git", "fetch"],
+    decision = "prompt",
+    justification = "Syncing remote metadata requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "clone"],
+    decision = "prompt",
+    justification = "Repository download requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "commit"],
+    decision = "prompt",
+    justification = "Creating commits requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "rebase"],
+    decision = "prompt",
+    justification = "History rewrite requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "merge"],
+    decision = "prompt",
+    justification = "Branch history mutation requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "cherry-pick"],
+    decision = "prompt",
+    justification = "History mutation requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "revert"],
+    decision = "prompt",
+    justification = "History mutation requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "clean"],
+    decision = "prompt",
+    justification = "Destructive cleanup requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "checkout"],
+    decision = "prompt",
+    justification = "Working tree mutation requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "switch"],
+    decision = "prompt",
+    justification = "Working tree mutation requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "restore"],
+    decision = "prompt",
+    justification = "Working tree mutation requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "stash"],
+    decision = "prompt",
+    justification = "Working tree mutation requires confirmation",
 )
 prefix_rule(
     pattern = ["curl"],
@@ -81,10 +320,50 @@ prefix_rule(
 prefix_rule(
     pattern = ["rm"],
     decision = "prompt",
-    justification = "Destructive deletion is blocked by policy",
+    justification = "Destructive deletion requires confirmation",
 )
 prefix_rule(
     pattern = ["git", "reset"],
     decision = "prompt",
-    justification = "History rewrite and destructive reset are blocked",
+    justification = "History rewrite and reset require confirmation",
+)
+prefix_rule(
+    pattern = ["npm", "install"],
+    decision = "prompt",
+    justification = "Dependency changes require confirmation",
+)
+prefix_rule(
+    pattern = ["pnpm", "add"],
+    decision = "prompt",
+    justification = "Dependency changes require confirmation",
+)
+prefix_rule(
+    pattern = ["yarn", "add"],
+    decision = "prompt",
+    justification = "Dependency changes require confirmation",
+)
+prefix_rule(
+    pattern = ["pip", "install"],
+    decision = "prompt",
+    justification = "Dependency changes require confirmation",
+)
+prefix_rule(
+    pattern = ["uv", "pip"],
+    decision = "prompt",
+    justification = "Dependency changes require confirmation",
+)
+prefix_rule(
+    pattern = ["brew"],
+    decision = "prompt",
+    justification = "System package changes require confirmation",
+)
+prefix_rule(
+    pattern = ["apt"],
+    decision = "prompt",
+    justification = "System package changes require confirmation",
+)
+prefix_rule(
+    pattern = ["dnf"],
+    decision = "prompt",
+    justification = "System package changes require confirmation",
 )
