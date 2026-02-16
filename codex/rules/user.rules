@@ -1,0 +1,90 @@
+# User-managed execution policy rules.
+
+# Read-only git and shell inspection commands.
+prefix_rule(
+    pattern = ["git", "status"],
+    decision = "allow",
+    justification = "Read-only repository status",
+)
+prefix_rule(
+    pattern = ["git", "log"],
+    decision = "allow",
+    justification = "Read-only commit history",
+)
+prefix_rule(
+    pattern = ["git", "show"],
+    decision = "allow",
+    justification = "Read-only object display",
+)
+prefix_rule(
+    pattern = ["git", "diff"],
+    decision = "allow",
+    justification = "Read-only comparison",
+)
+prefix_rule(
+    pattern = ["ls"],
+    decision = "allow",
+    justification = "Read-only directory listing",
+)
+prefix_rule(
+    pattern = ["pwd"],
+    decision = "allow",
+    justification = "Read-only current path",
+)
+prefix_rule(
+    pattern = ["cat"],
+    decision = "allow",
+    justification = "Read-only file output",
+)
+prefix_rule(
+    pattern = ["head"],
+    decision = "allow",
+    justification = "Read-only file preview",
+)
+prefix_rule(
+    pattern = ["tail"],
+    decision = "allow",
+    justification = "Read-only file preview",
+)
+prefix_rule(
+    pattern = ["wc"],
+    decision = "allow",
+    justification = "Read-only counting",
+)
+prefix_rule(
+    pattern = ["rg"],
+    decision = "allow",
+    justification = "Read-only code and file search",
+)
+
+# Network/publish/destructive actions should always be reviewed.
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Publishing changes requires confirmation",
+)
+prefix_rule(
+    pattern = ["git", "pull"],
+    decision = "prompt",
+    justification = "Syncing from remote can change local state",
+)
+prefix_rule(
+    pattern = ["curl"],
+    decision = "prompt",
+    justification = "Network access requires confirmation",
+)
+prefix_rule(
+    pattern = ["wget"],
+    decision = "prompt",
+    justification = "Network access requires confirmation",
+)
+prefix_rule(
+    pattern = ["rm"],
+    decision = "prompt",
+    justification = "Destructive deletion is blocked by policy",
+)
+prefix_rule(
+    pattern = ["git", "reset"],
+    decision = "prompt",
+    justification = "History rewrite and destructive reset are blocked",
+)
