@@ -19,6 +19,9 @@
       "selectedType": "oauth-personal"
     }
   },
+  "experimental": {
+    "plan": true
+  },
   "mcpServers": {
     "github": {
       "httpUrl": "https://api.githubcopilot.com/mcp/",
@@ -62,5 +65,56 @@
         "CONTEXT7_API_KEY": "$CONTEXT7_API_KEY"
       }
     }
+  },
+  "tools": {
+    "allowed": [
+      "run_shell_command(git status)",
+      "run_shell_command(git log)",
+      "run_shell_command(git show)",
+      "run_shell_command(git diff)",
+      "run_shell_command(git branch)",
+      "run_shell_command(git rev-parse)",
+      "run_shell_command(git remote)",
+      "run_shell_command(git ls-files)",
+      "run_shell_command(git tag)",
+      "run_shell_command(ls)",
+      "run_shell_command(pwd)",
+      "run_shell_command(cat)",
+      "run_shell_command(head)",
+      "run_shell_command(tail)",
+      "run_shell_command(wc)",
+      "run_shell_command(rg)",
+      "run_shell_command(grep)",
+      "run_shell_command(find)",
+      "run_shell_command(sed)",
+      "run_shell_command(awk)",
+      "run_shell_command(sort)",
+      "run_shell_command(uniq)",
+      "run_shell_command(cut)",
+      "run_shell_command(xargs)",
+      "run_shell_command(which)",
+      "run_shell_command(type)",
+      "run_shell_command(file)",
+      "run_shell_command(stat)",
+      "run_shell_command(dirname)",
+      "run_shell_command(basename)",
+      "run_shell_command(realpath)",
+      "run_shell_command(env)",
+      "run_shell_command(printenv)",
+      "run_shell_command(ps)",
+      "run_shell_command(date)",
+      "run_shell_command(du)",
+      "run_shell_command(df)",
+      "run_shell_command(tree)",
+      "run_shell_command(pytest)",
+      "run_shell_command(go test)",
+      "run_shell_command(cargo test)",
+      "run_shell_command(npm test)",
+      "run_shell_command(pnpm test)",
+      "run_shell_command(yarn test)"
+    ]
+  },
+  "model": {
+    "name": "auto-gemini-3"
   }
 }

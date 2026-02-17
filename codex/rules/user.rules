@@ -84,6 +84,11 @@ prefix_rule(
     justification = "Read-only code and file search",
 )
 prefix_rule(
+    pattern = ["grep"],
+    decision = "allow",
+    justification = "Read-only code and file search",
+)
+prefix_rule(
     pattern = ["find"],
     decision = "allow",
     justification = "Read-only path search",
