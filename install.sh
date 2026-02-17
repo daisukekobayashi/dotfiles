@@ -67,6 +67,8 @@ link_file "$(pwd)/codex/config.toml" "${CODEX_HOME}/config.toml"
 CODEX_RULES_HOME="${CODEX_HOME}/rules"
 make_directory "${CODEX_RULES_HOME}"
 link_file "$(pwd)/codex/rules/user.rules" "${CODEX_RULES_HOME}/user.rules"
+CODEX_PROMPTS_HOME="${CODEX_HOME}/prompts"
+link_file "$(pwd)/codex/prompts" "${CODEX_PROMPTS_HOME}"
 
 # gemini
 GEMINI_HOME="${HOME}/.gemini"
