@@ -30,6 +30,10 @@ bearer_token_env_var = "GITHUB_MCP_API_TOKEN"
 command = "npx"
 args = ["-y", "@playwright/mcp"]
 
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest"]
+
 [mcp_servers.markitdown]
 command = "uvx"
 args = ["markitdown-mcp"]
@@ -63,3 +67,7 @@ args = [
 ]
 [mcp_servers.azure-devops.env]
 ADO_MCP_AUTH_TOKEN = "<YOUR_PERSONAL_ACCESS_TOKEN>"
+
+[mcp_servers.arxiv_mcp_server]
+command = "uv"
+args = ["tool", "run", "arxiv-mcp-server"]
