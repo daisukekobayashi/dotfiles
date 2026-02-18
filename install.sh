@@ -74,6 +74,8 @@ link_file "$(pwd)/codex/prompts" "${CODEX_PROMPTS_HOME}"
 GEMINI_HOME="${HOME}/.gemini"
 make_directory "${GEMINI_HOME}"
 link_file "$(pwd)/gemini/settings.json" "${GEMINI_HOME}/settings.json"
+GEMINI_COMMANDS_HOME="${GEMINI_HOME}/commands"
+link_file "$(pwd)/gemini/commands" "${GEMINI_COMMANDS_HOME}"
 
 # claude
 CLAUDE_HOME="${HOME}/.claude"
