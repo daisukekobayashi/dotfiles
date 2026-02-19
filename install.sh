@@ -81,6 +81,8 @@ link_file "$(pwd)/gemini/commands" "${GEMINI_COMMANDS_HOME}"
 CLAUDE_HOME="${HOME}/.claude"
 make_directory "${CLAUDE_HOME}"
 link_file "$(pwd)/claude/settings.json" "${CLAUDE_HOME}/settings.json"
+CLAUDE_COMMANDS_HOME="${CLAUDE_HOME}/commands"
+link_file "$(pwd)/claude/commands" "${CLAUDE_COMMANDS_HOME}"
 link_file "$(pwd)/claude/.claude.json" "${HOME}/.claude.json"
 
 # agent instruction markdowns (generated copies)
