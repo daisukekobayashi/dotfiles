@@ -1,52 +1,58 @@
 #!/usr/bin/env bash
 
 setup_post() {
-  require_cmd git
-  require_cmd curl
+  local setup_home="$1"
+  local dry_run="$2"
+  local tpm_dir
+  local vim_plug
 
-  if command -v mise >/dev/null 2>&1; then
-    mise plugins install neovim lazygit github-cli
-    mise plugins install clojure
-    mise plugins install haskell stack
-    mise plugins install aws-cli
-    mise plugins install azure
-    mise plugins install gcloud
-    mise install
+  if [ "${dry_run}" != "1" ]; then
+    require_cmd git
+    require_cmd curl
+  fi
+
+  if command_exists mise; then
+    run_cmd "${dry_run}" mise plugins install neovim lazygit github-cli
+    run_cmd "${dry_run}" mise plugins install clojure
+    run_cmd "${dry_run}" mise plugins install haskell stack
+    run_cmd "${dry_run}" mise plugins install aws-cli
+    run_cmd "${dry_run}" mise plugins install azure
+    run_cmd "${dry_run}" mise plugins install gcloud
+    run_cmd "${dry_run}" mise install
   else
     log_warn "Skipping mise plugin install because mise is not available."
   fi
 
-  local tpm_dir="${HOME}/.tmux/plugins/tpm"
+  tpm_dir="${setup_home}/.tmux/plugins/tpm"
   if [ ! -d "${tpm_dir}" ]; then
-    git clone http://github.com/tmux-plugins/tpm "${tpm_dir}"
+    run_cmd "${dry_run}" git clone http://github.com/tmux-plugins/tpm "${tpm_dir}"
   else
-    git -C "${tpm_dir}" pull --ff-only
+    run_cmd "${dry_run}" git -C "${tpm_dir}" pull --ff-only
   fi
 
-  if command -v tmux >/dev/null 2>&1; then
-    tmux start-server
-    tmux new-session -d
-    "${tpm_dir}/scripts/install_plugins.sh"
+  if command_exists tmux; then
+    run_cmd "${dry_run}" tmux start-server
+    run_cmd "${dry_run}" tmux new-session -d
+    run_cmd "${dry_run}" "${tpm_dir}/scripts/install_plugins.sh"
   else
     log_warn "Skipping tmux plugin install because tmux is not available."
   fi
 
-  local vim_plug="${HOME}/.vim/autoload/plug.vim"
+  vim_plug="${setup_home}/.vim/autoload/plug.vim"
   if [ ! -f "${vim_plug}" ]; then
-    curl -fLo "${vim_plug}" --create-dirs \
-      https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-    if command -v vim >/dev/null 2>&1; then
-      vim +'PlugInstall --sync' +qall
+    run_cmd "${dry_run}" curl -fLo "${vim_plug}" --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+    if command_exists vim; then
+      run_cmd "${dry_run}" vim +'PlugInstall --sync' +qall
     else
       log_warn "Skipping PlugInstall because vim is not available."
     fi
   fi
 
-  if [ ! -d "${HOME}/.mintty" ]; then
-    git clone https://github.com/mavnn/mintty-colors-solarized "${HOME}/.mintty"
+  if [ ! -d "${setup_home}/.mintty" ]; then
+    run_cmd "${dry_run}" git clone https://github.com/mavnn/mintty-colors-solarized "${setup_home}/.mintty"
   fi
 
-  if [ ! -d "${HOME}/.solarized-mate-terminal" ]; then
-    git clone https://github.com/oz123/solarized-mate-terminal "${HOME}/.solarized-mate-terminal"
+  if [ ! -d "${setup_home}/.solarized-mate-terminal" ]; then
+    run_cmd "${dry_run}" git clone https://github.com/oz123/solarized-mate-terminal "${setup_home}/.solarized-mate-terminal"
   fi
 }

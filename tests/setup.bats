@@ -24,10 +24,9 @@ load 'helpers/test_helper.bash'
   [[ "$output" == *"Flags are not supported."* ]]
 }
 
-@test "packages subcommand rejects unsupported package flags" {
-  run_setup packages --only tmux
+@test "packages subcommand rejects unknown flags" {
+  run_setup packages --unknown
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Unknown packages arguments: --only tmux"* ]]
-  [[ "$output" == *"No package-level flags are available yet."* ]]
+  [[ "$output" == *"Unknown packages argument: --unknown"* ]]
 }
