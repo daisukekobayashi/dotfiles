@@ -11,6 +11,7 @@
       "Read(./secrets/**)"
     ]
   },
+  "model": "opusplan",
   "enabledMcpjsonServers": [
     "github",
     "playwright",
@@ -18,5 +19,7 @@
     "serena",
     "context7"
   ],
-  "model": "opusplan"
+  "enabledPlugins": {
+    "claude-mem@thedotmack": true
+  }
 }
