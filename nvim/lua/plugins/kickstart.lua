@@ -446,6 +446,8 @@ return {
           javascript = { 'prettierd', 'prettier', stop_after_first = true },
           typescript = { 'prettierd', 'prettier', stop_after_first = true },
           sh = { 'shfmt' },
+          json = { 'prettierd', 'prettier', 'jq', stop_after_first = true },
+          jsonc = { 'prettierd', 'prettier', stop_after_first = true },
           yaml = { 'yamlfmt' },
           toml = { 'taplo' },
           starlark = { 'buildifier' },
