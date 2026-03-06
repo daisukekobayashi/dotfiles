@@ -86,6 +86,78 @@ install_mise_linux() {
   fi
 }
 
+homebrew_bin_path() {
+  local candidate
+
+  if command_exists brew; then
+    command -v brew
+    return 0
+  fi
+
+  for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -x "${candidate}" ]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+install_homebrew_darwin() {
+  local dry_run="$1"
+
+  if homebrew_bin_path >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN install homebrew"
+    return 0
+  fi
+
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+}
+
+activate_homebrew_darwin() {
+  local dry_run="$1"
+  local brew_bin
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN activate homebrew shellenv"
+    return 0
+  fi
+
+  brew_bin="$(homebrew_bin_path)" || {
+    log_error "Homebrew not found after install."
+    return 1
+  }
+  eval "$("${brew_bin}" shellenv)"
+}
+
+install_homebrew_bundle_darwin() {
+  local dotfiles_root="$1"
+  local dry_run="$2"
+  local brewfile="${dotfiles_root}/brew/Brewfile"
+  local brew_bin
+
+  if [ ! -f "${brewfile}" ]; then
+    log_error "Brewfile not found: ${brewfile}"
+    return 1
+  fi
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN brew bundle --file=${brewfile}"
+    return 0
+  fi
+
+  brew_bin="$(homebrew_bin_path)" || {
+    log_error "Homebrew not found for brew bundle."
+    return 1
+  }
+  "${brew_bin}" bundle --file="${brewfile}"
+}
+
 setup_alacritty() {
   local dotfiles_root="$1"
   local setup_home="$2"
@@ -248,15 +320,18 @@ setup_packages_linux() {
 }
 
 setup_packages_darwin() {
-  local dry_run="$1"
+  local dotfiles_root="$1"
+  local dry_run="$2"
+  local only_csv="$3"
+  local skip_csv="$4"
 
-  if [ -x /opt/homebrew/bin/brew ]; then
-    if [ "${dry_run}" = "1" ]; then
-      log_info "DRY-RUN activate homebrew shellenv"
-    else
-      eval "$(/opt/homebrew/bin/brew shellenv)"
-    fi
+  if [ -n "${only_csv}" ] || [ -n "${skip_csv}" ]; then
+    log_warn "Package filters are ignored on macOS; using brew/Brewfile."
   fi
+
+  install_homebrew_darwin "${dry_run}" || return 1
+  activate_homebrew_darwin "${dry_run}" || return 1
+  install_homebrew_bundle_darwin "${dotfiles_root}" "${dry_run}" || return 1
 
   if command_exists mise; then
     if [ "${dry_run}" = "1" ]; then
@@ -294,7 +369,7 @@ setup_packages() {
   if [[ "${unamestr}" == "Linux" ]]; then
     setup_packages_linux "${dotfiles_root}" "${setup_home}" "${setup_tmpdir}" "${dry_run}" "${only_csv}" "${skip_csv}" "${archstr}"
   elif [[ "${unamestr}" == "Darwin" ]]; then
-    setup_packages_darwin "${dry_run}"
+    setup_packages_darwin "${dotfiles_root}" "${dry_run}" "${only_csv}" "${skip_csv}"
   else
     log_warn "Unsupported OS: ${unamestr}"
   fi
