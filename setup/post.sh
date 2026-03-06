@@ -1,11 +1,29 @@
 #!/usr/bin/env bash
 
-detect_mise_env() {
+detect_platform() {
   case "$(uname -s)" in
     Linux)
-      printf 'linux'
+      if [ -n "${WSL_DISTRO_NAME:-}" ] || [ -n "${WSL_INTEROP:-}" ] || grep -qi microsoft /proc/version 2>/dev/null; then
+        printf 'wsl'
+      else
+        printf 'linux'
+      fi
       ;;
     Darwin)
+      printf 'macos'
+      ;;
+    *)
+      printf ''
+      ;;
+  esac
+}
+
+detect_mise_env() {
+  case "$(detect_platform)" in
+    linux | wsl)
+      printf 'linux'
+      ;;
+    macos)
       printf 'macos'
       ;;
     *)
@@ -44,9 +62,9 @@ install_mise_tools() {
   local strict_mise="${SETUP_MISE_STRICT:-0}"
   local mise_env
   local tool
-  local -a mise_tools
-  local -a failed_tools
-  local -a cmd
+  local -a mise_tools=()
+  local -a failed_tools=()
+  local -a cmd=()
 
   case "${strict_mise}" in
     0 | 1) ;;

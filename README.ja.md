@@ -12,6 +12,10 @@
 
 このリポジトリの setup スクリプトは, この構成を前提にしています.
 
+`mise` は `mise/config.toml` を共通設定として読み込み, 環境ごとに次の設定を自動で切り替えます.
+- Linux と WSL: `mise/config.linux.toml`
+- macOS: `mise/config.macos.toml`
+
 ## Setup
 
 ### 初回セットアップ
