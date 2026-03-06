@@ -47,6 +47,7 @@ cd ~/.dotfiles
 - `./setup.sh packages --only tmux,luarocks`
 - `./setup.sh packages --skip quarto`
 - `./setup.sh packages --dry-run`
+- `./setup.sh all --reload-shell`
 
 利用可能な環境変数.
 
@@ -60,6 +61,7 @@ cd ~/.dotfiles
 
 ```bash
 SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
+./setup.sh all --reload-shell
 ```
 
 ## Test

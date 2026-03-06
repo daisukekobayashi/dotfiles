@@ -47,6 +47,7 @@ Package step filters.
 - `./setup.sh packages --only tmux,luarocks`
 - `./setup.sh packages --skip quarto`
 - `./setup.sh packages --dry-run`
+- `./setup.sh all --reload-shell`
 
 Optional environment variables.
 
@@ -60,6 +61,7 @@ Example.
 
 ```bash
 SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
+./setup.sh all --reload-shell
 ```
 
 ## Test

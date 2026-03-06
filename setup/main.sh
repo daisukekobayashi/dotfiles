@@ -30,11 +30,18 @@ packages args:
   --skip <csv>   Skip selected package steps
   --dry-run      Print commands without executing side effects
 
+all/post args:
+  --reload-shell Exec a fresh login zsh after setup completes
+
+packages args:
+  --reload-shell Exec a fresh login zsh after setup completes
+
 Environment:
   SETUP_HOME          Override target home directory (default: $HOME)
   SETUP_TMPDIR        Override temp directory (default: $TMPDIR or /tmp)
   SETUP_DOTFILES_ROOT Override dotfiles root path
   SETUP_DRY_RUN       Force dry-run mode (0 or 1)
+  SETUP_EXEC_SHELL    Exec a fresh login zsh after setup completes (0 or 1)
 EOF
 }
 
@@ -43,6 +50,7 @@ init_setup_env() {
   SETUP_TMPDIR="${SETUP_TMPDIR:-${TMPDIR:-/tmp}}"
   SETUP_DOTFILES_ROOT="${SETUP_DOTFILES_ROOT:-${DOTFILES_ROOT}}"
   SETUP_DRY_RUN="${SETUP_DRY_RUN:-0}"
+  SETUP_EXEC_SHELL="${SETUP_EXEC_SHELL:-0}"
 
   case "${SETUP_DRY_RUN}" in
     0 | 1) ;;
@@ -51,6 +59,36 @@ init_setup_env() {
       return 1
       ;;
   esac
+
+  case "${SETUP_EXEC_SHELL}" in
+    0 | 1) ;;
+    *)
+      log_error "SETUP_EXEC_SHELL must be 0 or 1: ${SETUP_EXEC_SHELL}"
+      return 1
+      ;;
+  esac
+}
+
+maybe_reload_shell() {
+  if [ "${SETUP_DRY_RUN}" = "1" ]; then
+    return 0
+  fi
+
+  if ! [ -t 0 ] || ! [ -t 1 ]; then
+    return 0
+  fi
+
+  if ! command_exists zsh; then
+    log_warn "zsh is not available; open a new shell manually to load the new config."
+    return 0
+  fi
+
+  if [ "${SETUP_EXEC_SHELL}" = "1" ]; then
+    log_info "Reloading into a fresh login zsh..."
+    exec zsh -l
+  fi
+
+  log_info "Setup completed. Run 'exec zsh -l' to load zsh, sheldon, and mise in this terminal."
 }
 
 parse_packages_args() {
@@ -79,6 +117,10 @@ parse_packages_args() {
         SETUP_DRY_RUN=1
         shift
         ;;
+      --reload-shell)
+        SETUP_EXEC_SHELL=1
+        shift
+        ;;
       *)
         log_error "Unknown packages argument: $1"
         return 1
@@ -94,12 +136,14 @@ run_all() {
   setup_packages "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "" ""
   log_info "Running post setup..."
   setup_post "${SETUP_HOME}" "${SETUP_DRY_RUN}"
+  maybe_reload_shell
 }
 
 main() {
   init_setup_env
 
   local subcommand
+  local -a remaining_args=()
   if [ "$#" -eq 0 ]; then
     subcommand="all"
   else
@@ -113,16 +157,22 @@ main() {
     return 1
   fi
 
-  if [ "$#" -gt 0 ] && [[ "${subcommand}" != "packages" ]]; then
-    log_error "Unexpected arguments for subcommand '${subcommand}': $*"
-    usage
-    return 1
-  fi
-
   case "${subcommand}" in
     all)
-      if [ "$#" -gt 0 ]; then
-        log_error "Unexpected arguments for subcommand 'all': $*"
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --reload-shell)
+            SETUP_EXEC_SHELL=1
+            shift
+            ;;
+          *)
+            remaining_args+=("$1")
+            shift
+            ;;
+        esac
+      done
+      if [ "${#remaining_args[@]}" -gt 0 ]; then
+        log_error "Unexpected arguments for subcommand 'all': ${remaining_args[*]}"
         usage
         return 1
       fi
@@ -146,15 +196,29 @@ main() {
       setup_packages "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "${PACKAGES_ONLY}" "${PACKAGES_SKIP}"
       log_info "Running post setup..."
       setup_post "${SETUP_HOME}" "${SETUP_DRY_RUN}"
+      maybe_reload_shell
       ;;
     post)
-      if [ "$#" -gt 0 ]; then
-        log_error "Unexpected arguments for subcommand 'post': $*"
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --reload-shell)
+            SETUP_EXEC_SHELL=1
+            shift
+            ;;
+          *)
+            remaining_args+=("$1")
+            shift
+            ;;
+        esac
+      done
+      if [ "${#remaining_args[@]}" -gt 0 ]; then
+        log_error "Unexpected arguments for subcommand 'post': ${remaining_args[*]}"
         usage
         return 1
       fi
       log_info "Running post setup..."
       setup_post "${SETUP_HOME}" "${SETUP_DRY_RUN}"
+      maybe_reload_shell
       ;;
     help)
       usage
