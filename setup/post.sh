@@ -32,6 +32,8 @@ setup_post() {
 
   if command_exists tmux; then
     run_cmd "${dry_run}" tmux start-server
+    # TPM's install script reads this from the tmux server environment.
+    run_cmd "${dry_run}" tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "${setup_home}/.tmux/plugins/"
     run_cmd "${dry_run}" tmux new-session -d
     run_cmd "${dry_run}" "${tpm_dir}/scripts/install_plugins.sh"
   else
