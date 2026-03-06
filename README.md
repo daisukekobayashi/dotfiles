@@ -13,8 +13,11 @@ Personal dotfiles for my own development environment.
 The setup scripts are designed around this stack.
 
 `mise` loads `mise/config.toml` as the base config and switches environment-specific config automatically:
-- Linux and WSL: `mise/config.linux.toml`
+- Linux: `mise/config.linux.toml`
+- WSL: `mise/config.wsl.toml`
 - macOS: `mise/config.macos.toml`
+
+On macOS, package bootstrap is handled with Homebrew and `brew/Brewfile`.
 
 ## Setup
 
