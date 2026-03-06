@@ -47,6 +47,7 @@ cd ~/.dotfiles
 - `SETUP_TMPDIR`
 - `SETUP_DOTFILES_ROOT`
 - `SETUP_DRY_RUN` (`0` or `1`)
+- `SETUP_MISE_STRICT` (`0` or `1`, default: `0`)
 
 例.
 

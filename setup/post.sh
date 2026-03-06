@@ -1,5 +1,99 @@
 #!/usr/bin/env bash
 
+detect_mise_env() {
+  case "$(uname -s)" in
+    Linux)
+      printf 'linux'
+      ;;
+    Darwin)
+      printf 'macos'
+      ;;
+    *)
+      printf ''
+      ;;
+  esac
+}
+
+list_mise_configured_tools() {
+  local setup_home="$1"
+  local mise_env="$2"
+  local -a cmd
+
+  cmd=(env HOME="${setup_home}" mise config ls --no-header)
+  if [ -n "${mise_env}" ]; then
+    cmd+=(-E "${mise_env}")
+  fi
+
+  "${cmd[@]}" | awk '
+    {
+      $1 = ""
+      sub(/^[[:space:]]+/, "")
+      gsub(/,/, "")
+      for (i = 1; i <= NF; i++) {
+        if (!seen[$i]++) {
+          print $i
+        }
+      }
+    }
+  '
+}
+
+install_mise_tools() {
+  local setup_home="$1"
+  local dry_run="$2"
+  local strict_mise="${SETUP_MISE_STRICT:-0}"
+  local mise_env
+  local tool
+  local -a mise_tools
+  local -a failed_tools
+  local -a cmd
+
+  case "${strict_mise}" in
+    0 | 1) ;;
+    *)
+      log_error "SETUP_MISE_STRICT must be 0 or 1: ${strict_mise}"
+      return 1
+      ;;
+  esac
+
+  mise_env="$(detect_mise_env)"
+  if ! mapfile -t mise_tools < <(list_mise_configured_tools "${setup_home}" "${mise_env}"); then
+    if [ "${strict_mise}" = "1" ]; then
+      log_error "Failed to read configured mise tools."
+      return 1
+    fi
+    log_warn "Skipping mise install because configured tools could not be read."
+    return 0
+  fi
+
+  if [ "${#mise_tools[@]}" -eq 0 ]; then
+    log_warn "Skipping mise install because no configured tools were found."
+    return 0
+  fi
+
+  for tool in "${mise_tools[@]}"; do
+    log_info "Installing mise tool: ${tool}"
+    cmd=(env HOME="${setup_home}" mise install)
+    if [ -n "${mise_env}" ]; then
+      cmd+=(-E "${mise_env}")
+    fi
+    cmd+=("${tool}")
+
+    if ! run_cmd "${dry_run}" "${cmd[@]}"; then
+      failed_tools+=("${tool}")
+      log_warn "Failed to install mise tool: ${tool}"
+    fi
+  done
+
+  if [ "${#failed_tools[@]}" -gt 0 ]; then
+    if [ "${strict_mise}" = "1" ]; then
+      log_error "mise tool installs failed: ${failed_tools[*]}"
+      return 1
+    fi
+    log_warn "Continuing despite failed mise tool installs: ${failed_tools[*]}"
+  fi
+}
+
 setup_post() {
   local setup_home="$1"
   local dry_run="$2"
@@ -12,13 +106,7 @@ setup_post() {
   fi
 
   if command_exists mise; then
-    run_cmd "${dry_run}" mise plugins install neovim lazygit github-cli
-    run_cmd "${dry_run}" mise plugins install clojure
-    run_cmd "${dry_run}" mise plugins install haskell stack
-    run_cmd "${dry_run}" mise plugins install aws-cli
-    run_cmd "${dry_run}" mise plugins install azure
-    run_cmd "${dry_run}" mise plugins install gcloud
-    run_cmd "${dry_run}" mise install
+    install_mise_tools "${setup_home}" "${dry_run}" || return 1
   else
     log_warn "Skipping mise plugin install because mise is not available."
   fi
