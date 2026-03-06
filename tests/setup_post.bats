@@ -12,6 +12,8 @@ teardown() {
 }
 
 @test "post step seeds tmux plugin manager path before plugin install" {
+  touch "${TEST_HOME}/.tmux.conf"
+
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
@@ -24,6 +26,7 @@ teardown() {
   [[ "$output" == *"DRY-RUN tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH ${TEST_HOME}/.tmux/plugins/"* ]]
   [[ "$output" == *"DRY-RUN tmux new-session -d"* ]]
   [[ "$output" == *"DRY-RUN ${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"* ]]
+  [[ "$output" == *"DRY-RUN tmux source-file ${TEST_HOME}/.tmux.conf"* ]]
 }
 
 @test "post step continues when a mise tool install fails by default" {

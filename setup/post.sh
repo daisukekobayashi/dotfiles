@@ -145,6 +145,9 @@ setup_post() {
     run_cmd "${dry_run}" tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "${setup_home}/.tmux/plugins/"
     run_cmd "${dry_run}" tmux new-session -d
     run_cmd "${dry_run}" "${tpm_dir}/scripts/install_plugins.sh"
+    if [ -f "${setup_home}/.tmux.conf" ]; then
+      run_cmd "${dry_run}" tmux source-file "${setup_home}/.tmux.conf"
+    fi
   else
     log_warn "Skipping tmux plugin install because tmux is not available."
   fi
