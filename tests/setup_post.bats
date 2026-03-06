@@ -160,7 +160,7 @@ EOF
   [[ "$output" == *"mise tool installs failed: azure"* ]]
 }
 
-@test "post step uses linux mise env when running under WSL" {
+@test "post step uses wsl mise env when running under WSL" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
@@ -178,10 +178,10 @@ EOF
 set -eu
 printf 'mise %s\n' "$*" >> "${LOG_FILE}"
 case "$*" in
-  "config ls --no-header -E linux")
+  "config ls --no-header -E wsl")
     cat <<'OUT'
 /fake/config.toml      python
-/fake/config.linux.toml  terraform
+/fake/config.wsl.toml  terraform
 OUT
     ;;
   *)
@@ -218,8 +218,8 @@ EOF
     post
 
   [ "$status" -eq 0 ]
-  run grep -F "mise config ls --no-header -E linux" "${log_file}"
+  run grep -F "mise config ls --no-header -E wsl" "${log_file}"
   [ "$status" -eq 0 ]
-  run grep -F "mise install -E linux terraform" "${log_file}"
+  run grep -F "mise install -E wsl terraform" "${log_file}"
   [ "$status" -eq 0 ]
 }
