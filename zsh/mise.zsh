@@ -24,8 +24,10 @@ detect_mise_env() {
   local platform
   platform="$(detect_platform)"
 
-  if [[ "${platform}" == 'linux' ]] || [[ "${platform}" == 'wsl' ]]; then
+  if [[ "${platform}" == 'linux' ]]; then
     printf 'linux'
+  elif [[ "${platform}" == 'wsl' ]]; then
+    printf 'wsl'
   elif [[ "${platform}" == 'macos' ]]; then
     printf 'macos'
   else

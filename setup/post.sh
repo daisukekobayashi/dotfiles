@@ -20,8 +20,11 @@ detect_platform() {
 
 detect_mise_env() {
   case "$(detect_platform)" in
-    linux | wsl)
+    linux)
       printf 'linux'
+      ;;
+    wsl)
+      printf 'wsl'
       ;;
     macos)
       printf 'macos'
