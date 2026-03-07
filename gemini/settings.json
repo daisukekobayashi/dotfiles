@@ -8,7 +8,12 @@
       "enabled": true
     },
     "previewFeatures": true,
-    "enableAutoUpdate": false
+    "enableAutoUpdate": false,
+    "sessionRetention": {
+      "enabled": true,
+      "maxAge": "30d",
+      "warningAcknowledged": true
+    }
   },
   "ui": {
     "theme": "GitHub",
