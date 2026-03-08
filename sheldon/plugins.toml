@@ -11,7 +11,7 @@ fzf-install = "{{ dir }}/install --bin > /dev/null \n[[ ! $PATH =~ {{ dir }} ]] 
 fzf-source = "{% for file in files %}source \"{{ file }}\"\n{% endfor %}"
 
 [plugins.compinit]
-inline = "autoload -Uz compinit && zsh-defer compinit"
+inline = "autoload -Uz compinit && compinit"
 
 [plugins.colors]
 inline = "autoload -Uz colors && zsh-defer colors"
