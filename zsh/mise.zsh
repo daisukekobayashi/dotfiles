@@ -52,5 +52,3 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export MISE_ENV="$(detect_mise_env)"
   eval "$(mise activate zsh)"
 fi
-
-eval "$(gh copilot alias -- zsh)"
