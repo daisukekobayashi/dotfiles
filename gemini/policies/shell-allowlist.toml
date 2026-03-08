@@ -1,0 +1,66 @@
+# Auto-approved shell commands migrated from deprecated tools.allowed.
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = [
+  "git status",
+  "git log",
+  "git show",
+  "git diff",
+  "git branch",
+  "git rev-parse",
+  "git remote",
+  "git ls-files",
+  "git tag",
+]
+decision = "allow"
+priority = 100
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = [
+  "ls",
+  "pwd",
+  "cat",
+  "head",
+  "tail",
+  "wc",
+  "rg",
+  "grep",
+  "find",
+  "sed",
+  "awk",
+  "sort",
+  "uniq",
+  "cut",
+  "xargs",
+  "which",
+  "type",
+  "file",
+  "stat",
+  "dirname",
+  "basename",
+  "realpath",
+  "env",
+  "printenv",
+  "ps",
+  "date",
+  "du",
+  "df",
+  "tree",
+]
+decision = "allow"
+priority = 100
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = [
+  "pytest",
+  "go test",
+  "cargo test",
+  "npm test",
+  "pnpm test",
+  "yarn test",
+]
+decision = "allow"
+priority = 100
