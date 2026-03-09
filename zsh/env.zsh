@@ -28,6 +28,17 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export ERL_AFLAGS="-kernel shell_history enabled"
   # ghcup
   export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
+
+  # WSL mounts Windows directories as other-writable, which makes GNU ls
+  # render them with a background color by default.
+  if [[ -n "${WSL_DISTRO_NAME:-}" ]] ||
+     [[ -n "${WSL_INTEROP:-}" ]] ||
+     grep -qi microsoft /proc/version 2>/dev/null; then
+    if command -v dircolors >/dev/null 2>&1 && [[ -z "${LS_COLORS:-}" ]]; then
+      eval "$(dircolors -b)"
+    fi
+    export LS_COLORS="${LS_COLORS:+${LS_COLORS}:}ow=01;34:tw=01;34"
+  fi
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   # android
   export PATH=${HOME}/Library/Android/sdk/platform-tools:$PATH
