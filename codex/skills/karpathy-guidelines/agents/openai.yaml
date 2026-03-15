@@ -1,0 +1,7 @@
+interface:
+  display_name: "Karpathy Guidelines"
+  short_description: "Apply cautious, simple, surgical, goal-driven coding behavior."
+  default_prompt: "Use this skill to keep non-trivial coding work explicit, simple, surgical, and verifiable."
+
+policy:
+  allow_implicit_invocation: true

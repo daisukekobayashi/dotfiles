@@ -27,6 +27,8 @@ teardown() {
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
   [ -L "${TEST_HOME}/.agents/skills/git-workflow-guardrails" ]
   [ "$(readlink "${TEST_HOME}/.agents/skills/git-workflow-guardrails")" = "${root}/codex/skills/git-workflow-guardrails" ]
+  [ -L "${TEST_HOME}/.agents/skills/karpathy-guidelines" ]
+  [ "$(readlink "${TEST_HOME}/.agents/skills/karpathy-guidelines")" = "${root}/codex/skills/karpathy-guidelines" ]
   [ -L "${TEST_HOME}/.agents/skills/readme-first-repo-onboarding" ]
   [ "$(readlink "${TEST_HOME}/.agents/skills/readme-first-repo-onboarding")" = "${root}/codex/skills/readme-first-repo-onboarding" ]
   [ -f "${TEST_HOME}/.gemini/GEMINI.md" ]
