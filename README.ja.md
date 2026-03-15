@@ -64,6 +64,12 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 ./setup.sh all --reload-shell
 ```
 
+## AI Agent Rules
+
+`./setup.sh links` は, Codex, Gemini, Claude 向けの生成済み rule file も配置します.
+
+Codex 専用の skill は `codex/skills/` で管理し, `~/.agents/skills` に user-scope の symlink として配置します. これにより, どのリポジトリでも同じ skill を利用できます.
+
 ## Test
 
 `setup` スクリプトのテストは `bats` を使います.
