@@ -26,12 +26,7 @@ setup_links() {
   link_file "${dotfiles_root}/codex/prompts" "${setup_home}/.codex/prompts" "${dry_run}"
 
   make_directory "${setup_home}/.agents" "${dry_run}"
-  make_directory "${setup_home}/.agents/skills" "${dry_run}"
-  local skill_dir
-  for skill_dir in "${dotfiles_root}/codex/skills/"*; do
-    [ -d "${skill_dir}" ] || continue
-    link_file "${skill_dir}" "${setup_home}/.agents/skills/$(basename "${skill_dir}")" "${dry_run}"
-  done
+  link_file "${dotfiles_root}/codex/skills" "${setup_home}/.agents/skills" "${dry_run}"
 
   make_directory "${setup_home}/.gemini" "${dry_run}"
   link_file "${dotfiles_root}/gemini/settings.json" "${setup_home}/.gemini/settings.json" "${dry_run}"
