@@ -68,7 +68,7 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 `./setup.sh links` also installs generated rule files for Codex, Gemini, and Claude.
 
-Codex skills are managed in `codex/skills/` and linked into `~/.agents/skills`, so they are available as user-scoped Codex skills across repositories.
+Codex skills are managed in `codex/skills/` and linked as `~/.agents/skills`, so they are available as user-scoped Codex skills across repositories.
 
 ## Test
 
