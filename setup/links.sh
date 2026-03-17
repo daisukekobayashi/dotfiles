@@ -35,7 +35,6 @@ setup_links() {
   make_directory "${setup_home}/.claude" "${dry_run}"
   link_file "${dotfiles_root}/claude/settings.json" "${setup_home}/.claude/settings.json" "${dry_run}"
   link_file "${dotfiles_root}/claude/commands" "${setup_home}/.claude/commands" "${dry_run}"
-  link_file "${dotfiles_root}/claude/.claude.json" "${setup_home}/.claude.json" "${dry_run}"
 
   local rules_composer="${dotfiles_root}/ai-rules/scripts/compose-rules.sh"
   if [ ! -f "${rules_composer}" ]; then
