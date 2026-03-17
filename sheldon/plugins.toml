@@ -18,7 +18,7 @@ inline = "autoload -Uz colors && zsh-defer colors"
 
 [plugins.dotfiles-sync]
 local = "~/.config/zsh"
-use = ["{alias,env,opt,style,mise}.zsh"]
+use = ["{alias,claude,env,opt,style,mise}.zsh"]
 apply = ["source"]
 
 [plugins.cd]
