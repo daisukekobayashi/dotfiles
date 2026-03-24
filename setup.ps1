@@ -1,57 +1,81 @@
-if (-not ($PSVersionTable.PSVersion.Major -gt 5 -or ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -ge 1))) {
-  Write-Output "You need to have PowerShell >= 5.1. Exiting script."
-  Exit
+[CmdletBinding()]
+param(
+  [Parameter(Position = 0)]
+  [string]$Subcommand = "all"
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$DEFAULT_DOTFILES_ROOT = $PSScriptRoot
+. (Join-Path $DEFAULT_DOTFILES_ROOT "lib/common.ps1")
+
+function Show-Usage {
+  @"
+Usage: .\setup.ps1 <subcommand>
+
+Subcommands:
+  all         Run Windows setup for the current privilege level
+  links       Create Windows symbolic links only
+  packages    Install or verify Scoop only
+  help        Show this help
+
+Behavior:
+  all (non-admin): runs packages, then links
+  all (admin): skips packages and runs links only
+"@
 }
 
-$HOME_DIR = if ($Env:CUSTOM_HOME) { $Env:CUSTOM_HOME } else { $Env:USERPROFILE }
+try {
+  Assert-MinimumPowerShellVersion
+  $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
+  $Env:SETUP_DOTFILES_ROOT = $setupContext.DotfilesRoot
 
-$scoop_shim = Join-Path $HOME_DIR "scoop\shims\scoop.ps1"
-if (-not (Test-Path $scoop_shim)) {
-  Write-Output "Scoop is not installed. Installing Scoop..."
-  try {
-    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -ErrorAction Stop
-    Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-  } catch {
-    Write-Error "Failed to install Scoop. Exiting script."
-    Exit
+  $linksScript = Join-Path $setupContext.DotfilesRoot "setup/links.ps1"
+  $packagesScript = Join-Path $setupContext.DotfilesRoot "setup/packages.ps1"
+
+  switch ($Subcommand.ToLowerInvariant()) {
+    "all" {
+      if (Test-IsAdministrator) {
+        Write-Output "Running elevated. Skipping packages and running links only."
+        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList @(
+          "-HomeDir",
+          $setupContext.HomeDir,
+          "-DotfilesRoot",
+          $setupContext.DotfilesRoot
+        )
+      } else {
+        Write-Output "Running packages in the current non-elevated session..."
+        Invoke-SetupPowerShellScript -ScriptPath $packagesScript
+        Write-Output "Running links in the current session..."
+        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList @(
+          "-HomeDir",
+          $setupContext.HomeDir,
+          "-DotfilesRoot",
+          $setupContext.DotfilesRoot
+        )
+      }
+    }
+    "links" {
+      Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList @(
+        "-HomeDir",
+        $setupContext.HomeDir,
+        "-DotfilesRoot",
+        $setupContext.DotfilesRoot
+      )
+    }
+    "packages" {
+      Invoke-SetupPowerShellScript -ScriptPath $packagesScript
+    }
+    "help" {
+      Show-Usage
+    }
+    default {
+      Show-Usage
+      throw "Unknown subcommand: $Subcommand"
+    }
   }
-} else {
-  Write-Output "Scoop is already installed."
+} catch {
+  Write-Error $_.Exception.Message
+  exit 1
 }
-
-function New-SymbolicLink {
-  param (
-    [string]$Path,
-    [string]$Name,
-    [string]$Value
-  )
-
-  if (-not (Test-Path $Path)) {
-    New-Item -ItemType Directory -Path $Path -Force | Out-Null
-    Write-Output "Created directory: $Path"
-  }
-
-  $fullLinkPath = Join-Path $Path $Name
-  if (Test-Path $fullLinkPath) {
-    Remove-Item -Path $fullLinkPath -Force -Recurse
-    Write-Output "Removed existing symbolic link: $fullLinkPath"
-  }
-  New-Item -ItemType SymbolicLink -Path $Path -Name $Name -Value $Value
-  Write-Output "Created symbolic link: $fullLinkPath -> $Value"
-}
-
-$dotfiles = "$HOME_DIR\.dotfiles"
-New-SymbolicLink -Path $HOME_DIR -Name ".vimrc" -Value "$dotfiles\.vimrc"
-New-SymbolicLink -Path $HOME_DIR -Name ".gvimrc" -Value "$dotfiles\.gvimrc"
-
-$pwsh_home = "$HOME_DIR\Documents\PowerShell"
-New-SymbolicLink -Path $pwsh_home -Name "Microsoft.PowerShell_profile.ps1" -Value "$dotfiles\powershell\Microsoft.PowerShell_profile.ps1"
-
-$config_home = "$HOME_DIR\.config"
-New-SymbolicLink -Path $config_home -Name "mise" -Value "$dotfiles\mise"
-
-$nvim_home = "$HOME_DIR\AppData\Local"
-New-SymbolicLink -Path $nvim_home -Name "nvim" -Value "$dotfiles\nvim"
-
-Write-Output "Press any key to exit..."
-[System.Console]::ReadKey() | Out-Null
