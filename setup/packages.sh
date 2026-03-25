@@ -283,7 +283,9 @@ setup_packages_linux() {
   local skip_csv="$6"
   local archstr="$7"
   local package_name
+  local step_status
   local package_order=(sheldon mise alacritty tmux luarocks quarto)
+  local -a failed_packages=()
 
   for package_name in "${package_order[@]}"; do
     if ! should_run_package "${package_name}" "${only_csv}" "${skip_csv}"; then
@@ -292,31 +294,41 @@ setup_packages_linux() {
     fi
 
     log_info "Running package step: ${package_name}"
+    step_status=0
     case "${package_name}" in
       sheldon)
-        install_sheldon "${setup_home}" "${dry_run}"
+        install_sheldon "${setup_home}" "${dry_run}" || step_status=$?
         ;;
       mise)
-        install_mise_linux "${setup_home}" "${dry_run}"
+        install_mise_linux "${setup_home}" "${dry_run}" || step_status=$?
         ;;
       alacritty)
-        setup_alacritty "${dotfiles_root}" "${setup_home}" "${dry_run}"
+        setup_alacritty "${dotfiles_root}" "${setup_home}" "${dry_run}" || step_status=$?
         ;;
       tmux)
-        install_tmux "${setup_home}" "${setup_tmpdir}" "${dry_run}"
+        install_tmux "${setup_home}" "${setup_tmpdir}" "${dry_run}" || step_status=$?
         ;;
       luarocks)
-        install_luarocks "${setup_home}" "${setup_tmpdir}" "${dry_run}"
+        install_luarocks "${setup_home}" "${setup_tmpdir}" "${dry_run}" || step_status=$?
         ;;
       quarto)
         if [[ "${archstr}" == "x86_64" ]]; then
-          install_quarto_linux_amd64 "${setup_home}" "${setup_tmpdir}" "${dry_run}"
+          install_quarto_linux_amd64 "${setup_home}" "${setup_tmpdir}" "${dry_run}" || step_status=$?
         else
           log_warn "Skipping quarto because architecture is not x86_64: ${archstr}"
         fi
         ;;
     esac
+
+    if [ "${step_status}" -ne 0 ]; then
+      failed_packages+=("${package_name}")
+      log_warn "Package step failed: ${package_name} (exit ${step_status}). Continuing setup."
+    fi
   done
+
+  if [ "${#failed_packages[@]}" -gt 0 ]; then
+    log_warn "Continuing despite failed package steps: ${failed_packages[*]}"
+  fi
 }
 
 setup_packages_darwin() {
