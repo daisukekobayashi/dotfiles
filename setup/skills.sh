@@ -62,5 +62,10 @@ setup_skills() {
 
   link_file "${restore_skills_dir}" "${setup_home}/.agents/skills" "${dry_run}"
   link_file "${restore_skills_dir}" "${setup_home}/.claude/skills" "${dry_run}"
-  link_file "${restore_skills_dir}" "${setup_home}/.gemini/skills" "${dry_run}"
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN rm -rf ${setup_home}/.gemini/skills"
+  elif [ -e "${setup_home}/.gemini/skills" ] || [ -L "${setup_home}/.gemini/skills" ]; then
+    rm -rf "${setup_home}/.gemini/skills"
+  fi
 }

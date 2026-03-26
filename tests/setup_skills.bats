@@ -33,7 +33,10 @@ teardown() {
   teardown_test_env
 }
 
-@test "skills restores external skills, links local skills, and wires assistant skill directories" {
+@test "skills restores external skills and wires only the required assistant skill directories" {
+  mkdir -p "${TEST_HOME}/.gemini"
+  ln -s /tmp/stale-gemini-skills "${TEST_HOME}/.gemini/skills"
+
   run env \
     HOME="${TEST_HOME}" \
     SETUP_HOME="${TEST_HOME}" \
@@ -52,8 +55,7 @@ teardown() {
   [ "$(readlink "${TEST_HOME}/.agents/skills")" = "${TEST_DOTFILES}/.agents/skills" ]
   [ -L "${TEST_HOME}/.claude/skills" ]
   [ "$(readlink "${TEST_HOME}/.claude/skills")" = "${TEST_DOTFILES}/.agents/skills" ]
-  [ -L "${TEST_HOME}/.gemini/skills" ]
-  [ "$(readlink "${TEST_HOME}/.gemini/skills")" = "${TEST_DOTFILES}/.agents/skills" ]
+  [ ! -e "${TEST_HOME}/.gemini/skills" ]
   [ "$(cat "${TEST_LOG}")" = "skills experimental_install" ]
 }
 
