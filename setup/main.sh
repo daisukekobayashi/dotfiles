@@ -9,6 +9,8 @@ source "${DOTFILES_ROOT}/lib/common.sh"
 source "${SCRIPT_DIR}/versions.sh"
 # shellcheck source=setup/links.sh
 source "${SCRIPT_DIR}/links.sh"
+# shellcheck source=setup/skills.sh
+source "${SCRIPT_DIR}/skills.sh"
 # shellcheck source=setup/packages.sh
 source "${SCRIPT_DIR}/packages.sh"
 # shellcheck source=setup/post.sh
@@ -21,6 +23,7 @@ Usage: ./setup.sh <subcommand> [args]
 Subcommands:
   all         Run all setup steps (default): links -> packages -> post
   links       Run symbolic link and local config setup only
+  skills      Restore skills and wire agent skill directories
   packages    Run required package/tool install and post-setup steps
   post        Run post-setup steps only
   help        Show this help
@@ -152,7 +155,7 @@ main() {
   fi
 
   if [[ "${subcommand}" == --* ]]; then
-    log_error "Flags are not supported. Use subcommands: all, links, packages, post, help."
+    log_error "Flags are not supported. Use subcommands: all, links, skills, packages, post, help."
     usage
     return 1
   fi
@@ -186,6 +189,15 @@ main() {
       fi
       log_info "Running links setup..."
       setup_links "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
+      ;;
+    skills)
+      if [ "$#" -gt 0 ]; then
+        log_error "Unexpected arguments for subcommand 'skills': $*"
+        usage
+        return 1
+      fi
+      log_info "Running skills setup..."
+      setup_skills "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}"
       ;;
     packages)
       parse_packages_args "$@" || {
