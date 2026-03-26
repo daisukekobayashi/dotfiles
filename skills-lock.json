@@ -71,6 +71,11 @@
       "sourceType": "github",
       "computedHash": "41e8ca055bbde13d240776a14a076a59614057200340c243130a76ba4e64cac8"
     },
+    "read-arxiv-paper": {
+      "source": "karpathy/nanochat",
+      "sourceType": "github",
+      "computedHash": "fbfe8363abc18db544f627d00a69078f2371f2c272c480c2e83d065fc6588b02"
+    },
     "receiving-code-review": {
       "source": "obra/superpowers",
       "sourceType": "github",
