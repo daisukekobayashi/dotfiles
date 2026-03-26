@@ -57,10 +57,6 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "codex\prompts"
     },
     @{
-      Link = Join-Path $setupContext.HomeDir ".agents\skills"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\skills"
-    },
-    @{
       Link = Join-Path $setupContext.HomeDir ".gemini\settings.json"
       Target = Join-Path $setupContext.DotfilesRoot "gemini\settings.json"
     },

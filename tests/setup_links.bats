@@ -25,8 +25,6 @@ teardown() {
   [ -L "${TEST_HOME}/.config/nvim" ]
   [ "$(readlink "${TEST_HOME}/.config/nvim")" = "${root}/nvim" ]
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
-  [ -L "${TEST_HOME}/.agents/skills" ]
-  [ "$(readlink "${TEST_HOME}/.agents/skills")" = "${root}/codex/skills" ]
   [ -f "${TEST_HOME}/.gemini/GEMINI.md" ]
   [ -f "${TEST_HOME}/.claude/CLAUDE.md" ]
 }
