@@ -4,7 +4,87 @@
     "agent-browser": {
       "source": "vercel-labs/agent-browser",
       "sourceType": "github",
-      "computedHash": "1fdc3ae39490000d36b242168c64db00c1654fe1a0e45a1b12e93b38cc21e32c"
+      "computedHash": "0eafe0971692cf8fcecb75f955595821452a835791d315db738f89ee49063a34"
+    },
+    "appinsights-instrumentation": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "3ddf71098d9bd57c67b551fff1edbfe7a80ebebf0f47745e096cfae386639144"
+    },
+    "azure-ai": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "56c9a059910cc97f9b8c7ffc582a979e2940363ed2bbde2fdcd9c8fb4a500ccd"
+    },
+    "azure-compliance": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "b1453a838f0ca9f4949ca49c3c41193968fb565a923a5119b6b6606160b36508"
+    },
+    "azure-compute": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "b3718109349705a2847d9b6b9b1cf4873c8b76aad9fc90e68476cfc3335b9377"
+    },
+    "azure-cost-optimization": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "82efbe7f1e18b2d27ddbc142a1c1bd130552677d8b0678c685f22238442b5fa7"
+    },
+    "azure-deploy": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "95ee86a7431a67f14160533d345421fc1967b53aa093ab05272dfdaad2f66bbd"
+    },
+    "azure-diagnostics": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "ba77faad35ea56061e384faedda127645b70cce34381ceb2f131b072cba20aed"
+    },
+    "azure-enterprise-infra-planner": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "6a43b9c43d989a860127e3c2a97f9da76aeab5a26d7e71fee10b53f3269c7fa2"
+    },
+    "azure-prepare": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "ad987e15487286a2c5368fc868ba9de5e2cf39f78abad2c78f5639067dcf9a8e"
+    },
+    "azure-quotas": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "8d27ba47ffc87d67c7733bc80210240ba77892f09000970aff4b38b6b0f0f7fb"
+    },
+    "azure-rbac": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "0c6d5f147f0e66ed176544bc6c59f7deead8b55f69390b5f9f95f6ef3b3973ed"
+    },
+    "azure-resource-lookup": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "626726ff2d792df6c446291713f72708159f782e6a361b632f341beab876e185"
+    },
+    "azure-resource-visualizer": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "ce4c09807008ecfc145c38ad10335c6bbbeff0fc8ad1cfb828e1cfec21ea1e01"
+    },
+    "azure-storage": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "91c9e0459a74b405ee6181698ea085e5d04e683e2b6100d44630e90def608f1f"
+    },
+    "azure-upgrade": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "f5b763ea4338836606081f4db34c26afddfd2360d6fce816be9cfc2d8da9cc72"
+    },
+    "azure-validate": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "computedHash": "793bb6453f2a01bd5cd07141949f6475c5e13edec8e9c364939944c898791fe2"
     },
     "baseline-ui": {
       "source": "ibelick/ui-skills",
@@ -30,6 +110,11 @@
       "source": "obra/superpowers",
       "sourceType": "github",
       "computedHash": "e21044ae7496fc285f1df9ff3fb518a3a20bea6f5216c1f59f4987e12c769a0a"
+    },
+    "docx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "6962db07127ee540a56e4677f65576d0727668a1d67f7da8bc978f10791c2bfe"
     },
     "executing-plans": {
       "source": "obra/superpowers",
@@ -75,6 +160,21 @@
       "source": "forrestchang/andrej-karpathy-skills",
       "sourceType": "github",
       "computedHash": "41e8ca055bbde13d240776a14a076a59614057200340c243130a76ba4e64cac8"
+    },
+    "mcp-builder": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "fc68038c900eb801f73ff96130c9f9dba533cc94212ed8435833242f196dedcf"
+    },
+    "pdf": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "cfbc539377088ca7e44a813b30c306327385bbd973cd7a721e1743f60837dd62"
+    },
+    "pptx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "6b8b859d26f93aa059c9870d1ab76b44ab69e3d6757ce4a03cc94cb760888073"
     },
     "read-arxiv-paper": {
       "source": "karpathy/nanochat",
@@ -131,6 +231,11 @@
       "sourceType": "github",
       "computedHash": "72e9ab72627e4fd8ed26a582e82309a98ecdc4f6e1c99418430ac05682c9e91d"
     },
+    "tailwind-design-system": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "988d80e52c67c3692d43cc963b6a048a239895e88b272b061de55370d0f8efc3"
+    },
     "test-driven-development": {
       "source": "obra/superpowers",
       "sourceType": "github",
@@ -171,6 +276,11 @@
       "sourceType": "github",
       "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
     },
+    "webapp-testing": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "cf8e5916d474886bd67b09691247f43f331523008b7d366064bc607ab42d6302"
+    },
     "writing-plans": {
       "source": "obra/superpowers",
       "sourceType": "github",
@@ -180,6 +290,11 @@
       "source": "obra/superpowers",
       "sourceType": "github",
       "computedHash": "c0a92e629e39ea91b1f54da67a6aa92723008a8ef5b500c6de078f55485937c7"
+    },
+    "xlsx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "efd0c8011cf0677d8075cf93867ecec804f9a8754a777e1d2fdb46197e9c247f"
     }
   }
 }
