@@ -1,7 +1,0 @@
-interface:
-  display_name: "Git Workflow Guardrails"
-  short_description: "Apply branch, staging, and commit rules for repo-changing git tasks."
-  default_prompt: "Use this skill to handle branch creation, staging, commit preparation, and pushes while following the configured git workflow rules."
-
-policy:
-  allow_implicit_invocation: true
