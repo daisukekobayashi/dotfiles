@@ -22,23 +22,6 @@ wire_api = "responses"
 model = "gpt-5.4"
 model_provider = "azure"
 
-[mcp_servers.github-mcp-server]
-url = "https://api.githubcopilot.com/mcp/"
-bearer_token_env_var = "GITHUB_MCP_API_TOKEN"
-
-[mcp_servers.playwright]
-command = "npx"
-args = ["-y", "@playwright/mcp"]
-
-[mcp_servers.chrome-devtools]
-command = "npx"
-args = ["-y", "chrome-devtools-mcp@latest"]
-
-[mcp_servers.markitdown]
-command = "uvx"
-args = ["markitdown-mcp"]
-startup_timeout_sec = 30
-
 [mcp_servers.serena]
 command = "uvx"
 args = [
@@ -54,21 +37,3 @@ args = [
 ]
 startup_timeout_sec = 30
 
-[mcp_servers.context7]
-command = "npx"
-args = ["-y", "@upstash/context7-mcp", "--api-key", "<CONTEXT7_API_KEY>"]
-[mcp_servers.azure-devops]
-command = "npx"
-args = [
-  "-y",
-  "@azure-devops/mcp",
-  "--authentication",
-  "envvar",
-  "<YOUR_ORG_NAME>",
-]
-[mcp_servers.azure-devops.env]
-ADO_MCP_AUTH_TOKEN = "<YOUR_PERSONAL_ACCESS_TOKEN>"
-
-[mcp_servers.arxiv_mcp_server]
-command = "uv"
-args = ["tool", "run", "arxiv-mcp-server"]
