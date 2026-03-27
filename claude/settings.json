@@ -5,20 +5,10 @@
     "MCP_TIMEOUT": "30000"
   },
   "permissions": {
-    "deny": [
-      "Read(./.env)",
-      "Read(./.env.*)",
-      "Read(./secrets/**)"
-    ]
+    "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)"]
   },
   "model": "opusplan",
-  "enabledMcpjsonServers": [
-    "github",
-    "playwright",
-    "markitdown",
-    "serena",
-    "context7"
-  ],
+  "enabledMcpjsonServers": ["serena"],
   "enabledPlugins": {
     "claude-mem@thedotmack": true
   }
