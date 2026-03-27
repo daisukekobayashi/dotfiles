@@ -1,7 +1,0 @@
-interface:
-  display_name: "README-First Repo Onboarding"
-  short_description: "Find repo commands from the README and linked docs before falling back to inference."
-  default_prompt: "Use this skill to determine how to run tests, builds, setup, or local services by checking the repository documentation first."
-
-policy:
-  allow_implicit_invocation: true
