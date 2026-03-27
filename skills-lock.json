@@ -136,11 +136,6 @@
       "sourceType": "github",
       "computedHash": "2f709d1a2c7564f8ce6a9bb707e7f5451117ba80f8e8e2302662c29bc61246a6"
     },
-    "execution-context-first-repo-onboarding": {
-      "source": "/home/u10077029/.dotfiles/skills/execution-context-first-repo-onboarding",
-      "sourceType": "local",
-      "computedHash": "a26be21bd5cc2fd2e68425e76e5dafb57ef5c6bf5f989e981dd0e0f7feef0d15"
-    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "sourceType": "github",
@@ -235,11 +230,6 @@
       "source": "coreyhaines31/marketingskills",
       "sourceType": "github",
       "computedHash": "ec3109d213dde1747614ad1112ef0e498e04b24e464538968e156dfbfadb2121"
-    },
-    "serena-session-init": {
-      "source": "/home/u10077029/.dotfiles/skills/serena-session-init",
-      "sourceType": "local",
-      "computedHash": "613ccf5d9d57a8a50975dd76c738710f8b7f70d867754412f6790102b2d00c2b"
     },
     "skill-creator": {
       "source": "anthropics/skills",
