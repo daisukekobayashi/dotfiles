@@ -1,0 +1,106 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    command: >
+      sh -lc "
+        ./scripts/setup.sh &&
+        ./scripts/bootstrap-dev.sh &&
+        npm run dev
+      "
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgres://postgres:postgres@db:5432/sample_dev
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/app
+      - deps_dev:/app/deps
+      - build_dev:/app/build
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    command: >
+      sh -lc "
+        ./scripts/setup.sh &&
+        python -m sample_worker
+      "
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgres://postgres:postgres@db:5432/sample_dev
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/app
+      - deps_worker:/app/deps
+      - build_worker:/app/build
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    profiles: ["test"]
+    command: >
+      sh -lc "
+        ./scripts/setup.sh &&
+        ./scripts/bootstrap-test.sh &&
+        npm test &&
+        pytest
+      "
+    environment:
+      APP_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@db:5432/sample_test
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/app
+      - deps_test:/app/deps
+      - build_test:/app/build
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sample_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sample_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "PING"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  deps_dev:
+  deps_worker:
+  deps_test:
+  build_dev:
+  build_worker:
+  build_test:

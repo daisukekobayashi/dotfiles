@@ -1,0 +1,62 @@
+{
+  "skill_name": "execution-context-first-repo-onboarding",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Open the sample repo at `skills/execution-context-first-repo-onboarding/evals/files/sample-compose-app` and run `npm test` for me. If there are multiple ways to do it, use the repository's intended local workflow rather than the fastest-looking generic command.",
+      "expected_output": "Should read the sample repo docs and keep the JavaScript test command inside the documented containerized workflow. Expected command source is the README. Should prefer `docker compose --profile test run --rm test sh -lc \"./scripts/setup.sh && npm test\"` over running `npm test` directly on the host.",
+      "assertions": [
+        "Checks the sample repo README before selecting the command",
+        "Recognizes the repo's intended test workflow is containerized",
+        "Uses the documented compose test service for `npm test`",
+        "Does not run `npm test` directly on the host",
+        "Notes the execution context as docker compose or Make wrapping docker compose"
+      ],
+      "files": [
+        "evals/files/sample-compose-app/README.md",
+        "evals/files/sample-compose-app/compose.yaml",
+        "evals/files/sample-compose-app/Makefile",
+        "evals/files/sample-compose-app/package.json",
+        "evals/files/sample-compose-app/scripts/setup.sh"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Open the sample repo at `skills/execution-context-first-repo-onboarding/evals/files/sample-compose-app` and run `pytest` for me. Use the repository's intended workflow even if the host has Python installed.",
+      "expected_output": "Should read the sample repo docs and keep the Python test command inside the documented containerized workflow. Expected command source is the README. Should prefer `docker compose --profile test run --rm test sh -lc \"./scripts/setup.sh && pytest\"` over running `pytest` directly on the host.",
+      "assertions": [
+        "Checks the sample repo README for test instructions",
+        "Chooses the documented compose test service for `pytest`",
+        "Does not run `pytest` directly on the host",
+        "Treats the compose service commands and dependencies as high-signal evidence",
+        "Uses repo evidence such as `pyproject.toml` without treating it as permission for host execution"
+      ],
+      "files": [
+        "evals/files/sample-compose-app/README.md",
+        "evals/files/sample-compose-app/compose.yaml",
+        "evals/files/sample-compose-app/pyproject.toml",
+        "evals/files/sample-compose-app/scripts/setup.sh"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "In `skills/execution-context-first-repo-onboarding/evals/files/sample-compose-app`, boot the app for local development the way this repository expects. I want the actual dev stack, not just `npm run dev` by itself.",
+      "expected_output": "Should use the compose-based dev workflow from the README. Expected command is `docker compose up --build` or a scoped compose invocation consistent with the docs. Should not substitute a host-level process launch because the repo expects supporting services and setup inside containers.",
+      "assertions": [
+        "Checks the sample repo README for startup instructions",
+        "Chooses `docker compose up --build` or an equivalent documented compose stack command",
+        "Explains that local development includes supporting services, not only the main app process",
+        "Does not jump straight to `npm run dev` on the host",
+        "Treats the compose service commands and dependencies as high-signal evidence"
+      ],
+      "files": [
+        "evals/files/sample-compose-app/README.md",
+        "evals/files/sample-compose-app/compose.yaml",
+        "evals/files/sample-compose-app/Makefile",
+        "evals/files/sample-compose-app/package.json",
+        "evals/files/sample-compose-app/scripts/bootstrap-dev.sh",
+        "evals/files/sample-compose-app/scripts/setup.sh"
+      ]
+    }
+  ]
+}
