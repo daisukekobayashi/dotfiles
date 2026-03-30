@@ -1,3 +1,4 @@
+---
 name: local-runtime-port-isolation
 description: Use whenever the user wants to run, debug, test, or start a local web service or other developer runtime and there is any chance multiple agents, worktrees, or local environments may be active at the same time. This skill prevents host-port collisions before startup by identifying the repository's real execution entry point, preferring repo-native port configuration when available, falling back to temporary overrides when necessary, and avoiding unnecessary interference when the runtime already auto-selects a free port. Also use it when the user mentions `docker compose`, dev servers, `npm run dev`, `uvicorn`, published ports, parallel development, coding agents, worktrees, local stacks, or startup failures caused by `address already in use`.
 ---
