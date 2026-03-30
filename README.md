@@ -72,7 +72,7 @@ Third-party skills are tracked in `skills-lock.json`.
 
 Custom skills live in `skills/`.
 
-`./setup.sh skills` restores third-party skills into `.agents/skills`, symlinks custom skills from `skills/`, wires `~/.agents/skills` and `~/.claude/skills` to that generated directory, and removes a stale `~/.gemini/skills` link because Gemini already reads `~/.agents/skills`.
+`./setup.sh skills` restores third-party skills from `skills-lock.json` and symlinks custom skills from `skills/` into `.agents/skills` by default. Use `./setup.sh skills --source lock` to restore only third-party skills, or `./setup.sh skills --source local` to install only custom skills. The command wires `~/.agents/skills` and `~/.claude/skills` to that generated directory.
 
 `.agents/` is a generated restore target and is intentionally ignored by git.
 
