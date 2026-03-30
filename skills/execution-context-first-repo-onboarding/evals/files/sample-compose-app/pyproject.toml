@@ -1,0 +1,7 @@
+[project]
+name = "sample-compose-worker"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

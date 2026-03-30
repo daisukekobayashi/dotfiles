@@ -1,0 +1,9 @@
+{
+  "name": "sample-compose-app",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest run",
+    "lint": "eslint ."
+  }
+}
