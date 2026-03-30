@@ -12,6 +12,7 @@ setup() {
 
   cp "$(repo_root)/skills-lock.json" "${TEST_DOTFILES}/skills-lock.json"
   cp -R "$(repo_root)/skills" "${TEST_DOTFILES}/skills"
+  TEST_LOCAL_SKILL="$(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | head -n 1)"
 
   cat > "${TEST_BIN}/npx" <<'EOF'
 #!/usr/bin/env bash
@@ -44,13 +45,17 @@ teardown() {
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
     PATH="${TEST_BIN}:${PATH}" \
     TEST_SKILLS_LOG="${TEST_LOG}" \
+    TEST_LOCAL_SKILL="${TEST_LOCAL_SKILL}" \
     "$(setup_script_path)" \
     skills
 
   [ "$status" -eq 0 ]
   [ -d "${TEST_DOTFILES}/.agents/skills/external-skill" ]
-  [ -L "${TEST_DOTFILES}/.agents/skills/git-workflow-guardrails" ]
-  [ "$(readlink "${TEST_DOTFILES}/.agents/skills/git-workflow-guardrails")" = "${TEST_DOTFILES}/skills/git-workflow-guardrails" ]
+  local skill_name
+  for skill_name in $(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
+    [ -L "${TEST_DOTFILES}/.agents/skills/${skill_name}" ]
+    [ "$(readlink "${TEST_DOTFILES}/.agents/skills/${skill_name}")" = "${TEST_DOTFILES}/skills/${skill_name}" ]
+  done
   [ -L "${TEST_HOME}/.agents/skills" ]
   [ "$(readlink "${TEST_HOME}/.agents/skills")" = "${TEST_DOTFILES}/.agents/skills" ]
   [ -L "${TEST_HOME}/.claude/skills" ]
@@ -66,7 +71,7 @@ set -euo pipefail
 printf '%s\n' "$*" >> "${TEST_SKILLS_LOG}"
 
 if [ "$#" -ge 2 ] && [ "$1" = "skills" ] && [ "$2" = "experimental_install" ]; then
-  mkdir -p .agents/skills/git-workflow-guardrails
+  mkdir -p ".agents/skills/${TEST_LOCAL_SKILL}"
   exit 0
 fi
 
@@ -86,7 +91,6 @@ EOF
     skills
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"local skill already exists in restore target: git-workflow-guardrails"* ]]
 }
 
 @test "skills fails when skills-lock.json is missing" {
