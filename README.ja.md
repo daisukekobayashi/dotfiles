@@ -72,7 +72,7 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 独自 skill は `skills/` に置きます.
 
-`./setup.sh skills` はデフォルトで `skills-lock.json` から外部 skill を `.agents/skills` に restore し, `skills/` 配下の独自 skill を symlink します. `./setup.sh skills --source lock` で外部 skill のみ, `./setup.sh skills --source local` で独自 skill のみをインストールできます. そのうえで `~/.agents/skills` と `~/.claude/skills` を生成先へ向けます.
+`./setup.sh skills` はデフォルトで `skills-lock.json` から外部 skill を `.agents/skills` に restore し, `skills/` 配下の独自 skill を symlink します. `./setup.sh skills --source lock` は独自 skill を保持したまま外部 skill を更新し, `./setup.sh skills --source local` は restore 済みの外部 skill を消さずに独自 skill だけ更新します. そのうえで `~/.agents/skills` と `~/.claude/skills` を生成先へ向けます.
 
 `.agents/` は生成物なので git には含めません.
 
