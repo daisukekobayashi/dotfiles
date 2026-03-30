@@ -33,6 +33,11 @@ packages args:
   --skip <csv>   Skip selected package steps
   --dry-run      Print commands without executing side effects
 
+skills args:
+  --source lock  Restore only third-party skills from skills-lock.json
+  --source local Install only local skills from skills/
+                 Omit --source to install both
+
 all/post args:
   --reload-shell Exec a fresh login zsh after setup completes
 
@@ -132,6 +137,36 @@ parse_packages_args() {
   done
 }
 
+parse_skills_args() {
+  SKILLS_SOURCE="both"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --source)
+        if [ "$#" -lt 2 ]; then
+          log_error "--source requires one of: lock, local"
+          return 1
+        fi
+
+        case "$2" in
+          lock | local)
+            SKILLS_SOURCE="$2"
+            ;;
+          *)
+            log_error "Unknown skills source: $2"
+            return 1
+            ;;
+        esac
+        shift 2
+        ;;
+      *)
+        log_error "Unknown skills argument: $1"
+        return 1
+        ;;
+    esac
+  done
+}
+
 run_all() {
   log_info "Running links setup..."
   setup_links "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
@@ -191,13 +226,12 @@ main() {
       setup_links "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
       ;;
     skills)
-      if [ "$#" -gt 0 ]; then
-        log_error "Unexpected arguments for subcommand 'skills': $*"
+      parse_skills_args "$@" || {
         usage
         return 1
-      fi
+      }
       log_info "Running skills setup..."
-      setup_skills "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}"
+      setup_skills "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "${SKILLS_SOURCE}"
       ;;
     packages)
       parse_packages_args "$@" || {

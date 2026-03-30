@@ -60,7 +60,54 @@ teardown() {
   [ "$(readlink "${TEST_HOME}/.agents/skills")" = "${TEST_DOTFILES}/.agents/skills" ]
   [ -L "${TEST_HOME}/.claude/skills" ]
   [ "$(readlink "${TEST_HOME}/.claude/skills")" = "${TEST_DOTFILES}/.agents/skills" ]
-  [ ! -e "${TEST_HOME}/.gemini/skills" ]
+  [ -L "${TEST_HOME}/.gemini/skills" ]
+  [ "$(readlink "${TEST_HOME}/.gemini/skills")" = "/tmp/stale-gemini-skills" ]
+  [ "$(cat "${TEST_LOG}")" = "skills experimental_install" ]
+}
+
+@test "skills --source local installs only local skills without requiring skills-lock.json" {
+  local backup
+  backup="${TEST_ROOT}/skills-lock.json.backup"
+  mv "${TEST_DOTFILES}/skills-lock.json" "${backup}"
+
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --source local
+
+  mv "${backup}" "${TEST_DOTFILES}/skills-lock.json"
+
+  [ "$status" -eq 0 ]
+  [ ! -e "${TEST_DOTFILES}/.agents/skills/external-skill" ]
+  local skill_name
+  for skill_name in $(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
+    [ -L "${TEST_DOTFILES}/.agents/skills/${skill_name}" ]
+    [ "$(readlink "${TEST_DOTFILES}/.agents/skills/${skill_name}")" = "${TEST_DOTFILES}/skills/${skill_name}" ]
+  done
+  [ ! -e "${TEST_LOG}" ]
+}
+
+@test "skills --source lock installs only restored skills without requiring local skills directory" {
+  rm -rf "${TEST_DOTFILES}/skills"
+
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --source lock
+
+  [ "$status" -eq 0 ]
+  [ -d "${TEST_DOTFILES}/.agents/skills/external-skill" ]
+  [ ! -e "${TEST_DOTFILES}/.agents/skills/${TEST_LOCAL_SKILL}" ]
   [ "$(cat "${TEST_LOG}")" = "skills experimental_install" ]
 }
 
@@ -87,6 +134,7 @@ EOF
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
     PATH="${TEST_BIN}:${PATH}" \
     TEST_SKILLS_LOG="${TEST_LOG}" \
+    TEST_LOCAL_SKILL="${TEST_LOCAL_SKILL}" \
     "$(setup_script_path)" \
     skills
 
@@ -113,4 +161,19 @@ EOF
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"skills lock file not found:"* ]]
+}
+
+@test "skills fails when --source value is unsupported" {
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --source invalid
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown skills source: invalid"* ]]
 }

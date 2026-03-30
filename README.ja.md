@@ -72,7 +72,7 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 独自 skill は `skills/` に置きます.
 
-`./setup.sh skills` は外部 skill を `.agents/skills` に restore し, `skills/` 配下の独自 skill を symlink し, `~/.agents/skills` と `~/.claude/skills` をその生成先へ向けます. Gemini は `~/.agents/skills` を読むため, 既存の `~/.gemini/skills` リンクがあれば削除します.
+`./setup.sh skills` はデフォルトで `skills-lock.json` から外部 skill を `.agents/skills` に restore し, `skills/` 配下の独自 skill を symlink します. `./setup.sh skills --source lock` で外部 skill のみ, `./setup.sh skills --source local` で独自 skill のみをインストールできます. そのうえで `~/.agents/skills` と `~/.claude/skills` を生成先へ向けます.
 
 `.agents/` は生成物なので git には含めません.
 
