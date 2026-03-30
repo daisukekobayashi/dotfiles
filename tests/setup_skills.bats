@@ -12,7 +12,7 @@ setup() {
 
   cp "$(repo_root)/skills-lock.json" "${TEST_DOTFILES}/skills-lock.json"
   cp -R "$(repo_root)/skills" "${TEST_DOTFILES}/skills"
-  TEST_LOCAL_SKILL="$(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | head -n 1)"
+  TEST_LOCAL_SKILL="$(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | head -n 1)"
 
   cat > "${TEST_BIN}/npx" <<'EOF'
 #!/usr/bin/env bash
@@ -52,7 +52,7 @@ teardown() {
   [ "$status" -eq 0 ]
   [ -d "${TEST_DOTFILES}/.agents/skills/external-skill" ]
   local skill_name
-  for skill_name in $(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
+  for skill_name in $(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort); do
     [ -L "${TEST_DOTFILES}/.agents/skills/${skill_name}" ]
     [ "$(readlink "${TEST_DOTFILES}/.agents/skills/${skill_name}")" = "${TEST_DOTFILES}/skills/${skill_name}" ]
   done
@@ -65,7 +65,8 @@ teardown() {
   [ "$(cat "${TEST_LOG}")" = "skills experimental_install" ]
 }
 
-@test "skills --source local installs only local skills without requiring skills-lock.json" {
+@test "skills --source local refreshes local skills without clearing existing restored skills" {
+  mkdir -p "${TEST_DOTFILES}/.agents/skills/external-skill"
   local backup
   backup="${TEST_ROOT}/skills-lock.json.backup"
   mv "${TEST_DOTFILES}/skills-lock.json" "${backup}"
@@ -83,17 +84,17 @@ teardown() {
   mv "${backup}" "${TEST_DOTFILES}/skills-lock.json"
 
   [ "$status" -eq 0 ]
-  [ ! -e "${TEST_DOTFILES}/.agents/skills/external-skill" ]
+  [ -d "${TEST_DOTFILES}/.agents/skills/external-skill" ]
   local skill_name
-  for skill_name in $(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort); do
+  for skill_name in $(find "${TEST_DOTFILES}/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort); do
     [ -L "${TEST_DOTFILES}/.agents/skills/${skill_name}" ]
     [ "$(readlink "${TEST_DOTFILES}/.agents/skills/${skill_name}")" = "${TEST_DOTFILES}/skills/${skill_name}" ]
   done
   [ ! -e "${TEST_LOG}" ]
 }
 
-@test "skills --source lock installs only restored skills without requiring local skills directory" {
-  rm -rf "${TEST_DOTFILES}/skills"
+@test "skills --source lock refreshes restored skills and preserves local skills when available" {
+  mkdir -p "${TEST_DOTFILES}/.agents/skills/stale-external-skill"
 
   run env \
     HOME="${TEST_HOME}" \
@@ -107,7 +108,9 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [ -d "${TEST_DOTFILES}/.agents/skills/external-skill" ]
-  [ ! -e "${TEST_DOTFILES}/.agents/skills/${TEST_LOCAL_SKILL}" ]
+  [ ! -e "${TEST_DOTFILES}/.agents/skills/stale-external-skill" ]
+  [ -L "${TEST_DOTFILES}/.agents/skills/${TEST_LOCAL_SKILL}" ]
+  [ "$(readlink "${TEST_DOTFILES}/.agents/skills/${TEST_LOCAL_SKILL}")" = "${TEST_DOTFILES}/skills/${TEST_LOCAL_SKILL}" ]
   [ "$(cat "${TEST_LOG}")" = "skills experimental_install" ]
 }
 
