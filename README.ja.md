@@ -74,6 +74,8 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 `./setup.sh skills` はデフォルトで `skills-lock.json` から外部 skill を `.agents/skills` に restore し, `skills/` 配下の独自 skill を symlink します. `./setup.sh skills --source lock` は独自 skill を保持したまま外部 skill を更新し, `./setup.sh skills --source local` は restore 済みの外部 skill を消さずに独自 skill だけ更新します. そのうえで `~/.agents/skills` と `~/.claude/skills` を生成先へ向けます.
 
+Windows ではデフォルトの restore+link は `.\setup.ps1 skills` で実行し, 外部 skill だけ更新したい場合は `.\setup.ps1 skills -Source lock`, 独自 skill だけ更新したい場合は `.\setup.ps1 skills -Source local` を使います. `.\setup.ps1 all` は引き続き `packages` と `links` だけを実行するため, skill の restore は明示的に実行します. `skills-lock.json` から外部 skill を restore する場合は `npx` が利用可能である必要があります.
+
 `.agents/` は生成物なので git には含めません.
 
 ## Test

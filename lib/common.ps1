@@ -112,11 +112,11 @@ function Get-LinkTarget {
     [string]$Path
   )
 
-  if (-not (Test-Path -LiteralPath $Path)) {
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  if (-not $item) {
     return $null
   }
 
-  $item = Get-Item -LiteralPath $Path -Force
   if (-not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
     return $null
   }
@@ -127,6 +127,15 @@ function Get-LinkTarget {
   }
 
   return $target
+}
+
+function Test-CommandAvailable {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$Name
+  )
+
+  return $null -ne (Get-Command -Name $Name -ErrorAction SilentlyContinue)
 }
 
 function Test-SymbolicLinkMatchesTarget {

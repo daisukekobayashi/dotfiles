@@ -74,6 +74,8 @@ Custom skills live in `skills/`.
 
 `./setup.sh skills` restores third-party skills from `skills-lock.json` and symlinks custom skills from `skills/` into `.agents/skills` by default. Use `./setup.sh skills --source lock` to refresh third-party skills while preserving installed custom skills, or `./setup.sh skills --source local` to refresh only custom skills without clearing restored third-party ones. The command wires `~/.agents/skills` and `~/.claude/skills` to that generated directory.
 
+On Windows, use `.\setup.ps1 skills` for the default restore+link flow, `.\setup.ps1 skills -Source lock` to refresh only third-party skills, or `.\setup.ps1 skills -Source local` to refresh only custom skills. `.\setup.ps1 all` still runs only `packages` and `links`, so skills restore remains an explicit step. The PowerShell workflow expects `npx` to be available when restoring third-party skills from `skills-lock.json`.
+
 `.agents/` is a generated restore target and is intentionally ignored by git.
 
 ## Test
