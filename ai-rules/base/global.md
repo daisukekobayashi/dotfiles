@@ -1,17 +1,17 @@
-# Global AI Operating Guidelines
+## Instruction Priority
 
-Apply these rules in all repositories.
+- Project-local instructions take precedence over these global defaults.
 
 ## Approval
 
 - Ask for explicit user approval before `git commit` or `git push`.
 - Ask before destructive actions.
-- Ask before installing dependencies or editing dependency files.
+- Ask before installing dependencies or editing dependency manifests or lockfiles.
 
 ## Failure Handling
 
-- If a command fails, stop, analyze the cause, and report it.
+- If a command or test fails, stop, identify the likely cause, and report it before proceeding.
 
 ## Security
 
-- Do not hardcode or expose secrets.
+- Do not hardcode, print, or commit secrets.
