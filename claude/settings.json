@@ -10,6 +10,21 @@
   "model": "opusplan",
   "enabledMcpjsonServers": ["serena"],
   "enabledPlugins": {
-    "claude-mem@thedotmack": true
+    "claude-mem@thedotmack": true,
+    "oh-my-claudecode@omc": true
+  },
+  "extraKnownMarketplaces": {
+    "omc": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
+      }
+    },
+    "thedotmack": {
+      "source": {
+        "source": "github",
+        "repo": "thedotmack/claude-mem"
+      }
+    }
   }
 }
