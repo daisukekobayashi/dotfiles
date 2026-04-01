@@ -117,6 +117,7 @@ render_one() {
   local layer_file
   local doc_files=()
   local layer_files=()
+  local all_doc_files=()
   local source_parts=("ai-rules/base/global.md")
   local first_doc=1
 
@@ -142,6 +143,11 @@ render_one() {
     fi
   done
 
+  all_doc_files=("${doc_files[@]}")
+  if [[ ${#layer_files[@]} -gt 0 ]]; then
+    all_doc_files+=("${layer_files[@]}")
+  fi
+
   mkdir -p "$(dirname "${target_path}")"
 
   {
@@ -153,7 +159,7 @@ render_one() {
       echo
     fi
 
-    for doc_file in "${doc_files[@]}" "${layer_files[@]}"; do
+    for doc_file in "${all_doc_files[@]}"; do
       if [[ "${first_doc}" -eq 0 ]]; then
         echo
         echo "---"
