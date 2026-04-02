@@ -5,25 +5,31 @@
     "MCP_TIMEOUT": "30000"
   },
   "permissions": {
-    "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)"]
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
   },
   "model": "opusplan",
-  "enabledMcpjsonServers": ["serena"],
+  "enabledMcpjsonServers": [
+    "serena"
+  ],
   "enabledPlugins": {
     "claude-mem@thedotmack": true,
     "oh-my-claudecode@omc": true
   },
   "extraKnownMarketplaces": {
-    "omc": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
-      }
-    },
     "thedotmack": {
       "source": {
         "source": "github",
         "repo": "thedotmack/claude-mem"
+      }
+    },
+    "omc": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
       }
     }
   }
