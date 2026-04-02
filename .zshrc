@@ -33,3 +33,5 @@ eval "$(sheldon source)"
 #export ZELLIJ_AUTO_ATTACH=true
 #export ZELLIJ_AUTO_EXIT=true
 #eval "$(zellij setup --generate-auto-start zsh)"
+
+alias claude-mem='"$HOME/.bun/bin/bun" "$HOME/.claude/plugins/cache/thedotmack/claude-mem/10.4.3/scripts/worker-service.cjs"'
