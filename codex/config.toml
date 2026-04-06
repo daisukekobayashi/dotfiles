@@ -1,4 +1,4 @@
-model = "gpt-5.4"
+model = "gpt-5.3-codex"
 model_reasoning_effort = "high"
 model_reasoning_summary = "auto"
 
@@ -19,7 +19,7 @@ query_params = { api-version = "2025-04-01-preview" }
 wire_api = "responses"
 
 [profiles.azure]
-model = "gpt-5.4"
+model = "gpt-5.3-codex"
 model_provider = "azure"
 
 [mcp_servers.serena]
@@ -36,4 +36,5 @@ args = [
   "$(pwd)",
 ]
 startup_timeout_sec = 30
-
+[notice.model_migrations]
+"gpt-5.3-codex" = "gpt-5.4"
