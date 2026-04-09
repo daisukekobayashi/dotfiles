@@ -1,2 +1,4 @@
 $Env:MISE_ENV = "windows"
-mise activate pwsh | Out-String | Invoke-Expression
+$env:MISE_QUIET = "true"
+$env:MISE_AUTO_INSTALL = "false"
+(&mise activate pwsh --shims) | Out-String | Invoke-Expression
