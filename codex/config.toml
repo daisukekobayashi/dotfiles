@@ -1,9 +1,10 @@
-model = "gpt-5.3-codex"
-model_reasoning_effort = "high"
+model = "gpt-5.4"
+model_reasoning_effort = "xhigh"
 model_reasoning_summary = "auto"
 
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
+service_tier = "fast"
 
 [sandbox_workspace_write]
 network_access = true
