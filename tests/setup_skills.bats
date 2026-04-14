@@ -93,6 +93,57 @@ teardown() {
   [ ! -e "${TEST_LOG}" ]
 }
 
+@test "skills --source local links the GitHub workflow custom skills" {
+  local expected_skills
+  expected_skills=(
+    github-ai-review-followup
+    github-issue-from-discussion
+    github-issue-worktree
+    github-merge-cleanup
+  )
+
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --source local
+
+  [ "$status" -eq 0 ]
+
+  local skill_name
+  for skill_name in "${expected_skills[@]}"; do
+    [ -d "${TEST_DOTFILES}/skills/${skill_name}" ]
+    [ -L "${TEST_DOTFILES}/.agents/skills/${skill_name}" ]
+    [ "$(readlink "${TEST_DOTFILES}/.agents/skills/${skill_name}")" = "${TEST_DOTFILES}/skills/${skill_name}" ]
+  done
+}
+
+@test "github issue workflow skill documents type-prefixed branch naming" {
+  run grep -F '`type/<id>-<slug>`' "$(repo_root)/skills/github-issue-worktree/SKILL.md"
+  [ "$status" -eq 0 ]
+
+  run grep -F '`type/<id1>-<id2>-<slug>`' "$(repo_root)/skills/github-issue-worktree/SKILL.md"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'conventional-commit-style branch prefix' "$(repo_root)/skills/github-issue-worktree/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "github issue from discussion skill documents preview and template checks" {
+  run grep -F 'issue template' "$(repo_root)/skills/github-issue-from-discussion/SKILL.md"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'preview' "$(repo_root)/skills/github-issue-from-discussion/SKILL.md"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'current-repo only' "$(repo_root)/skills/github-issue-from-discussion/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
 @test "skills --source lock refreshes restored skills and preserves local skills when available" {
   mkdir -p "${TEST_DOTFILES}/.agents/skills/stale-external-skill"
 
