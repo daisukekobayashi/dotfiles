@@ -24,24 +24,32 @@ export SSH_FALLBACK_AUTH_SOCK="$HOME/.ssh/ssh_auth_sock"
 
 setup_ssh_agent() {
   local agent_status
+  local managed_agent=0
 
   # Reuse an already reachable agent.
-  # This also preserves forwarded agents from remote SSH sessions.
+  # This also preserves forwarded agents from remote SSH sessions when
+  # they already have a usable identity loaded.
   ssh-add -l >/dev/null 2>&1
   agent_status=$?
 
-  if [[ $agent_status -eq 2 ]]; then
+  if [[ "${SSH_AUTH_SOCK:-}" == "$SSH_FALLBACK_AUTH_SOCK" ]]; then
+    managed_agent=1
+  fi
+
+  if [[ $agent_status -ne 0 ]] && [[ $managed_agent -eq 0 ]]; then
     if [[ "$unamestr" == "Linux" ]] && command -v keychain >/dev/null 2>&1; then
       # Reuse or start a long-lived agent via keychain.
       eval "$(keychain --eval --quiet --agents ssh "$SSH_KEY_PATH")"
+      managed_agent=1
 
       ssh-add -l >/dev/null 2>&1
       agent_status=$?
     fi
 
-    if [[ $agent_status -eq 2 ]]; then
+    if [[ $agent_status -ne 0 ]]; then
       # Fallback: keep the agent on a fixed socket so tmux panes can share it.
       export SSH_AUTH_SOCK="$SSH_FALLBACK_AUTH_SOCK"
+      managed_agent=1
 
       if [[ ! -S "$SSH_AUTH_SOCK" ]]; then
         rm -f "$SSH_AUTH_SOCK"
@@ -53,20 +61,6 @@ setup_ssh_agent() {
           eval "$(ssh-agent -a "$SSH_AUTH_SOCK")" >/dev/null
         fi
       fi
-
-      ssh-add -l >/dev/null 2>&1
-      agent_status=$?
-    fi
-  fi
-
-  # Auto-load the key only for local shells.
-  # This avoids pushing a local private key into a forwarded agent on a remote host.
-  if [[ -z "$SSH_CONNECTION" ]] && [[ -f "$SSH_KEY_PATH" ]] && [[ $agent_status -eq 1 ]]; then
-    if [[ "$unamestr" == "Darwin" ]]; then
-      ssh-add --apple-load-keychain "$SSH_KEY_PATH" >/dev/null 2>&1 || \
-        ssh-add --apple-use-keychain "$SSH_KEY_PATH" </dev/tty
-    else
-      ssh-add "$SSH_KEY_PATH" </dev/tty
     fi
   fi
 }
