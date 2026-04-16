@@ -59,7 +59,7 @@ setup_links() {
     local base
     base="$(basename "${f}")"
     case "${base}" in
-      .git | .DS_Store | .env | .env.example)
+      .git | .DS_Store | .env | .env.example | .codex)
         continue
         ;;
     esac
