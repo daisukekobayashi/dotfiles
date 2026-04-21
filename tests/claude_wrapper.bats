@@ -32,7 +32,7 @@ teardown() {
     zsh -c "source '${root}/zsh/claude.zsh'; claude hello world"
 
   [ "$status" -eq 0 ]
-  [ "$(cat "${TEST_LOG}")" = "--mcp-config ${TEST_HOME}/.dotfiles/claude/mcp/base.json hello world" ]
+  [ "$(cat "${TEST_LOG}")" = "--mcp-config=${TEST_HOME}/.dotfiles/claude/mcp/base.json hello world" ]
 }
 
 @test "claude-raw and explicit --mcp-config bypass the default config injection" {
@@ -65,4 +65,19 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"warning: Claude MCP config not found at ${TEST_HOME}/.dotfiles/claude/mcp/base.json; running raw claude"* ]]
   [ "$(cat "${TEST_LOG}")" = "fallback" ]
+}
+
+@test "claude keeps update as a subcommand when injecting the default MCP config" {
+  local root
+  root="$(repo_root)"
+  ln -s "${root}" "${TEST_HOME}/.dotfiles"
+
+  run env \
+    HOME="${TEST_HOME}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    CLAUDE_TEST_LOG="${TEST_LOG}" \
+    zsh -c "source '${root}/zsh/claude.zsh'; claude update --help"
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "${TEST_LOG}")" = "--mcp-config=${TEST_HOME}/.dotfiles/claude/mcp/base.json update --help" ]
 }

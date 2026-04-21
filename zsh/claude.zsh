@@ -27,5 +27,5 @@ claude() {
     return
   fi
 
-  command claude --mcp-config "${mcp_config}" "$@"
+  command claude --mcp-config="${mcp_config}" "$@"
 }
