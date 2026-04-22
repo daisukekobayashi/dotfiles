@@ -8,11 +8,12 @@
   "permissions": {
     "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)"]
   },
-  "model": "opusplan",
+  "model": "opus[1m]",
   "enabledMcpjsonServers": ["serena"],
   "enabledPlugins": {
     "claude-mem@thedotmack": true,
-    "oh-my-claudecode@omc": true
+    "oh-my-claudecode@omc": true,
+    "codex@openai-codex": true
   },
   "extraKnownMarketplaces": {
     "thedotmack": {
@@ -26,6 +27,14 @@
         "source": "git",
         "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
       }
+    },
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
+      }
     }
-  }
+  },
+  "effortLevel": "high",
+  "skipAutoPermissionPrompt": true
 }
