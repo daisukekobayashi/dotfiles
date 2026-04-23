@@ -1,0 +1,42 @@
+---
+name: github-ai-review-request
+description: Use only when the user explicitly invokes `$github-ai-review-request` or names `github-ai-review-request`. Do not use for generic PR creation, PR review, Copilot-only, or Codex-only requests.
+---
+
+# GitHub AI Review Request
+
+## Scope
+
+Use this wrapper skill to request both Copilot and Codex review on an existing
+pull request.
+
+This skill is not for:
+- creating pull requests
+- Copilot-only requests
+- Codex-only requests
+- reading or applying review feedback
+
+## Workflow
+
+1. Resolve the current GitHub repository and target PR once.
+   - Use the PR number or URL in the prompt when provided.
+   - Otherwise use `gh pr view --json number,url` on the current branch.
+   - If no PR can be resolved, stop and ask for the PR number or URL.
+2. Invoke `github-copilot-review-request` for the same PR.
+3. Invoke `github-codex-review-request` for the same PR.
+4. If one request fails, continue to the other unless auth or repository access is completely blocked.
+5. Verify final state:
+   ```bash
+   gh api repos/<owner>/<repo>/pulls/<PR> --jq \
+     '{url: .html_url, requested_reviewers: [.requested_reviewers[].login]}'
+   gh api repos/<owner>/<repo>/issues/<PR>/comments --jq \
+     '[.[] | select(.body | contains("@codex")) | {user: .user.login, url: .html_url}]'
+   ```
+6. Report separate outcomes for Copilot and Codex.
+
+## Guardrails
+
+- Do not create a PR.
+- Do not push, commit, merge, or edit repository files.
+- Keep Copilot and Codex results separate in the final report.
+- Do not hide partial failure: if only one AI review request succeeds, say exactly which one.
