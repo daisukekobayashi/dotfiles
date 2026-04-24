@@ -51,15 +51,20 @@ This skill is not for:
    gh api repos/<owner>/<repo>/pulls/<PR> --jq \
      '{url: .html_url, requested_reviewers: [.requested_reviewers[].login]}'
    ```
-7. If `codex` is not a requested reviewer, post a mention comment:
+7. If `codex` is not a requested reviewer, post a mention comment. Use the
+   shortest trigger by default:
    ```bash
-   gh pr comment <PR> --body \
-     "@codex please review this pull request for correctness, scope control, documentation quality, and test coverage."
+   gh pr comment <PR> --body "@codex review"
+   ```
+   If the user provided review focus or criteria after invoking the skill, append
+   it as a concise instruction:
+   ```bash
+   gh pr comment <PR> --body "@codex review: <user-provided focus>"
    ```
 8. Verify the comment exists with:
    ```bash
    gh api repos/<owner>/<repo>/issues/<PR>/comments --jq \
-     '[.[] | select(.body | contains("@codex")) | {user: .user.login, url: .html_url}]'
+     '[.[] | select(.body | startswith("@codex review")) | {user: .user.login, body: .body, url: .html_url}]'
    ```
 9. Report whether Codex was requested as a reviewer, requested by mention comment, or blocked.
 
