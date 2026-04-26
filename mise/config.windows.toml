@@ -1,5 +1,5 @@
 [tools]
-neovim = "0.11"
+neovim = "0.12"
 ripgrep = "15"
 lazygit = "0.59"
 gitui = "0.28"
@@ -9,3 +9,4 @@ uv = "0.10"
 yt-dlp = "2025.03.31"
 azure = "2"
 gcloud = "543"
+

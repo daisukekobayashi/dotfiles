@@ -15,6 +15,7 @@ brew "azure-cli"
 brew "typst"
 brew "shellcheck"
 brew "bats-core"
+brew "tree-sitter-cli"
 
 tap "hashicorp/tap"
 brew "hashicorp/tap/terraform"
