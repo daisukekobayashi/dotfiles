@@ -1,5 +1,5 @@
 [tools]
-neovim = "0.11"
+neovim = "0.12"
 zellij = "0.43"
 ripgrep = "15"
 lazygit = "0.59"
@@ -11,6 +11,10 @@ yt-dlp = "2025.03.31"
 azure = "2"
 gcloud = "543"
 terraform = "1.14"
+"cargo:tree-sitter-cli" = "0.26.8"
 typst = "0.14"
 shellcheck = "0.11"
 bats = "1.13"
+
+[settings]
+cargo.binstall = false
