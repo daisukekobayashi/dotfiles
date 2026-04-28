@@ -30,9 +30,10 @@ This skill is not for:
    gh api repos/<owner>/<repo>/pulls/<PR> --jq \
      '{url: .html_url, requested_reviewers: [.requested_reviewers[].login]}'
    gh api repos/<owner>/<repo>/issues/<PR>/comments --jq \
-     '[.[] | select(.body | contains("@codex")) | {user: .user.login, url: .html_url}]'
+     '[.[] | select(.body | startswith("@codex review")) | {user: .user.login, body: .body, url: .html_url}]'
    ```
-6. Report separate outcomes for Copilot and Codex.
+6. Report separate outcomes: Copilot is verified from requested reviewers, and
+   Codex is verified from a PR comment containing `@codex review`.
 
 ## Guardrails
 
