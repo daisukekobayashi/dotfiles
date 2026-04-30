@@ -43,6 +43,7 @@ _tmux_moshi_apply_options() {
   local window_id
 
   command tmux set-option -t "${session_name}" -q @tmux-moshi-session 1 || return
+  command tmux set-option -t "${session_name}" -q prefix2 C-b || return
   command tmux set-environment -t "${session_name}" TMUX_MOSHI_SESSION 1 || return
   command tmux set-option -t "${session_name}" -q status-left "" || return
   command tmux set-option -t "${session_name}" -q status-right "" || return

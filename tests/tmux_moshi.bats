@@ -78,6 +78,8 @@ teardown() {
   [ "$status" -eq 0 ]
   run grep -F "<set-option><-t><demo><-q><@tmux-moshi-session><1>" "${TMUX_LOG}"
   [ "$status" -eq 0 ]
+  run grep -F "<set-option><-t><demo><-q><prefix2><C-b>" "${TMUX_LOG}"
+  [ "$status" -eq 0 ]
   run grep -F "<set-environment><-t><demo><TMUX_MOSHI_SESSION><1>" "${TMUX_LOG}"
   [ "$status" -eq 0 ]
   run grep -F "<set-option><-t><demo><-q><status-left><>" "${TMUX_LOG}"
