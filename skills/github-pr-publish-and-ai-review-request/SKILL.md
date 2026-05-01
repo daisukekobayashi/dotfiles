@@ -1,15 +1,15 @@
 ---
-name: github-pr-publish-and-ai-review
-description: Use only when the user explicitly invokes `$github-pr-publish-and-ai-review` or names `github-pr-publish-and-ai-review`. Do not use for generic commit, push, PR creation, or review requests.
+name: github-pr-publish-and-ai-review-request
+description: Use only when the user explicitly invokes `$github-pr-publish-and-ai-review-request` or names `github-pr-publish-and-ai-review-request` for publishing local GitHub changes as a pull request and requesting AI review.
 ---
 
-# GitHub PR Publish And AI Review
+# GitHub PR Publish And AI Review Request
 
 ## Scope
 
 Use this orchestration skill to publish one or more local branches or worktrees
 as pull requests, then request both Copilot and Codex review through the
-existing AI review wrapper.
+existing PR AI review request wrapper.
 
 This skill is not for:
 - implementing feature changes before publication
@@ -44,10 +44,10 @@ This skill is not for:
    - If push intent is ambiguous, preview the target remote and branch, then ask before pushing.
    - Use a normal push only. Do not force push, delete remote branches, or rewrite history unless the user separately and explicitly approves that operation.
 6. Create or resolve the PR.
-   - Use the `github-pr-from-template` skill for each target branch.
+   - Use the `github-pr` skill for each target branch.
    - Reuse an existing PR when one already exists for the branch.
 7. Request AI review.
-   - Use the existing `github-ai-review-request` skill for the resolved PR.
+   - Use the existing `github-pr-ai-review-request` skill for the resolved PR.
    - Keep Copilot and Codex outcomes separate.
    - If only one review request succeeds, report the partial success and the failure reason.
 

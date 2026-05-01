@@ -1,14 +1,16 @@
 ---
-name: github-pr-from-template
-description: Use only when the user explicitly invokes `$github-pr-from-template` or names `github-pr-from-template`. Do not use for generic PR creation, commit, push, or review requests.
+name: github-pr
+description: Use only when the user explicitly invokes `$github-pr` or names `github-pr` for creating or resolving a GitHub pull request from the current branch without committing, pushing, or requesting review.
 ---
 
-# GitHub PR From Template
+# GitHub PR
 
 ## Scope
 
 Use this skill to create a GitHub pull request from the current branch while
-respecting the repository's pull request template.
+respecting the repository's pull request template when one exists. Templates
+are optional; if no template exists, create a minimal generic body with summary
+and test sections.
 
 This skill is not for:
 - committing changes
@@ -24,7 +26,7 @@ This skill is not for:
    - Resolve the current branch with `git branch --show-current`.
    - Resolve the remote repository with `gh repo view --json nameWithOwner,defaultBranchRef`.
    - Stop if the current branch is the default branch.
-2. Find the pull request template.
+2. Find an optional pull request template.
    - Check these paths in order:
      - `.github/pull_request_template.md`
      - `.github/PULL_REQUEST_TEMPLATE.md`
