@@ -1,9 +1,9 @@
 ---
-name: github-codex-review-request
-description: Use only when the user explicitly invokes `$github-codex-review-request` or names `github-codex-review-request`. Do not use for generic PR creation, PR review, or AI review requests.
+name: github-pr-codex-review-request
+description: Use only when the user explicitly invokes `$github-pr-codex-review-request` or names `github-pr-codex-review-request` for requesting Codex review on an existing GitHub pull request.
 ---
 
-# GitHub Codex Review Request
+# GitHub PR Codex Review Request
 
 ## Scope
 

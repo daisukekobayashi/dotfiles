@@ -1,9 +1,9 @@
 ---
-name: github-ai-review-request
-description: Use only when the user explicitly invokes `$github-ai-review-request` or names `github-ai-review-request`. Do not use for generic PR creation, PR review, Copilot-only, or Codex-only requests.
+name: github-pr-ai-review-request
+description: Use only when the user explicitly invokes `$github-pr-ai-review-request` or names `github-pr-ai-review-request` for requesting both Copilot and Codex review on an existing GitHub pull request.
 ---
 
-# GitHub AI Review Request
+# GitHub PR AI Review Request
 
 ## Scope
 
@@ -22,8 +22,8 @@ This skill is not for:
    - Use the PR number or URL in the prompt when provided.
    - Otherwise use `gh pr view --json number,url` on the current branch.
    - If no PR can be resolved, stop and ask for the PR number or URL.
-2. Invoke `github-copilot-review-request` for the same PR.
-3. Invoke `github-codex-review-request` for the same PR.
+2. Invoke `github-pr-copilot-review-request` for the same PR.
+3. Invoke `github-pr-codex-review-request` for the same PR.
 4. If one request fails, continue to the other unless auth or repository access is completely blocked.
 5. Verify final state:
    ```bash

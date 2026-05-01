@@ -1,9 +1,9 @@
 ---
-name: github-copilot-review-request
-description: Use only when the user explicitly invokes `$github-copilot-review-request` or names `github-copilot-review-request`. Do not use for generic PR creation, PR review, or AI review requests.
+name: github-pr-copilot-review-request
+description: Use only when the user explicitly invokes `$github-pr-copilot-review-request` or names `github-pr-copilot-review-request` for requesting GitHub Copilot review on an existing pull request.
 ---
 
-# GitHub Copilot Review Request
+# GitHub PR Copilot Review Request
 
 ## Scope
 

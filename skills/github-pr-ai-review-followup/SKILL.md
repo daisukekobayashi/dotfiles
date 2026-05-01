@@ -1,9 +1,9 @@
 ---
-name: github-ai-review-followup
-description: Use when the user wants to inspect the latest Copilot or Codex review feedback on a pull request in the current repository, filter it down to worthwhile comments, and apply the useful follow-up fixes locally.
+name: github-pr-ai-review-followup
+description: Use when the user wants to inspect the latest Copilot or Codex review feedback on a GitHub pull request, filter worthwhile comments, and apply useful follow-up fixes locally.
 ---
 
-# GitHub AI Review Follow-Up
+# GitHub PR AI Review Follow-Up
 
 ## Scope
 
