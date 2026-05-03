@@ -76,11 +76,122 @@ return {
         elixir_ls_debugger = '/path/to/elixir-ls/debug_adapter.sh'
       end
 
-      dap.adapters.mix_task = {
-        type = 'executable',
-        command = elixir_ls_debugger,
-        args = {},
-      }
+      local elixir_dap_compose = vim.fn.stdpath('config') .. '/bin/elixir_dap_compose'
+
+      local function workspace_root()
+        local root = nil
+        if vim.fs and vim.fs.root then
+          root = vim.fs.root(0, { 'compose.yaml', 'docker-compose.yml', 'mix.exs', '.git' })
+        end
+        return root or vim.fn.getcwd()
+      end
+
+      local function config_env(config)
+        return (config and type(config.env) == 'table') and config.env or {}
+      end
+
+      local function has_env(config, name)
+        local value = config_env(config)[name]
+        return type(value) == 'string' and value ~= ''
+      end
+
+      local function use_compose_elixir_dap(config)
+        return config
+          and config.request == 'attach'
+          and type(config.remoteNode) == 'string'
+          and has_env(config, 'DAP_DOCKER_SERVICE')
+      end
+
+      local function compose_adapter_env(config)
+        local env = vim.deepcopy(config_env(config))
+        env.DAP_COMPOSE_PROJECT_DIR = env.DAP_COMPOSE_PROJECT_DIR or env.COMPOSE_PROJECT_DIR or workspace_root()
+        env.ELIXIR_LS_DEBUGGER_IN_CONTAINER = env.ELIXIR_LS_DEBUGGER_IN_CONTAINER or '/opt/elixir-ls/debug_adapter.sh'
+        env.SHELL = env.SHELL or '/bin/bash'
+        env.ELIXIR_ERL_OPTIONS = env.ELIXIR_ERL_OPTIONS or ''
+        return env
+      end
+
+      local function process_env(env)
+        if type(env) ~= 'table' or vim.tbl_isempty(env) then
+          return nil
+        end
+
+        local merged = vim.tbl_extend('force', vim.fn.environ(), env)
+        local result = {}
+        for key, value in pairs(merged) do
+          table.insert(result, key .. '=' .. tostring(value))
+        end
+        table.sort(result)
+        return result
+      end
+
+      dap.adapters.mix_task = function(callback, config)
+        if use_compose_elixir_dap(config) then
+          local env = compose_adapter_env(config)
+          callback({
+            type = 'executable',
+            command = '/bin/bash',
+            args = { elixir_dap_compose },
+            options = {
+              cwd = env.DAP_COMPOSE_PROJECT_DIR,
+              env = process_env(env),
+            },
+          })
+          return
+        end
+
+        callback({
+          type = 'executable',
+          command = elixir_ls_debugger,
+          args = {},
+          options = {
+            env = process_env(config_env(config)),
+          },
+        })
+      end
+
+      local function map_source_path(path, mappings)
+        if type(path) ~= 'string' or type(mappings) ~= 'table' then
+          return path
+        end
+
+        for remote, local_path in pairs(mappings) do
+          if type(remote) == 'string' and type(local_path) == 'string' and vim.startswith(path, remote) then
+            local suffix = path:sub(#remote + 1)
+            return vim.fn.fnamemodify(local_path .. suffix, ':p')
+          end
+        end
+
+        return path
+      end
+
+      dap.listeners.before.stackTrace.path_mappings = function(session, _err, response)
+        local mappings = session.config and session.config.pathMappings
+        if not response or type(mappings) ~= 'table' then
+          return
+        end
+
+        for _, frame in ipairs(response.stackFrames or {}) do
+          if frame.source and frame.source.path then
+            frame.source.path = map_source_path(frame.source.path, mappings)
+          end
+        end
+      end
+
+      dap.listeners.after.configurationDone.elixir_compose_breakpoint_sync = function(session, err)
+        if err or not use_compose_elixir_dap(session.config) then
+          return
+        end
+
+        local delay = tonumber(session.config.postAttachBreakpointSyncDelayMs) or 500
+        vim.defer_fn(function()
+          if session.closed then
+            return
+          end
+
+          session:set_breakpoints(require('dap.breakpoints').get())
+        end, delay)
+      end
 
       -- Extract the root namespace from "defmodule Xxx.MixProject do"
       local function infer_ns_from_mixfile(dir)
@@ -255,6 +366,9 @@ return {
       dap.listeners.before.launch.dapui_config = function()
         dapui.open()
       end
+      dap.listeners.after.event_initialized.dapui_config = function()
+        dapui.open()
+      end
       dap.listeners.before.event_terminated.dapui_config = function()
         dapui.close()
       end
@@ -262,6 +376,9 @@ return {
         dapui.close()
       end
       dapui.setup()
+      vim.keymap.set('n', '<Leader>du', function()
+        dapui.toggle()
+      end, { desc = '[D]ebug Toggle DAP [U]I' })
     end,
   },
   {
