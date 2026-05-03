@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_dir="${DAP_COMPOSE_PROJECT_DIR:-${COMPOSE_PROJECT_DIR:-${PWD}}}"
+service_name="${DAP_DOCKER_SERVICE:-}"
+container_debugger="${ELIXIR_LS_DEBUGGER_IN_CONTAINER:-/opt/elixir-ls/debug_adapter.sh}"
+container_shell="${DAP_CONTAINER_SHELL:-/bin/bash}"
+adapter_elixir_opts="${ELS_ELIXIR_OPTS:-}"
+
+if [ -z "${service_name}" ]; then
+  echo "DAP_DOCKER_SERVICE is required for Compose Elixir DAP attach." >&2
+  exit 1
+fi
+
+if [ -z "${adapter_elixir_opts}" ]; then
+  echo "ELS_ELIXIR_OPTS is required for Compose Elixir DAP attach." >&2
+  exit 1
+fi
+
+if ! docker compose --project-directory "${project_dir}" ps --status running --services 2>/dev/null | grep -Fqx -- "${service_name}"; then
+  echo "Compose service '${service_name}' is not running. Start it with the DAP compose override first." >&2
+  exit 1
+fi
+
+exec docker compose --project-directory "${project_dir}" exec -T \
+  -e "SHELL=${container_shell}" \
+  -e "ELIXIR_ERL_OPTIONS=${ELIXIR_ERL_OPTIONS:-}" \
+  -e "ELS_ELIXIR_OPTS=${adapter_elixir_opts}" \
+  "${service_name}" \
+  "${container_debugger}"
