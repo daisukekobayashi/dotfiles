@@ -1,0 +1,45 @@
+{
+  "description": "Frontend, UI, React, Tailwind, SEO, Remotion, and web design skills.",
+  "includes": ["base"],
+  "external": [
+    {
+      "source": "anthropics/skills",
+      "skills": ["frontend-design", "webapp-testing"]
+    },
+    {
+      "source": "ibelick/ui-skills",
+      "skills": [
+        "baseline-ui",
+        "fixing-accessibility",
+        "fixing-metadata",
+        "fixing-motion-performance"
+      ]
+    },
+    {
+      "source": "remotion-dev/skills",
+      "skills": ["remotion-best-practices"]
+    },
+    {
+      "source": "coreyhaines31/marketingskills",
+      "skills": ["seo-audit"]
+    },
+    {
+      "source": "sleekdotdesign/agent-skills",
+      "skills": ["sleek-design-mobile-apps"]
+    },
+    {
+      "source": "wshobson/agents",
+      "skills": ["tailwind-design-system"]
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "skills": [
+        "vercel-composition-patterns",
+        "vercel-react-best-practices",
+        "vercel-react-native-skills",
+        "web-design-guidelines"
+      ]
+    }
+  ],
+  "local": []
+}
