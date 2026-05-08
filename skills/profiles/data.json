@@ -1,6 +1,5 @@
 {
   "description": "Data and database skills.",
-  "includes": ["base"],
   "external": [
     {
       "source": "redis/agent-skills",

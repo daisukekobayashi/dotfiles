@@ -1,6 +1,5 @@
 {
   "description": "Documentation lookup and library documentation skills.",
-  "includes": ["base"],
   "external": [
     {
       "source": "upstash/context7",

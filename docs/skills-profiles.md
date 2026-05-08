@@ -23,6 +23,7 @@ Expected command shape:
 ```sh
 ~/.dotfiles/setup.sh skills --scope project --profile office
 ~/.dotfiles/setup.sh skills --scope project --profile base,office --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
 
 Project scope requires an explicit `--profile`. If it is omitted, setup should fail rather than installing an implicit default.
@@ -87,6 +88,7 @@ skills/
     data.json
     research.json
     docs.json
+    workbench.json
 ```
 
 Custom skills live under `skills/local/<name>`.
@@ -104,7 +106,6 @@ Example:
 ```json
 {
   "description": "Office document skills",
-  "includes": ["base"],
   "external": [
     {
       "source": "anthropics/skills",
@@ -125,6 +126,7 @@ Rules:
 - Duplicate skills are ignored.
 - Cyclic includes are errors.
 - Missing profiles, missing local skills, and malformed external entries are errors.
+- Domain profiles should generally stay independent. Compose `base` explicitly, or use a dedicated aggregate profile such as `workbench`.
 
 ## Initial Profiles
 
@@ -141,6 +143,17 @@ Include:
 - planning, debugging, TDD, verification, and code review workflow skills
 - custom GitHub workflow skills from `skills/local/`
 - repository onboarding and runtime isolation local skills
+
+### `workbench`
+
+Default broad repository workbench profile.
+
+Include:
+
+- `base`
+- `docs`
+- `browser`
+- `research`
 
 ### `office`
 
@@ -199,6 +212,8 @@ Documentation lookup and library documentation skills:
 
 Use Bash as the public entry point and a small Node helper for profile resolution and metadata.
 
+The profile-based skills setup is Bash/Node-only. The PowerShell `skills` subcommand should fail with a clear message instead of running the old lock-based global restore path.
+
 Suggested helper:
 
 ```text
@@ -238,7 +253,7 @@ npx skills add <owner/repo> \
 
 Run this from the repository root and let the CLI manage `skills-lock.json` and agent-specific project output paths.
 
-If an existing `skills-lock.json` will be replaced, create a backup first. Dirty Git state should produce a warning, not block execution.
+If an existing `skills-lock.json` or agent skill directory will be replaced, create a backup first and restore it if installation fails. Dirty Git state should produce a warning, not block execution.
 
 ## Local Skills
 

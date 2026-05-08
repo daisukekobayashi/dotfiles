@@ -35,7 +35,7 @@ packages args:
 
 skills args:
   --scope user|project       Install user or project skills (default: user)
-  --profile <csv>            Profile list, e.g. base,office
+  --profile <csv>            Profile list, e.g. base,office or workbench
                              Required for project scope; defaults to base for user scope
   --agent <name>             Target agent, repeatable or comma-separated
                              Supported: codex, claude-code

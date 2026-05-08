@@ -77,9 +77,14 @@ Skill profile は `skills/profiles/` に置きます.
 ```bash
 ~/.dotfiles/setup.sh skills --scope project --profile office
 ~/.dotfiles/setup.sh skills --scope project --profile base,office --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
 
+`office`, `docs`, `browser` のような domain profile は単体で使えるようにしています。共通 workflow skill が必要なリポジトリでは `base` を明示的に組み合わせるか、集約 profile の `workbench` を使います。
+
 Project scope では, リポジトリ root から `npx skills add` で外部 skill をインストールし, 公式 CLI にリポジトリの `skills-lock.json` を管理させます. Dotfiles の local skill は `skills/local/` から symlink し, `skills-lock.json` には書き込みません.
+
+Profile ベースの skills setup は Bash/Node で実装しています。PowerShell の `skills` subcommand は、旧 lock ベースの global restore を実行せず、意図的にエラーで止めます。
 
 Profile は手で編集します. 検証は次のコマンドで行います.
 

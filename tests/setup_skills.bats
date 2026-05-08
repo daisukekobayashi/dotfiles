@@ -107,6 +107,42 @@ teardown() {
   [[ "$output" == *"office"* ]]
 }
 
+@test "docs profile stays independent from base" {
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --scope user --profile docs
+
+  [ "$status" -eq 0 ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
+  [ ! -e "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
+  [ ! -e "${TEST_DOTFILES}/.agents/user/skills/github-pr" ]
+}
+
+@test "workbench profile composes base docs browser and research" {
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --scope user --profile workbench
+
+  [ "$status" -eq 0 ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
+  [ -L "${TEST_DOTFILES}/.agents/user/skills/github-pr" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/agent-browser" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/read-arxiv-paper" ]
+}
+
 @test "github issue workflow skill documents type-prefixed branch naming" {
   run grep -F "\`type/<id>-<slug>\`" "$(repo_root)/skills/local/github-issue-worktree/SKILL.md"
   [ "$status" -eq 0 ]
