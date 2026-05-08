@@ -1,0 +1,15 @@
+{
+  "description": "Data and database skills.",
+  "includes": ["base"],
+  "external": [
+    {
+      "source": "redis/agent-skills",
+      "skills": ["redis-development"]
+    },
+    {
+      "source": "supabase/agent-skills",
+      "skills": ["supabase-postgres-best-practices"]
+    }
+  ],
+  "local": []
+}

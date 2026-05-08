@@ -1,0 +1,23 @@
+{
+  "description": "Browser automation and debugging skills.",
+  "includes": ["base"],
+  "external": [
+    {
+      "source": "vercel-labs/agent-browser",
+      "skills": ["agent-browser"]
+    },
+    {
+      "source": "browser-use/browser-use",
+      "skills": ["browser-use"]
+    },
+    {
+      "source": "chromedevtools/chrome-devtools-mcp",
+      "skills": ["chrome-devtools"]
+    },
+    {
+      "source": "microsoft/playwright-cli",
+      "skills": ["playwright-cli"]
+    }
+  ],
+  "local": []
+}

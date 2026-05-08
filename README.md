@@ -68,13 +68,27 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 `./setup.sh links` also installs generated rule files for Codex, Gemini, and Claude.
 
-Third-party skills are tracked in `skills-lock.json`.
+Skill profiles live in `skills/profiles/`.
 
-Custom skills live in `skills/`.
+Custom local skills live in `skills/local/`.
 
-`./setup.sh skills` restores third-party skills from `skills-lock.json` and symlinks custom skills from `skills/` into `.agents/skills` by default. Use `./setup.sh skills --source lock` to refresh third-party skills while preserving installed custom skills, or `./setup.sh skills --source local` to refresh only custom skills without clearing restored third-party ones. The command wires `~/.agents/skills` and `~/.claude/skills` to that generated directory.
+`./setup.sh skills` installs the user-scope `base` profile by default and wires `~/.agents/skills` and `~/.claude/skills` to a dotfiles-managed user skill view. Use project scope to install repository-specific skills:
 
-On Windows, use `.\setup.ps1 skills` for the default restore+link flow, `.\setup.ps1 skills -Source lock` to refresh only third-party skills, or `.\setup.ps1 skills -Source local` to refresh only custom skills. `.\setup.ps1 all` still runs only `packages` and `links`, so skills restore remains an explicit step. The PowerShell workflow expects `npx` to be available when restoring third-party skills from `skills-lock.json`.
+```bash
+~/.dotfiles/setup.sh skills --scope project --profile office
+~/.dotfiles/setup.sh skills --scope project --profile base,office --agent codex
+```
+
+Project scope installs third-party skills with `npx skills add` from the repository root and lets the official CLI manage the repository `skills-lock.json`. Dotfiles local skills are symlinked from `skills/local/` and are not written to `skills-lock.json`.
+
+Profiles are edited by hand. Validate them with:
+
+```bash
+./setup.sh skills profile validate
+./setup.sh skills profile validate --profile base,office
+```
+
+See `docs/skills-profiles.md` for the full design.
 
 `.agents/` is a generated restore target and is intentionally ignored by git.
 

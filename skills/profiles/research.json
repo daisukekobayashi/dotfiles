@@ -1,0 +1,11 @@
+{
+  "description": "Research-specific skills.",
+  "includes": ["base"],
+  "external": [
+    {
+      "source": "karpathy/nanochat",
+      "skills": ["read-arxiv-paper"]
+    }
+  ],
+  "local": []
+}

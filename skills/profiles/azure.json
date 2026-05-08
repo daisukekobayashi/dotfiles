@@ -1,0 +1,31 @@
+{
+  "description": "Curated Azure and Azure-adjacent skills.",
+  "includes": ["base"],
+  "external": [
+    {
+      "source": "microsoft/azure-skills",
+      "skills": [
+        "appinsights-instrumentation",
+        "azure-ai",
+        "azure-compliance",
+        "azure-compute",
+        "azure-deploy",
+        "azure-diagnostics",
+        "azure-enterprise-infra-planner",
+        "azure-prepare",
+        "azure-quotas",
+        "azure-rbac",
+        "azure-resource-lookup",
+        "azure-resource-visualizer",
+        "azure-storage",
+        "azure-upgrade",
+        "azure-validate"
+      ]
+    },
+    {
+      "source": "github/awesome-copilot",
+      "skills": ["azure-devops-cli"]
+    }
+  ],
+  "local": []
+}

@@ -137,7 +137,7 @@ try {
 
   $restoreRoot = Join-Path $setupContext.DotfilesRoot ".agents"
   $restoreSkillsDir = Join-Path $restoreRoot "skills"
-  $localSkillsDir = Join-Path $setupContext.DotfilesRoot "skills"
+  $localSkillsDir = Join-Path $setupContext.DotfilesRoot "skills/local"
   $lockFile = Join-Path $setupContext.DotfilesRoot "skills-lock.json"
   if ([string]::IsNullOrWhiteSpace($Env:TEMP)) {
     $npmCacheDir = Join-Path ([System.IO.Path]::GetTempPath()) "skills-npm-cache"
