@@ -58,17 +58,21 @@ link_skills_local_project() {
   local project_root="$3"
   local dry_run="$4"
 
-  local dry_run_arg=()
   if [ "${dry_run}" = "1" ]; then
-    dry_run_arg=(--dry-run)
+    node "$(skills_profile_helper)" link-local \
+      --dotfiles-root "${dotfiles_root}" \
+      --plan "${plan_file}" \
+      --target project \
+      --root "${project_root}" \
+      --dry-run
+    return
   fi
 
   node "$(skills_profile_helper)" link-local \
     --dotfiles-root "${dotfiles_root}" \
     --plan "${plan_file}" \
     --target project \
-    --root "${project_root}" \
-    "${dry_run_arg[@]}"
+    --root "${project_root}"
 }
 
 link_skills_local_user() {
@@ -77,17 +81,21 @@ link_skills_local_user() {
   local skills_dir="$3"
   local dry_run="$4"
 
-  local dry_run_arg=()
   if [ "${dry_run}" = "1" ]; then
-    dry_run_arg=(--dry-run)
+    node "$(skills_profile_helper)" link-local \
+      --dotfiles-root "${dotfiles_root}" \
+      --plan "${plan_file}" \
+      --target user \
+      --skills-dir "${skills_dir}" \
+      --dry-run
+    return
   fi
 
   node "$(skills_profile_helper)" link-local \
     --dotfiles-root "${dotfiles_root}" \
     --plan "${plan_file}" \
     --target user \
-    --skills-dir "${skills_dir}" \
-    "${dry_run_arg[@]}"
+    --skills-dir "${skills_dir}"
 }
 
 write_skills_external_lines() {
@@ -524,12 +532,13 @@ validate_skills_profiles() {
 
   require_cmd node || return 1
 
-  local profile_arg=()
   if [ -n "${profiles_csv}" ]; then
-    profile_arg=(--profiles "${profiles_csv}")
+    node "$(skills_profile_helper)" validate \
+      --dotfiles-root "${dotfiles_root}" \
+      --profiles "${profiles_csv}"
+    return
   fi
 
   node "$(skills_profile_helper)" validate \
-    --dotfiles-root "${dotfiles_root}" \
-    "${profile_arg[@]}"
+    --dotfiles-root "${dotfiles_root}"
 }
