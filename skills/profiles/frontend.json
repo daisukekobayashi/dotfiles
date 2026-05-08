@@ -1,6 +1,5 @@
 {
   "description": "Frontend, UI, React, Tailwind, SEO, Remotion, and web design skills.",
-  "includes": ["base"],
   "external": [
     {
       "source": "anthropics/skills",

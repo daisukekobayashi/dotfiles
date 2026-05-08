@@ -1,6 +1,5 @@
 {
   "description": "Browser automation and debugging skills.",
-  "includes": ["base"],
   "external": [
     {
       "source": "vercel-labs/agent-browser",

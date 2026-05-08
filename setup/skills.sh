@@ -144,7 +144,7 @@ run_skills_external_installs() {
       (
         cd "${work_dir}" || exit 1
         NPM_CONFIG_CACHE="${npm_cache_dir}" "${cmd[@]}" < /dev/null
-      )
+      ) || return 1
     fi
   done < "${external_file}"
 }
@@ -153,13 +153,19 @@ backup_skills_path() {
   local target_path="$1"
   local backup_root="$2"
   local dry_run="$3"
+  local backup_log="${4:-}"
 
-  [ -e "${target_path}" ] || [ -L "${target_path}" ] || return 0
+  if ! [ -e "${target_path}" ] && ! [ -L "${target_path}" ]; then
+    if [ -n "${backup_log}" ] && [ "${dry_run}" != "1" ]; then
+      printf '%s\t\n' "${target_path}" >> "${backup_log}"
+    fi
+    return 0
+  fi
 
   local backup_name
   local backup_path
   backup_name="$(basename "$(dirname "${target_path}")")-$(basename "${target_path}")"
-  backup_path="${backup_root}/${backup_name}.$(date +%Y%m%d%H%M%S)"
+  backup_path="${backup_root}/${backup_name}.$(date +%Y%m%d%H%M%S).$$"
 
   if [ "${dry_run}" = "1" ]; then
     log_info "DRY-RUN mv ${target_path} ${backup_path}"
@@ -168,6 +174,9 @@ backup_skills_path() {
 
   mkdir -p "${backup_root}"
   mv "${target_path}" "${backup_path}"
+  if [ -n "${backup_log}" ]; then
+    printf '%s\t%s\n' "${target_path}" "${backup_path}" >> "${backup_log}"
+  fi
   log_warn "Backed up existing skills path to ${backup_path}"
 }
 
@@ -176,12 +185,19 @@ prepare_project_skills_targets() {
   local agents_csv="$2"
   local backup_root="$3"
   local dry_run="$4"
+  local backup_log="$5"
 
   local agent
   local target_dir
   IFS=',' read -r -a agent_list <<< "${agents_csv}"
 
-  backup_skills_path "${project_root}/skills-lock.json" "${backup_root}" "${dry_run}"
+  if [ "${dry_run}" != "1" ]; then
+    mkdir -p "$(dirname "${backup_log}")"
+    : > "${backup_log}"
+  fi
+
+  backup_skills_path "${project_root}/skills-lock.json" "${backup_root}" "${dry_run}" "${backup_log}"
+  backup_skills_path "${project_root}/.agents/skills-profile.json" "${backup_root}" "${dry_run}" "${backup_log}"
 
   for agent in "${agent_list[@]}"; do
     agent="$(trim_whitespace "${agent}")"
@@ -197,8 +213,30 @@ prepare_project_skills_targets() {
         return 1
         ;;
     esac
-    backup_skills_path "${target_dir}" "${backup_root}" "${dry_run}"
+    backup_skills_path "${target_dir}" "${backup_root}" "${dry_run}" "${backup_log}"
   done
+}
+
+rollback_project_skills_targets() {
+  local backup_log="$1"
+  local dry_run="$2"
+
+  [ "${dry_run}" != "1" ] || return 0
+  [ -s "${backup_log}" ] || return 0
+
+  local target_path
+  local backup_path
+  while IFS=$'\t' read -r target_path backup_path; do
+    [ -n "${target_path}" ] || continue
+
+    rm -rf "${target_path}"
+    if [ -n "${backup_path}" ] && { [ -e "${backup_path}" ] || [ -L "${backup_path}" ]; }; then
+      mkdir -p "$(dirname "${target_path}")"
+      mv "${backup_path}" "${target_path}"
+    fi
+  done < "${backup_log}"
+
+  log_warn "Restored previous project skills after failed install"
 }
 
 copy_user_external_skills() {
@@ -258,11 +296,78 @@ run_user_external_installs() {
       (
         cd "${temp_install_dir}" || exit 1
         NPM_CONFIG_CACHE="${npm_cache_dir}" "${cmd[@]}" < /dev/null
-      )
+      ) || return 1
     fi
 
     copy_user_external_skills "${temp_install_dir}" "${restore_skills_dir}" "${dry_run}" || return 1
   done < "${external_file}"
+}
+
+cleanup_user_skills_staging() {
+  local staging_skills_dir="$1"
+  local staging_metadata="$2"
+  local temp_install_dir="$3"
+  local dry_run="$4"
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN rm -rf ${staging_skills_dir} ${staging_metadata} ${temp_install_dir}"
+    return 0
+  fi
+
+  rm -rf "${staging_skills_dir}" "${staging_metadata}" "${temp_install_dir}"
+}
+
+restore_user_skills_backup() {
+  local restore_skills_dir="$1"
+  local metadata_file="$2"
+  local backup_skills_dir="$3"
+  local backup_metadata="$4"
+
+  rm -rf "${restore_skills_dir}" "${metadata_file}"
+  if [ -e "${backup_skills_dir}" ] || [ -L "${backup_skills_dir}" ]; then
+    mv "${backup_skills_dir}" "${restore_skills_dir}"
+  fi
+  if [ -e "${backup_metadata}" ] || [ -L "${backup_metadata}" ]; then
+    mv "${backup_metadata}" "${metadata_file}"
+  fi
+}
+
+swap_user_skills_view() {
+  local restore_root="$1"
+  local restore_skills_dir="$2"
+  local staging_skills_dir="$3"
+  local staging_metadata="$4"
+  local dry_run="$5"
+
+  local metadata_file="${restore_root}/skills-profile.json"
+  local backup_skills_dir="${restore_root}/skills.previous.$$"
+  local backup_metadata="${restore_root}/skills-profile.json.previous.$$"
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN swap ${staging_skills_dir} into ${restore_skills_dir}"
+    log_info "DRY-RUN mv ${staging_metadata} ${metadata_file}"
+    return 0
+  fi
+
+  rm -rf "${backup_skills_dir}" "${backup_metadata}"
+  if [ -e "${restore_skills_dir}" ] || [ -L "${restore_skills_dir}" ]; then
+    mv "${restore_skills_dir}" "${backup_skills_dir}"
+  fi
+  if [ -e "${metadata_file}" ] || [ -L "${metadata_file}" ]; then
+    mv "${metadata_file}" "${backup_metadata}"
+  fi
+
+  if ! mv "${staging_skills_dir}" "${restore_skills_dir}"; then
+    restore_user_skills_backup "${restore_skills_dir}" "${metadata_file}" "${backup_skills_dir}" "${backup_metadata}"
+    return 1
+  fi
+
+  if ! mv "${staging_metadata}" "${metadata_file}"; then
+    restore_user_skills_backup "${restore_skills_dir}" "${metadata_file}" "${backup_skills_dir}" "${backup_metadata}"
+    return 1
+  fi
+
+  rm -rf "${backup_skills_dir}" "${backup_metadata}"
 }
 
 link_user_agent_skill_dirs() {
@@ -319,6 +424,7 @@ setup_project_skills() {
   local plan_file="${work_dir}/project-plan.json"
   local external_file="${work_dir}/project-external.tsv"
   local npm_cache_dir="${setup_tmpdir}/skills-npm-cache"
+  local backup_log="${work_dir}/project-backups.tsv"
   local backup_root
   backup_root="${setup_tmpdir}/dotfiles-skills-backup/$(basename "${project_root}")"
 
@@ -327,10 +433,13 @@ setup_project_skills() {
 
   create_skills_plan "${dotfiles_root}" "project" "${profiles_csv}" "${agents_csv}" "${plan_file}" || return 1
   write_skills_external_lines "${plan_file}" "${external_file}" || return 1
-  prepare_project_skills_targets "${project_root}" "${agents_csv}" "${backup_root}" "${dry_run}" || return 1
-  run_skills_external_installs "${project_root}" "${external_file}" "${agents_csv}" "${npm_cache_dir}" "${dry_run}" || return 1
-  link_skills_local_project "${dotfiles_root}" "${plan_file}" "${project_root}" "${dry_run}" || return 1
-  write_skills_metadata "${plan_file}" "${project_root}/.agents/skills-profile.json" "${dry_run}"
+  prepare_project_skills_targets "${project_root}" "${agents_csv}" "${backup_root}" "${dry_run}" "${backup_log}" || return 1
+  if ! run_skills_external_installs "${project_root}" "${external_file}" "${agents_csv}" "${npm_cache_dir}" "${dry_run}" \
+    || ! link_skills_local_project "${dotfiles_root}" "${plan_file}" "${project_root}" "${dry_run}" \
+    || ! write_skills_metadata "${plan_file}" "${project_root}/.agents/skills-profile.json" "${dry_run}"; then
+    rollback_project_skills_targets "${backup_log}" "${dry_run}"
+    return 1
+  fi
 
   log_info "Project skills installed for profiles: ${profiles_csv}"
   log_info "Consider ignoring generated skill directories: .agents/skills/ .claude/skills/"
@@ -349,6 +458,8 @@ setup_user_skills() {
 
   local restore_root="${dotfiles_root}/.agents/user"
   local restore_skills_dir="${restore_root}/skills"
+  local staging_skills_dir="${restore_root}/skills.next.$$"
+  local staging_metadata="${restore_root}/skills-profile.json.next.$$"
   local temp_install_dir="${setup_tmpdir}/dotfiles-skills-user-install"
   local work_dir="${setup_tmpdir}/dotfiles-skills"
   local plan_file="${work_dir}/user-plan.json"
@@ -360,18 +471,25 @@ setup_user_skills() {
   write_skills_external_lines "${plan_file}" "${external_file}" || return 1
 
   if [ "${dry_run}" = "1" ]; then
-    log_info "DRY-RUN rm -rf ${restore_skills_dir}"
+    log_info "DRY-RUN rm -rf ${staging_skills_dir}"
+    log_info "DRY-RUN rm -rf ${staging_metadata}"
     log_info "DRY-RUN rm -rf ${temp_install_dir}"
   else
-    rm -rf "${restore_skills_dir}" "${temp_install_dir}"
+    rm -rf "${staging_skills_dir}" "${staging_metadata}" "${temp_install_dir}"
   fi
 
-  make_directory "${restore_skills_dir}" "${dry_run}"
+  make_directory "${restore_root}" "${dry_run}"
+  make_directory "${staging_skills_dir}" "${dry_run}"
   make_directory "${temp_install_dir}" "${dry_run}"
 
-  run_user_external_installs "${temp_install_dir}" "${restore_skills_dir}" "${external_file}" "${npm_cache_dir}" "${dry_run}" || return 1
-  link_skills_local_user "${dotfiles_root}" "${plan_file}" "${restore_skills_dir}" "${dry_run}" || return 1
-  write_skills_metadata "${plan_file}" "${restore_root}/skills-profile.json" "${dry_run}"
+  if ! run_user_external_installs "${temp_install_dir}" "${staging_skills_dir}" "${external_file}" "${npm_cache_dir}" "${dry_run}" \
+    || ! link_skills_local_user "${dotfiles_root}" "${plan_file}" "${staging_skills_dir}" "${dry_run}" \
+    || ! write_skills_metadata "${plan_file}" "${staging_metadata}" "${dry_run}" \
+    || ! swap_user_skills_view "${restore_root}" "${restore_skills_dir}" "${staging_skills_dir}" "${staging_metadata}" "${dry_run}"; then
+    cleanup_user_skills_staging "${staging_skills_dir}" "${staging_metadata}" "${temp_install_dir}" "${dry_run}"
+    return 1
+  fi
+  cleanup_user_skills_staging "${staging_skills_dir}" "${staging_metadata}" "${temp_install_dir}" "${dry_run}"
   link_user_agent_skill_dirs "${restore_skills_dir}" "${setup_home}" "${agents_csv}" "${dry_run}" || return 1
 
   log_info "User skills installed for profiles: ${profiles_csv}"

@@ -77,9 +77,14 @@ Custom local skills live in `skills/local/`.
 ```bash
 ~/.dotfiles/setup.sh skills --scope project --profile office
 ~/.dotfiles/setup.sh skills --scope project --profile base,office --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
 
+Domain profiles such as `office`, `docs`, and `browser` are standalone. Include `base` explicitly when a repository needs the common workflow skills, or use the aggregate `workbench` profile.
+
 Project scope installs third-party skills with `npx skills add` from the repository root and lets the official CLI manage the repository `skills-lock.json`. Dotfiles local skills are symlinked from `skills/local/` and are not written to `skills-lock.json`.
+
+Profile-based skills setup is implemented in Bash/Node. The PowerShell `skills` subcommand intentionally fails instead of running the old lock-based global restore path.
 
 Profiles are edited by hand. Validate them with:
 

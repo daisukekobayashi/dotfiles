@@ -147,6 +147,73 @@ teardown() {
   grep -F 'skills add vercel-labs/skills' "${TEST_LOG}"
 }
 
+@test "skills --scope project restores existing skills when external install fails" {
+  cd "${TEST_PROJECT}"
+
+  mkdir -p .agents/skills/old-agent .claude/skills/old-claude
+  printf 'old-lock\n' > skills-lock.json
+  printf 'old-profile\n' > .agents/skills-profile.json
+  printf 'old-agent\n' > .agents/skills/old-agent/SKILL.md
+  printf 'old-claude\n' > .claude/skills/old-claude/SKILL.md
+
+  cat > "${TEST_BIN}/npx" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "${TEST_SKILLS_LOG}"
+exit 42
+EOF
+  chmod +x "${TEST_BIN}/npx"
+
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --scope project --profile office --agent codex --agent claude-code
+
+  [ "$status" -ne 0 ]
+  [ "$(cat skills-lock.json)" = "old-lock" ]
+  [ "$(cat .agents/skills-profile.json)" = "old-profile" ]
+  [ "$(cat .agents/skills/old-agent/SKILL.md)" = "old-agent" ]
+  [ "$(cat .claude/skills/old-claude/SKILL.md)" = "old-claude" ]
+}
+
+@test "skills --scope project removes partial generated skills when external install fails" {
+  cd "${TEST_PROJECT}"
+
+  cat > "${TEST_BIN}/npx" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "${TEST_SKILLS_LOG}"
+mkdir -p .agents/skills/partial .claude/skills/partial
+printf 'partial-lock\n' > skills-lock.json
+printf 'partial-agent\n' > .agents/skills/partial/SKILL.md
+printf 'partial-claude\n' > .claude/skills/partial/SKILL.md
+exit 42
+EOF
+  chmod +x "${TEST_BIN}/npx"
+
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --scope project --profile base --agent codex --agent claude-code
+
+  [ "$status" -ne 0 ]
+  [ ! -e skills-lock.json ]
+  [ ! -e .agents/skills/partial ]
+  [ ! -e .claude/skills/partial ]
+}
+
 @test "skills --scope project requires an explicit profile" {
   cd "${TEST_PROJECT}"
 
@@ -185,6 +252,35 @@ teardown() {
   [ -L "${TEST_HOME}/.claude/skills" ]
   [ "$(readlink "${TEST_HOME}/.claude/skills")" = "${TEST_DOTFILES}/.agents/user/skills" ]
   grep -F 'skills add vercel-labs/skills' "${TEST_LOG}"
+}
+
+@test "skills --scope user keeps existing skill view when external install fails" {
+  mkdir -p "${TEST_DOTFILES}/.agents/user/skills/old-user"
+  printf 'old-user\n' > "${TEST_DOTFILES}/.agents/user/skills/old-user/SKILL.md"
+  printf 'old-profile\n' > "${TEST_DOTFILES}/.agents/user/skills-profile.json"
+
+  cat > "${TEST_BIN}/npx" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "${TEST_SKILLS_LOG}"
+exit 42
+EOF
+  chmod +x "${TEST_BIN}/npx"
+
+  run env \
+    HOME="${TEST_HOME}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    PATH="${TEST_BIN}:${PATH}" \
+    TEST_SKILLS_LOG="${TEST_LOG}" \
+    "$(setup_script_path)" \
+    skills --scope user --profile base
+
+  [ "$status" -ne 0 ]
+  [ "$(cat "${TEST_DOTFILES}/.agents/user/skills/old-user/SKILL.md")" = "old-user" ]
+  [ "$(cat "${TEST_DOTFILES}/.agents/user/skills-profile.json")" = "old-profile" ]
 }
 
 @test "skills --scope user preserves external skills when the CLI refreshes its target per source" {

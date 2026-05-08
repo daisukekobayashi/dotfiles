@@ -1,6 +1,5 @@
 {
   "description": "Curated Azure and Azure-adjacent skills.",
-  "includes": ["base"],
   "external": [
     {
       "source": "microsoft/azure-skills",
