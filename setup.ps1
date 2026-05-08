@@ -19,14 +19,14 @@ Usage: .\setup.ps1 <subcommand>
 Subcommands:
   all         Run Windows setup for the current privilege level
   links       Create Windows symbolic links only
-  skills      Restore agent skills and wire assistant skill directories
+  skills      Unsupported in PowerShell; use ./setup.sh skills from Bash/WSL
   packages    Install or verify Scoop only
   help        Show this help
 
 Behavior:
   all (non-admin): runs packages, then links
   all (admin): skips packages and runs links only
-  skills: restores third-party and custom skills separately from all
+  skills: profile-based skills setup is Bash/Node-only
 "@
 }
 

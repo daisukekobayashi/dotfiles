@@ -1,0 +1,10 @@
+{
+  "description": "Office and document processing skills.",
+  "external": [
+    {
+      "source": "anthropics/skills",
+      "skills": ["docx", "pdf", "pptx", "xlsx"]
+    }
+  ],
+  "local": []
+}

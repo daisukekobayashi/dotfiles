@@ -1,0 +1,6 @@
+{
+  "description": "Default dotfiles workbench profile for broad repository work.",
+  "includes": ["base", "docs", "browser", "research"],
+  "external": [],
+  "local": []
+}
