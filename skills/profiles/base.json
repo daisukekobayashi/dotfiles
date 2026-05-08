@@ -1,0 +1,76 @@
+{
+  "description": "Common baseline workflow skills for repository work.",
+  "external": [
+    {
+      "source": "vercel-labs/skills",
+      "skills": ["find-skills"]
+    },
+    {
+      "source": "obra/superpowers",
+      "skills": [
+        "using-superpowers",
+        "brainstorming",
+        "dispatching-parallel-agents",
+        "executing-plans",
+        "finishing-a-development-branch",
+        "receiving-code-review",
+        "requesting-code-review",
+        "subagent-driven-development",
+        "systematic-debugging",
+        "test-driven-development",
+        "using-git-worktrees",
+        "verification-before-completion",
+        "writing-plans",
+        "writing-skills"
+      ]
+    },
+    {
+      "source": "mattpocock/skills",
+      "skills": [
+        "caveman",
+        "diagnose",
+        "grill-me",
+        "grill-with-docs",
+        "improve-codebase-architecture",
+        "prototype",
+        "setup-matt-pocock-skills",
+        "tdd",
+        "to-issues",
+        "to-prd",
+        "triage",
+        "write-a-skill",
+        "zoom-out"
+      ]
+    },
+    {
+      "source": "forrestchang/andrej-karpathy-skills",
+      "skills": ["karpathy-guidelines"]
+    },
+    {
+      "source": "github/awesome-copilot",
+      "skills": ["gh-cli", "git-commit"]
+    },
+    {
+      "source": "sanyuan0704/code-review-expert",
+      "skills": ["code-review-expert"]
+    }
+  ],
+  "local": [
+    "execution-context-first-repo-onboarding",
+    "github-issue-create",
+    "github-issue-review",
+    "github-issue-triage",
+    "github-issue-worktree",
+    "github-merge-cleanup",
+    "github-pr",
+    "github-pr-ai-review-followup",
+    "github-pr-ai-review-request",
+    "github-pr-codex-review-request",
+    "github-pr-copilot-review-request",
+    "github-pr-publish",
+    "github-pr-publish-and-ai-review-request",
+    "github-pr-review",
+    "local-runtime-port-isolation",
+    "serena-session-init"
+  ]
+}

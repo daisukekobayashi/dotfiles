@@ -34,9 +34,14 @@ packages args:
   --dry-run      Print commands without executing side effects
 
 skills args:
-  --source lock  Restore only third-party skills from skills-lock.json
-  --source local Install only local skills from skills/
-                 Omit --source to install both
+  --scope user|project       Install user or project skills (default: user)
+  --profile <csv>            Profile list, e.g. base,office or workbench
+                             Required for project scope; defaults to base for user scope
+  --agent <name>             Target agent, repeatable or comma-separated
+                             Supported: codex, claude-code
+  profile validate           Validate all skills/profiles/*.json files
+  profile validate --profile <csv>
+                             Validate selected profiles only
 
 all/post args:
   --reload-shell Exec a fresh login zsh after setup completes
@@ -138,25 +143,86 @@ parse_packages_args() {
 }
 
 parse_skills_args() {
-  SKILLS_SOURCE="both"
+  SKILLS_ACTION="install"
+  SKILLS_SCOPE="user"
+  SKILLS_PROFILE=""
+  SKILLS_AGENTS=""
+
+  if [ "$#" -gt 0 ] && [ "$1" = "profile" ]; then
+    shift
+    if [ "$#" -eq 0 ]; then
+      log_error "skills profile requires a subcommand"
+      return 1
+    fi
+
+    case "$1" in
+      validate)
+        SKILLS_ACTION="profile-validate"
+        shift
+        ;;
+      *)
+        log_error "Unknown skills profile subcommand: $1"
+        return 1
+        ;;
+    esac
+
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --profile)
+          if [ "$#" -lt 2 ]; then
+            log_error "--profile requires a csv value"
+            return 1
+          fi
+          SKILLS_PROFILE="$2"
+          shift 2
+          ;;
+        *)
+          log_error "Unknown skills profile argument: $1"
+          return 1
+          ;;
+      esac
+    done
+
+    return 0
+  fi
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --source)
+      --scope)
         if [ "$#" -lt 2 ]; then
-          log_error "--source requires one of: lock, local"
+          log_error "--scope requires one of: user, project"
           return 1
         fi
 
         case "$2" in
-          lock | local)
-            SKILLS_SOURCE="$2"
+          user | project)
+            SKILLS_SCOPE="$2"
             ;;
           *)
-            log_error "Unknown skills source: $2"
+            log_error "Unknown skills scope: $2"
             return 1
             ;;
         esac
+        shift 2
+        ;;
+      --profile)
+        if [ "$#" -lt 2 ]; then
+          log_error "--profile requires a csv value"
+          return 1
+        fi
+        SKILLS_PROFILE="$2"
+        shift 2
+        ;;
+      --agent)
+        if [ "$#" -lt 2 ]; then
+          log_error "--agent requires a value"
+          return 1
+        fi
+        if [ -z "${SKILLS_AGENTS}" ]; then
+          SKILLS_AGENTS="$2"
+        else
+          SKILLS_AGENTS="${SKILLS_AGENTS},$2"
+        fi
         shift 2
         ;;
       *)
@@ -165,6 +231,10 @@ parse_skills_args() {
         ;;
     esac
   done
+
+  if [ -z "${SKILLS_AGENTS}" ]; then
+    SKILLS_AGENTS="codex,claude-code"
+  fi
 }
 
 run_all() {
@@ -230,8 +300,13 @@ main() {
         usage
         return 1
       }
-      log_info "Running skills setup..."
-      setup_skills "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "${SKILLS_SOURCE}"
+      if [ "${SKILLS_ACTION}" = "profile-validate" ]; then
+        log_info "Validating skills profiles..."
+        validate_skills_profiles "${SETUP_DOTFILES_ROOT}" "${SKILLS_PROFILE}"
+      else
+        log_info "Running skills setup..."
+        setup_skills "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "${SKILLS_SCOPE}" "${SKILLS_PROFILE}" "${SKILLS_AGENTS}"
+      fi
       ;;
     packages)
       parse_packages_args "$@" || {

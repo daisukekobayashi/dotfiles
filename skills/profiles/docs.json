@@ -1,0 +1,10 @@
+{
+  "description": "Documentation lookup and library documentation skills.",
+  "external": [
+    {
+      "source": "upstash/context7",
+      "skills": ["context7-cli"]
+    }
+  ],
+  "local": []
+}
