@@ -64,3 +64,24 @@ make_links_fixture_root() {
   [ ! -L "${TEST_HOME}/.codex" ]
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
 }
+
+@test "links configures the dotfiles repository git hooks path" {
+  local root fixture_root hooks_path
+  root="$(repo_root)"
+  fixture_root="${TEST_ROOT}/dotfiles"
+
+  make_links_fixture_root "${root}" "${fixture_root}"
+  ln -s "${root}/.githooks" "${fixture_root}/.githooks"
+  git -C "${fixture_root}" init -q
+
+  run env \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${fixture_root}" \
+    "$(setup_script_path)" \
+    links
+
+  [ "$status" -eq 0 ]
+  hooks_path="$(git -C "${fixture_root}" config --get core.hooksPath)"
+  [ "${hooks_path}" = ".githooks" ]
+}

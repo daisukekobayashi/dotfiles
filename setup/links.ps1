@@ -88,10 +88,20 @@ try {
   New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_config.py")
   New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_kernel_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_kernel_config.py")
 
-  Get-ChildItem -LiteralPath $dotIpyStartupDir -Filter "*.py" | ForEach-Object {
-    New-DotfilesSymbolicLink `
-      -LinkPath (Join-Path $ipyStartupDir $_.Name) `
-      -TargetPath $_.FullName
+	  Get-ChildItem -LiteralPath $dotIpyStartupDir -Filter "*.py" | ForEach-Object {
+	    New-DotfilesSymbolicLink `
+	      -LinkPath (Join-Path $ipyStartupDir $_.Name) `
+	      -TargetPath $_.FullName
+	  }
+
+  if (Test-CommandAvailable -Name "git") {
+    & git -C $setupContext.DotfilesRoot rev-parse --is-inside-work-tree *> $null
+    if ($LASTEXITCODE -eq 0) {
+      & git -C $setupContext.DotfilesRoot config core.hooksPath .githooks
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Failed to configure git hooks path for $($setupContext.DotfilesRoot)"
+      }
+    }
   }
 } catch {
   if ((-not (Test-IsAdministrator)) -and (-not $ElevatedRelaunch) -and (Test-IsAdminRequiredError -ErrorRecord $_)) {
