@@ -142,101 +142,6 @@ parse_packages_args() {
   done
 }
 
-parse_skills_args() {
-  SKILLS_ACTION="install"
-  SKILLS_SCOPE="user"
-  SKILLS_PROFILE=""
-  SKILLS_AGENTS=""
-
-  if [ "$#" -gt 0 ] && [ "$1" = "profile" ]; then
-    shift
-    if [ "$#" -eq 0 ]; then
-      log_error "skills profile requires a subcommand"
-      return 1
-    fi
-
-    case "$1" in
-      validate)
-        SKILLS_ACTION="profile-validate"
-        shift
-        ;;
-      *)
-        log_error "Unknown skills profile subcommand: $1"
-        return 1
-        ;;
-    esac
-
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --profile)
-          if [ "$#" -lt 2 ]; then
-            log_error "--profile requires a csv value"
-            return 1
-          fi
-          SKILLS_PROFILE="$2"
-          shift 2
-          ;;
-        *)
-          log_error "Unknown skills profile argument: $1"
-          return 1
-          ;;
-      esac
-    done
-
-    return 0
-  fi
-
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --scope)
-        if [ "$#" -lt 2 ]; then
-          log_error "--scope requires one of: user, project"
-          return 1
-        fi
-
-        case "$2" in
-          user | project)
-            SKILLS_SCOPE="$2"
-            ;;
-          *)
-            log_error "Unknown skills scope: $2"
-            return 1
-            ;;
-        esac
-        shift 2
-        ;;
-      --profile)
-        if [ "$#" -lt 2 ]; then
-          log_error "--profile requires a csv value"
-          return 1
-        fi
-        SKILLS_PROFILE="$2"
-        shift 2
-        ;;
-      --agent)
-        if [ "$#" -lt 2 ]; then
-          log_error "--agent requires a value"
-          return 1
-        fi
-        if [ -z "${SKILLS_AGENTS}" ]; then
-          SKILLS_AGENTS="$2"
-        else
-          SKILLS_AGENTS="${SKILLS_AGENTS},$2"
-        fi
-        shift 2
-        ;;
-      *)
-        log_error "Unknown skills argument: $1"
-        return 1
-        ;;
-    esac
-  done
-
-  if [ -z "${SKILLS_AGENTS}" ]; then
-    SKILLS_AGENTS="codex,claude-code"
-  fi
-}
-
 run_all() {
   log_info "Running links setup..."
   setup_links "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
@@ -296,17 +201,12 @@ main() {
       setup_links "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
       ;;
     skills)
-      parse_skills_args "$@" || {
-        usage
-        return 1
-      }
-      if [ "${SKILLS_ACTION}" = "profile-validate" ]; then
+      if [ "$#" -ge 2 ] && [ "$1" = "profile" ] && [ "$2" = "validate" ]; then
         log_info "Validating skills profiles..."
-        validate_skills_profiles "${SETUP_DOTFILES_ROOT}" "${SKILLS_PROFILE}"
       else
         log_info "Running skills setup..."
-        setup_skills "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "${SKILLS_SCOPE}" "${SKILLS_PROFILE}" "${SKILLS_AGENTS}"
       fi
+      setup_skills "$@"
       ;;
     packages)
       parse_packages_args "$@" || {

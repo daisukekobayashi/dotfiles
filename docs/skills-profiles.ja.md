@@ -210,31 +210,37 @@ Documentation lookup や library docs 参照系:
 
 ## CLI Behavior
 
-Bash は公開 entry point として維持し、profile 解決と metadata 生成は小さな Node helper に寄せます。
+Profile ベースの skills setup は TypeScript を正本にします。bootstrap 時に TypeScript runtime を要求しないよう、生成済みの Node runtime を commit します。
 
-Profile ベースの skills setup は Bash/Node のみ対応にします。PowerShell の `skills` subcommand は、旧 lock ベースの global restore を実行せず、明確なエラーで止めます。
-
-想定 helper:
+Runtime entry point:
 
 ```text
-setup/skills-profile.js
+setup/skills.js
 ```
 
-Bash の責務:
+TypeScript source:
 
-- setup flag の parse
-- setup path の解決
-- 外部 skill 用の `npx skills add` 実行
-- user scope の最終 link 作成
+```text
+setup/src/skills.ts
+```
 
-Node helper の責務:
+Bash と PowerShell の責務:
 
+- setup path と環境変数の解決
+- `node setup/skills.js` の起動
+
+Node runtime の責務:
+
+- skills flag の parse
 - profile JSON の読み込みと validation
 - `includes` の展開
 - source ごとの external skill merge
 - local skill 名の validation
+- 外部 skill 用の `npx skills add` 実行
+- local skill の link 作成
+- project output の backup と rollback
 - `.agents/skills-profile.json` の出力
-- Bash が実行しやすい安定した install plan の生成
+- user scope の最終 link 作成
 
 Profile add/remove の補助コマンドは初期実装の対象外にします。Profile JSON は手で編集し, `./setup.sh skills profile validate` で検証します。
 

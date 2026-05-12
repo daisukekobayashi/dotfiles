@@ -66,4 +66,10 @@ setup_links() {
     [ -d "${f}" ] && continue
     link_file "${f}" "${setup_home}/${base}" "${dry_run}"
   done
+
+  if command_exists git && git -C "${dotfiles_root}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if ! run_cmd "${dry_run}" git -C "${dotfiles_root}" config core.hooksPath .githooks; then
+      log_warn "Failed to configure git hooks path for ${dotfiles_root}"
+    fi
+  fi
 }

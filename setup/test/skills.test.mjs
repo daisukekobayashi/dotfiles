@@ -1,0 +1,276 @@
+import assert from "node:assert/strict";
+import { lstat, mkdtemp, mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import test from "node:test";
+
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+const skillsRuntime = path.join(repoRoot, "setup", "skills.js");
+
+async function writeExecutable(filePath, content) {
+  await writeFile(filePath, content, { mode: 0o755 });
+}
+
+async function createFixture(options = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "skills-node-test."));
+  const home = path.join(root, "home");
+  const tmp = path.join(root, "tmp");
+  const dotfiles = path.join(root, "dotfiles");
+  const bin = path.join(root, "bin");
+  const project = path.join(root, "project");
+  const log = path.join(root, "skills.log");
+
+  await mkdir(home, { recursive: true });
+  await mkdir(tmp, { recursive: true });
+  await mkdir(bin, { recursive: true });
+  await mkdir(project, { recursive: true });
+  await mkdir(path.join(dotfiles, "skills", "local", "local-one"), { recursive: true });
+  await mkdir(path.join(dotfiles, "skills", "profiles"), { recursive: true });
+
+  await writeFile(
+    path.join(dotfiles, "skills", "local", "local-one", "SKILL.md"),
+    "---\nname: local-one\ndescription: Test local skill\n---\n\nLocal skill.\n",
+  );
+  await writeFile(
+    path.join(dotfiles, "skills", "profiles", "base.json"),
+    JSON.stringify(
+      {
+        description: "Base test profile",
+        external: [{ source: "vercel-labs/skills", skills: ["find-skills"] }],
+        local: ["local-one"],
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  await writeFile(
+    path.join(dotfiles, "skills", "profiles", "office.json"),
+    JSON.stringify(
+      {
+        description: "Office test profile",
+        includes: ["base"],
+        external: [{ source: "anthropics/skills", skills: ["docx", "pdf"] }],
+        local: [],
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+
+  const npxBody =
+    options.npxBody ??
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+if [ "$#" -lt 3 ] || [ "$1" != "skills" ] || [ "$2" != "add" ]; then
+  printf 'unexpected npx invocation: %s\\n' "$*" >&2
+  exit 1
+fi
+shift 2
+source_name="$1"
+shift
+agents=()
+skills=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --agent)
+      agents+=("$2")
+      shift 2
+      ;;
+    --skill)
+      skills+=("$2")
+      shift 2
+      ;;
+    --copy|--yes)
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+mkdir -p .agents/skills .claude/skills
+printf '{"version":3,"source":"%s"}\\n' "\${source_name}" > skills-lock.json
+for skill_name in "\${skills[@]}"; do
+  if [ "\${#agents[@]}" -eq 0 ]; then
+    agents=(codex)
+  fi
+  for agent_name in "\${agents[@]}"; do
+    case "\${agent_name}" in
+      codex)
+        mkdir -p ".agents/skills/\${skill_name}"
+        printf '%s\\n' "\${skill_name}" > ".agents/skills/\${skill_name}/SKILL.md"
+        ;;
+      claude-code)
+        mkdir -p ".claude/skills/\${skill_name}"
+        printf '%s\\n' "\${skill_name}" > ".claude/skills/\${skill_name}/SKILL.md"
+        ;;
+    esac
+  done
+done
+`;
+  await writeExecutable(path.join(bin, "npx"), npxBody);
+
+  spawnSync("git", ["init", "-q"], { cwd: project });
+
+  const env = {
+    ...process.env,
+    HOME: home,
+    SETUP_HOME: home,
+    SETUP_TMPDIR: tmp,
+    SETUP_DOTFILES_ROOT: dotfiles,
+    PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+    TEST_SKILLS_LOG: log,
+  };
+
+  return {
+    root,
+    home,
+    tmp,
+    dotfiles,
+    bin,
+    project,
+    log,
+    env,
+    cleanup: () => rm(root, { recursive: true, force: true }),
+  };
+}
+
+function runSkills(args, fixture, options = {}) {
+  return spawnSync(process.execPath, [skillsRuntime, ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: fixture.env,
+    encoding: "utf8",
+  });
+}
+
+async function readText(filePath) {
+  return readFile(filePath, "utf8");
+}
+
+test("profile validate accepts selected profiles", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkills(["profile", "validate", "--profile", "base,office"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /Profiles valid: base,office/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("user scope builds one managed skill view and links selected user agents", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.home, ".gemini"), { recursive: true });
+    await symlink("/tmp/stale-gemini-skills", path.join(fixture.home, ".gemini", "skills"));
+
+    const result = runSkills(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills", "find-skills")), true);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills", "local-one")), true);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills-profile.json")), true);
+    assert.equal(existsSync(path.join(fixture.home, ".agents", "skills")), true);
+    assert.equal(existsSync(path.join(fixture.home, ".claude", "skills")), true);
+    assert.equal((await lstat(path.join(fixture.home, ".gemini", "skills"))).isSymbolicLink(), true);
+    assert.equal(await readlink(path.join(fixture.home, ".gemini", "skills")), "/tmp/stale-gemini-skills");
+    assert.match(await readText(fixture.log), /skills add vercel-labs\/skills/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("dry-run user scope does not write managed skill outputs", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = spawnSync(process.execPath, [skillsRuntime, "--scope", "user", "--profile", "base"], {
+      cwd: repoRoot,
+      env: {
+        ...fixture.env,
+        SETUP_DRY_RUN: "1",
+      },
+      encoding: "utf8",
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /DRY-RUN/);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills")), false);
+    assert.equal(existsSync(path.join(fixture.home, ".agents", "skills")), false);
+    assert.equal(existsSync(fixture.log), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope installs external and local skills for selected agents", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkills(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills", "docx")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills", "pdf")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills", "find-skills")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".claude", "skills", "docx")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".claude", "skills", "pdf")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".claude", "skills", "find-skills")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills", "local-one")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".claude", "skills", "local-one")), true);
+    assert.equal(existsSync(path.join(fixture.project, "skills-lock.json")), true);
+    assert.match(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), /"office"/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope requires an explicit profile", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkills(["--scope", "project"], fixture, { cwd: fixture.project });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--profile is required for project scope/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope restores existing outputs when external install fails", async () => {
+  const fixture = await createFixture({
+    npxBody: `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+exit 42
+`,
+  });
+  try {
+    await mkdir(path.join(fixture.project, ".agents", "skills", "old-agent"), { recursive: true });
+    await mkdir(path.join(fixture.project, ".claude", "skills", "old-claude"), { recursive: true });
+    await writeFile(path.join(fixture.project, "skills-lock.json"), "old-lock\n");
+    await writeFile(path.join(fixture.project, ".agents", "skills-profile.json"), "old-profile\n");
+    await writeFile(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md"), "old-agent\n");
+    await writeFile(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md"), "old-claude\n");
+
+    const result = runSkills(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "old-lock\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), "old-profile\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
+    assert.equal(await readText(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md")), "old-claude\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});

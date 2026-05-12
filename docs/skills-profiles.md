@@ -210,31 +210,37 @@ Documentation lookup and library documentation skills:
 
 ## CLI Behavior
 
-Use Bash as the public entry point and a small Node helper for profile resolution and metadata.
+Use TypeScript as the source of truth for profile-based skills setup. Commit the generated Node runtime so bootstrap does not require a TypeScript runtime.
 
-The profile-based skills setup is Bash/Node-only. The PowerShell `skills` subcommand should fail with a clear message instead of running the old lock-based global restore path.
-
-Suggested helper:
+Runtime entry point:
 
 ```text
-setup/skills-profile.js
+setup/skills.js
 ```
 
-Bash responsibilities:
+TypeScript source:
 
-- Parse setup flags.
-- Resolve setup paths.
-- Call `npx skills add` for external skills.
-- Wire final user-scope links.
+```text
+setup/src/skills.ts
+```
 
-Node helper responsibilities:
+Bash and PowerShell responsibilities:
 
+- Resolve setup paths and environment.
+- Invoke `node setup/skills.js`.
+
+Node runtime responsibilities:
+
+- Parse skills flags.
 - Load and validate profile JSON.
 - Expand `includes`.
 - Merge external skills by source.
 - Validate local skill names.
+- Call `npx skills add` for external skills.
+- Link local skills.
+- Back up and roll back project outputs.
 - Write `.agents/skills-profile.json`.
-- Produce a stable install plan for Bash.
+- Wire final user-scope links.
 
 Profile add/remove helper commands are intentionally out of scope for the first implementation. Edit profile JSON by hand and use `./setup.sh skills profile validate`.
 

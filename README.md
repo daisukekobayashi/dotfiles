@@ -72,7 +72,7 @@ Skill profiles live in `skills/profiles/`.
 
 Custom local skills live in `skills/local/`.
 
-`./setup.sh skills` installs the user-scope `base` profile by default and wires `~/.agents/skills` and `~/.claude/skills` to a dotfiles-managed user skill view. Use project scope to install repository-specific skills:
+`./setup.sh skills` installs the user-scope `base` profile by default and wires `~/.agents/skills` and `~/.claude/skills` to a dotfiles-managed user skill view. The PowerShell entry point `.\setup.ps1 skills` uses the same Node runtime. Use project scope to install repository-specific skills:
 
 ```bash
 ~/.dotfiles/setup.sh skills --scope project --profile office
@@ -84,7 +84,7 @@ Domain profiles such as `office`, `docs`, and `browser` are standalone. Include 
 
 Project scope installs third-party skills with `npx skills add` from the repository root and lets the official CLI manage the repository `skills-lock.json`. Dotfiles local skills are symlinked from `skills/local/` and are not written to `skills-lock.json`.
 
-Profile-based skills setup is implemented in Bash/Node. The PowerShell `skills` subcommand intentionally fails instead of running the old lock-based global restore path.
+Profile-based skills setup is authored in TypeScript and runs through the committed Node runtime at `setup/skills.js`; Bash and PowerShell are thin wrappers around that runtime.
 
 Profiles are edited by hand. Validate them with:
 
@@ -102,6 +102,9 @@ See `docs/skills-profiles.md` for the full design.
 Run setup tests with `bats`.
 
 ```bash
+npm --prefix setup install
+npm --prefix setup run build
+npm --prefix setup test
 bats tests
 ```
 

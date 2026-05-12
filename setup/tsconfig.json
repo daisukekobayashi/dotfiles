@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "rootDir": "src",
+    "outDir": ".",
+    "strict": true,
+    "types": ["node"],
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "files": ["src/skills.ts"]
+}

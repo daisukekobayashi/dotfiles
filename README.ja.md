@@ -72,7 +72,7 @@ Skill profile は `skills/profiles/` に置きます.
 
 独自 local skill は `skills/local/` に置きます.
 
-`./setup.sh skills` はデフォルトで user scope の `base` profile をインストールし, `~/.agents/skills` と `~/.claude/skills` を dotfiles 管理の user skill view へ向けます. リポジトリ固有の skill は project scope でインストールします.
+`./setup.sh skills` はデフォルトで user scope の `base` profile をインストールし, `~/.agents/skills` と `~/.claude/skills` を dotfiles 管理の user skill view へ向けます. PowerShell entry point の `.\setup.ps1 skills` も同じ Node runtime を使います. リポジトリ固有の skill は project scope でインストールします.
 
 ```bash
 ~/.dotfiles/setup.sh skills --scope project --profile office
@@ -84,7 +84,7 @@ Skill profile は `skills/profiles/` に置きます.
 
 Project scope では, リポジトリ root から `npx skills add` で外部 skill をインストールし, 公式 CLI にリポジトリの `skills-lock.json` を管理させます. Dotfiles の local skill は `skills/local/` から symlink し, `skills-lock.json` には書き込みません.
 
-Profile ベースの skills setup は Bash/Node で実装しています。PowerShell の `skills` subcommand は、旧 lock ベースの global restore を実行せず、意図的にエラーで止めます。
+Profile ベースの skills setup は TypeScript で実装し, commit 済み Node runtime の `setup/skills.js` で実行します. Bash と PowerShell はこの runtime への薄い wrapper です.
 
 Profile は手で編集します. 検証は次のコマンドで行います.
 
@@ -102,6 +102,9 @@ Profile は手で編集します. 検証は次のコマンドで行います.
 `setup` スクリプトのテストは `bats` を使います.
 
 ```bash
+npm --prefix setup install
+npm --prefix setup run build
+npm --prefix setup test
 bats tests
 ```
 
