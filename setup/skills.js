@@ -116,15 +116,22 @@ function parseArgs(argv) {
         agents,
     };
 }
-function requireCommand(command) {
-    const checker = process.platform === "win32" ? "where" : "command";
-    const args = process.platform === "win32" ? [command] : ["-v", command];
+function resolveCommand(command, env = process.env) {
     const result = process.platform === "win32"
-        ? (0, node_child_process_1.spawnSync)(checker, args, { stdio: "ignore" })
-        : (0, node_child_process_1.spawnSync)("sh", ["-c", `command -v ${shellQuote(command)}`], { stdio: "ignore" });
+        ? (0, node_child_process_1.spawnSync)("where", [command], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+        : (0, node_child_process_1.spawnSync)("sh", ["-c", `command -v ${shellQuote(command)}`], {
+            env,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+        });
     if (result.status !== 0) {
         fail(`Required command not found: ${command}`);
     }
+    const resolved = result.stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+    if (!resolved) {
+        fail(`Required command not found: ${command}`);
+    }
+    return resolved;
 }
 function shellQuote(value) {
     return `'${value.replace(/'/g, "'\\''")}'`;
@@ -357,6 +364,7 @@ function runCommand(command, args, cwd, env = process.env) {
     const result = (0, node_child_process_1.spawnSync)(command, args, {
         cwd,
         env,
+        shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(command),
         stdio: ["ignore", "inherit", "inherit"],
     });
     if (result.error) {
@@ -423,7 +431,7 @@ function runExternalInstalls(workDir, plan, agents, npmCacheDir) {
     if (plan.external.length === 0) {
         return;
     }
-    requireCommand("npx");
+    const npxCommand = resolveCommand("npx");
     fs.mkdirSync(npmCacheDir, { recursive: true });
     for (const entry of plan.external) {
         const args = ["skills", "add", entry.source, "--copy", "--yes"];
@@ -433,7 +441,7 @@ function runExternalInstalls(workDir, plan, agents, npmCacheDir) {
         for (const skill of entry.skills) {
             args.push("--skill", skill);
         }
-        runCommand("npx", args, workDir, {
+        runCommand(npxCommand, args, workDir, {
             ...process.env,
             NPM_CONFIG_CACHE: npmCacheDir,
         });
@@ -443,7 +451,7 @@ function runUserExternalInstalls(tempInstallDir, restoreSkillsDir, plan, npmCach
     if (plan.external.length === 0) {
         return;
     }
-    requireCommand("npx");
+    const npxCommand = resolveCommand("npx");
     fs.mkdirSync(npmCacheDir, { recursive: true });
     for (const entry of plan.external) {
         removePath(tempInstallDir);
@@ -452,7 +460,7 @@ function runUserExternalInstalls(tempInstallDir, restoreSkillsDir, plan, npmCach
         for (const skill of entry.skills) {
             args.push("--skill", skill);
         }
-        runCommand("npx", args, tempInstallDir, {
+        runCommand(npxCommand, args, tempInstallDir, {
             ...process.env,
             NPM_CONFIG_CACHE: npmCacheDir,
         });
@@ -599,8 +607,8 @@ function rollbackProjectTargets(records) {
     warn("Restored previous project skills after failed install");
 }
 function gitProjectRoot(cwd) {
-    requireCommand("git");
-    const result = (0, node_child_process_1.spawnSync)("git", ["-C", cwd, "rev-parse", "--show-toplevel"], {
+    const gitCommand = resolveCommand("git");
+    const result = (0, node_child_process_1.spawnSync)(gitCommand, ["-C", cwd, "rev-parse", "--show-toplevel"], {
         encoding: "utf8",
     });
     if (result.status !== 0) {

@@ -111,7 +111,57 @@ for skill_name in "\${skills[@]}"; do
   done
 done
 `;
-  await writeExecutable(path.join(bin, "npx"), npxBody);
+  await writeExecutable(path.join(bin, options.npxName ?? "npx"), npxBody);
+
+  if (options.withWindowsWhere) {
+    await writeExecutable(
+      path.join(bin, "where"),
+      `#!/bin/bash
+set -euo pipefail
+command_name="$1"
+IFS=':' read -ra path_entries <<< "\${PATH}"
+for path_entry in "\${path_entries[@]}"; do
+  if [ -x "\${path_entry}/\${command_name}" ]; then
+    printf '%s\\n' "\${path_entry}/\${command_name}"
+    exit 0
+  fi
+  if [ -x "\${path_entry}/\${command_name}.cmd" ]; then
+    printf '%s\\n' "\${path_entry}/\${command_name}.cmd"
+    exit 0
+  fi
+done
+exit 1
+`,
+    );
+    await writeExecutable(
+      path.join(bin, "cmd.exe"),
+      `#!/bin/bash
+set -euo pipefail
+while [ "$#" -gt 0 ]; do
+  case "\${1,,}" in
+    /d|/s)
+      shift
+      ;;
+    /c)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+if [ "$#" -eq 0 ]; then
+  exit 0
+fi
+command_line="$*"
+if [[ "\${command_line}" == \\"*\\" ]]; then
+  command_line="\${command_line:1:\${#command_line}-2}"
+fi
+eval "exec \${command_line}"
+`,
+    );
+  }
 
   spawnSync("git", ["init", "-q"], { cwd: project });
 
@@ -121,7 +171,7 @@ done
     SETUP_HOME: home,
     SETUP_TMPDIR: tmp,
     SETUP_DOTFILES_ROOT: dotfiles,
-    PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+    PATH: options.isolatedPath ? bin : `${bin}${path.delimiter}${process.env.PATH}`,
     TEST_SKILLS_LOG: log,
   };
 
@@ -140,6 +190,21 @@ done
 
 function runSkills(args, fixture, options = {}) {
   return spawnSync(process.execPath, [skillsRuntime, ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: fixture.env,
+    encoding: "utf8",
+  });
+}
+
+function runSkillsAsWindows(args, fixture, options = {}) {
+  const launcher = `
+const runtime = process.argv[1];
+const args = process.argv.slice(2);
+Object.defineProperty(process, "platform", { value: "win32" });
+process.argv = [process.execPath, runtime, ...args];
+require(runtime);
+`;
+  return spawnSync(process.execPath, ["-e", launcher, skillsRuntime, ...args], {
     cwd: options.cwd ?? repoRoot,
     env: fixture.env,
     encoding: "utf8",
@@ -178,6 +243,31 @@ test("user scope builds one managed skill view and links selected user agents", 
     assert.equal(existsSync(path.join(fixture.home, ".claude", "skills")), true);
     assert.equal((await lstat(path.join(fixture.home, ".gemini", "skills"))).isSymbolicLink(), true);
     assert.equal(await readlink(path.join(fixture.home, ".gemini", "skills")), "/tmp/stale-gemini-skills");
+    assert.match(await readText(fixture.log), /skills add vercel-labs\/skills/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows user scope runs npx.cmd when npx resolves through PATHEXT", async () => {
+  const fixture = await createFixture({
+    npxName: "npx.cmd",
+    npxBody: `#!/bin/bash
+set -euo pipefail
+PATH="/bin:\${PATH}"
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+mkdir -p .agents/skills
+printf '{"version":3,"source":"%s"}\\n' "$3" > skills-lock.json
+mkdir -p .agents/skills/find-skills
+printf '%s\\n' "find-skills" > .agents/skills/find-skills/SKILL.md
+`,
+    isolatedPath: true,
+    withWindowsWhere: true,
+  });
+  try {
+    const result = runSkillsAsWindows(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(await readText(fixture.log), /skills add vercel-labs\/skills/);
   } finally {
     await fixture.cleanup();
