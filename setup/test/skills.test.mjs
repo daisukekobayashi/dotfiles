@@ -196,6 +196,26 @@ function runSkills(args, fixture, options = {}) {
   });
 }
 
+function runSkillsWithSymlinkError(args, fixture, options = {}) {
+  const launcher = `
+const fs = require("node:fs");
+fs.symlinkSync = () => {
+  const error = new Error("EPERM: operation not permitted, symlink");
+  error.code = "EPERM";
+  throw error;
+};
+const runtime = process.argv[1];
+const args = process.argv.slice(2);
+process.argv = [process.execPath, runtime, ...args];
+require(runtime);
+`;
+  return spawnSync(process.execPath, ["-e", launcher, skillsRuntime, ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: fixture.env,
+    encoding: "utf8",
+  });
+}
+
 function runSkillsAsWindows(args, fixture, options = {}) {
   const launcher = `
 const runtime = process.argv[1];
@@ -244,6 +264,26 @@ test("user scope builds one managed skill view and links selected user agents", 
     assert.equal((await lstat(path.join(fixture.home, ".gemini", "skills"))).isSymbolicLink(), true);
     assert.equal(await readlink(path.join(fixture.home, ".gemini", "skills")), "/tmp/stale-gemini-skills");
     assert.match(await readText(fixture.log), /skills add vercel-labs\/skills/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("user scope copies skill directories when symlinks are denied", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const restoreLocalSkill = path.join(fixture.dotfiles, ".agents", "user", "skills", "local-one");
+    const homeCodexSkills = path.join(fixture.home, ".agents", "skills");
+    const homeClaudeSkills = path.join(fixture.home, ".claude", "skills");
+    assert.equal(existsSync(path.join(restoreLocalSkill, "SKILL.md")), true);
+    assert.equal(existsSync(path.join(homeCodexSkills, "find-skills", "SKILL.md")), true);
+    assert.equal(existsSync(path.join(homeCodexSkills, "local-one", "SKILL.md")), true);
+    assert.equal(existsSync(path.join(homeClaudeSkills, "local-one", "SKILL.md")), true);
+    assert.equal((await lstat(restoreLocalSkill)).isSymbolicLink(), false);
+    assert.equal((await lstat(homeCodexSkills)).isSymbolicLink(), false);
   } finally {
     await fixture.cleanup();
   }

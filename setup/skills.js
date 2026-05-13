@@ -325,6 +325,18 @@ function isManagedLocalSymlink(targetPath, expectedRoot) {
     const resolvedRoot = normalizePath(expectedRoot);
     return resolvedLinked === resolvedRoot || resolvedLinked.startsWith(`${resolvedRoot}${path.sep}`);
 }
+function isSymlinkPermissionError(error) {
+    const code = error.code;
+    return code === "EPERM" || code === "EACCES";
+}
+function copyPath(sourcePath, targetPath) {
+    removePath(targetPath);
+    fs.cpSync(sourcePath, targetPath, {
+        recursive: true,
+        dereference: true,
+        force: true,
+    });
+}
 function createSymlink(sourcePath, targetPath, expectedRoot) {
     const resolvedSource = normalizePath(sourcePath);
     if (fs.existsSync(targetPath) || fs.existsSync(path.dirname(targetPath)) && getLinkTarget(targetPath) !== null) {
@@ -334,7 +346,16 @@ function createSymlink(sourcePath, targetPath, expectedRoot) {
         removePath(targetPath);
     }
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.symlinkSync(resolvedSource, targetPath, "dir");
+    try {
+        fs.symlinkSync(resolvedSource, targetPath, "dir");
+    }
+    catch (error) {
+        if (!isSymlinkPermissionError(error)) {
+            throw error;
+        }
+        copyPath(resolvedSource, targetPath);
+        warn(`Symlink permission denied for ${targetPath}; copied ${resolvedSource} instead`);
+    }
 }
 function agentSkillDir(root, agent) {
     if (agent === "codex") {

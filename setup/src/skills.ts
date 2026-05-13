@@ -403,6 +403,20 @@ function isManagedLocalSymlink(targetPath: string, expectedRoot: string): boolea
   return resolvedLinked === resolvedRoot || resolvedLinked.startsWith(`${resolvedRoot}${path.sep}`);
 }
 
+function isSymlinkPermissionError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === "EPERM" || code === "EACCES";
+}
+
+function copyPath(sourcePath: string, targetPath: string): void {
+  removePath(targetPath);
+  fs.cpSync(sourcePath, targetPath, {
+    recursive: true,
+    dereference: true,
+    force: true,
+  });
+}
+
 function createSymlink(sourcePath: string, targetPath: string, expectedRoot?: string): void {
   const resolvedSource = normalizePath(sourcePath);
   if (fs.existsSync(targetPath) || fs.existsSync(path.dirname(targetPath)) && getLinkTarget(targetPath) !== null) {
@@ -412,7 +426,15 @@ function createSymlink(sourcePath: string, targetPath: string, expectedRoot?: st
     removePath(targetPath);
   }
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.symlinkSync(resolvedSource, targetPath, "dir");
+  try {
+    fs.symlinkSync(resolvedSource, targetPath, "dir");
+  } catch (error) {
+    if (!isSymlinkPermissionError(error)) {
+      throw error;
+    }
+    copyPath(resolvedSource, targetPath);
+    warn(`Symlink permission denied for ${targetPath}; copied ${resolvedSource} instead`);
+  }
 }
 
 function agentSkillDir(root: string, agent: Agent): string {
