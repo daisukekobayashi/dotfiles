@@ -63,7 +63,7 @@ local function read_template_lines(templates, ctx)
   return lines
 end
 
-local function insert_frontmatter_only_template(templates, ctx)
+local function insert_template_with_unmanaged_frontmatter(templates, ctx)
   local Note = require('obsidian.note')
   local api = require('obsidian.api')
   local buf, win, row, _ = unpack(ctx.location)
@@ -73,7 +73,7 @@ local function insert_frontmatter_only_template(templates, ctx)
 
   local template_lines = read_template_lines(templates, ctx)
   local insert_note = Note.from_lines(template_lines)
-  if not insert_note.has_frontmatter or #insert_note:body_lines() > 0 then
+  if not insert_note.has_frontmatter then
     return nil
   end
 
@@ -82,7 +82,13 @@ local function insert_frontmatter_only_template(templates, ctx)
     error('Failed to get current note for buffer')
   end
 
-  if current_note:should_save_frontmatter() then
+  local should_save_frontmatter = current_note:should_save_frontmatter()
+
+  if should_save_frontmatter then
+    if #insert_note:body_lines() > 0 then
+      return nil
+    end
+
     current_note:merge(insert_note)
     current_note:update_frontmatter(buf)
   else
@@ -94,7 +100,12 @@ local function insert_frontmatter_only_template(templates, ctx)
   end
 
   require('obsidian.ui').update(0)
-  return Note.from_buffer(buf)
+  local note = Note.from_buffer(buf)
+  if not should_save_frontmatter then
+    note.has_frontmatter = false
+    note.frontmatter_end_line = nil
+  end
+  return note
 end
 
 return {
@@ -173,9 +184,9 @@ return {
           end
 
           templates.insert_template = function(ctx)
-            local frontmatter_only_note = insert_frontmatter_only_template(templates, ctx)
-            if frontmatter_only_note then
-              return frontmatter_only_note
+            local unmanaged_frontmatter_note = insert_template_with_unmanaged_frontmatter(templates, ctx)
+            if unmanaged_frontmatter_note then
+              return unmanaged_frontmatter_note
             end
 
             local ok, result = pcall(original_insert_template, ctx)
