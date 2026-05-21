@@ -1,0 +1,11 @@
+[
+  {
+    "icon": "",
+    "title": "Tools...",
+    "category": "Tools",
+    "description": "gitui, btop",
+    "action": {
+      "palette": "tools"
+    }
+  }
+]

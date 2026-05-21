@@ -1,0 +1,22 @@
+{
+  "title": "Tools",
+  "icon": "",
+  "items": [
+    {
+      "icon": "",
+      "title": "gitui",
+      "description": "Git TUI",
+      "action": {
+        "popup": "-d '#{pane_current_path}' gitui"
+      }
+    },
+    {
+      "icon": "",
+      "title": "btop",
+      "description": "Resource monitor",
+      "action": {
+        "popup": "btop"
+      }
+    }
+  ]
+}

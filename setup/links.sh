@@ -13,6 +13,10 @@ setup_links() {
   link_file "${dotfiles_root}/lazygit" "${setup_home}/.config/lazygit" "${dry_run}"
   link_file "${dotfiles_root}/gitui" "${setup_home}/.config/gitui" "${dry_run}"
   link_file "${dotfiles_root}/mcphub" "${setup_home}/.config/mcphub" "${dry_run}"
+  make_directory "${setup_home}/.config/tmux-palette" "${dry_run}"
+  link_file "${dotfiles_root}/tmux/tmux-palette/commands.json" "${setup_home}/.config/tmux-palette/commands.json" "${dry_run}"
+  link_file "${dotfiles_root}/tmux/tmux-palette/theme.json" "${setup_home}/.config/tmux-palette/theme.json" "${dry_run}"
+  link_file "${dotfiles_root}/tmux/tmux-palette/palettes" "${setup_home}/.config/tmux-palette/palettes" "${dry_run}"
 
   make_directory "${setup_home}/.vim/vim/undo" "${dry_run}"
   make_directory "${setup_home}/.vim/vim/tmp" "${dry_run}"

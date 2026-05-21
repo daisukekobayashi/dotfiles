@@ -18,7 +18,7 @@ make_links_fixture_root() {
 
   mkdir -p "${fixture_root}"
 
-  for path in sheldon zsh mise zellij nvim lazygit gitui mcphub codex gemini claude ai-rules ipython; do
+  for path in sheldon zsh mise zellij nvim lazygit gitui mcphub tmux codex gemini claude ai-rules ipython; do
     ln -s "${source_root}/${path}" "${fixture_root}/${path}"
   done
 
@@ -39,9 +39,31 @@ make_links_fixture_root() {
   [ "$status" -eq 0 ]
   [ -L "${TEST_HOME}/.config/nvim" ]
   [ "$(readlink "${TEST_HOME}/.config/nvim")" = "${root}/nvim" ]
+  [ -L "${TEST_HOME}/.config/tmux-palette/commands.json" ]
+  [ "$(readlink "${TEST_HOME}/.config/tmux-palette/commands.json")" = "${root}/tmux/tmux-palette/commands.json" ]
+  [ -L "${TEST_HOME}/.config/tmux-palette/theme.json" ]
+  [ "$(readlink "${TEST_HOME}/.config/tmux-palette/theme.json")" = "${root}/tmux/tmux-palette/theme.json" ]
+  [ -L "${TEST_HOME}/.config/tmux-palette/palettes" ]
+  [ "$(readlink "${TEST_HOME}/.config/tmux-palette/palettes")" = "${root}/tmux/tmux-palette/palettes" ]
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
   [ -f "${TEST_HOME}/.gemini/GEMINI.md" ]
   [ -f "${TEST_HOME}/.claude/CLAUDE.md" ]
+}
+
+@test "links preserves environment-specific tmux-palette sizing config" {
+  mkdir -p "${TEST_HOME}/.config/tmux-palette"
+  printf '{"width":100}\n' > "${TEST_HOME}/.config/tmux-palette/sizing.json"
+
+  run env \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    links
+
+  [ "$status" -eq 0 ]
+  [ -L "${TEST_HOME}/.config/tmux-palette/commands.json" ]
+  [ -L "${TEST_HOME}/.config/tmux-palette/theme.json" ]
+  [ "$(cat "${TEST_HOME}/.config/tmux-palette/sizing.json")" = '{"width":100}' ]
 }
 
 @test "links ignores a repo-local .codex marker file when generating Codex docs" {
