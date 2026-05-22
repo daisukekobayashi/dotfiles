@@ -35,6 +35,12 @@ detect_mise_env() {
   fi
 }
 
+refresh_tmux_path() {
+  if [[ -n "${TMUX:-}" ]] && command -v tmux >/dev/null 2>&1; then
+    tmux set-environment -g PATH "$PATH" >/dev/null 2>&1 || true
+  fi
+}
+
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
@@ -47,8 +53,22 @@ elif [[ "${unamestr}" == 'Linux' ]]; then
   export DOTFILES_PLATFORM="$(detect_platform)"
   export MISE_ENV="$(detect_mise_env)"
   eval "$(~/.local/bin/mise activate zsh)"
+  refresh_tmux_path
+  if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init zsh)"
+  fi
+  if command -v atuin >/dev/null 2>&1; then
+    eval "$(atuin init zsh --disable-up-arrow --disable-ai)"
+  fi
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   export DOTFILES_PLATFORM="$(detect_platform)"
   export MISE_ENV="$(detect_mise_env)"
   eval "$(mise activate zsh)"
+  refresh_tmux_path
+  if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init zsh)"
+  fi
+  if command -v atuin >/dev/null 2>&1; then
+    eval "$(atuin init zsh --disable-up-arrow --disable-ai)"
+  fi
 fi
