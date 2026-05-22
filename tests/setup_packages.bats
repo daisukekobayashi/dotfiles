@@ -195,6 +195,8 @@ EOF
     'gdu = "5.36.1"'
     'dua = "2.34.0"'
     'dust = "1.2.4"'
+    '"aqua:jorgerojas26/lazysql" = "0.5.0"'
+    '"pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }'
   )
 
   for tool in "${mise_tools[@]}"; do
@@ -223,7 +225,7 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done

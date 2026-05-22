@@ -23,6 +23,8 @@ duf = "0.9.1"
 gdu = "5.36.1"
 dua = "2.34.0"
 dust = "1.2.4"
+"aqua:jorgerojas26/lazysql" = "0.5.0"
+"pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }
 github-cli = "2"
 ruff = "0.15"
 uv = "0.10"
