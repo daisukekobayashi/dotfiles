@@ -173,3 +173,26 @@ EOF
   [[ "$output" == *"Continuing despite failed package steps: tmux"* ]]
   [[ "$output" == *"Running post setup..."* ]]
 }
+
+@test "tmux-palette tool dependencies are declared for linux wsl and macos" {
+  run grep -F 'lazydocker = "0.25"' "$(repo_root)/mise/config.linux.toml"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'lazydocker = "0.25"' "$(repo_root)/mise/config.wsl.toml"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'oxker = "0.13"' "$(repo_root)/mise/config.linux.toml"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'oxker = "0.13"' "$(repo_root)/mise/config.wsl.toml"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'brew "btop"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'brew "lazydocker"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'brew "oxker"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -eq 0 ]
+}

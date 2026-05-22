@@ -2,10 +2,19 @@
   {
     "icon": "",
     "title": "gitui",
-    "category": "Tools",
+    "category": "Git",
     "description": "Git TUI",
     "action": {
       "tmux": "display-popup -E -h 80% -w 80% -d '#{pane_current_path}' gitui"
+    }
+  },
+  {
+    "icon": "",
+    "title": "lazygit",
+    "category": "Git",
+    "description": "Git TUI",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 80% -d '#{pane_current_path}' lazygit"
     }
   },
   {
@@ -14,7 +23,52 @@
     "category": "Tools",
     "description": "Resource monitor",
     "action": {
-      "tmux": "display-popup -E -h 80% -w 80% 'mise exec github:aristocratos/btop@1.4 -- btop'"
+      "tmux": "display-popup -E -h 80% -w 80% btop"
+    }
+  },
+  {
+    "icon": "",
+    "title": "lazydocker",
+    "category": "Docker",
+    "description": "Docker TUI",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% lazydocker"
+    }
+  },
+  {
+    "icon": "",
+    "title": "oxker",
+    "category": "Docker",
+    "description": "Docker TUI",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% oxker"
+    }
+  },
+  {
+    "icon": "",
+    "title": "GitHub PRs",
+    "category": "GitHub",
+    "description": "Open pull requests",
+    "action": {
+      "palette": "github-prs"
+    }
+  },
+  {
+    "icon": "",
+    "title": "GitHub Issues",
+    "category": "GitHub",
+    "description": "Open issues",
+    "action": {
+      "palette": "github-issues"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Container Logs",
+    "category": "Docker",
+    "description": "Follow container logs",
+    "action": {
+      "palette": "container-logs"
     }
   }
 ]
