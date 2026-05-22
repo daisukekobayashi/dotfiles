@@ -8,6 +8,17 @@ load 'helpers/test_helper.bash'
   [ "$status" -ne 0 ]
 }
 
+@test "tmux passes terminal identity through for yazi" {
+  run grep -Eq '^set[[:space:]]+-gq?[[:space:]]+allow-passthrough[[:space:]]+on([[:space:]]|$)' "$(repo_root)/.tmux.conf"
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^set[[:space:]]+-ga[[:space:]]+update-environment[[:space:]]+TERM([[:space:]]|$)' "$(repo_root)/.tmux.conf"
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^set[[:space:]]+-ga[[:space:]]+update-environment[[:space:]]+TERM_PROGRAM([[:space:]]|$)' "$(repo_root)/.tmux.conf"
+  [ "$status" -eq 0 ]
+}
+
 @test "tmux-palette opens direct tools from PATH without relaunching palette" {
   run node -e '
 const fs = require("fs");
@@ -18,7 +29,16 @@ if (byTitle.has("Tools...")) {
   throw new Error("Tools submenu should not be required for direct tools");
 }
 
-for (const title of ["gitui", "lazygit", "btop", "lazydocker", "oxker"]) {
+for (const [title, commandPattern] of [
+  ["gitui", /(^|\s)gitui($|\s)/],
+  ["lazygit", /(^|\s)lazygit($|\s)/],
+  ["btop", /(^|\s)btop($|\s)/],
+  ["lazydocker", /(^|\s)lazydocker($|\s)/],
+  ["oxker", /(^|\s)oxker($|\s)/],
+  ["yazi", /(^|[\s/])yazi-popup($|\s)/],
+  ["gh-dash", /(^|\s)gh-dash($|\s)/],
+  ["mprocs", /(^|\s)mprocs($|\s)/],
+]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);
   if (item.action && Object.prototype.hasOwnProperty.call(item.action, "popup")) {
@@ -33,13 +53,81 @@ for (const title of ["gitui", "lazygit", "btop", "lazydocker", "oxker"]) {
   if (item.action.tmux.includes("mise exec")) {
     throw new Error(`${title} should launch from PATH instead of mise exec`);
   }
-  if (!new RegExp(`(^|\\s)${title}($|\\s)`).test(item.action.tmux)) {
-    throw new Error(`${title} action does not call ${title}`);
+  if (!commandPattern.test(item.action.tmux)) {
+    throw new Error(`${title} action does not call the expected executable`);
   }
 }
 ' "$(repo_root)/tmux/tmux-palette/commands.json"
 
   [ "$status" -eq 0 ]
+}
+
+@test "zsh initializes zoxide and atuin when installed" {
+  run grep -F 'zoxide init zsh' "$(repo_root)/zsh/mise.zsh"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'atuin init zsh --disable-up-arrow --disable-ai' "$(repo_root)/zsh/mise.zsh"
+  [ "$status" -eq 0 ]
+}
+
+@test "zsh mise activation refreshes tmux server PATH" {
+  local root fake_home fake_bin log_file
+  root="$(repo_root)"
+  fake_home="${BATS_TEST_TMPDIR}/home"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/tmux.log"
+  mkdir -p "${fake_home}/.local/bin" "${fake_bin}"
+  ln -s "${root}" "${fake_home}/.dotfiles"
+
+  cat > "${fake_home}/.local/bin/mise" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "activate" ]; then
+  printf 'export PATH="/mise/bin:$PATH"\n'
+fi
+EOF
+  chmod +x "${fake_home}/.local/bin/mise"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${TMUX_LOG}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    HOME="${fake_home}" \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    TMUX_LOG="${log_file}" \
+    zsh -c "source '${root}/zsh/mise.zsh'"
+
+  [ "$status" -eq 0 ]
+  run grep -F "set-environment -g PATH /mise/bin:${fake_bin}:/usr/bin:/bin" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "yazi popup wrapper filters terminal response timeout warning only" {
+  local root fake_bin
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/yazi" <<'EOF'
+#!/usr/bin/env bash
+{
+  printf '\033[38;5;9m\033[1m\r\nTerminal response timeout: \033[0m\033[0mThe request sent by Yazi did not receive a correct response.\n'
+  printf 'Please check your terminal environment as per: https://yazi-rs.github.io/docs/faq#trt\n'
+  printf 'real yazi error\n'
+} >&2
+EOF
+  chmod +x "${fake_bin}/yazi"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" "${root}/tmux/bin/yazi-popup"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Terminal response timeout"* ]]
+  [[ "$output" != *"The request sent by Yazi"* ]]
+  [[ "$output" != *"Please check your terminal environment"* ]]
+  [[ "$output" == *"real yazi error"* ]]
 }
 
 @test "tmux-palette provides github and container dynamic palettes" {

@@ -175,17 +175,27 @@ EOF
 }
 
 @test "tmux-palette tool dependencies are declared for linux wsl and macos" {
-  run grep -F 'lazydocker = "0.25"' "$(repo_root)/mise/config.linux.toml"
-  [ "$status" -eq 0 ]
+  local tool
+  local -a mise_tools=(
+    'lazydocker = "0.25"'
+    'oxker = "0.13"'
+    'yazi = "26.5.6"'
+    'fd = "10.4.2"'
+    'bat = "0.26.1"'
+    'zoxide = "0.9.9"'
+    'atuin = "18.16.1"'
+    'delta = "0.19.2"'
+    '"aqua:dlvhdr/gh-dash" = "4.24.1"'
+    'mprocs = "0.9.3"'
+  )
 
-  run grep -F 'lazydocker = "0.25"' "$(repo_root)/mise/config.wsl.toml"
-  [ "$status" -eq 0 ]
+  for tool in "${mise_tools[@]}"; do
+    run grep -F "${tool}" "$(repo_root)/mise/config.linux.toml"
+    [ "$status" -eq 0 ]
 
-  run grep -F 'oxker = "0.13"' "$(repo_root)/mise/config.linux.toml"
-  [ "$status" -eq 0 ]
-
-  run grep -F 'oxker = "0.13"' "$(repo_root)/mise/config.wsl.toml"
-  [ "$status" -eq 0 ]
+    run grep -F "${tool}" "$(repo_root)/mise/config.wsl.toml"
+    [ "$status" -eq 0 ]
+  done
 
   run grep -F 'brew "btop"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
@@ -195,4 +205,12 @@ EOF
 
   run grep -F 'brew "oxker"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
+
+  run grep -F '"aqua:dlvhdr/gh-dash" = "4.24.1"' "$(repo_root)/mise/config.macos.toml"
+  [ "$status" -eq 0 ]
+
+  for tool in yazi fd bat zoxide atuin git-delta mprocs; do
+    run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
+    [ "$status" -eq 0 ]
+  done
 }

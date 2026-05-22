@@ -46,6 +46,33 @@
   },
   {
     "icon": "",
+    "title": "yazi",
+    "category": "Files",
+    "description": "Terminal file manager",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/yazi-popup"
+    }
+  },
+  {
+    "icon": "",
+    "title": "gh-dash",
+    "category": "GitHub",
+    "description": "GitHub dashboard",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' gh-dash"
+    }
+  },
+  {
+    "icon": "",
+    "title": "mprocs",
+    "category": "Tools",
+    "description": "Run project processes",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' mprocs"
+    }
+  },
+  {
+    "icon": "",
     "title": "GitHub PRs",
     "category": "GitHub",
     "description": "Open pull requests",

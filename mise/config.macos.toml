@@ -1,5 +1,6 @@
 [tools]
 r = "4.5.2"
+"aqua:dlvhdr/gh-dash" = "4.24.1"
 
 [env]
 CPPFLAGS = "-I/opt/homebrew/include -I/opt/X11/include"

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+yazi "$@" 2> >(
+  awk '
+    {
+      clean = $0
+      gsub(/\r/, "", clean)
+      gsub(/\033\[[0-9;]*[[:alpha:]]/, "", clean)
+      if (clean == "") next
+      if (clean ~ /Terminal response timeout/) next
+      if (clean ~ /The request sent by Yazi/) next
+      if (clean ~ /Please check your terminal environment/) next
+      print $0 > "/dev/stderr"
+    }
+  '
+)
