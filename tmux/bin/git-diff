@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git -C "${PWD}" rev-parse --show-toplevel 2>/dev/null)" || {
+  printf 'Not a Git repository\n'
+  printf 'Press Enter to close...'
+  read -r _
+  exit 0
+}
+
+cd "${repo_root}"
+
+if git diff --quiet --exit-code -- .; then
+  printf 'No unstaged changes\n'
+  printf 'Press Enter to close...'
+  read -r _
+  exit 0
+fi
+
+git -c core.pager=delta diff -- .

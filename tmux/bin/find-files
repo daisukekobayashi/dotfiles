@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+selected="$(
+  fd --type f --hidden --follow --exclude .git . |
+    fzf \
+      --prompt="files> " \
+      --preview="bat --style=numbers --color=always --line-range :200 {}" \
+      --preview-window="right:60%:wrap"
+)" || exit 0
+
+[ -n "${selected}" ] || exit 0
+"${EDITOR:-vim}" "${selected}"

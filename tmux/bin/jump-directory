@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dir="$(
+  zoxide query -l |
+    fzf --prompt="zoxide> "
+)" || exit 0
+
+[ -n "${dir}" ] || exit 0
+
+if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+  tmux new-window -c "${dir}"
+else
+  cd "${dir}" && exec "${SHELL:-sh}"
+fi

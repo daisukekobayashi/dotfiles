@@ -38,6 +38,10 @@ for (const [title, commandPattern] of [
   ["yazi", /(^|[\s/])yazi-popup($|\s)/],
   ["gh-dash", /(^|\s)gh-dash($|\s)/],
   ["mprocs", /(^|\s)mprocs($|\s)/],
+  ["Find Files", /(^|[\s/])find-files($|\s)/],
+  ["Jump Directory", /(^|[\s/])jump-directory($|\s)/],
+  ["Command History", /(^|\s)atuin search -i($|\s)/],
+  ["Git Diff", /(^|[\s/])git-diff($|\s)/],
 ]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);
@@ -128,6 +132,94 @@ EOF
   [[ "$output" != *"The request sent by Yazi"* ]]
   [[ "$output" != *"Please check your terminal environment"* ]]
   [[ "$output" == *"real yazi error"* ]]
+}
+
+@test "tmux utility wrappers compose fd bat zoxide fzf and delta" {
+  local root fake_bin log_file selected_dir selected_file
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/commands.log"
+  selected_dir="${BATS_TEST_TMPDIR}/project"
+  selected_file="src/main.rs"
+  mkdir -p "${fake_bin}" "${selected_dir}"
+
+  cat > "${fake_bin}/fd" <<EOF
+#!/usr/bin/env bash
+printf 'fd %s\n' "\$*" >> "${log_file}"
+printf '%s\n' "${selected_file}"
+EOF
+  chmod +x "${fake_bin}/fd"
+
+  cat > "${fake_bin}/fzf" <<EOF
+#!/usr/bin/env bash
+printf 'fzf %s\n' "\$*" >> "${log_file}"
+cat >/dev/null
+if [[ "\$*" == *"zoxide"* ]]; then
+  printf '%s\n' "${selected_dir}"
+else
+  printf '%s\n' "${selected_file}"
+fi
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/vim" <<'EOF'
+#!/usr/bin/env bash
+printf 'editor %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/vim"
+
+  cat > "${fake_bin}/zoxide" <<EOF
+#!/usr/bin/env bash
+printf 'zoxide %s\n' "\$*" >> "${log_file}"
+printf '%s\n' "${selected_dir}"
+EOF
+  chmod +x "${fake_bin}/zoxide"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf 'tmux %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  cat > "${fake_bin}/git" <<EOF
+#!/usr/bin/env bash
+printf 'git %s\n' "\$*" >> "${log_file}"
+case "\$*" in
+  *"rev-parse --show-toplevel"*)
+    printf '%s\n' "${selected_dir}"
+    ;;
+  *"diff --quiet --exit-code -- ."*)
+    exit 1
+    ;;
+  *"core.pager=delta diff -- ."*)
+    printf 'diff output\n'
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/git"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" EDITOR=vim LOG_FILE="${log_file}" "${root}/tmux/bin/find-files"
+  [ "$status" -eq 0 ]
+  run grep -F "fd --type f --hidden --follow --exclude .git ." "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "bat --style=numbers --color=always --line-range :200 {}" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "editor ${selected_file}" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" "${root}/tmux/bin/jump-directory"
+  [ "$status" -eq 0 ]
+  run grep -F "zoxide query -l" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "tmux new-window -c ${selected_dir}" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" "${root}/tmux/bin/git-diff"
+  [ "$status" -eq 0 ]
+  run grep -F "git -C" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "git -c core.pager=delta diff -- ." "${log_file}"
+  [ "$status" -eq 0 ]
 }
 
 @test "tmux-palette provides github and container dynamic palettes" {
