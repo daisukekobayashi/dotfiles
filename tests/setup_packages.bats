@@ -187,6 +187,10 @@ EOF
     'delta = "0.19.2"'
     '"aqua:dlvhdr/gh-dash" = "4.24.1"'
     'mprocs = "0.9.3"'
+    'just = "1.51.0"'
+    'watchexec = "2.5.1"'
+    'process-compose = "1.110.0"'
+    '"cargo:pueue" = "4.0.4"'
   )
 
   for tool in "${mise_tools[@]}"; do
@@ -209,7 +213,13 @@ EOF
   run grep -F '"aqua:dlvhdr/gh-dash" = "4.24.1"' "$(repo_root)/mise/config.macos.toml"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs; do
+  run grep -F 'tap "f1bonacc1/tap"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -eq 0 ]
+
+  run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -eq 0 ]
+
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done
