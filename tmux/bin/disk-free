@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf '\nPress Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v duf >/dev/null 2>&1; then
+  printf 'duf is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+set +e
+duf "$@"
+status="$?"
+set -e
+
+pause
+exit "${status}"
