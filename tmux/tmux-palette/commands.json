@@ -82,6 +82,24 @@
   },
   {
     "icon": "",
+    "title": "Database Client",
+    "category": "Database",
+    "description": "Open lazysql database TUI",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' lazysql"
+    }
+  },
+  {
+    "icon": "",
+    "title": "SQL IDE",
+    "category": "Database",
+    "description": "Open Harlequin SQL IDE",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' harlequin"
+    }
+  },
+  {
+    "icon": "",
     "title": "lazydocker",
     "category": "Docker",
     "description": "Docker TUI",
