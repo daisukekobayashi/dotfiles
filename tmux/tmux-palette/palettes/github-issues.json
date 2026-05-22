@@ -1,0 +1,5 @@
+{
+  "title": "GitHub Issues",
+  "emptyText": "No open issues",
+  "command": "pane_path=$(tmux display-message -p '#{pane_current_path}'); repo_root=$(git -C \"$pane_path\" rev-parse --show-toplevel 2>/dev/null) || { printf '[{\"icon\":\"\",\"title\":\"Not a Git repository\",\"description\":\"Open tmux-palette from a Git worktree\",\"action\":{\"shell\":\":\"}}]\\n'; exit 0; }; cd \"$repo_root\" && gh issue list --limit 50 --json number,title,state,labels,author --jq '[.[] | {icon: \"\", title: (\"#\" + (.number|tostring) + \" \" + .title), description: ((([.labels[].name] | join(\", \")) // \"\") + (if .author.login then \" by \" + .author.login else \"\" end)), action: {shell: (\"gh issue view \" + (.number|tostring) + \" --web\")}}]'"
+}

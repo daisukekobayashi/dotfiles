@@ -1,0 +1,8 @@
+{
+  "title": "Container Logs",
+  "emptyText": "No running containers",
+  "command": "docker ps --format '{{.Names}}'",
+  "action": {
+    "tmux": "display-popup -E -h 80% -w 80% docker logs -f --tail 200 {}"
+  }
+}
