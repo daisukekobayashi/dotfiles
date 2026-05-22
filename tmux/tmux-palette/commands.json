@@ -19,6 +19,15 @@
   },
   {
     "icon": "",
+    "title": "Git Diff",
+    "category": "Git",
+    "description": "View unstaged diff with delta",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/git-diff"
+    }
+  },
+  {
+    "icon": "",
     "title": "btop",
     "category": "Tools",
     "description": "Resource monitor",
@@ -51,6 +60,33 @@
     "description": "Terminal file manager",
     "action": {
       "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/yazi-popup"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Find Files",
+    "category": "Files",
+    "description": "fd + fzf with bat preview",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/find-files"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Jump Directory",
+    "category": "Navigation",
+    "description": "Open a zoxide directory in a new tmux window",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 80% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/jump-directory"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Command History",
+    "category": "Shell",
+    "description": "Search shell history with Atuin",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 80% -d '#{pane_current_path}' atuin search -i"
     }
   },
   {
