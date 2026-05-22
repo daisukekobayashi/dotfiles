@@ -1,0 +1,95 @@
+# shellcheck shell=bash
+
+add_project_command() {
+  local label="$1"
+  local command="$2"
+
+  printf '%s\t%s\n' "${label}" "${command}"
+}
+
+has_any_file() {
+  local path
+
+  for path in "$@"; do
+    [ -e "${path}" ] && return 0
+  done
+
+  return 1
+}
+
+print_project_commands() {
+  local item
+
+  if command -v mise >/dev/null 2>&1; then
+    while IFS= read -r item; do
+      [ -n "${item}" ] && add_project_command "mise ${item}" "mise run ${item}"
+    done < <(mise tasks ls --no-header 2>/dev/null | awk 'NF {print $1}')
+  fi
+
+  if has_any_file justfile Justfile && command -v just >/dev/null 2>&1; then
+    for item in $(just --summary 2>/dev/null); do
+      [ -n "${item}" ] && add_project_command "just ${item}" "just ${item}"
+    done
+  fi
+
+  if has_any_file Makefile makefile GNUmakefile && command -v make >/dev/null 2>&1; then
+    while IFS= read -r item; do
+      [ -n "${item}" ] && add_project_command "make ${item}" "make ${item}"
+    done < <(
+      make -qp -rR 2>/dev/null |
+        awk -F: '/^[A-Za-z0-9][A-Za-z0-9_.\/-]*:([^=]|$)/ { if ($1 !~ /^\.|%/) print $1 }' |
+        sort -u
+    )
+  fi
+
+  if [ -f package.json ] && command -v node >/dev/null 2>&1; then
+    while IFS= read -r item; do
+      [ -n "${item}" ] && add_project_command "npm ${item}" "npm run ${item}"
+    done < <(
+      node -e '
+const fs = require("fs");
+const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+for (const name of Object.keys(pkg.scripts || {})) console.log(name);
+' 2>/dev/null
+    )
+  fi
+
+  if has_any_file pyproject.toml pytest.ini setup.cfg tox.ini || [ -d tests ]; then
+    add_project_command "python pytest" "python -m pytest"
+  fi
+
+  if [ -f app.py ] && command -v streamlit >/dev/null 2>&1; then
+    add_project_command "streamlit app.py" "streamlit run app.py"
+  fi
+
+  if [ -f streamlit_app.py ] && command -v streamlit >/dev/null 2>&1; then
+    add_project_command "streamlit streamlit_app.py" "streamlit run streamlit_app.py"
+  fi
+
+  if has_any_file compose.yml compose.yaml docker-compose.yml docker-compose.yaml && command -v docker >/dev/null 2>&1; then
+    add_project_command "docker compose ps" "docker compose ps"
+    add_project_command "docker compose logs" "docker compose logs -f --tail 200"
+    add_project_command "docker compose up -d" "docker compose up -d"
+    add_project_command "docker compose down" "docker compose down"
+    add_project_command "docker compose restart" "docker compose restart"
+  fi
+}
+
+select_project_command() {
+  local prompt="${1:-commands> }"
+  local selected
+
+  selected="$(
+    print_project_commands |
+      awk '!seen[$0]++' |
+      fzf \
+        --prompt="${prompt}" \
+        --delimiter=$'\t' \
+        --with-nth=1 \
+        --preview='printf "%s\n" {2}' \
+        --preview-window='down:3:wrap'
+  )" || return 1
+
+  [ -n "${selected}" ] || return 1
+  printf '%s\n' "${selected#*$'\t'}"
+}

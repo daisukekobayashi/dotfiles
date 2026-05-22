@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+if [ -f process-compose.yaml ] || [ -f process-compose.yml ]; then
+  if command -v process-compose >/dev/null 2>&1; then
+    exec process-compose up
+  fi
+
+  printf 'process-compose is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+if [ -f mprocs.yaml ] || [ -f mprocs.yml ] || [ -f mprocs.json ]; then
+  if command -v mprocs >/dev/null 2>&1; then
+    exec mprocs
+  fi
+
+  printf 'mprocs is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+if [ -f package.json ] && command -v mprocs >/dev/null 2>&1; then
+  exec mprocs --npm
+fi
+
+if [ -f Procfile ] && command -v mprocs >/dev/null 2>&1; then
+  exec mprocs --procfile
+fi
+
+printf 'No process-compose.yaml, mprocs.yaml, package.json, or Procfile found\n'
+pause

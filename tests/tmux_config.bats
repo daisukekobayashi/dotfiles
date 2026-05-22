@@ -42,6 +42,10 @@ for (const [title, commandPattern] of [
   ["Jump Directory", /(^|[\s/])jump-directory($|\s)/],
   ["Command History", /(^|\s)atuin search -i($|\s)/],
   ["Git Diff", /(^|[\s/])git-diff($|\s)/],
+  ["Project Commands", /(^|[\s/])project-command($|\s)/],
+  ["Watch Command", /(^|[\s/])watch-command($|\s)/],
+  ["Project Services", /(^|[\s/])project-services($|\s)/],
+  ["Background Jobs", /(^|[\s/])background-jobs($|\s)/],
 ]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);
@@ -63,6 +67,180 @@ for (const [title, commandPattern] of [
 }
 ' "$(repo_root)/tmux/tmux-palette/commands.json"
 
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux project command wrappers discover commands and run selected actions" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/commands.log"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}/tests"
+  touch "${project_dir}/app.py" "${project_dir}/compose.yml"
+  printf '{}\n' > "${project_dir}/package.json"
+  printf 'build:\n\t@true\n' > "${project_dir}/Makefile"
+  printf '[project]\nname = "demo"\n' > "${project_dir}/pyproject.toml"
+  printf 'default:\n\ttrue\n' > "${project_dir}/justfile"
+
+  cat > "${fake_bin}/mise" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "tasks" ] && [ "$2" = "ls" ]; then
+  printf 'setup    bootstrap project\n'
+fi
+EOF
+  chmod +x "${fake_bin}/mise"
+
+  cat > "${fake_bin}/just" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "--summary" ]; then
+  printf 'serve lint\n'
+fi
+EOF
+  chmod +x "${fake_bin}/just"
+
+  cat > "${fake_bin}/make" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *"-qp"* ]]; then
+  printf 'build:\n'
+  printf 'test:\n'
+fi
+EOF
+  chmod +x "${fake_bin}/make"
+
+  cat > "${fake_bin}/node" <<'EOF'
+#!/usr/bin/env bash
+printf 'build\nstart\n'
+EOF
+  chmod +x "${fake_bin}/node"
+
+  cat > "${fake_bin}/streamlit" <<'EOF'
+#!/usr/bin/env bash
+printf 'streamlit %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/streamlit"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+printf 'docker %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  cat > "${fake_bin}/npm" <<'EOF'
+#!/usr/bin/env bash
+printf 'npm %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/npm"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+cat > "${FZF_INPUT}"
+case "${FZF_CHOICE}" in
+  watch)
+    printf 'make build\tmake build\n'
+    ;;
+  *)
+    printf 'npm build\tnpm run build\n'
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/watchexec" <<'EOF'
+#!/usr/bin/env bash
+printf 'watchexec %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/watchexec"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    FZF_INPUT="${BATS_TEST_TMPDIR}/project-command-items" \
+    bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/project-command'"
+  [ "$status" -eq 0 ]
+  run grep -F $'mise setup\tmise run setup' "${BATS_TEST_TMPDIR}/project-command-items"
+  [ "$status" -eq 0 ]
+  run grep -F $'just serve\tjust serve' "${BATS_TEST_TMPDIR}/project-command-items"
+  [ "$status" -eq 0 ]
+  run grep -F $'make build\tmake build' "${BATS_TEST_TMPDIR}/project-command-items"
+  [ "$status" -eq 0 ]
+  run grep -F $'npm build\tnpm run build' "${BATS_TEST_TMPDIR}/project-command-items"
+  [ "$status" -eq 0 ]
+  run grep -F $'python pytest\tpython -m pytest' "${BATS_TEST_TMPDIR}/project-command-items"
+  [ "$status" -eq 0 ]
+  run grep -F $'streamlit app.py\tstreamlit run app.py' "${BATS_TEST_TMPDIR}/project-command-items"
+  [ "$status" -eq 0 ]
+  run grep -F $'docker compose up -d\tdocker compose up -d' "${BATS_TEST_TMPDIR}/project-command-items"
+  [ "$status" -eq 0 ]
+  run grep -F "npm run build" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    FZF_INPUT="${BATS_TEST_TMPDIR}/watch-command-items" \
+    FZF_CHOICE=watch \
+    bash -c "cd '${project_dir}' && '${root}/tmux/bin/watch-command'"
+  [ "$status" -eq 0 ]
+  run grep -F "watchexec --clear --restart -- make build" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux project service and background job wrappers manage long-running commands" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/services.log"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+  printf 'version: "0.5"\nprocesses: {}\n' > "${project_dir}/process-compose.yaml"
+
+  cat > "${fake_bin}/process-compose" <<'EOF'
+#!/usr/bin/env bash
+printf 'process-compose %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/process-compose"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf 'Add Command\n'
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/pueue" <<'EOF'
+#!/usr/bin/env bash
+printf 'pueue %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "status" ] && [ ! -f "${PUEUE_READY}" ]; then
+  exit 1
+fi
+EOF
+  chmod +x "${fake_bin}/pueue"
+
+  cat > "${fake_bin}/pueued" <<'EOF'
+#!/usr/bin/env bash
+printf 'pueued %s\n' "$*" >> "${LOG_FILE}"
+touch "${PUEUE_READY}"
+EOF
+  chmod +x "${fake_bin}/pueued"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_dir}' && '${root}/tmux/bin/project-services'"
+  [ "$status" -eq 0 ]
+  run grep -F "process-compose up" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    PUEUE_READY="${BATS_TEST_TMPDIR}/pueue-ready" \
+    bash -c "printf 'npm run dev\n\n' | '${root}/tmux/bin/background-jobs'"
+  [ "$status" -eq 0 ]
+  run grep -F "pueued -d" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "pueue add -- npm run dev" "${log_file}"
   [ "$status" -eq 0 ]
 }
 

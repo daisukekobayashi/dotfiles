@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tmux/bin/project-commands-lib
+source "${script_dir}/project-commands-lib"
+
+command_line="$(select_project_command 'watch> ')" || exit 0
+
+printf 'Watching: %s\n' "${command_line}"
+exec watchexec --clear --restart -- "${command_line}"

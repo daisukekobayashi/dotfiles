@@ -109,6 +109,42 @@
   },
   {
     "icon": "",
+    "title": "Project Commands",
+    "category": "Project",
+    "description": "Run make, npm, mise, just, Python, Streamlit, or Docker commands",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/project-command"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Watch Command",
+    "category": "Project",
+    "description": "Re-run a project command with watchexec",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/watch-command"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Project Services",
+    "category": "Project",
+    "description": "Open process-compose or mprocs for long-running services",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/project-services"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Background Jobs",
+    "category": "Project",
+    "description": "Manage long-running commands with pueue",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 80% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/background-jobs"
+    }
+  },
+  {
+    "icon": "",
     "title": "GitHub PRs",
     "category": "GitHub",
     "description": "Open pull requests",

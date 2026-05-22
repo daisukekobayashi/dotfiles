@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+ensure_pueue_daemon() {
+  if ! command -v pueue >/dev/null 2>&1; then
+    printf 'pueue is not installed or not on PATH\n'
+    return 1
+  fi
+
+  if pueue status >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! command -v pueued >/dev/null 2>&1; then
+    printf 'pueued is not installed or not on PATH\n'
+    return 1
+  fi
+
+  pueued -d >/dev/null 2>&1 || {
+    printf 'Failed to start pueued\n'
+    return 1
+  }
+
+  sleep 0.2
+  pueue status >/dev/null 2>&1
+}
+
+ensure_pueue_daemon || {
+  pause
+  exit 0
+}
+
+choice="$(
+  printf '%s\n' \
+    'Status' \
+    'Add Command' \
+    'Follow Task' \
+    'Kill Task' \
+    'Shutdown Daemon' |
+    fzf --prompt='pueue> '
+)" || exit 0
+
+case "${choice}" in
+  'Status')
+    pueue status
+    pause
+    ;;
+  'Add Command')
+    printf 'command> '
+    read -r command_line || exit 0
+    [ -n "${command_line}" ] || exit 0
+    pueue add -- "${command_line}"
+    pueue status
+    pause
+    ;;
+  'Follow Task')
+    printf 'task id> '
+    read -r task_id || exit 0
+    [ -n "${task_id}" ] || exit 0
+    exec pueue follow "${task_id}"
+    ;;
+  'Kill Task')
+    printf 'task id> '
+    read -r task_id || exit 0
+    [ -n "${task_id}" ] || exit 0
+    pueue kill "${task_id}"
+    pueue status
+    pause
+    ;;
+  'Shutdown Daemon')
+    pueue shutdown
+    pause
+    ;;
+esac

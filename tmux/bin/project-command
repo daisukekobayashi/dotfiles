@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tmux/bin/project-commands-lib
+source "${script_dir}/project-commands-lib"
+
+command_line="$(select_project_command 'run> ')" || exit 0
+
+printf 'Running: %s\n\n' "${command_line}"
+set +e
+"${SHELL:-sh}" -lc "${command_line}"
+status="$?"
+set -e
+
+printf '\nExit status: %s\n' "${status}"
+printf 'Press Enter to close...'
+read -r _ || true
+exit "${status}"
