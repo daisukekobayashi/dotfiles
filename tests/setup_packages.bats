@@ -191,6 +191,10 @@ EOF
     'watchexec = "2.5.1"'
     'process-compose = "1.110.0"'
     '"cargo:pueue" = "4.0.4"'
+    'duf = "0.9.1"'
+    'gdu = "5.36.1"'
+    'dua = "2.34.0"'
+    'dust = "1.2.4"'
   )
 
   for tool in "${mise_tools[@]}"; do
@@ -219,7 +223,7 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done

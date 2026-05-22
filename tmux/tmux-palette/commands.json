@@ -37,6 +37,51 @@
   },
   {
     "icon": "",
+    "title": "Disk Free",
+    "category": "Storage",
+    "description": "Show mounted filesystems and free space with duf",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 90% ~/.dotfiles/tmux/bin/disk-free"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Disk Usage",
+    "category": "Storage",
+    "description": "Analyze current directory with gdu",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' gdu ."
+    }
+  },
+  {
+    "icon": "",
+    "title": "Disk Usage Home",
+    "category": "Storage",
+    "description": "Analyze home directory with gdu",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% gdu ~"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Disk Cleanup",
+    "category": "Storage",
+    "description": "Explore and clean current directory with dua",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' dua interactive ."
+    }
+  },
+  {
+    "icon": "",
+    "title": "Disk Tree",
+    "category": "Storage",
+    "description": "Show current directory disk tree with dust",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/disk-tree"
+    }
+  },
+  {
+    "icon": "",
     "title": "lazydocker",
     "category": "Docker",
     "description": "Docker TUI",

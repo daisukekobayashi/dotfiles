@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf '\nPress Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v dust >/dev/null 2>&1; then
+  printf 'dust is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+target="${1:-.}"
+
+set +e
+dust "${target}"
+status="$?"
+set -e
+
+pause
+exit "${status}"

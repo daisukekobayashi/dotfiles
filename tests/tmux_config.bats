@@ -46,6 +46,11 @@ for (const [title, commandPattern] of [
   ["Watch Command", /(^|[\s/])watch-command($|\s)/],
   ["Project Services", /(^|[\s/])project-services($|\s)/],
   ["Background Jobs", /(^|[\s/])background-jobs($|\s)/],
+  ["Disk Free", /(^|[\s/])disk-free($|\s)/],
+  ["Disk Usage", /(^|\s)gdu \.($|\s)/],
+  ["Disk Usage Home", /(^|\s)gdu ~($|\s)/],
+  ["Disk Cleanup", /(^|\s)dua interactive \.($|\s)/],
+  ["Disk Tree", /(^|[\s/])disk-tree($|\s)/],
 ]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);
@@ -67,6 +72,42 @@ for (const [title, commandPattern] of [
 }
 ' "$(repo_root)/tmux/tmux-palette/commands.json"
 
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux disk wrappers keep one-shot disk output visible" {
+  local root fake_bin log_file
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/disk.log"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/duf" <<'EOF'
+#!/usr/bin/env bash
+printf 'duf %s\n' "$*" >> "${LOG_FILE}"
+printf 'duf output\n'
+EOF
+  chmod +x "${fake_bin}/duf"
+
+  cat > "${fake_bin}/dust" <<'EOF'
+#!/usr/bin/env bash
+printf 'dust %s\n' "$*" >> "${LOG_FILE}"
+printf 'dust output\n'
+EOF
+  chmod +x "${fake_bin}/dust"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "printf '\n' | '${root}/tmux/bin/disk-free'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"duf output"* ]]
+  [[ "$output" == *"Press Enter to close..."* ]]
+  run grep -F "duf " "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "printf '\n' | '${root}/tmux/bin/disk-tree'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"dust output"* ]]
+  [[ "$output" == *"Press Enter to close..."* ]]
+  run grep -F "dust ." "${log_file}"
   [ "$status" -eq 0 ]
 }
 
