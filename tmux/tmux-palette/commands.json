@@ -1,11 +1,20 @@
 [
   {
     "icon": "",
-    "title": "Tools...",
+    "title": "gitui",
     "category": "Tools",
-    "description": "gitui, btop",
+    "description": "Git TUI",
     "action": {
-      "palette": "tools"
+      "tmux": "display-popup -E -h 80% -w 80% -d '#{pane_current_path}' gitui"
+    }
+  },
+  {
+    "icon": "",
+    "title": "btop",
+    "category": "Tools",
+    "description": "Resource monitor",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 80% 'mise exec github:aristocratos/btop@1.4 -- btop'"
     }
   }
 ]
