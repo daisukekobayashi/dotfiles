@@ -227,7 +227,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step installs posting with uv tool" {
+@test "post step installs uv-managed cli tools" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
@@ -279,9 +279,12 @@ EOF
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Installing uv tool: posting"* ]]
+  [[ "$output" == *"Installing uv tool: nvitop"* ]]
   run grep -F "uv tool list" "${log_file}"
   [ "$status" -eq 0 ]
   run grep -F "uv tool install --python 3.13 posting" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "uv tool install --python 3.13 nvitop" "${log_file}"
   [ "$status" -eq 0 ]
 }
 

@@ -33,6 +33,8 @@ for (const [title, commandPattern] of [
   ["gitui", /(^|\s)gitui($|\s)/],
   ["lazygit", /(^|\s)lazygit($|\s)/],
   ["btop", /(^|\s)btop($|\s)/],
+  ["nvtop", /(^|\s)nvtop($|\s)/],
+  ["nvitop", /(^|\s)nvitop --readonly($|\s)/],
   ["lazydocker", /(^|\s)lazydocker($|\s)/],
   ["oxker", /(^|\s)oxker($|\s)/],
   ["yazi", /(^|[\s/])yazi-popup($|\s)/],
