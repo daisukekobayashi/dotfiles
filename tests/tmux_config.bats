@@ -53,6 +53,7 @@ for (const [title, commandPattern] of [
   ["Disk Tree", /(^|[\s/])disk-tree($|\s)/],
   ["Database Client", /(^|\s)lazysql($|\s)/],
   ["SQL IDE", /(^|\s)harlequin($|\s)/],
+  ["Markdown Viewer", /(^|\s)glow($|\s)/],
 ]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);

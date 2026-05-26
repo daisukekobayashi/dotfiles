@@ -197,6 +197,7 @@ EOF
     'dust = "1.2.4"'
     '"aqua:jorgerojas26/lazysql" = "0.5.0"'
     '"pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }'
+    'glow = "2.1.2"'
   )
 
   for tool in "${mise_tools[@]}"; do
@@ -219,13 +220,16 @@ EOF
   run grep -F '"aqua:dlvhdr/gh-dash" = "4.24.1"' "$(repo_root)/mise/config.macos.toml"
   [ "$status" -eq 0 ]
 
+  run grep -F 'glow = "2.1.2"' "$(repo_root)/mise/config.macos.toml"
+  [ "$status" -ne 0 ]
+
   run grep -F 'tap "f1bonacc1/tap"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done

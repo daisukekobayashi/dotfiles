@@ -100,6 +100,15 @@
   },
   {
     "icon": "",
+    "title": "Markdown Viewer",
+    "category": "Docs",
+    "description": "Browse Markdown files with Glow",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' glow"
+    }
+  },
+  {
+    "icon": "",
     "title": "lazydocker",
     "category": "Docker",
     "description": "Docker TUI",
