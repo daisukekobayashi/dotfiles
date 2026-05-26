@@ -2,7 +2,7 @@
 
 is_supported_package() {
   case "$1" in
-    sheldon | mise | alacritty | tmux | luarocks | quarto)
+    sheldon | mise | alacritty | tmux | luarocks | quarto | nvtop)
       return 0
       ;;
     *)
@@ -25,7 +25,7 @@ validate_package_csv() {
     [ -z "${item}" ] && continue
     if ! is_supported_package "${item}"; then
       log_error "Unknown package in --${label}: ${item}"
-      log_error "Supported packages: sheldon,mise,alacritty,tmux,luarocks,quarto"
+      log_error "Supported packages: sheldon,mise,alacritty,tmux,luarocks,quarto,nvtop"
       return 1
     fi
   done
@@ -274,6 +274,67 @@ install_quarto_linux_amd64() {
   rm -f "${quarto_tarball}"
 }
 
+current_nvtop_version() {
+  local -a version_cmd=(nvtop --version)
+
+  if command_exists nvtop; then
+    if command_exists timeout; then
+      version_cmd=(timeout 2 "${version_cmd[@]}")
+    fi
+    { "${version_cmd[@]}" 2>/dev/null || true; } | awk '/nvtop version/ { print $3; exit }'
+  fi
+}
+
+install_nvtop_linux_amd64() {
+  local setup_home="$1"
+  local setup_tmpdir="$2"
+  local dry_run="$3"
+  local current_version
+  local appimage_path
+  local install_parent
+  local install_dir
+  local wrapper_path
+  local work_dir
+
+  current_version="$(current_nvtop_version)"
+  if [ "${current_version}" = "${NVTOP_VERSION}" ]; then
+    return 0
+  fi
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN install nvtop ${NVTOP_VERSION}"
+    return 0
+  fi
+
+  make_directory "${setup_home}/.local/bin"
+  install_parent="${setup_home}/.local/share"
+  install_dir="${install_parent}/nvtop-${NVTOP_VERSION}"
+  wrapper_path="${setup_home}/.local/bin/nvtop"
+  work_dir="${setup_tmpdir}/nvtop-${NVTOP_VERSION}"
+  appimage_path="${work_dir}/nvtop-${NVTOP_VERSION}-x86_64.AppImage"
+
+  rm -rf "${work_dir}"
+  mkdir -p "${work_dir}" "${install_parent}"
+
+  curl -fLo "${appimage_path}" "https://github.com/Syllo/nvtop/releases/download/${NVTOP_VERSION}/nvtop-${NVTOP_VERSION}-x86_64.AppImage"
+  chmod +x "${appimage_path}"
+
+  (
+    cd "${work_dir}" &&
+      "${appimage_path}" --appimage-extract >/dev/null
+  )
+
+  rm -rf "${install_dir}"
+  cp -R "${work_dir}/squashfs-root" "${install_dir}"
+  rm -f "${wrapper_path}"
+  cat > "${wrapper_path}" <<EOF
+#!/usr/bin/env bash
+exec "${install_dir}/AppRun" "\$@"
+EOF
+  chmod +x "${wrapper_path}"
+  rm -rf "${work_dir}"
+}
+
 setup_packages_linux() {
   local dotfiles_root="$1"
   local setup_home="$2"
@@ -284,7 +345,7 @@ setup_packages_linux() {
   local archstr="$7"
   local package_name
   local step_status
-  local package_order=(sheldon mise alacritty tmux luarocks quarto)
+  local package_order=(sheldon mise alacritty tmux luarocks quarto nvtop)
   local -a failed_packages=()
 
   for package_name in "${package_order[@]}"; do
@@ -316,6 +377,13 @@ setup_packages_linux() {
           install_quarto_linux_amd64 "${setup_home}" "${setup_tmpdir}" "${dry_run}" || step_status=$?
         else
           log_warn "Skipping quarto because architecture is not x86_64: ${archstr}"
+        fi
+        ;;
+      nvtop)
+        if [[ "${archstr}" == "x86_64" ]]; then
+          install_nvtop_linux_amd64 "${setup_home}" "${setup_tmpdir}" "${dry_run}" || step_status=$?
+        else
+          log_warn "Skipping nvtop because architecture is not x86_64: ${archstr}"
         fi
         ;;
     esac

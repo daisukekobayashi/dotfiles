@@ -118,6 +118,7 @@ install_mise_tools() {
 list_uv_tool_specs() {
   cat <<'EOF'
 posting|--python 3.13
+nvitop|--python 3.13
 EOF
 }
 

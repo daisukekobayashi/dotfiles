@@ -37,6 +37,24 @@
   },
   {
     "icon": "",
+    "title": "nvtop",
+    "category": "GPU",
+    "description": "GPU process monitor",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 90% nvtop"
+    }
+  },
+  {
+    "icon": "",
+    "title": "nvitop",
+    "category": "GPU",
+    "description": "NVIDIA GPU process monitor",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 90% nvitop --readonly"
+    }
+  },
+  {
+    "icon": "",
     "title": "Disk Free",
     "category": "Storage",
     "description": "Show mounted filesystems and free space with duf",
