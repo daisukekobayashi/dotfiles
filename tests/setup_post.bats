@@ -227,6 +227,64 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+@test "post step installs posting with uv tool" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local log_file="${TEST_ROOT}/commands.log"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
+    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  : > "${TEST_HOME}/.vim/autoload/plug.vim"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+  cat > "${fake_bin}/uv" <<'EOF'
+#!/usr/bin/env bash
+set -eu
+printf 'uv %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "tool" ] && [ "$2" = "list" ]; then
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "${fake_bin}/uv"
+
+  cat > "${fake_bin}/git" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/git"
+
+  cat > "${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/curl"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    post
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Installing uv tool: posting"* ]]
+  run grep -F "uv tool list" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "uv tool install --python 3.13 posting" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
 @test "linux and wsl mise configs install btop through github backend" {
   run grep -F 'btop = "1.4"' "$(repo_root)/mise/config.linux.toml" "$(repo_root)/mise/config.wsl.toml"
   [ "$status" -ne 0 ]
