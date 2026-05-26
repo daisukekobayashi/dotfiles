@@ -362,14 +362,20 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy wireshark; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done
 
+  run grep -F 'brew "wireshark"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -ne 0 ]
+
   run grep -F 'brew "termshark"' "$(repo_root)/brew/Brewfile"
   [ "$status" -ne 0 ]
 
-  run grep -F 'cask "wireshark-chmodbpf"' "$(repo_root)/brew/Brewfile"
+  run grep -F 'cask "wireshark-app"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
+
+  run grep -F 'cask "wireshark-chmodbpf"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -ne 0 ]
 }

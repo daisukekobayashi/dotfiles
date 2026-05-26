@@ -137,7 +137,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "tmux network packet wrapper explains macOS ChmodBPF setup" {
+@test "tmux network packet wrapper explains macOS Wireshark app setup" {
   local root fake_bin log_file
   root="$(repo_root)"
   fake_bin="${BATS_TEST_TMPDIR}/bin"
@@ -167,7 +167,7 @@ EOF
   run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "printf '\n' | '${root}/tmux/bin/network-packets'"
   [ "$status" -eq 1 ]
   [[ "$output" == *"capture permission denied"* ]]
-  [[ "$output" == *"brew install --cask wireshark-chmodbpf"* ]]
+  [[ "$output" == *"brew install --cask wireshark-app"* ]]
   [[ "$output" == *"Press Enter to close..."* ]]
   run grep -F "termshark " "${log_file}"
   [ "$status" -eq 0 ]
@@ -208,7 +208,7 @@ EOF
 
   run env PATH="${fake_bin}:/usr/bin:/bin" bash -c "printf '\n' | '${root}/tmux/bin/network-bandwidth'"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"brew install --cask wireshark-chmodbpf"* ]]
+  [[ "$output" == *"brew install --cask wireshark-app"* ]]
   [[ "$output" != *"setcap"* ]]
 
   run env PATH="${fake_bin}:/usr/bin:/bin" bash -c "printf '\n' | '${root}/tmux/bin/network-trace'"
