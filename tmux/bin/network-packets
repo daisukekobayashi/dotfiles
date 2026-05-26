@@ -16,8 +16,7 @@ print_permission_hint() {
   case "${platform}" in
     Darwin)
       printf '\nFor live capture on macOS, install Wireshark BPF permissions:\n'
-      printf '  brew install wireshark\n'
-      printf '  brew install --cask wireshark-chmodbpf\n'
+      printf '  brew install --cask wireshark-app\n'
       printf 'Then restart your terminal or tmux server.\n'
       ;;
     Linux)
