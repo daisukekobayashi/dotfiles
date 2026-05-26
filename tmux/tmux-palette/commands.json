@@ -109,6 +109,24 @@
   },
   {
     "icon": "",
+    "title": "Posting",
+    "category": "API",
+    "description": "Open Posting API client",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' posting"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Resterm",
+    "category": "API",
+    "description": "Open Resterm API client",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' resterm"
+    }
+  },
+  {
+    "icon": "",
     "title": "lazydocker",
     "category": "Docker",
     "description": "Docker TUI",

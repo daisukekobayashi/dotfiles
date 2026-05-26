@@ -54,6 +54,8 @@ for (const [title, commandPattern] of [
   ["Database Client", /(^|\s)lazysql($|\s)/],
   ["SQL IDE", /(^|\s)harlequin($|\s)/],
   ["Markdown Viewer", /(^|\s)glow($|\s)/],
+  ["Posting", /(^|\s)posting($|\s)/],
+  ["Resterm", /(^|\s)resterm($|\s)/],
 ]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);

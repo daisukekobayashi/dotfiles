@@ -42,3 +42,8 @@ bats = "1.13"
 
 [settings]
 cargo.binstall = false
+
+[tools."http:resterm"]
+version = "0.39.5"
+url = "https://github.com/unkn0wn-root/resterm/releases/download/v{{ version }}/resterm_Linux_x86_64"
+bin = "resterm"

@@ -115,6 +115,62 @@ install_mise_tools() {
   fi
 }
 
+list_uv_tool_specs() {
+  cat <<'EOF'
+posting|--python 3.13
+EOF
+}
+
+uv_tool_is_installed() {
+  local setup_home="$1"
+  local tool="$2"
+
+  env HOME="${setup_home}" uv tool list |
+    awk '{ print $1 }' |
+    grep -Fxq "${tool}"
+}
+
+install_uv_tools() {
+  local setup_home="$1"
+  local dry_run="$2"
+  local tool
+  local args
+  local -a extra_args=()
+  local -a cmd=()
+  local -a failed_tools=()
+
+  if ! command_exists uv; then
+    log_warn "Skipping uv tool install because uv is not available."
+    return 0
+  fi
+
+  while IFS='|' read -r tool args; do
+    [ -n "${tool}" ] || continue
+
+    if [ "${dry_run}" != "1" ] && uv_tool_is_installed "${setup_home}" "${tool}"; then
+      log_info "Skipping installed uv tool: ${tool}"
+      continue
+    fi
+
+    log_info "Installing uv tool: ${tool}"
+    cmd=(env HOME="${setup_home}" uv tool install)
+    if [ -n "${args}" ]; then
+      read -r -a extra_args <<< "${args}"
+      cmd+=("${extra_args[@]}")
+    fi
+    cmd+=("${tool}")
+
+    if ! run_cmd "${dry_run}" "${cmd[@]}"; then
+      failed_tools+=("${tool}")
+      log_warn "Failed to install uv tool: ${tool}"
+    fi
+  done < <(list_uv_tool_specs)
+
+  if [ "${#failed_tools[@]}" -gt 0 ]; then
+    log_warn "Continuing despite failed uv tool installs: ${failed_tools[*]}"
+  fi
+}
+
 setup_post() {
   local setup_home="$1"
   local dry_run="$2"
@@ -131,6 +187,8 @@ setup_post() {
   else
     log_warn "Skipping mise plugin install because mise is not available."
   fi
+
+  install_uv_tools "${setup_home}" "${dry_run}" || return 1
 
   tpm_dir="${setup_home}/.tmux/plugins/tpm"
   if [ ! -d "${tpm_dir}" ]; then
