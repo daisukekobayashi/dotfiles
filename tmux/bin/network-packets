@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf '\nPress Enter to close...'
+  read -r _ || true
+}
+
+print_permission_hint() {
+  local platform
+  local dumpcap_path
+  local current_user
+
+  platform="$(uname -s 2>/dev/null || printf unknown)"
+
+  case "${platform}" in
+    Darwin)
+      printf '\nFor live capture on macOS, install Wireshark BPF permissions:\n'
+      printf '  brew install wireshark\n'
+      printf '  brew install --cask wireshark-chmodbpf\n'
+      printf 'Then restart your terminal or tmux server.\n'
+      ;;
+    Linux)
+      current_user="${USER:-$(id -un 2>/dev/null || printf USER)}"
+      printf '\nFor live capture on Linux, configure dumpcap permissions:\n'
+      printf '  sudo dpkg-reconfigure wireshark-common\n'
+      printf '  sudo usermod -a -G wireshark %q\n' "${current_user}"
+      printf 'Then log out and back in.\n'
+
+      if command -v dumpcap >/dev/null 2>&1; then
+        dumpcap_path="$(command -v dumpcap)"
+        printf '\nAlternatively, grant packet capture capabilities directly:\n'
+        printf '  sudo setcap cap_net_raw,cap_net_admin+eip %q\n' "${dumpcap_path}"
+      fi
+      ;;
+    *)
+      printf '\nLive packet capture may require OS-specific packet capture permissions.\n'
+      ;;
+  esac
+}
+
+if ! command -v termshark >/dev/null 2>&1; then
+  printf 'termshark is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+if ! command -v tshark >/dev/null 2>&1; then
+  printf 'tshark is required by termshark but is not installed or not on PATH\n'
+  print_permission_hint
+  pause
+  exit 1
+fi
+
+termshark_path="$(command -v termshark)"
+
+set +e
+"${termshark_path}" "$@"
+status="$?"
+set -e
+
+if [ "${status}" -ne 0 ]; then
+  print_permission_hint
+fi
+
+pause
+exit "${status}"

@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf '\nPress Enter to close...'
+  read -r _ || true
+}
+
+print_permission_hint() {
+  local platform
+
+  platform="$(uname -s 2>/dev/null || printf unknown)"
+
+  case "${platform}" in
+    Darwin)
+      printf '\nmacOS does not support Linux setcap. Use sudo for privileged tracing.\n'
+      ;;
+    Linux)
+      printf '\nIf sudo is inconvenient, grant CAP_NET_RAW to the installed binary:\n'
+      printf '  sudo setcap cap_net_raw+ep %q\n' "${trip_path}"
+      ;;
+    *)
+      printf '\nNetwork tracing may require OS-specific privileges.\n'
+      ;;
+  esac
+}
+
+if ! command -v trip >/dev/null 2>&1; then
+  printf 'trip is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+trip_path="$(command -v trip)"
+
+if [ "$#" -eq 0 ]; then
+  set -- 1.1.1.1
+fi
+
+if [ "${EUID}" -eq 0 ]; then
+  set +e
+  "${trip_path}" "$@"
+  status="$?"
+  set -e
+else
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'trippy requires network tracing privileges, but sudo is not available.\n'
+    pause
+    exit 1
+  fi
+
+  printf 'trippy requires network tracing privileges. Starting with sudo...\n\n'
+  set +e
+  sudo "${trip_path}" "$@"
+  status="$?"
+  set -e
+fi
+
+if [ "${status}" -ne 0 ]; then
+  print_permission_hint
+fi
+
+pause
+exit "${status}"

@@ -55,6 +55,33 @@
   },
   {
     "icon": "",
+    "title": "bandwhich",
+    "category": "Network",
+    "description": "Show bandwidth usage by process and connection",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% ~/.dotfiles/tmux/bin/network-bandwidth"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Trippy",
+    "category": "Network",
+    "description": "Trace network hops with latency and loss",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% ~/.dotfiles/tmux/bin/network-trace"
+    }
+  },
+  {
+    "icon": "",
+    "title": "termshark",
+    "category": "Network",
+    "description": "Open Wireshark-like packet analyzer TUI",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/network-packets"
+    }
+  },
+  {
+    "icon": "",
     "title": "Disk Free",
     "category": "Storage",
     "description": "Show mounted filesystems and free space with duf",

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf '\nPress Enter to close...'
+  read -r _ || true
+}
+
+print_permission_hint() {
+  local platform
+
+  platform="$(uname -s 2>/dev/null || printf unknown)"
+
+  case "${platform}" in
+    Darwin)
+      printf '\nFor packet capture on macOS, install Wireshark BPF permissions:\n'
+      printf '  brew install --cask wireshark-chmodbpf\n'
+      printf 'Then restart your terminal or tmux server.\n'
+      ;;
+    Linux)
+      printf '\nIf sudo is inconvenient, grant capabilities to the installed binary:\n'
+      printf '  sudo setcap cap_sys_ptrace,cap_dac_read_search,cap_net_raw,cap_net_admin+ep %q\n' "${bandwhich_path}"
+      ;;
+    *)
+      printf '\nPacket capture may require OS-specific privileges.\n'
+      ;;
+  esac
+}
+
+if ! command -v bandwhich >/dev/null 2>&1; then
+  printf 'bandwhich is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+bandwhich_path="$(command -v bandwhich)"
+
+if [ "${EUID}" -eq 0 ]; then
+  set +e
+  "${bandwhich_path}" "$@"
+  status="$?"
+  set -e
+else
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'bandwhich requires network capture privileges, but sudo is not available.\n'
+    pause
+    exit 1
+  fi
+
+  printf 'bandwhich requires network capture privileges. Starting with sudo...\n\n'
+  set +e
+  sudo "${bandwhich_path}" "$@"
+  status="$?"
+  set -e
+fi
+
+if [ "${status}" -ne 0 ]; then
+  print_permission_hint
+fi
+
+pause
+exit "${status}"

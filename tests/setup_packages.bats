@@ -316,7 +316,36 @@ EOF
   run grep -F 'glow = "2.1.2"' "$(repo_root)/mise/config.macos.toml"
   [ "$status" -ne 0 ]
 
+  run grep -F 'bandwhich' "$(repo_root)/mise/config.macos.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'trippy' "$(repo_root)/mise/config.macos.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'termshark' "$(repo_root)/mise/config.macos.toml"
+  [ "$status" -ne 0 ]
+
   for config in "$(repo_root)/mise/config.linux.toml" "$(repo_root)/mise/config.wsl.toml"; do
+    for tool in bandwhich trippy termshark; do
+      run grep -F "[tools.\"http:${tool}\"]" "${config}"
+      [ "$status" -eq 0 ]
+    done
+
+    run grep -F 'url = "https://github.com/imsnif/bandwhich/releases/download/v{{ version }}/bandwhich-v{{ version }}-x86_64-unknown-linux-gnu.tar.gz"' "${config}"
+    [ "$status" -eq 0 ]
+
+    run grep -F 'url = "https://github.com/fujiapple852/trippy/releases/download/{{ version }}/trippy-{{ version }}-x86_64-unknown-linux-musl.tar.gz"' "${config}"
+    [ "$status" -eq 0 ]
+
+    run grep -F 'bin = "trip"' "${config}"
+    [ "$status" -eq 0 ]
+
+    run grep -F 'url = "https://github.com/gcla/termshark/releases/download/v{{ version }}/termshark_{{ version }}_linux_x64.tar.gz"' "${config}"
+    [ "$status" -eq 0 ]
+
+    run grep -F 'bin = "termshark"' "${config}"
+    [ "$status" -eq 0 ]
+
     run grep -F '[tools."http:resterm"]' "${config}"
     [ "$status" -eq 0 ]
 
@@ -333,8 +362,14 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy wireshark; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done
+
+  run grep -F 'brew "termshark"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'cask "wireshark-chmodbpf"' "$(repo_root)/brew/Brewfile"
+  [ "$status" -eq 0 ]
 }
