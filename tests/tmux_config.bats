@@ -35,6 +35,9 @@ for (const [title, commandPattern] of [
   ["btop", /(^|\s)btop($|\s)/],
   ["nvtop", /(^|\s)nvtop($|\s)/],
   ["nvitop", /(^|\s)nvitop --readonly($|\s)/],
+  ["bandwhich", /(^|[\s/])network-bandwidth($|\s)/],
+  ["Trippy", /(^|[\s/])network-trace($|\s)/],
+  ["termshark", /(^|[\s/])network-packets($|\s)/],
   ["lazydocker", /(^|\s)lazydocker($|\s)/],
   ["oxker", /(^|\s)oxker($|\s)/],
   ["yazi", /(^|[\s/])yazi-popup($|\s)/],
@@ -80,6 +83,138 @@ for (const [title, commandPattern] of [
 ' "$(repo_root)/tmux/tmux-palette/commands.json"
 
   [ "$status" -eq 0 ]
+}
+
+@test "tmux network wrappers keep privilege failures visible" {
+  local root fake_bin log_file
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/network.log"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/bandwhich" <<'EOF'
+#!/usr/bin/env bash
+printf 'bandwhich should run through sudo\n' >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/bandwhich"
+
+  cat > "${fake_bin}/trip" <<'EOF'
+#!/usr/bin/env bash
+printf 'trip should run through sudo\n' >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/trip"
+
+  cat > "${fake_bin}/sudo" <<'EOF'
+#!/usr/bin/env bash
+printf 'sudo %s\n' "$*" >> "${LOG_FILE}"
+printf 'sudo failed\n' >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/sudo"
+
+  cat > "${fake_bin}/uname" <<'EOF'
+#!/usr/bin/env bash
+printf 'Linux\n'
+EOF
+  chmod +x "${fake_bin}/uname"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "printf '\n' | '${root}/tmux/bin/network-bandwidth'"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bandwhich requires network capture privileges"* ]]
+  [[ "$output" == *"sudo failed"* ]]
+  [[ "$output" == *"Press Enter to close..."* ]]
+  run grep -F "sudo ${fake_bin}/bandwhich" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "printf '\n' | '${root}/tmux/bin/network-trace'"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"trippy requires network tracing privileges"* ]]
+  [[ "$output" == *"sudo failed"* ]]
+  [[ "$output" == *"Press Enter to close..."* ]]
+  run grep -F "sudo ${fake_bin}/trip 1.1.1.1" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux network packet wrapper explains macOS ChmodBPF setup" {
+  local root fake_bin log_file
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/packets.log"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/termshark" <<'EOF'
+#!/usr/bin/env bash
+printf 'termshark %s\n' "$*" >> "${LOG_FILE}"
+printf 'capture permission denied\n' >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/termshark"
+
+  cat > "${fake_bin}/tshark" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/tshark"
+
+  cat > "${fake_bin}/uname" <<'EOF'
+#!/usr/bin/env bash
+printf 'Darwin\n'
+EOF
+  chmod +x "${fake_bin}/uname"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "printf '\n' | '${root}/tmux/bin/network-packets'"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"capture permission denied"* ]]
+  [[ "$output" == *"brew install --cask wireshark-chmodbpf"* ]]
+  [[ "$output" == *"Press Enter to close..."* ]]
+  run grep -F "termshark " "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux network wrappers use macOS-specific privilege guidance" {
+  local root fake_bin
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/bandwhich" <<'EOF'
+#!/usr/bin/env bash
+printf 'capture permission denied\n' >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/bandwhich"
+
+  cat > "${fake_bin}/trip" <<'EOF'
+#!/usr/bin/env bash
+printf 'privileges are required\n' >&2
+exit 1
+EOF
+  chmod +x "${fake_bin}/trip"
+
+  cat > "${fake_bin}/sudo" <<'EOF'
+#!/usr/bin/env bash
+shift 0
+"$@"
+EOF
+  chmod +x "${fake_bin}/sudo"
+
+  cat > "${fake_bin}/uname" <<'EOF'
+#!/usr/bin/env bash
+printf 'Darwin\n'
+EOF
+  chmod +x "${fake_bin}/uname"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" bash -c "printf '\n' | '${root}/tmux/bin/network-bandwidth'"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"brew install --cask wireshark-chmodbpf"* ]]
+  [[ "$output" != *"setcap"* ]]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" bash -c "printf '\n' | '${root}/tmux/bin/network-trace'"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"macOS does not support Linux setcap"* ]]
+  [[ "$output" != *"setcap cap_net_raw"* ]]
 }
 
 @test "tmux disk wrappers keep one-shot disk output visible" {

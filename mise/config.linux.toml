@@ -47,3 +47,18 @@ cargo.binstall = false
 version = "0.39.5"
 url = "https://github.com/unkn0wn-root/resterm/releases/download/v{{ version }}/resterm_Linux_x86_64"
 bin = "resterm"
+
+[tools."http:bandwhich"]
+version = "0.23.1"
+url = "https://github.com/imsnif/bandwhich/releases/download/v{{ version }}/bandwhich-v{{ version }}-x86_64-unknown-linux-gnu.tar.gz"
+bin = "bandwhich"
+
+[tools."http:trippy"]
+version = "0.13.0"
+url = "https://github.com/fujiapple852/trippy/releases/download/{{ version }}/trippy-{{ version }}-x86_64-unknown-linux-musl.tar.gz"
+bin = "trip"
+
+[tools."http:termshark"]
+version = "2.4.0"
+url = "https://github.com/gcla/termshark/releases/download/v{{ version }}/termshark_{{ version }}_linux_x64.tar.gz"
+bin = "termshark"
