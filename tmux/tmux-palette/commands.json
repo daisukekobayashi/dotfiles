@@ -55,6 +55,15 @@
   },
   {
     "icon": "",
+    "title": "Process List",
+    "category": "Tools",
+    "description": "Show processes with procs",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 90% ~/.dotfiles/tmux/bin/process-list"
+    }
+  },
+  {
+    "icon": "",
     "title": "bandwhich",
     "category": "Network",
     "description": "Show bandwidth usage by process and connection",
@@ -127,6 +136,15 @@
   },
   {
     "icon": "",
+    "title": "File Tree",
+    "category": "Files",
+    "description": "Show current directory tree with eza",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/file-tree"
+    }
+  },
+  {
+    "icon": "",
     "title": "Database Client",
     "category": "Database",
     "description": "Open lazysql database TUI",
@@ -195,6 +213,24 @@
     "description": "Run ast-grep project rules from sgconfig.yml",
     "action": {
       "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/ast-grep-scan"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Code Stats",
+    "category": "Code",
+    "description": "Count code by language with tokei",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/code-stats"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Benchmark Command",
+    "category": "Tools",
+    "description": "Benchmark a command with hyperfine",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/benchmark-command"
     }
   },
   {
