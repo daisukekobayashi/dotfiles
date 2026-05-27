@@ -291,6 +291,7 @@ EOF
     '"aqua:jorgerojas26/lazysql" = "0.5.0"'
     '"pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }'
     'glow = "2.1.2"'
+    'ast-grep = "0.43.0"'
   )
 
   for tool in "${mise_tools[@]}"; do
@@ -323,6 +324,9 @@ EOF
   [ "$status" -ne 0 ]
 
   run grep -F 'termshark' "$(repo_root)/mise/config.macos.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'ast-grep = "0.43.0"' "$(repo_root)/mise/config.macos.toml"
   [ "$status" -ne 0 ]
 
   for config in "$(repo_root)/mise/config.linux.toml" "$(repo_root)/mise/config.wsl.toml"; do
@@ -362,7 +366,7 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy ast-grep; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done

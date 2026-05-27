@@ -172,6 +172,33 @@
   },
   {
     "icon": "",
+    "title": "Structural Search",
+    "category": "Code",
+    "description": "Search code by AST pattern with ast-grep",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/ast-grep-search"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Structural Rewrite",
+    "category": "Code",
+    "description": "Preview AST-based rewrite with ast-grep",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/ast-grep-rewrite"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Ast-grep Scan",
+    "category": "Code",
+    "description": "Run ast-grep project rules from sgconfig.yml",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/ast-grep-scan"
+    }
+  },
+  {
+    "icon": "",
     "title": "lazydocker",
     "category": "Docker",
     "description": "Docker TUI",

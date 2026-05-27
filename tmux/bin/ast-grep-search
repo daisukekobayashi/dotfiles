@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v ast-grep >/dev/null 2>&1; then
+  printf 'ast-grep is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+printf 'language [ts]: '
+read -r language || exit 0
+language="${language:-ts}"
+
+printf 'pattern> '
+read -r pattern || exit 0
+[ -n "${pattern}" ] || exit 0
+
+printf '\nSearching %s AST pattern: %s\n\n' "${language}" "${pattern}"
+
+set +e
+ast-grep run --lang "${language}" --pattern "${pattern}" --heading always --color always --context 2 .
+status="$?"
+set -e
+
+printf '\nExit status: %s\n' "${status}"
+pause
+exit "${status}"
