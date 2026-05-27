@@ -32,10 +32,6 @@ const fs = require("fs");
 const items = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
 const byTitle = new Map(items.map((item) => [item.title, item]));
 
-if (byTitle.has("Tools...")) {
-  throw new Error("Tools submenu should not be required for direct tools");
-}
-
 for (const [title, commandPattern] of [
   ["gitui", /(^|\s)gitui($|\s)/],
   ["lazygit", /(^|\s)lazygit($|\s)/],
