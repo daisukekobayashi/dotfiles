@@ -1,0 +1,24 @@
+{
+  "description": "GitHub workflow skills for issues, pull requests, and merge cleanup.",
+  "external": [
+    {
+      "source": "github/awesome-copilot",
+      "skills": ["gh-cli"]
+    }
+  ],
+  "local": [
+    "github-issue-create",
+    "github-issue-review",
+    "github-issue-triage",
+    "github-issue-worktree",
+    "github-merge-cleanup",
+    "github-pr",
+    "github-pr-ai-review-followup",
+    "github-pr-ai-review-request",
+    "github-pr-codex-review-request",
+    "github-pr-copilot-review-request",
+    "github-pr-publish",
+    "github-pr-publish-and-ai-review-request",
+    "github-pr-review"
+  ]
+}

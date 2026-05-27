@@ -1,0 +1,20 @@
+{
+  "description": "Azure DevOps workflow skills for Work Items, pull requests, and merge cleanup.",
+  "external": [
+    {
+      "source": "github/awesome-copilot",
+      "skills": ["azure-devops-cli"]
+    }
+  ],
+  "local": [
+    "azure-devops-common",
+    "azure-devops-work-item-create",
+    "azure-devops-work-item-review",
+    "azure-devops-work-item-triage",
+    "azure-devops-work-item-worktree",
+    "azure-devops-pr",
+    "azure-devops-pr-publish",
+    "azure-devops-pr-review",
+    "azure-devops-merge-cleanup"
+  ]
+}

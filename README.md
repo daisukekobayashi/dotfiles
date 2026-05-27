@@ -76,11 +76,12 @@ Custom local skills live in `skills/local/`.
 
 ```bash
 ~/.dotfiles/setup.sh skills --scope project --profile office
-~/.dotfiles/setup.sh skills --scope project --profile base,office --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,github --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,azure-devops
 ~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
 
-Domain profiles such as `office`, `docs`, and `browser` are standalone. Include `base` explicitly when a repository needs the common workflow skills, or use the aggregate `workbench` profile.
+`base` is provider-neutral. Use `base,github` for the previous GitHub-enabled baseline, or `base,azure-devops` for Azure DevOps repositories. `azure` and `azure-devops` are independent; combine them only when a repository needs both Azure cloud/resource work and Azure DevOps workflow skills. Domain profiles such as `office`, `docs`, and `browser` are standalone. Include `base` explicitly when a repository needs the common workflow skills, or use the aggregate `workbench` profile.
 
 Project scope installs third-party skills with `npx skills add` from the repository root and lets the official CLI manage the repository `skills-lock.json`. Dotfiles local skills are symlinked from `skills/local/` and are not written to `skills-lock.json`.
 
