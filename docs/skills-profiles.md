@@ -22,7 +22,8 @@ Expected command shape:
 
 ```sh
 ~/.dotfiles/setup.sh skills --scope project --profile office
-~/.dotfiles/setup.sh skills --scope project --profile base,office --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,github --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,azure-devops
 ~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
 
@@ -81,8 +82,10 @@ skills/
     ...
   profiles/
     base.json
+    github.json
     office.json
     azure.json
+    azure-devops.json
     frontend.json
     browser.json
     data.json
@@ -132,7 +135,7 @@ Rules:
 
 ### `base`
 
-Common workflow skills used broadly across repositories.
+Provider-neutral workflow skills used broadly across repositories.
 
 Include:
 
@@ -141,8 +144,19 @@ Include:
 - `brainstorming`
 - `grill-me`
 - planning, debugging, TDD, verification, and code review workflow skills
-- custom GitHub workflow skills from `skills/local/`
 - repository onboarding and runtime isolation local skills
+- `git-commit`
+
+Use `base,github` when you want the previous GitHub-enabled baseline.
+
+### `github`
+
+GitHub workflow skills:
+
+- `gh-cli`
+- custom GitHub issue, pull request, AI review, and merge cleanup skills from `skills/local/`
+
+GitHub `issue` skills map to Azure DevOps `work-item` skills when using the Azure DevOps provider profile.
 
 ### `workbench`
 
@@ -166,13 +180,44 @@ Office and document skills:
 
 ### `azure`
 
-Azure-related skills selected from the current curated set:
+Azure cloud and resource management skills selected from the current curated set:
 
 - `azure-*`
 - `appinsights-instrumentation`
-- `azure-devops-cli`
 
 Only include Azure skills that are intentionally useful; do not blindly install every available Azure skill.
+
+### `azure-devops`
+
+Azure DevOps workflow skills:
+
+- `azure-devops-cli`
+- `azure-devops-common`
+- `azure-devops-work-item-create`
+- `azure-devops-work-item-review`
+- `azure-devops-work-item-triage`
+- `azure-devops-work-item-worktree`
+- `azure-devops-pr`
+- `azure-devops-pr-publish`
+- `azure-devops-pr-review`
+- `azure-devops-merge-cleanup`
+
+`azure-devops` is independent from `azure`. Use `base,azure-devops` for Azure DevOps repositories. Use `base,azure,azure-devops` only when the same repository also needs Azure cloud/resource work.
+
+Azure DevOps AI review request and follow-up skills are intentionally omitted for now.
+
+GitHub to Azure DevOps workflow mapping:
+
+| GitHub skill | Azure DevOps skill |
+|---|---|
+| `github-issue-create` | `azure-devops-work-item-create` |
+| `github-issue-review` | `azure-devops-work-item-review` |
+| `github-issue-triage` | `azure-devops-work-item-triage` |
+| `github-issue-worktree` | `azure-devops-work-item-worktree` |
+| `github-pr` | `azure-devops-pr` |
+| `github-pr-publish` | `azure-devops-pr-publish` |
+| `github-pr-review` | `azure-devops-pr-review` |
+| `github-merge-cleanup` | `azure-devops-merge-cleanup` |
 
 ### `frontend`
 

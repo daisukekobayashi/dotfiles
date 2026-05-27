@@ -1,5 +1,5 @@
 {
-  "description": "Curated Azure and Azure-adjacent skills.",
+  "description": "Curated Azure cloud and resource management skills.",
   "external": [
     {
       "source": "microsoft/azure-skills",
@@ -20,10 +20,6 @@
         "azure-upgrade",
         "azure-validate"
       ]
-    },
-    {
-      "source": "github/awesome-copilot",
-      "skills": ["azure-devops-cli"]
     }
   ],
   "local": []
