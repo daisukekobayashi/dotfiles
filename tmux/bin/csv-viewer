@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+for tool in fd fzf csvlens; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    printf '%s is not installed or not on PATH\n' "${tool}"
+    pause
+    exit 0
+  fi
+done
+
+selected="$(
+  fd --type f --hidden --follow --exclude .git -e csv -e tsv . |
+    fzf --prompt="csv/tsv> " --preview="sed -n '1,80p' {}" --preview-window="right:60%:wrap"
+)" || exit 0
+
+[ -n "${selected}" ] || exit 0
+
+case "${selected}" in
+  *.tsv)
+    csvlens --tab-separated "${selected}"
+    ;;
+  *)
+    csvlens "${selected}"
+    ;;
+esac

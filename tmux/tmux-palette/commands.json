@@ -190,6 +190,51 @@
   },
   {
     "icon": "",
+    "title": "JSON Viewer",
+    "category": "Data",
+    "description": "Browse JSON, JSONL, YAML with jless",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/json-viewer"
+    }
+  },
+  {
+    "icon": "",
+    "title": "jq Playground",
+    "category": "Data",
+    "description": "Explore jq filters interactively with jqp",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/jq-playground"
+    }
+  },
+  {
+    "icon": "",
+    "title": "CSV Viewer",
+    "category": "Data",
+    "description": "Browse CSV or TSV files with csvlens",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/csv-viewer"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Log Viewer",
+    "category": "Logs",
+    "description": "Open current directory in lnav",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/log-viewer"
+    }
+  },
+  {
+    "icon": "",
+    "title": "HTTP Load Test",
+    "category": "API",
+    "description": "Run oha against a URL",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/http-load-test"
+    }
+  },
+  {
+    "icon": "",
     "title": "Structural Search",
     "category": "Code",
     "description": "Search code by AST pattern with ast-grep",
@@ -253,6 +298,24 @@
   },
   {
     "icon": "",
+    "title": "Docker Image Layers",
+    "category": "Docker",
+    "description": "Analyze Docker image layers with dive",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/docker-image-layers"
+    }
+  },
+  {
+    "icon": "",
+    "title": "k9s",
+    "category": "Kubernetes",
+    "description": "Kubernetes cluster TUI",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' k9s"
+    }
+  },
+  {
+    "icon": "",
     "title": "yazi",
     "category": "Files",
     "description": "Terminal file manager",
@@ -267,6 +330,15 @@
     "description": "fd + fzf with bat preview",
     "action": {
       "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/find-files"
+    }
+  },
+  {
+    "icon": "",
+    "title": "termscp",
+    "category": "Files",
+    "description": "Remote file transfer TUI",
+    "action": {
+      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' termscp"
     }
   },
   {

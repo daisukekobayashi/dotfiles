@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v oha >/dev/null 2>&1; then
+  printf 'oha is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+printf 'url> '
+read -r url || exit 0
+[ -n "${url}" ] || exit 0
+
+printf 'oha args [-n 200 -c 50]> '
+read -r args_line || args_line=""
+
+if [ -n "${args_line}" ]; then
+  read -r -a args <<< "${args_line}"
+else
+  args=(-n 200 -c 50)
+fi
+
+set +e
+oha "${args[@]}" "${url}"
+status="$?"
+set -e
+
+printf '\nExit status: %s\n' "${status}"
+pause
+exit "${status}"

@@ -66,6 +66,14 @@ for (const [title, commandPattern] of [
   ["Markdown Viewer", /(^|\s)glow($|\s)/],
   ["Posting", /(^|\s)posting($|\s)/],
   ["Resterm", /(^|\s)resterm($|\s)/],
+  ["JSON Viewer", /(^|[\s/])json-viewer($|\s)/],
+  ["jq Playground", /(^|[\s/])jq-playground($|\s)/],
+  ["CSV Viewer", /(^|[\s/])csv-viewer($|\s)/],
+  ["Log Viewer", /(^|[\s/])log-viewer($|\s)/],
+  ["Docker Image Layers", /(^|[\s/])docker-image-layers($|\s)/],
+  ["HTTP Load Test", /(^|[\s/])http-load-test($|\s)/],
+  ["k9s", /(^|\s)k9s($|\s)/],
+  ["termscp", /(^|\s)termscp($|\s)/],
   ["Structural Search", /(^|[\s/])ast-grep-search($|\s)/],
   ["Structural Rewrite", /(^|[\s/])ast-grep-rewrite($|\s)/],
   ["Ast-grep Scan", /(^|[\s/])ast-grep-scan($|\s)/],
@@ -92,6 +100,133 @@ for (const [title, commandPattern] of [
 }
 ' "$(repo_root)/tmux/tmux-palette/commands.json"
 
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux data and log wrappers select files and run viewers" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/data-tools.log"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+  touch "${project_dir}/data.json" "${project_dir}/query.json" "${project_dir}/table.csv"
+
+  cat > "${fake_bin}/fd" <<'EOF'
+#!/usr/bin/env bash
+printf 'fd %s\n' "$*" >> "${LOG_FILE}"
+case "$*" in
+  *"-e json"*"-e jsonl"*"-e yaml"*"-e yml"*)
+    printf 'data.json\n'
+    ;;
+  *"-e json"*"-e jsonl"*)
+    printf 'query.json\n'
+    ;;
+  *"-e csv"*"-e tsv"*)
+    printf 'table.csv\n'
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/fd"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+printf 'fzf %s\n' "$*" >> "${LOG_FILE}"
+cat >/dev/null
+case "$*" in
+  *"json/yaml>"*)
+    printf 'data.json\n'
+    ;;
+  *"jq>"*)
+    printf 'query.json\n'
+    ;;
+  *"csv/tsv>"*)
+    printf 'table.csv\n'
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  for tool in jless jqp csvlens lnav; do
+    cat > "${fake_bin}/${tool}" <<'EOF'
+#!/usr/bin/env bash
+printf '%s %s\n' "$(basename "$0")" "$*" >> "${LOG_FILE}"
+EOF
+    chmod +x "${fake_bin}/${tool}"
+  done
+
+  cat > "${fake_bin}/bat" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/bat"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && '${root}/tmux/bin/json-viewer'"
+  [ "$status" -eq 0 ]
+  run grep -F "jless data.json" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && '${root}/tmux/bin/jq-playground'"
+  [ "$status" -eq 0 ]
+  run grep -F "jqp --file query.json" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && '${root}/tmux/bin/csv-viewer'"
+  [ "$status" -eq 0 ]
+  run grep -F "csvlens table.csv" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && '${root}/tmux/bin/log-viewer'"
+  [ "$status" -eq 0 ]
+  run grep -F "lnav ." "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux docker and http wrappers run selected diagnostics" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/diagnostics.log"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+printf 'docker %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "images" ]; then
+  printf 'demo:latest\tabc123\t42MB\n'
+fi
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+printf 'fzf %s\n' "$*" >> "${LOG_FILE}"
+cat >/dev/null
+printf 'demo:latest\tabc123\t42MB\n'
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/dive" <<'EOF'
+#!/usr/bin/env bash
+printf 'dive %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/dive"
+
+  cat > "${fake_bin}/oha" <<'EOF'
+#!/usr/bin/env bash
+printf 'oha %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/oha"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && '${root}/tmux/bin/docker-image-layers'"
+  [ "$status" -eq 0 ]
+  run grep -F "dive demo:latest" "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && printf 'https://example.test\n-n 10 -c 2\n\n' | '${root}/tmux/bin/http-load-test'"
+  [ "$status" -eq 0 ]
+  run grep -F "oha -n 10 -c 2 https://example.test" "${log_file}"
   [ "$status" -eq 0 ]
 }
 

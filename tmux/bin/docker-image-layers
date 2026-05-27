@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v dive >/dev/null 2>&1; then
+  printf 'dive is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+image=""
+
+if command -v docker >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
+  set +e
+  images="$(docker images --format '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.Size}}')"
+  status="$?"
+  set -e
+
+  if [ "${status}" -eq 0 ] && [ -n "${images}" ]; then
+    selected="$(
+      printf '%s\n' "${images}" |
+        awk -F '\t' '$1 != "<none>:<none>"' |
+        fzf --prompt="image> " --with-nth=1,3
+    )" || true
+
+    if [ -n "${selected:-}" ]; then
+      image="$(printf '%s\n' "${selected}" | awk -F '\t' '{print $1}')"
+    fi
+  fi
+fi
+
+if [ -z "${image}" ]; then
+  printf 'image> '
+  read -r image || exit 0
+fi
+
+[ -n "${image}" ] || exit 0
+
+set +e
+dive "${image}"
+status="$?"
+set -e
+
+if [ "${status}" -ne 0 ]; then
+  printf '\nExit status: %s\n' "${status}"
+  pause
+fi
+
+exit "${status}"

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+for tool in fd fzf jless; do
+  if ! command -v "${tool}" >/dev/null 2>&1; then
+    printf '%s is not installed or not on PATH\n' "${tool}"
+    pause
+    exit 0
+  fi
+done
+
+preview='if command -v bat >/dev/null 2>&1; then bat --style=numbers --color=always --line-range :200 -- "{}"; else sed -n "1,200p" "{}"; fi'
+
+selected="$(
+  fd --type f --hidden --follow --exclude .git -e json -e jsonl -e yaml -e yml . |
+    fzf \
+      --prompt="json/yaml> " \
+      --preview="${preview}" \
+      --preview-window="right:60%:wrap"
+)" || exit 0
+
+[ -n "${selected}" ] || exit 0
+jless "${selected}"
