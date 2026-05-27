@@ -292,6 +292,13 @@ EOF
     '"pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }'
     'glow = "2.1.2"'
     'ast-grep = "0.43.0"'
+    'jless = "0.9.0"'
+    '"aqua:noahgorstein/jqp" = "0.8.0"'
+    '"aqua:tstack/lnav" = "0.14.0"'
+    '"aqua:wagoodman/dive" = "0.13.1"'
+    '"aqua:hatoo/oha" = "1.14.0"'
+    '"aqua:derailed/k9s" = "0.50.18"'
+    '"cargo:termscp" = { version = "1.0.0", default-features = false }'
     'eza = "0.23.4"'
     'jq = "1.8.1"'
     'yq = "4.53.2"'
@@ -351,6 +358,16 @@ EOF
 
     run grep -F 'bin = "resterm"' "${config}"
     [ "$status" -eq 0 ]
+
+    run grep -F '[tools."http:csvlens"]' "${config}"
+    [ "$status" -eq 0 ]
+
+    run grep -F 'url = "https://github.com/YS-L/csvlens/releases/download/v{{ version }}/csvlens-x86_64-unknown-linux-gnu.tar.xz"' "${config}"
+    [ "$status" -eq 0 ]
+
+    run grep -F 'bin = "csvlens"' "${config}"
+    [ "$status" -eq 0 ]
+
   done
 
   run grep -F 'tap "f1bonacc1/tap"' "$(repo_root)/brew/Brewfile"
@@ -359,7 +376,7 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy ast-grep eza jq yq sd hyperfine procs xh tokei; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy ast-grep jless jqp csvlens lnav dive oha k9s termscp eza jq yq sd hyperfine procs xh tokei; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done
