@@ -76,10 +76,12 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
-  [ -L "${TEST_DOTFILES}/.agents/user/skills/github-pr" ]
-  [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/github-pr")" = "${TEST_DOTFILES}/skills/local/github-pr" ]
-  [ -L "${TEST_DOTFILES}/.agents/user/skills/github-issue-create" ]
-  [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/github-issue-create")" = "${TEST_DOTFILES}/skills/local/github-issue-create" ]
+  [ -L "${TEST_DOTFILES}/.agents/user/skills/execution-context-first-repo-onboarding" ]
+  [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/execution-context-first-repo-onboarding")" = "${TEST_DOTFILES}/skills/local/execution-context-first-repo-onboarding" ]
+  [ -L "${TEST_DOTFILES}/.agents/user/skills/local-runtime-port-isolation" ]
+  [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/local-runtime-port-isolation")" = "${TEST_DOTFILES}/skills/local/local-runtime-port-isolation" ]
+  [ -L "${TEST_DOTFILES}/.agents/user/skills/serena-session-init" ]
+  [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/serena-session-init")" = "${TEST_DOTFILES}/skills/local/serena-session-init" ]
   [ -f "${TEST_DOTFILES}/.agents/user/skills-profile.json" ]
   [ -L "${TEST_HOME}/.agents/skills" ]
   [ "$(readlink "${TEST_HOME}/.agents/skills")" = "${TEST_DOTFILES}/.agents/user/skills" ]
@@ -121,7 +123,6 @@ teardown() {
   [ "$status" -eq 0 ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
   [ ! -e "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
-  [ ! -e "${TEST_DOTFILES}/.agents/user/skills/github-pr" ]
 }
 
 @test "workbench profile composes base docs browser and research" {
@@ -137,7 +138,7 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
-  [ -L "${TEST_DOTFILES}/.agents/user/skills/github-pr" ]
+  [ -L "${TEST_DOTFILES}/.agents/user/skills/execution-context-first-repo-onboarding" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/agent-browser" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/read-arxiv-paper" ]
@@ -165,7 +166,7 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "skills rejects the removed --source option" {
+@test "skills rejects unknown skills arguments" {
   run env \
     HOME="${TEST_HOME}" \
     SETUP_HOME="${TEST_HOME}" \
@@ -173,8 +174,8 @@ teardown() {
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
     PATH="${TEST_BIN}:${PATH}" \
     "$(setup_script_path)" \
-    skills --source invalid
+    skills --unknown-option
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Unknown skills argument: --source"* ]]
+  [[ "$output" == *"Unknown skills argument: --unknown-option"* ]]
 }
