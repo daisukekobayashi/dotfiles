@@ -25,6 +25,7 @@ dust = "1.2.4"
 "aqua:jorgerojas26/lazysql" = "0.5.0"
 "pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }
 glow = "2.1.2"
+ast-grep = "0.43.0"
 "github:aristocratos/btop" = "1.4"
 github-cli = "2"
 ruff = "0.15"

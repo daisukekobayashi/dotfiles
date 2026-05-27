@@ -61,6 +61,9 @@ for (const [title, commandPattern] of [
   ["Markdown Viewer", /(^|\s)glow($|\s)/],
   ["Posting", /(^|\s)posting($|\s)/],
   ["Resterm", /(^|\s)resterm($|\s)/],
+  ["Structural Search", /(^|[\s/])ast-grep-search($|\s)/],
+  ["Structural Rewrite", /(^|[\s/])ast-grep-rewrite($|\s)/],
+  ["Ast-grep Scan", /(^|[\s/])ast-grep-scan($|\s)/],
 ]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);
@@ -580,6 +583,46 @@ EOF
   run grep -F "git -C" "${log_file}"
   [ "$status" -eq 0 ]
   run grep -F "git -c core.pager=delta diff -- ." "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux ast-grep wrappers run structural search rewrite and scan" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/ast-grep.log"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+  printf 'ruleDirs: []\n' > "${project_dir}/sgconfig.yml"
+
+  cat > "${fake_bin}/ast-grep" <<'EOF'
+#!/usr/bin/env bash
+printf 'ast-grep %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/ast-grep"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_dir}' && printf 'ts\nconsole.log(\$A)\n\n' | '${root}/tmux/bin/ast-grep-search'"
+  [ "$status" -eq 0 ]
+  run grep -F 'ast-grep run --lang ts --pattern console.log($A) --heading always --color always --context 2 .' "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_dir}' && printf 'ts\n\$A && \$A()\n\$A?.()\n\n' | '${root}/tmux/bin/ast-grep-rewrite'"
+  [ "$status" -eq 0 ]
+  run grep -F 'ast-grep run --lang ts --pattern $A && $A() --rewrite $A?.() --interactive .' "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/ast-grep-scan'"
+  [ "$status" -eq 0 ]
+  run grep -F 'ast-grep scan .' "${log_file}"
   [ "$status" -eq 0 ]
 }
 

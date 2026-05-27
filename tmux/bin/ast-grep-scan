@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v ast-grep >/dev/null 2>&1; then
+  printf 'ast-grep is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+if repo_root="$(git -C "${PWD}" rev-parse --show-toplevel 2>/dev/null)"; then
+  cd "${repo_root}"
+fi
+
+if [ ! -f sgconfig.yml ] && [ ! -f sgconfig.yaml ]; then
+  printf 'No sgconfig.yml or sgconfig.yaml found in %s\n' "${PWD}"
+  printf 'Create ast-grep rules first, then run scan again.\n'
+  pause
+  exit 0
+fi
+
+set +e
+ast-grep scan .
+status="$?"
+set -e
+
+printf '\nExit status: %s\n' "${status}"
+pause
+exit "${status}"
