@@ -8,6 +8,13 @@ load 'helpers/test_helper.bash'
   [ "$status" -ne 0 ]
 }
 
+@test "zsh defines tm alias for the main tmux session" {
+  run zsh -c "source '$(repo_root)/zsh/alias.zsh'; alias tm"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "tm='tmux new -As main'" ]
+}
+
 @test "tmux passes terminal identity through for yazi" {
   run grep -Eq '^set[[:space:]]+-gq?[[:space:]]+allow-passthrough[[:space:]]+on([[:space:]]|$)' "$(repo_root)/.tmux.conf"
   [ "$status" -eq 0 ]

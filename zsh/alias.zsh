@@ -1,4 +1,5 @@
 alias ls='ls --color=auto'
+alias tm='tmux new -As main'
 
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
