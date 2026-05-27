@@ -76,11 +76,12 @@ Skill profile は `skills/profiles/` に置きます.
 
 ```bash
 ~/.dotfiles/setup.sh skills --scope project --profile office
-~/.dotfiles/setup.sh skills --scope project --profile base,office --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,github --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,azure-devops
 ~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
 
-`office`, `docs`, `browser` のような domain profile は単体で使えるようにしています。共通 workflow skill が必要なリポジトリでは `base` を明示的に組み合わせるか、集約 profile の `workbench` を使います。
+`base` は provider-neutral です. 以前の GitHub 対応込みの baseline が必要な場合は `base,github`, Azure DevOps リポジトリでは `base,azure-devops` を使います. `azure` と `azure-devops` は独立しているため, Azure cloud/resource 作業と Azure DevOps workflow skill の両方が必要な場合だけ組み合わせます. `office`, `docs`, `browser` のような domain profile は単体で使えるようにしています. 共通 workflow skill が必要なリポジトリでは `base` を明示的に組み合わせるか, 集約 profile の `workbench` を使います.
 
 Project scope では, リポジトリ root から `npx skills add` で外部 skill をインストールし, 公式 CLI にリポジトリの `skills-lock.json` を管理させます. Dotfiles の local skill は `skills/local/` から symlink し, `skills-lock.json` には書き込みません.
 

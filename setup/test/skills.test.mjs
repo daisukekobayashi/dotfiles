@@ -8,6 +8,32 @@ import test from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const skillsRuntime = path.join(repoRoot, "setup", "skills.js");
+const githubLocalSkills = [
+  "github-issue-create",
+  "github-issue-review",
+  "github-issue-triage",
+  "github-issue-worktree",
+  "github-merge-cleanup",
+  "github-pr",
+  "github-pr-ai-review-followup",
+  "github-pr-ai-review-request",
+  "github-pr-codex-review-request",
+  "github-pr-copilot-review-request",
+  "github-pr-publish",
+  "github-pr-publish-and-ai-review-request",
+  "github-pr-review",
+];
+const azureDevOpsLocalSkills = [
+  "azure-devops-common",
+  "azure-devops-work-item-create",
+  "azure-devops-work-item-review",
+  "azure-devops-work-item-triage",
+  "azure-devops-work-item-worktree",
+  "azure-devops-pr",
+  "azure-devops-pr-publish",
+  "azure-devops-pr-review",
+  "azure-devops-merge-cleanup",
+];
 
 async function writeExecutable(filePath, content) {
   await writeFile(filePath, content, { mode: 0o755 });
@@ -138,11 +164,11 @@ exit 1
       `#!/bin/bash
 set -euo pipefail
 while [ "$#" -gt 0 ]; do
-  case "\${1,,}" in
-    /d|/s)
+  case "$1" in
+    /d|/D|/s|/S)
       shift
       ;;
-    /c)
+    /c|/C)
       shift
       break
       ;;
@@ -234,6 +260,57 @@ require(runtime);
 async function readText(filePath) {
   return readFile(filePath, "utf8");
 }
+
+async function readRepoProfile(name) {
+  return JSON.parse(await readText(path.join(repoRoot, "skills", "profiles", `${name}.json`)));
+}
+
+function skillsForSource(profile, source) {
+  return profile.external.find((entry) => entry.source === source)?.skills ?? [];
+}
+
+test("repository profiles keep provider workflow skills separated", async () => {
+  for (const profileName of ["base", "github", "azure", "azure-devops"]) {
+    assert.equal(existsSync(path.join(repoRoot, "skills", "profiles", `${profileName}.json`)), true);
+  }
+
+  const base = await readRepoProfile("base");
+  const github = await readRepoProfile("github");
+  const azure = await readRepoProfile("azure");
+  const azureDevOps = await readRepoProfile("azure-devops");
+
+  assert.equal(base.description, "Provider-neutral baseline workflow skills for repository work.");
+  assert.deepEqual(skillsForSource(base, "github/awesome-copilot"), ["git-commit"]);
+  for (const skillName of githubLocalSkills) {
+    assert.equal(base.local.includes(skillName), false, `${skillName} should not be in base`);
+  }
+
+  assert.deepEqual(skillsForSource(github, "github/awesome-copilot"), ["gh-cli"]);
+  assert.deepEqual(github.local, githubLocalSkills);
+
+  assert.deepEqual(skillsForSource(azure, "github/awesome-copilot"), []);
+  assert.deepEqual(skillsForSource(azureDevOps, "github/awesome-copilot"), ["azure-devops-cli"]);
+  assert.deepEqual(azureDevOps.local, azureDevOpsLocalSkills);
+
+  for (const skillName of azureDevOpsLocalSkills) {
+    assert.equal(existsSync(path.join(repoRoot, "skills", "local", skillName, "SKILL.md")), true);
+  }
+
+  const result = spawnSync(
+    process.execPath,
+    [skillsRuntime, "profile", "validate", "--profile", "base,github,azure,azure-devops"],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        SETUP_DOTFILES_ROOT: repoRoot,
+      },
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+});
 
 test("profile validate accepts selected profiles", async () => {
   const fixture = await createFixture();

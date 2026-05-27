@@ -1,5 +1,5 @@
 {
-  "description": "Common baseline workflow skills for repository work.",
+  "description": "Provider-neutral baseline workflow skills for repository work.",
   "external": [
     {
       "source": "vercel-labs/skills",
@@ -48,7 +48,7 @@
     },
     {
       "source": "github/awesome-copilot",
-      "skills": ["gh-cli", "git-commit"]
+      "skills": ["git-commit"]
     },
     {
       "source": "sanyuan0704/code-review-expert",
@@ -57,19 +57,6 @@
   ],
   "local": [
     "execution-context-first-repo-onboarding",
-    "github-issue-create",
-    "github-issue-review",
-    "github-issue-triage",
-    "github-issue-worktree",
-    "github-merge-cleanup",
-    "github-pr",
-    "github-pr-ai-review-followup",
-    "github-pr-ai-review-request",
-    "github-pr-codex-review-request",
-    "github-pr-copilot-review-request",
-    "github-pr-publish",
-    "github-pr-publish-and-ai-review-request",
-    "github-pr-review",
     "local-runtime-port-isolation",
     "serena-session-init"
   ]
