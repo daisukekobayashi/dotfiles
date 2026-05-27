@@ -292,6 +292,14 @@ EOF
     '"pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }'
     'glow = "2.1.2"'
     'ast-grep = "0.43.0"'
+    'eza = "0.23.4"'
+    'jq = "1.8.1"'
+    'yq = "4.53.2"'
+    'sd = "1.1.0"'
+    'hyperfine = "1.20.0"'
+    '"aqua:dalance/procs" = "0.14.11"'
+    'xh = "0.25.3"'
+    'tokei = "14.0.0"'
   )
 
   for tool in "${mise_tools[@]}"; do
@@ -366,7 +374,7 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy ast-grep; do
+  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy ast-grep eza jq yq sd hyperfine procs xh tokei; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done

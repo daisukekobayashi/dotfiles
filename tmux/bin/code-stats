@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v tokei >/dev/null 2>&1; then
+  printf 'tokei is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+set +e
+tokei .
+status="$?"
+set -e
+
+printf '\nExit status: %s\n' "${status}"
+pause
+exit "${status}"

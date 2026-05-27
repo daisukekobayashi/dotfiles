@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+if ! command -v hyperfine >/dev/null 2>&1; then
+  printf 'hyperfine is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+printf 'command> '
+read -r command_line || exit 0
+[ -n "${command_line}" ] || exit 0
+
+set +e
+hyperfine --warmup 1 "${command_line}"
+status="$?"
+set -e
+
+printf '\nExit status: %s\n' "${status}"
+pause
+exit "${status}"

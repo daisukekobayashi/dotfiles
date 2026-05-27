@@ -42,6 +42,7 @@ for (const [title, commandPattern] of [
   ["btop", /(^|\s)btop($|\s)/],
   ["nvtop", /(^|\s)nvtop($|\s)/],
   ["nvitop", /(^|\s)nvitop --readonly($|\s)/],
+  ["Process List", /(^|[\s/])process-list($|\s)/],
   ["bandwhich", /(^|[\s/])network-bandwidth($|\s)/],
   ["Trippy", /(^|[\s/])network-trace($|\s)/],
   ["termshark", /(^|[\s/])network-packets($|\s)/],
@@ -63,6 +64,7 @@ for (const [title, commandPattern] of [
   ["Disk Usage Home", /(^|\s)gdu ~($|\s)/],
   ["Disk Cleanup", /(^|\s)dua interactive \.($|\s)/],
   ["Disk Tree", /(^|[\s/])disk-tree($|\s)/],
+  ["File Tree", /(^|[\s/])file-tree($|\s)/],
   ["Database Client", /(^|\s)lazysql($|\s)/],
   ["SQL IDE", /(^|\s)harlequin($|\s)/],
   ["Markdown Viewer", /(^|\s)glow($|\s)/],
@@ -71,6 +73,8 @@ for (const [title, commandPattern] of [
   ["Structural Search", /(^|[\s/])ast-grep-search($|\s)/],
   ["Structural Rewrite", /(^|[\s/])ast-grep-rewrite($|\s)/],
   ["Ast-grep Scan", /(^|[\s/])ast-grep-scan($|\s)/],
+  ["Code Stats", /(^|[\s/])code-stats($|\s)/],
+  ["Benchmark Command", /(^|[\s/])benchmark-command($|\s)/],
 ]) {
   const item = byTitle.get(title);
   if (!item) throw new Error(`${title} is missing from commands.json`);
@@ -630,6 +634,67 @@ EOF
     bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/ast-grep-scan'"
   [ "$status" -eq 0 ]
   run grep -F 'ast-grep scan .' "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux modern unix wrappers keep one-shot output visible" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/modern-unix.log"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/eza" <<'EOF'
+#!/usr/bin/env bash
+printf 'eza %s\n' "$*" >> "${LOG_FILE}"
+printf 'eza output\n'
+EOF
+  chmod +x "${fake_bin}/eza"
+
+  cat > "${fake_bin}/procs" <<'EOF'
+#!/usr/bin/env bash
+printf 'procs %s\n' "$*" >> "${LOG_FILE}"
+printf 'procs output\n'
+EOF
+  chmod +x "${fake_bin}/procs"
+
+  cat > "${fake_bin}/tokei" <<'EOF'
+#!/usr/bin/env bash
+printf 'tokei %s\n' "$*" >> "${LOG_FILE}"
+printf 'tokei output\n'
+EOF
+  chmod +x "${fake_bin}/tokei"
+
+  cat > "${fake_bin}/hyperfine" <<'EOF'
+#!/usr/bin/env bash
+printf 'hyperfine %s\n' "$*" >> "${LOG_FILE}"
+printf 'hyperfine output\n'
+EOF
+  chmod +x "${fake_bin}/hyperfine"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/file-tree'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"eza output"* ]]
+  run grep -F "eza --tree --git --group-directories-first --level=3 ." "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/process-list'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"procs output"* ]]
+  run grep -F "procs " "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/code-stats'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tokei output"* ]]
+  run grep -F "tokei ." "${log_file}"
+  [ "$status" -eq 0 ]
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" bash -c "cd '${project_dir}' && printf 'npm test\n\n' | '${root}/tmux/bin/benchmark-command'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hyperfine output"* ]]
+  run grep -F "hyperfine --warmup 1 npm test" "${log_file}"
   [ "$status" -eq 0 ]
 }
 
