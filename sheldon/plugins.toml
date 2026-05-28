@@ -34,14 +34,12 @@ pre = "setopt prompt_subst"
 [plugins.oh-my-zsh]
 github = "ohmyzsh/ohmyzsh"
 dir = "plugins"
-use = ["{git,tmux}/*.plugin.zsh"]
+use = ["git/*.plugin.zsh"]
 apply = ["defer"]
 
 [plugins.oh-my-zsh.hooks]
 pre = """
 TERM=xterm-256color
-ZSH_TMUX_FIXTERM=false
-ZSH_TMUX_AUTOSTART=false
 """
 
 [plugins.zsh-completions]

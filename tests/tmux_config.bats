@@ -8,11 +8,25 @@ load 'helpers/test_helper.bash'
   [ "$status" -ne 0 ]
 }
 
-@test "zsh defines tm alias for the main tmux session" {
-  run zsh -c "source '$(repo_root)/zsh/alias.zsh'; alias tm"
+@test "zsh defines tm function with main as the default session" {
+  run zsh -c "source '$(repo_root)/zsh/alias.zsh'; whence -f tm"
 
   [ "$status" -eq 0 ]
-  [ "$output" = "tm='tmux new -As main'" ]
+  [[ "$output" == *'command tmux new -As "${1:-main}"'* ]]
+}
+
+@test "zsh tm setup removes stale tmux alias wrappers" {
+  run zsh -c "alias tmux='_zsh_tmux_plugin_run'; source '$(repo_root)/zsh/alias.zsh'; alias tmux"
+
+  [ "$status" -ne 0 ]
+}
+
+@test "sheldon does not load oh-my-zsh tmux plugin" {
+  run grep -F 'tmux}/*.plugin.zsh' "$(repo_root)/sheldon/plugins.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'tmux/*.plugin.zsh' "$(repo_root)/sheldon/plugins.toml"
+  [ "$status" -ne 0 ]
 }
 
 @test "tmux passes terminal identity through for yazi" {
