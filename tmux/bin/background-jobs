@@ -19,6 +19,20 @@ ensure_group() {
   pueue group add "${group}" >/dev/null 2>&1 || true
 }
 
+start_pueue_daemon() {
+  if command -v setsid >/dev/null 2>&1; then
+    setsid -f pueued -d >/dev/null 2>&1 </dev/null
+    return $?
+  fi
+
+  if command -v nohup >/dev/null 2>&1; then
+    nohup pueued -d >/dev/null 2>&1 </dev/null &
+    return 0
+  fi
+
+  pueued -d >/dev/null 2>&1
+}
+
 ensure_pueue_daemon() {
   if ! command -v pueue >/dev/null 2>&1; then
     printf 'pueue is not installed or not on PATH\n'
@@ -34,12 +48,12 @@ ensure_pueue_daemon() {
     return 1
   fi
 
-  pueued -d >/dev/null 2>&1 || {
+  start_pueue_daemon || {
     printf 'Failed to start pueued\n'
     return 1
   }
 
-  sleep 0.2
+  sleep 0.5
   pueue status >/dev/null 2>&1
 }
 
@@ -48,106 +62,260 @@ ensure_pueue_daemon || {
   exit 0
 }
 
-if ! command -v fzf >/dev/null 2>&1; then
-  printf 'fzf is not installed or not on PATH\n'
+group="$(current_group)"
+scope="current"
+script_path="${BASH_SOURCE[0]}"
+
+require_command() {
+  local command_name="$1"
+  if command -v "${command_name}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  printf '%s is not installed or not on PATH\n' "${command_name}"
+  return 1
+}
+
+task_id_from_line() {
+  local line="$1"
+  local first
+  first="${line%%[[:space:]]*}"
+  case "${first}" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+    *)
+      printf '%s\n' "${first}"
+      ;;
+  esac
+}
+
+task_lines() {
+  local status_args
+  status_args=(-j)
+  if [ "${scope}" = "current" ]; then
+    status_args+=(-g "${group}")
+  fi
+
+  pueue status "${status_args[@]}" |
+    jq -r '
+      def status_name:
+        .status as $status |
+        if $status.Running then "running"
+        elif $status.Queued then "queued"
+        elif $status.Stashed then "stashed"
+        elif $status.Paused then "paused"
+        elif $status.Locked then "locked"
+        elif $status.Done then ($status.Done.result | ascii_downcase)
+        else "unknown"
+        end;
+
+      (.tasks // {})
+      | to_entries
+      | sort_by(.value.id)
+      | .[]
+      | .value
+      | "\(.id) \(status_name) \(.group // "default") \(.command)"
+    '
+}
+
+dashboard_items() {
+  printf '%s\n' \
+    '+ Add Command' \
+    'r Refresh' \
+    "s Scope: ${scope} (${group})" \
+    'c Clean Finished' \
+    'g Groups' \
+    'q Quit'
+  task_lines
+}
+
+select_with_fzf() {
+  local prompt="$1"
+  local preview_cmd="${2:-}"
+  local fzf_status
+  local selected
+
+  set +e
+  if [ -n "${preview_cmd}" ]; then
+    selected="$(fzf --prompt="${prompt}" --preview="${preview_cmd}")"
+  else
+    selected="$(fzf --prompt="${prompt}")"
+  fi
+  fzf_status="$?"
+  set -e
+
+  case "${fzf_status}" in
+    0)
+      printf '%s\n' "${selected}"
+      ;;
+    1|130)
+      return 1
+      ;;
+    *)
+      printf 'fzf failed with exit status %s\n' "${fzf_status}" >&2
+      return 2
+      ;;
+  esac
+}
+
+preview_selection() {
+  local line task_id
+  line="$(cat)"
+  if task_id="$(task_id_from_line "${line}")"; then
+    pueue log --lines 80 "${task_id}" 2>&1 || true
+  else
+    printf 'Select a task to preview its log.\n'
+  fi
+}
+
+show_status() {
+  if [ "${scope}" = "current" ]; then
+    pueue status -g "${group}"
+  else
+    pueue status
+  fi
   pause
+}
+
+open_log_pager() {
+  local task_id="$1"
+  if command -v less >/dev/null 2>&1; then
+    pueue log --full "${task_id}" | less -R
+  else
+    pueue log --full "${task_id}"
+    pause
+  fi
+}
+
+add_command() {
+  local command_line
+  printf 'command> '
+  read -r command_line || exit 0
+  [ -n "${command_line}" ] || return
+  ensure_group "${group}"
+  pueue add -g "${group}" --working-directory "${PWD}" -- "${command_line}"
+  pueue status -g "${group}"
+  pause
+}
+
+task_menu() {
+  local task_id="$1"
+  local task_action
+
+  while true; do
+    if ! task_action="$(
+      printf '%s\n' \
+        'Follow' \
+        'Show Log' \
+        'Open Log Pager' \
+        'Restart' \
+        'Kill' \
+        'Remove' \
+        'Back' |
+        select_with_fzf "task:${task_id}> "
+    )"; then
+      return
+    fi
+
+    case "${task_action}" in
+      'Follow')
+        pueue follow "${task_id}"
+        pause
+        return
+        ;;
+      'Show Log')
+        pueue log "${task_id}"
+        pause
+        return
+        ;;
+      'Open Log Pager')
+        open_log_pager "${task_id}"
+        return
+        ;;
+      'Restart')
+        pueue restart "${task_id}"
+        pause
+        return
+        ;;
+      'Kill')
+        pueue kill "${task_id}"
+        pause
+        return
+        ;;
+      'Remove')
+        pueue remove "${task_id}"
+        pause
+        return
+        ;;
+      'Back')
+        return
+        ;;
+    esac
+  done
+}
+
+main() {
+  local choice preview_cmd task_id
+
+  require_command fzf || {
+    pause
+    exit 0
+  }
+
+  require_command jq || {
+    pause
+    exit 0
+  }
+
+  preview_cmd="printf '%s\n' {q} | ${script_path} __preview"
+
+  while true; do
+    if ! choice="$(dashboard_items | select_with_fzf "pueue:${group}> " "${preview_cmd}")"; then
+      exit 0
+    fi
+
+    case "${choice}" in
+      '+ Add Command'|'Add Command')
+        add_command
+        ;;
+      'r Refresh'|'Refresh')
+        ;;
+      's Scope: '*)
+        if [ "${scope}" = "current" ]; then
+          scope="all"
+        else
+          scope="current"
+        fi
+        ;;
+      'c Clean Finished'|'Clean Finished')
+        pueue clean
+        show_status
+        ;;
+      'g Groups'|'Groups')
+        pueue group
+        pause
+        ;;
+      'q Quit'|'Quit')
+        exit 0
+        ;;
+      'Shutdown Daemon')
+        pueue shutdown
+        pause
+        exit 0
+        ;;
+      *)
+        if task_id="$(task_id_from_line "${choice}")"; then
+          task_menu "${task_id}"
+        fi
+        ;;
+    esac
+  done
+}
+
+if [ "${1:-}" = "__preview" ]; then
+  preview_selection
   exit 0
 fi
 
-group="$(current_group)"
-
-set +e
-choice="$(
-  printf '%s\n' \
-    "Status: Current Group (${group})" \
-    'Status: All Groups' \
-    'Add Command' \
-    'Follow Task' \
-    'Show Log' \
-    'Restart Task' \
-    'Kill Task' \
-    'Clean Finished' \
-    'Groups' \
-    'Shutdown Daemon' |
-    fzf --prompt="pueue:${group}> "
-)"
-fzf_status="$?"
-set -e
-
-case "${fzf_status}" in
-  0)
-    ;;
-  1|130)
-    exit 0
-    ;;
-  *)
-    printf 'fzf failed with exit status %s\n' "${fzf_status}"
-    pause
-    exit 0
-    ;;
-esac
-
-case "${choice}" in
-  'Status: Current Group ('*)
-    pueue status -g "${group}"
-    pause
-    ;;
-  'Status: All Groups')
-    pueue status
-    pause
-    ;;
-  'Add Command')
-    printf 'command> '
-    read -r command_line || exit 0
-    [ -n "${command_line}" ] || exit 0
-    ensure_group "${group}"
-    pueue add -g "${group}" --working-directory "${PWD}" -- "${command_line}"
-    pueue status -g "${group}"
-    pause
-    ;;
-  'Follow Task')
-    printf 'task id> '
-    read -r task_id || exit 0
-    [ -n "${task_id}" ] || exit 0
-    exec pueue follow "${task_id}"
-    ;;
-  'Show Log')
-    printf 'task id> '
-    read -r task_id || exit 0
-    if [ -n "${task_id}" ]; then
-      pueue log "${task_id}"
-    else
-      pueue log -g "${group}"
-    fi
-    pause
-    ;;
-  'Restart Task')
-    printf 'task id> '
-    read -r task_id || exit 0
-    [ -n "${task_id}" ] || exit 0
-    pueue restart "${task_id}"
-    pueue status -g "${group}"
-    pause
-    ;;
-  'Kill Task')
-    printf 'task id> '
-    read -r task_id || exit 0
-    [ -n "${task_id}" ] || exit 0
-    pueue kill "${task_id}"
-    pueue status -g "${group}"
-    pause
-    ;;
-  'Clean Finished')
-    pueue clean
-    pueue status -g "${group}"
-    pause
-    ;;
-  'Groups')
-    pueue group
-    pause
-    ;;
-  'Shutdown Daemon')
-    pueue shutdown
-    pause
-    ;;
-esac
+main

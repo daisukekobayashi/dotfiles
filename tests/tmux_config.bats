@@ -580,6 +580,16 @@ touch "${PUEUE_READY}"
 EOF
   chmod +x "${fake_bin}/pueued"
 
+  cat > "${fake_bin}/setsid" <<'EOF'
+#!/usr/bin/env bash
+printf 'setsid %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "-f" ]; then
+  shift
+fi
+"$@"
+EOF
+  chmod +x "${fake_bin}/setsid"
+
   run env \
     PATH="${fake_bin}:/usr/bin:/bin" \
     LOG_FILE="${log_file}" \
@@ -594,7 +604,7 @@ EOF
     PUEUE_READY="${BATS_TEST_TMPDIR}/pueue-ready" \
     bash -c "cd '${project_dir}' && printf 'npm run dev\n\n' | '${root}/tmux/bin/background-jobs'"
   [ "$status" -eq 0 ]
-  run grep -F "pueued -d" "${log_file}"
+  run grep -F "setsid -f pueued -d" "${log_file}"
   [ "$status" -eq 0 ]
   run grep -F "pueue group add project" "${log_file}"
   [ "$status" -eq 0 ]
@@ -631,6 +641,156 @@ EOF
   run grep -F "pueue group add dotfiles" "${log_file}"
   [ "$status" -eq 0 ]
   run grep -F "pueue add -g dotfiles --working-directory ${project_dir} -- streamlit run app.py" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux background job wrapper kills a selected task from the dashboard" {
+  local root fake_bin log_file fzf_count project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/background-jobs-dashboard.log"
+  fzf_count="${BATS_TEST_TMPDIR}/fzf-count"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+count="$(cat "${FZF_COUNT}" 2>/dev/null || printf '0')"
+count="$((count + 1))"
+printf '%s' "${count}" > "${FZF_COUNT}"
+printf 'fzf-call-%s\n' "${count}" >> "${LOG_FILE}"
+cat >> "${LOG_FILE}"
+case "${count}" in
+  1) printf '0 running project npm run dev\n' ;;
+  2) printf 'Kill\n' ;;
+  *) printf 'q Quit\n' ;;
+esac
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/pueue" <<'EOF'
+#!/usr/bin/env bash
+printf 'pueue %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "status" ] && [ "$2" = "-j" ]; then
+  cat <<'JSON'
+{"tasks":{"0":{"id":0,"command":"npm run dev","group":"project","status":{"Running":{"start":"2026-05-28T13:20:16+09:00"}}}},"groups":{"project":{"status":"Running","parallel_tasks":1}}}
+JSON
+fi
+EOF
+  chmod +x "${fake_bin}/pueue"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    FZF_COUNT="${fzf_count}" \
+    bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/background-jobs'"
+  [ "$status" -eq 0 ]
+  run grep -F "0 running project npm run dev" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "pueue kill 0" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux background job wrapper shows log for a selected task from the dashboard" {
+  local root fake_bin log_file fzf_count project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/background-jobs-log.log"
+  fzf_count="${BATS_TEST_TMPDIR}/fzf-count"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+count="$(cat "${FZF_COUNT}" 2>/dev/null || printf '0')"
+count="$((count + 1))"
+printf '%s' "${count}" > "${FZF_COUNT}"
+cat >/dev/null
+case "${count}" in
+  1) printf '0 failed project make build\n' ;;
+  2) printf 'Show Log\n' ;;
+  *) printf 'q Quit\n' ;;
+esac
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/pueue" <<'EOF'
+#!/usr/bin/env bash
+printf 'pueue %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "status" ] && [ "$2" = "-j" ]; then
+  cat <<'JSON'
+{"tasks":{"0":{"id":0,"command":"make build","group":"project","status":{"Done":{"result":"Failed","start":"2026-05-28T13:20:16+09:00","end":"2026-05-28T13:20:23+09:00"}}}},"groups":{"project":{"status":"Running","parallel_tasks":1}}}
+JSON
+elif [ "$1" = "log" ]; then
+  printf 'build failed\n'
+fi
+EOF
+  chmod +x "${fake_bin}/pueue"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    FZF_COUNT="${fzf_count}" \
+    bash -c "cd '${project_dir}' && printf '\n\n' | '${root}/tmux/bin/background-jobs'"
+  [ "$status" -eq 0 ]
+  run grep -F "pueue log 0" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux background job wrapper opens full task log in a pager for copying" {
+  local root fake_bin log_file fzf_count project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/background-jobs-pager.log"
+  fzf_count="${BATS_TEST_TMPDIR}/fzf-count"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+count="$(cat "${FZF_COUNT}" 2>/dev/null || printf '0')"
+count="$((count + 1))"
+printf '%s' "${count}" > "${FZF_COUNT}"
+cat >/dev/null
+case "${count}" in
+  1) printf '0 failed project make build\n' ;;
+  2) printf 'Open Log Pager\n' ;;
+  *) printf 'q Quit\n' ;;
+esac
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/pueue" <<'EOF'
+#!/usr/bin/env bash
+printf 'pueue %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "status" ] && [ "$2" = "-j" ]; then
+  cat <<'JSON'
+{"tasks":{"0":{"id":0,"command":"make build","group":"project","status":{"Done":{"result":"Failed","start":"2026-05-28T13:20:16+09:00","end":"2026-05-28T13:20:23+09:00"}}}},"groups":{"project":{"status":"Running","parallel_tasks":1}}}
+JSON
+elif [ "$1" = "log" ]; then
+  printf 'full build log\n'
+fi
+EOF
+  chmod +x "${fake_bin}/pueue"
+
+  cat > "${fake_bin}/less" <<'EOF'
+#!/usr/bin/env bash
+printf 'less %s\n' "$*" >> "${LOG_FILE}"
+cat >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/less"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    FZF_COUNT="${fzf_count}" \
+    bash -c "cd '${project_dir}' && '${root}/tmux/bin/background-jobs'"
+  [ "$status" -eq 0 ]
+  run grep -F "pueue log --full 0" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "less -R" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "full build log" "${log_file}"
   [ "$status" -eq 0 ]
 }
 
