@@ -1,5 +1,16 @@
 alias ls='ls --color=auto'
-alias tm='tmux new -As main'
+
+unalias tmux 2>/dev/null || true
+
+tm() {
+  command tmux new -As "${1:-main}"
+}
+
+alias tl='command tmux list-sessions'
+alias ta='command tmux attach -t'
+alias tad='command tmux attach -d -t'
+alias ts='command tmux new-session -s'
+alias tkss='command tmux kill-session -t'
 
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
