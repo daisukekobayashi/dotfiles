@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+socket_dir="${PROCESS_COMPOSE_SOCKET_DIR:-/tmp}"
+
+pause() {
+  printf 'Press Enter to close...'
+  read -r _ || true
+}
+
+require_command() {
+  local command_name="$1"
+  if command -v "${command_name}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  printf '%s is not installed or not on PATH\n' "${command_name}"
+  return 1
+}
+
+select_with_fzf() {
+  local prompt="$1"
+  local fzf_status selected
+
+  set +e
+  selected="$(fzf --prompt="${prompt}")"
+  fzf_status="$?"
+  set -e
+
+  case "${fzf_status}" in
+    0)
+      printf '%s\n' "${selected}"
+      ;;
+    1|130)
+      return 1
+      ;;
+    *)
+      printf 'fzf failed with exit status %s\n' "${fzf_status}" >&2
+      return 2
+      ;;
+  esac
+}
+
+socket_label() {
+  local socket="$1"
+  local label
+  label="$(basename "${socket}")"
+  label="${label#process-compose-}"
+  label="${label%.sock}"
+  printf '%s\n' "${label}"
+}
+
+candidate_sockets() {
+  find "${socket_dir}" -maxdepth 1 -name 'process-compose-*.sock' -print 2>/dev/null | sort
+}
+
+live_sockets() {
+  local socket
+  while IFS= read -r socket; do
+    [ -n "${socket}" ] || continue
+    if process-compose -U -u "${socket}" project is-ready >/dev/null 2>&1; then
+      printf '%s\n' "${socket}"
+    fi
+  done < <(candidate_sockets)
+}
+
+dashboard_items() {
+  local socket
+  printf '%s\n' \
+    '! Down All' \
+    'r Refresh' \
+    'q Quit'
+  while IFS= read -r socket; do
+    [ -n "${socket}" ] || continue
+    printf '%s\t%s\n' "$(socket_label "${socket}")" "${socket}"
+  done < <(live_sockets)
+}
+
+socket_from_line() {
+  local line="$1"
+  case "${line}" in
+    *$'\t'*)
+      printf '%s\n' "${line##*$'\t'}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+down_all() {
+  local socket found
+  found=0
+  while IFS= read -r socket; do
+    [ -n "${socket}" ] || continue
+    found=1
+    printf 'Stopping %s\n' "$(socket_label "${socket}")"
+    process-compose -U -u "${socket}" down
+  done < <(live_sockets)
+
+  if [ "${found}" -eq 0 ]; then
+    printf 'No process-compose servers found\n'
+  fi
+  pause
+}
+
+server_menu() {
+  local socket="$1"
+  local action
+
+  if ! action="$(
+    printf '%s\n' \
+      'Attach' \
+      'State' \
+      'List' \
+      'Down' \
+      'Back' |
+      select_with_fzf "$(socket_label "${socket}")> "
+  )"; then
+    return
+  fi
+
+  case "${action}" in
+    'Attach')
+      process-compose -U -u "${socket}" attach
+      ;;
+    'State')
+      process-compose -U -u "${socket}" project state
+      pause
+      ;;
+    'List')
+      process-compose -U -u "${socket}" list
+      pause
+      ;;
+    'Down')
+      process-compose -U -u "${socket}" down
+      pause
+      ;;
+    'Back')
+      return
+      ;;
+  esac
+}
+
+main() {
+  local choice socket
+
+  require_command process-compose || {
+    pause
+    exit 0
+  }
+  require_command fzf || {
+    pause
+    exit 0
+  }
+
+  while true; do
+    if ! choice="$(dashboard_items | select_with_fzf 'services> ')"; then
+      return
+    fi
+
+    case "${choice}" in
+      '! Down All')
+        down_all
+        return
+        ;;
+      'r Refresh')
+        continue
+        ;;
+      'q Quit')
+        return
+        ;;
+      *)
+        if socket="$(socket_from_line "${choice}")"; then
+          server_menu "${socket}"
+        fi
+        return
+        ;;
+    esac
+  done
+}
+
+main

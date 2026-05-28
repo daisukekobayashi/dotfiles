@@ -401,7 +401,16 @@
     "category": "Project",
     "description": "Open process-compose or mprocs for long-running services",
     "action": {
-      "tmux": "display-popup -E -h 90% -w 90% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/project-services"
+      "tmux": "display-popup -E -h 85% -w 85% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/project-services"
+    }
+  },
+  {
+    "icon": "",
+    "title": "Project Services: Manage All",
+    "category": "Project",
+    "description": "Attach to or stop any running process-compose project",
+    "action": {
+      "tmux": "display-popup -E -h 80% -w 80% -d '#{pane_current_path}' ~/.dotfiles/tmux/bin/project-services-manage"
     }
   },
   {

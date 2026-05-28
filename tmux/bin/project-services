@@ -6,11 +6,36 @@ pause() {
   read -r _ || true
 }
 
-if [ -f process-compose.yaml ] || [ -f process-compose.yml ]; then
-  if command -v process-compose >/dev/null 2>&1; then
-    exec process-compose up
+project_name() {
+  local name
+  name="$(basename "${PWD}")"
+  name="${name#.}"
+  [ -n "${name}" ] || name="root"
+  printf '%s' "${name}" | tr -cs '[:alnum:]_.-' '-'
+}
+
+project_hash() {
+  pwd -P | cksum | awk '{ print $1 }'
+}
+
+if command -v process-compose >/dev/null 2>&1; then
+  project="$(project_name)"
+  socket_path="/tmp/process-compose-${project}-$(project_hash).sock"
+
+  if ! process-compose -U -u "${socket_path}" project is-ready >/dev/null 2>&1; then
+    process-compose \
+      -U \
+      -u "${socket_path}" \
+      -f /dev/null \
+      --keep-project \
+      -D \
+      up
   fi
 
+  exec process-compose -U -u "${socket_path}" attach
+fi
+
+if [ -f process-compose.yaml ] || [ -f process-compose.yml ]; then
   printf 'process-compose is not installed or not on PATH\n'
   pause
   exit 0
