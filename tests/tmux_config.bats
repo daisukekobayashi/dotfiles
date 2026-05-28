@@ -82,6 +82,7 @@ for (const [title, commandPattern] of [
   ["Project Commands", /(^|[\s/])project-command($|\s)/],
   ["Watch Command", /(^|[\s/])watch-command($|\s)/],
   ["Project Services", /(^|[\s/])project-services($|\s)/],
+  ["Project Services: Manage All", /(^|[\s/])project-services-manage($|\s)/],
   ["Background Jobs: Pueue", /(^|[\s/])background-jobs($|\s)/],
   ["Disk Free", /(^|[\s/])disk-free($|\s)/],
   ["Disk Usage", /(^|\s)gdu \.($|\s)/],
@@ -595,7 +596,9 @@ EOF
     LOG_FILE="${log_file}" \
     bash -c "cd '${project_dir}' && '${root}/tmux/bin/project-services'"
   [ "$status" -eq 0 ]
-  run grep -F "process-compose up" "${log_file}"
+  run grep -E "process-compose -U -u /tmp/process-compose-project-[0-9]+\\.sock project is-ready" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -E "process-compose -U -u /tmp/process-compose-project-[0-9]+\\.sock attach" "${log_file}"
   [ "$status" -eq 0 ]
 
   run env \
@@ -609,6 +612,171 @@ EOF
   run grep -F "pueue group add project" "${log_file}"
   [ "$status" -eq 0 ]
   run grep -F "pueue add -g project --working-directory ${project_dir} -- npm run dev" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux project services starts an empty detached process-compose project without a config file" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/project-services-empty.log"
+  project_dir="${BATS_TEST_TMPDIR}/project"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/process-compose" <<'EOF'
+#!/usr/bin/env bash
+printf 'process-compose %s\n' "$*" >> "${LOG_FILE}"
+if [ "$1" = "-U" ] && [ "$2" = "-u" ] && [ "$4" = "project" ] && [ "$5" = "is-ready" ]; then
+  exit 1
+fi
+EOF
+  chmod +x "${fake_bin}/process-compose"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_dir}' && '${root}/tmux/bin/project-services'"
+  [ "$status" -eq 0 ]
+  run grep -E "process-compose -U -u /tmp/process-compose-project-[0-9]+\\.sock project is-ready" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -E "process-compose -U -u /tmp/process-compose-project-[0-9]+\\.sock -f /dev/null --keep-project -D up" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -E "process-compose -U -u /tmp/process-compose-project-[0-9]+\\.sock attach" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux project services attaches an existing process-compose project" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/project-services-attach.log"
+  project_dir="${BATS_TEST_TMPDIR}/.dotfiles"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/process-compose" <<'EOF'
+#!/usr/bin/env bash
+printf 'process-compose %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/process-compose"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_dir}' && '${root}/tmux/bin/project-services'"
+  [ "$status" -eq 0 ]
+  run grep -E "process-compose -U -u /tmp/process-compose-dotfiles-[0-9]+\\.sock project is-ready" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -E "process-compose -U -u /tmp/process-compose-dotfiles-[0-9]+\\.sock attach" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F -- "-D up" "${log_file}"
+  [ "$status" -ne 0 ]
+}
+
+@test "tmux project services gives same-name project directories distinct sockets" {
+  local root fake_bin log_file project_a project_b
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/project-services-sockets.log"
+  project_a="${BATS_TEST_TMPDIR}/a/project"
+  project_b="${BATS_TEST_TMPDIR}/b/project"
+  mkdir -p "${fake_bin}" "${project_a}" "${project_b}"
+
+  cat > "${fake_bin}/process-compose" <<'EOF'
+#!/usr/bin/env bash
+printf 'process-compose %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/process-compose"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_a}' && '${root}/tmux/bin/project-services'"
+  [ "$status" -eq 0 ]
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_b}' && '${root}/tmux/bin/project-services'"
+  [ "$status" -eq 0 ]
+
+  mapfile -t sockets < <(awk '{ for (i = 1; i <= NF; i++) if ($i == "-u") print $(i + 1) }' "${log_file}" | sort -u)
+  [ "${#sockets[@]}" -eq 2 ]
+  [[ "${sockets[0]}" =~ ^/tmp/process-compose-project-[0-9]+\.sock$ ]]
+  [[ "${sockets[1]}" =~ ^/tmp/process-compose-project-[0-9]+\.sock$ ]]
+}
+
+@test "tmux project services manager stops a selected process-compose server" {
+  local root fake_bin log_file socket_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/project-services-manage.log"
+  socket_dir="${BATS_TEST_TMPDIR}/sockets"
+  mkdir -p "${fake_bin}" "${socket_dir}"
+  touch "${socket_dir}/process-compose-alpha-111.sock" "${socket_dir}/process-compose-beta-222.sock"
+
+  cat > "${fake_bin}/process-compose" <<'EOF'
+#!/usr/bin/env bash
+printf 'process-compose %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/process-compose"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+if [ ! -f "${FZF_ONCE}" ]; then
+  touch "${FZF_ONCE}"
+  printf 'beta-222\t%s/process-compose-beta-222.sock\n' "${SOCKET_DIR}"
+else
+  printf 'Down\n'
+fi
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    SOCKET_DIR="${socket_dir}" \
+    FZF_ONCE="${BATS_TEST_TMPDIR}/fzf-once" \
+    PROCESS_COMPOSE_SOCKET_DIR="${socket_dir}" \
+    bash -c "'${root}/tmux/bin/project-services-manage'"
+  [ "$status" -eq 0 ]
+  run grep -F "process-compose -U -u ${socket_dir}/process-compose-beta-222.sock down" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "process-compose -U -u ${socket_dir}/process-compose-alpha-111.sock down" "${log_file}"
+  [ "$status" -ne 0 ]
+}
+
+@test "tmux project services manager can stop all process-compose servers" {
+  local root fake_bin log_file socket_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/project-services-manage-all.log"
+  socket_dir="${BATS_TEST_TMPDIR}/sockets"
+  mkdir -p "${fake_bin}" "${socket_dir}"
+  touch "${socket_dir}/process-compose-alpha-111.sock" "${socket_dir}/process-compose-beta-222.sock"
+
+  cat > "${fake_bin}/process-compose" <<'EOF'
+#!/usr/bin/env bash
+printf 'process-compose %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/process-compose"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '! Down All\n'
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    PROCESS_COMPOSE_SOCKET_DIR="${socket_dir}" \
+    bash -c "'${root}/tmux/bin/project-services-manage'"
+  [ "$status" -eq 0 ]
+  run grep -F "process-compose -U -u ${socket_dir}/process-compose-alpha-111.sock down" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "process-compose -U -u ${socket_dir}/process-compose-beta-222.sock down" "${log_file}"
   [ "$status" -eq 0 ]
 }
 
