@@ -406,7 +406,7 @@
   },
   {
     "icon": "",
-    "title": "Background Jobs",
+    "title": "Background Jobs: Pueue",
     "category": "Project",
     "description": "Manage long-running commands with pueue",
     "action": {

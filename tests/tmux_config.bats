@@ -29,6 +29,20 @@ load 'helpers/test_helper.bash'
   [ "$status" -ne 0 ]
 }
 
+@test "sheldon does not install fzf binary because packages manage fzf" {
+  run grep -F '[plugins.fzf]' "$(repo_root)/sheldon/plugins.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'github = "junegunn/fzf"' "$(repo_root)/sheldon/plugins.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F 'fzf-install' "$(repo_root)/sheldon/plugins.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F '.fzf.zsh' "$(repo_root)/.zshrc"
+  [ "$status" -ne 0 ]
+}
+
 @test "tmux passes terminal identity through for yazi" {
   run grep -Eq '^set[[:space:]]+-gq?[[:space:]]+allow-passthrough[[:space:]]+on([[:space:]]|$)' "$(repo_root)/.tmux.conf"
   [ "$status" -eq 0 ]
@@ -68,7 +82,7 @@ for (const [title, commandPattern] of [
   ["Project Commands", /(^|[\s/])project-command($|\s)/],
   ["Watch Command", /(^|[\s/])watch-command($|\s)/],
   ["Project Services", /(^|[\s/])project-services($|\s)/],
-  ["Background Jobs", /(^|[\s/])background-jobs($|\s)/],
+  ["Background Jobs: Pueue", /(^|[\s/])background-jobs($|\s)/],
   ["Disk Free", /(^|[\s/])disk-free($|\s)/],
   ["Disk Usage", /(^|\s)gdu \.($|\s)/],
   ["Disk Usage Home", /(^|\s)gdu ~($|\s)/],
@@ -578,12 +592,64 @@ EOF
     PATH="${fake_bin}:/usr/bin:/bin" \
     LOG_FILE="${log_file}" \
     PUEUE_READY="${BATS_TEST_TMPDIR}/pueue-ready" \
-    bash -c "printf 'npm run dev\n\n' | '${root}/tmux/bin/background-jobs'"
+    bash -c "cd '${project_dir}' && printf 'npm run dev\n\n' | '${root}/tmux/bin/background-jobs'"
   [ "$status" -eq 0 ]
   run grep -F "pueued -d" "${log_file}"
   [ "$status" -eq 0 ]
-  run grep -F "pueue add -- npm run dev" "${log_file}"
+  run grep -F "pueue group add project" "${log_file}"
   [ "$status" -eq 0 ]
+  run grep -F "pueue add -g project --working-directory ${project_dir} -- npm run dev" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux background job wrapper labels dot directories with readable pueue groups" {
+  local root fake_bin log_file project_dir
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/background-jobs.log"
+  project_dir="${BATS_TEST_TMPDIR}/.dotfiles"
+  mkdir -p "${fake_bin}" "${project_dir}"
+
+  cat > "${fake_bin}/fzf" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf 'Add Command\n'
+EOF
+  chmod +x "${fake_bin}/fzf"
+
+  cat > "${fake_bin}/pueue" <<'EOF'
+#!/usr/bin/env bash
+printf 'pueue %s\n' "$*" >> "${LOG_FILE}"
+EOF
+  chmod +x "${fake_bin}/pueue"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    bash -c "cd '${project_dir}' && printf 'streamlit run app.py\n\n' | '${root}/tmux/bin/background-jobs'"
+  [ "$status" -eq 0 ]
+  run grep -F "pueue group add dotfiles" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "pueue add -g dotfiles --working-directory ${project_dir} -- streamlit run app.py" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux background job wrapper keeps popup open when fzf is unavailable" {
+  local root fake_bin
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/pueue" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/pueue"
+
+  run env PATH="${fake_bin}:/usr/bin:/bin" bash -c "printf '\n' | '${root}/tmux/bin/background-jobs'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"fzf is not installed or not on PATH"* ]]
+  [[ "$output" == *"Press Enter to close..."* ]]
 }
 
 @test "zsh initializes zoxide and atuin when installed" {
