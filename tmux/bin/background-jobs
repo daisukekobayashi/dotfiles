@@ -6,6 +6,19 @@ pause() {
   read -r _ || true
 }
 
+current_group() {
+  local name
+  name="$(basename "${PWD}")"
+  name="${name#.}"
+  [ -n "${name}" ] || name="root"
+  printf '%s\n' "${name}"
+}
+
+ensure_group() {
+  local group="$1"
+  pueue group add "${group}" >/dev/null 2>&1 || true
+}
+
 ensure_pueue_daemon() {
   if ! command -v pueue >/dev/null 2>&1; then
     printf 'pueue is not installed or not on PATH\n'
@@ -35,18 +48,51 @@ ensure_pueue_daemon || {
   exit 0
 }
 
+if ! command -v fzf >/dev/null 2>&1; then
+  printf 'fzf is not installed or not on PATH\n'
+  pause
+  exit 0
+fi
+
+group="$(current_group)"
+
+set +e
 choice="$(
   printf '%s\n' \
-    'Status' \
+    "Status: Current Group (${group})" \
+    'Status: All Groups' \
     'Add Command' \
     'Follow Task' \
+    'Show Log' \
+    'Restart Task' \
     'Kill Task' \
+    'Clean Finished' \
+    'Groups' \
     'Shutdown Daemon' |
-    fzf --prompt='pueue> '
-)" || exit 0
+    fzf --prompt="pueue:${group}> "
+)"
+fzf_status="$?"
+set -e
+
+case "${fzf_status}" in
+  0)
+    ;;
+  1|130)
+    exit 0
+    ;;
+  *)
+    printf 'fzf failed with exit status %s\n' "${fzf_status}"
+    pause
+    exit 0
+    ;;
+esac
 
 case "${choice}" in
-  'Status')
+  'Status: Current Group ('*)
+    pueue status -g "${group}"
+    pause
+    ;;
+  'Status: All Groups')
     pueue status
     pause
     ;;
@@ -54,8 +100,9 @@ case "${choice}" in
     printf 'command> '
     read -r command_line || exit 0
     [ -n "${command_line}" ] || exit 0
-    pueue add -- "${command_line}"
-    pueue status
+    ensure_group "${group}"
+    pueue add -g "${group}" --working-directory "${PWD}" -- "${command_line}"
+    pueue status -g "${group}"
     pause
     ;;
   'Follow Task')
@@ -64,12 +111,39 @@ case "${choice}" in
     [ -n "${task_id}" ] || exit 0
     exec pueue follow "${task_id}"
     ;;
+  'Show Log')
+    printf 'task id> '
+    read -r task_id || exit 0
+    if [ -n "${task_id}" ]; then
+      pueue log "${task_id}"
+    else
+      pueue log -g "${group}"
+    fi
+    pause
+    ;;
+  'Restart Task')
+    printf 'task id> '
+    read -r task_id || exit 0
+    [ -n "${task_id}" ] || exit 0
+    pueue restart "${task_id}"
+    pueue status -g "${group}"
+    pause
+    ;;
   'Kill Task')
     printf 'task id> '
     read -r task_id || exit 0
     [ -n "${task_id}" ] || exit 0
     pueue kill "${task_id}"
-    pueue status
+    pueue status -g "${group}"
+    pause
+    ;;
+  'Clean Finished')
+    pueue clean
+    pueue status -g "${group}"
+    pause
+    ;;
+  'Groups')
+    pueue group
     pause
     ;;
   'Shutdown Daemon')

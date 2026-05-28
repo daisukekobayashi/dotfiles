@@ -273,6 +273,7 @@ EOF
     'lazydocker = "0.25"'
     'oxker = "0.13"'
     'yazi = "26.5.6"'
+    'fzf = "0.73.1"'
     'fd = "10.4.2"'
     'bat = "0.26.1"'
     'zoxide = "0.9.9"'
@@ -376,7 +377,7 @@ EOF
   run grep -F 'brew "f1bonacc1/tap/process-compose"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  for tool in yazi fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy ast-grep jless jqp csvlens lnav dive oha k9s termscp eza jq yq sd hyperfine procs xh tokei; do
+  for tool in yazi fzf fd bat zoxide atuin git-delta mprocs just watchexec pueue duf gdu dust dua-cli lazysql harlequin glow resterm nvtop bandwhich trippy ast-grep jless jqp csvlens lnav dive oha k9s termscp eza jq yq sd hyperfine procs xh tokei; do
     run grep -F "brew \"${tool}\"" "$(repo_root)/brew/Brewfile"
     [ "$status" -eq 0 ]
   done
