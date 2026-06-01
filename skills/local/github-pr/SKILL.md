@@ -37,6 +37,20 @@ This skill is not for:
    - Preserve the selected template headings and checklist structure.
    - Fill only facts supported by the current diff, commits, or verification logs.
    - Leave unknown template fields as clear placeholders instead of inventing details.
+   - In the related issues section, use `Closes #123` when this PR fully
+     satisfies the issue acceptance criteria and the issue should close when the
+     PR merges.
+   - Use `Refs #123` for parent trackers, umbrella issues, design/context
+     issues, partial implementation, follow-up work, or related issues that are
+     not fully completed by this PR.
+   - Prefer `Closes` as the canonical auto-close keyword. Use `Fixes` only when
+     the repo or user explicitly wants bug-fix wording. Do not use `Relates to`;
+     use `Refs` for non-closing relationships.
+   - For multiple completed issues, repeat the keyword for each issue, for
+     example `Closes #123` and `Closes #124`, then add any parent tracker as
+     `Refs #316`.
+   - Do not use an auto-closing keyword for a parent tracker unless this PR
+     completes the whole tracker.
 4. Avoid duplicate PRs.
    - Run `gh pr view --json number,url,state,headRefName,baseRefName` on the current branch.
    - If a PR already exists, return that PR and do not create another one.

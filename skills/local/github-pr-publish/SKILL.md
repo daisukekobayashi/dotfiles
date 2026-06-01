@@ -76,6 +76,7 @@ Still stop and ask before any action outside that narrow scope, including:
 8. Create or resolve the PR.
    - Use the `github-pr` skill for the target branch.
    - That skill should use a pull request template when present and a minimal generic body when no template exists.
+   - That skill should apply its related issue rules: `Closes #123` for issues fully completed by the PR, and `Refs #123` for parent trackers, partial work, follow-ups, or context.
    - Reuse an existing PR when one already exists for the branch.
 9. Verify and report the result.
    - Run `gh pr view --json number,url,title,state,baseRefName,headRefName`.
