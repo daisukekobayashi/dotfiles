@@ -61,6 +61,28 @@ Resolution rules:
 - Prefer body text for dependency notes. Add Work Item relations only when
   existing Work Item IDs and relation intent are unambiguous.
 
+## Work Item Links And State Transitions
+
+- For Azure Repos PRs, prefer Azure DevOps Work Item links over GitHub-style
+  prose. Use `az repos pr create --work-items` when creating a PR if the Work
+  Item ID is known and the CLI supports it; otherwise add the link after PR
+  creation with `az repos pr work-item add`.
+- Use state-transition keywords in the PR description, such as `Fixes #123`,
+  `Closes #123`, or `Resolves #123`, only when the user explicitly wants the
+  Work Item to transition on PR completion or merge and the PR fully completes
+  that Work Item.
+- For parent Work Items, epics, features, trackers, partial work, follow-ups, or
+  context-only references, do not use transition keywords. Use a neutral note
+  such as `Refs #123`, or link the Work Item without a transition keyword.
+- Do not transition parent tracker Work Items unless this PR completes the whole
+  tracker.
+- When multiple Work Items should transition, repeat the transition keyword for
+  each Work Item. Do not write one keyword followed by several IDs if all should
+  transition.
+- For GitHub repositories connected to Azure Boards, use `AB#123` references.
+  Use `Fixes AB#123` or a similar transition keyword only when the Work Item
+  should transition; use plain `AB#123` or `Refs AB#123` for non-closing links.
+
 ## Pull Requests
 
 - Use `az repos pr` where possible.
