@@ -23,7 +23,8 @@ teardown() {
   [[ ! "$(cat "${output_path}")" == *"Sources:"* ]]
   [[ ! "$(cat "${output_path}")" == *"Codex Overrides"* ]]
   [[ ! "$(cat "${output_path}")" == *$'\n---\n'* ]]
-  [[ "$(cat "${output_path}")" == *"## Instruction Priority"* ]]
+  [[ "$(cat "${output_path}")" == *"# Global Agent Instructions"* ]]
+  [[ "$(cat "${output_path}")" == *"## Approval"* ]]
 }
 
 @test "compose-rules emits metadata only when requested" {
