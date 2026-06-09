@@ -172,14 +172,45 @@ function parseArgs(argv: string[]): ParsedArgs {
   };
 }
 
+const WINDOWS_EXECUTABLE_EXTENSIONS = [".exe", ".cmd", ".bat", ".com"];
+
+function hasWindowsExecutableExtension(commandPath: string): boolean {
+  return WINDOWS_EXECUTABLE_EXTENSIONS.includes(path.extname(commandPath).toLowerCase());
+}
+
+function resolveWindowsCommand(command: string, env: NodeJS.ProcessEnv = process.env): string {
+  const result = spawnSync("where", [command], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  if (result.status !== 0) {
+    fail(`Required command not found: ${command}`);
+  }
+
+  const candidates = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const candidate of candidates) {
+    if (hasWindowsExecutableExtension(candidate)) {
+      return candidate;
+    }
+
+    for (const extension of WINDOWS_EXECUTABLE_EXTENSIONS) {
+      const executableCandidate = `${candidate}${extension}`;
+      if (fs.existsSync(executableCandidate)) {
+        return executableCandidate;
+      }
+    }
+  }
+
+  fail(`Required command not found: ${command}`);
+}
+
 function resolveCommand(command: string, env: NodeJS.ProcessEnv = process.env): string {
-  const result = process.platform === "win32"
-    ? spawnSync("where", [command], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
-    : spawnSync("sh", ["-c", `command -v ${shellQuote(command)}`], {
-        env,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      });
+  if (process.platform === "win32") {
+    return resolveWindowsCommand(command, env);
+  }
+
+  const result = spawnSync("sh", ["-c", `command -v ${shellQuote(command)}`], {
+    env,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
   if (result.status !== 0) {
     fail(`Required command not found: ${command}`);
   }

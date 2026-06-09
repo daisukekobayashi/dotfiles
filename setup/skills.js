@@ -116,14 +116,38 @@ function parseArgs(argv) {
         agents,
     };
 }
+const WINDOWS_EXECUTABLE_EXTENSIONS = [".exe", ".cmd", ".bat", ".com"];
+function hasWindowsExecutableExtension(commandPath) {
+    return WINDOWS_EXECUTABLE_EXTENSIONS.includes(path.extname(commandPath).toLowerCase());
+}
+function resolveWindowsCommand(command, env = process.env) {
+    const result = (0, node_child_process_1.spawnSync)("where", [command], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    if (result.status !== 0) {
+        fail(`Required command not found: ${command}`);
+    }
+    const candidates = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    for (const candidate of candidates) {
+        if (hasWindowsExecutableExtension(candidate)) {
+            return candidate;
+        }
+        for (const extension of WINDOWS_EXECUTABLE_EXTENSIONS) {
+            const executableCandidate = `${candidate}${extension}`;
+            if (fs.existsSync(executableCandidate)) {
+                return executableCandidate;
+            }
+        }
+    }
+    fail(`Required command not found: ${command}`);
+}
 function resolveCommand(command, env = process.env) {
-    const result = process.platform === "win32"
-        ? (0, node_child_process_1.spawnSync)("where", [command], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
-        : (0, node_child_process_1.spawnSync)("sh", ["-c", `command -v ${shellQuote(command)}`], {
-            env,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "ignore"],
-        });
+    if (process.platform === "win32") {
+        return resolveWindowsCommand(command, env);
+    }
+    const result = (0, node_child_process_1.spawnSync)("sh", ["-c", `command -v ${shellQuote(command)}`], {
+        env,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+    });
     if (result.status !== 0) {
         fail(`Required command not found: ${command}`);
     }

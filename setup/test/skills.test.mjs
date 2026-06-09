@@ -145,18 +145,23 @@ done
       `#!/bin/bash
 set -euo pipefail
 command_name="$1"
+found=0
 IFS=':' read -ra path_entries <<< "\${PATH}"
 for path_entry in "\${path_entries[@]}"; do
   if [ -x "\${path_entry}/\${command_name}" ]; then
     printf '%s\\n' "\${path_entry}/\${command_name}"
-    exit 0
+    found=1
+  fi
+  if [ -x "\${path_entry}/\${command_name}.exe" ]; then
+    printf '%s\\n' "\${path_entry}/\${command_name}.exe"
+    found=1
   fi
   if [ -x "\${path_entry}/\${command_name}.cmd" ]; then
     printf '%s\\n' "\${path_entry}/\${command_name}.cmd"
-    exit 0
+    found=1
   fi
 done
-exit 1
+exit $((found == 0))
 `,
     );
     await writeExecutable(
@@ -382,6 +387,39 @@ printf '%s\\n' "find-skills" > .agents/skills/find-skills/SKILL.md
     withWindowsWhere: true,
   });
   try {
+    const result = runSkillsAsWindows(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(await readText(fixture.log), /skills add vercel-labs\/skills/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows user scope prefers executable npx shim over extensionless npx", async () => {
+  const fixture = await createFixture({
+    npxName: "npx",
+    npxBody: `#!/bin/bash
+printf 'extensionless npx should not run\\n' >&2
+exit 99
+`,
+    isolatedPath: true,
+    withWindowsWhere: true,
+  });
+  try {
+    await writeExecutable(
+      path.join(fixture.bin, "npx.exe"),
+      `#!/bin/bash
+set -euo pipefail
+PATH="/bin:\${PATH}"
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+mkdir -p .agents/skills
+printf '{"version":3,"source":"%s"}\\n' "$3" > skills-lock.json
+mkdir -p .agents/skills/find-skills
+printf '%s\\n' "find-skills" > .agents/skills/find-skills/SKILL.md
+`,
+    );
+
     const result = runSkillsAsWindows(["--scope", "user", "--profile", "base"], fixture);
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
