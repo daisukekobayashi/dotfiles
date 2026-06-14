@@ -371,6 +371,52 @@ test("user scope copies skill directories when symlinks are denied", async () =>
   }
 });
 
+test("user scope can skip linking user agent skill directories", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = spawnSync(process.execPath, [skillsRuntime, "--scope", "user", "--profile", "base"], {
+      cwd: repoRoot,
+      env: {
+        ...fixture.env,
+        SETUP_SKIP_USER_AGENT_SKILL_LINKS: "1",
+      },
+      encoding: "utf8",
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills", "find-skills")), true);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills", "local-one")), true);
+    assert.equal(existsSync(path.join(fixture.home, ".agents", "skills")), false);
+    assert.equal(existsSync(path.join(fixture.home, ".claude", "skills")), false);
+    assert.match(result.stdout, /User agent skill links skipped/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("user scope can skip linking local skills while recording metadata", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = spawnSync(process.execPath, [skillsRuntime, "--scope", "user", "--profile", "base"], {
+      cwd: repoRoot,
+      env: {
+        ...fixture.env,
+        SETUP_SKIP_USER_LOCAL_SKILL_LINKS: "1",
+      },
+      encoding: "utf8",
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills", "find-skills")), true);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user", "skills", "local-one")), false);
+    const metadata = JSON.parse(await readText(path.join(fixture.dotfiles, ".agents", "user", "skills-profile.json")));
+    assert.deepEqual(metadata.localSkills, ["local-one"]);
+    assert.match(result.stdout, /User local skill links skipped/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("Windows user scope runs npx.cmd when npx resolves through PATHEXT", async () => {
   const fixture = await createFixture({
     npxName: "npx.cmd",

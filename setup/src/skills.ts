@@ -46,6 +46,8 @@ interface SetupContext {
   home: string;
   tmpdir: string;
   dryRun: boolean;
+  skipUserLocalSkillLinks: boolean;
+  skipUserAgentSkillLinks: boolean;
 }
 
 const SUPPORTED_AGENTS = new Set<Agent>(["codex", "claude-code"]);
@@ -60,6 +62,14 @@ function info(message: string): void {
 
 function warn(message: string): void {
   console.warn(message);
+}
+
+function envFlag(name: string): boolean {
+  const value = process.env[name] || "0";
+  if (value !== "0" && value !== "1") {
+    fail(`${name} must be 0 or 1: ${value}`);
+  }
+  return value === "1";
 }
 
 function csv(value: string): string[] {
@@ -665,7 +675,16 @@ function linkUserAgentSkillDirs(restoreSkillsDir: string, setupHome: string, age
   }
 }
 
-function setupUserSkills(dotfilesRoot: string, setupHome: string, setupTmpdir: string, profilesCsv: string, agents: Agent[], dryRun: boolean): void {
+function setupUserSkills(
+  dotfilesRoot: string,
+  setupHome: string,
+  setupTmpdir: string,
+  profilesCsv: string,
+  agents: Agent[],
+  dryRun: boolean,
+  skipUserLocalSkillLinks: boolean,
+  skipUserAgentSkillLinks: boolean,
+): void {
   const requestedProfiles = csv(profilesCsv || "base");
   const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "user");
   const restoreRoot = path.join(dotfilesRoot, ".agents", "user");
@@ -684,11 +703,19 @@ function setupUserSkills(dotfilesRoot: string, setupHome: string, setupTmpdir: s
     info(`DRY-RUN mkdir -p ${stagingSkillsDir}`);
     info(`DRY-RUN mkdir -p ${tempInstallDir}`);
     logDryRunUserExternalInstalls(tempInstallDir, plan, npmCacheDir);
-    logDryRunLinkLocalSkills(plan, "user", stagingSkillsDir);
+    if (skipUserLocalSkillLinks) {
+      info("DRY-RUN skip user local skill links");
+    } else {
+      logDryRunLinkLocalSkills(plan, "user", stagingSkillsDir);
+    }
     info(`DRY-RUN write skills metadata ${stagingMetadata}`);
     info(`DRY-RUN swap ${stagingSkillsDir} into ${restoreSkillsDir}`);
     info(`DRY-RUN mv ${stagingMetadata} ${path.join(restoreRoot, "skills-profile.json")}`);
-    logDryRunUserAgentSkillDirs(restoreSkillsDir, setupHome, agents);
+    if (skipUserAgentSkillLinks) {
+      info("DRY-RUN skip user agent skill links");
+    } else {
+      logDryRunUserAgentSkillDirs(restoreSkillsDir, setupHome, agents);
+    }
     info(`User skills installed for profiles: ${requestedProfiles.join(",")}`);
     return;
   }
@@ -703,7 +730,11 @@ function setupUserSkills(dotfilesRoot: string, setupHome: string, setupTmpdir: s
 
   try {
     runUserExternalInstalls(tempInstallDir, stagingSkillsDir, plan, npmCacheDir);
-    linkLocalSkills(plan, dotfilesRoot, "user", stagingSkillsDir);
+    if (skipUserLocalSkillLinks) {
+      info("User local skill links skipped");
+    } else {
+      linkLocalSkills(plan, dotfilesRoot, "user", stagingSkillsDir);
+    }
     writeMetadata(plan, stagingMetadata);
     swapUserSkillsView(restoreRoot, restoreSkillsDir, stagingSkillsDir, stagingMetadata);
   } catch (error) {
@@ -716,7 +747,11 @@ function setupUserSkills(dotfilesRoot: string, setupHome: string, setupTmpdir: s
   removePath(stagingSkillsDir);
   removePath(stagingMetadata);
   removePath(tempInstallDir);
-  linkUserAgentSkillDirs(restoreSkillsDir, setupHome, agents);
+  if (skipUserAgentSkillLinks) {
+    info("User agent skill links skipped");
+  } else {
+    linkUserAgentSkillDirs(restoreSkillsDir, setupHome, agents);
+  }
   info(`User skills installed for profiles: ${requestedProfiles.join(",")}`);
 }
 
@@ -834,15 +869,13 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
 
 function setupContext(): SetupContext {
   const defaultDotfilesRoot = path.resolve(__dirname, "..");
-  const dryRun = process.env.SETUP_DRY_RUN || "0";
-  if (dryRun !== "0" && dryRun !== "1") {
-    fail(`SETUP_DRY_RUN must be 0 or 1: ${dryRun}`);
-  }
   return {
     dotfilesRoot: path.resolve(process.env.SETUP_DOTFILES_ROOT || defaultDotfilesRoot),
     home: path.resolve(process.env.SETUP_HOME || process.env.HOME || os.homedir()),
     tmpdir: path.resolve(process.env.SETUP_TMPDIR || os.tmpdir()),
-    dryRun: dryRun === "1",
+    dryRun: envFlag("SETUP_DRY_RUN"),
+    skipUserLocalSkillLinks: envFlag("SETUP_SKIP_USER_LOCAL_SKILL_LINKS"),
+    skipUserAgentSkillLinks: envFlag("SETUP_SKIP_USER_AGENT_SKILL_LINKS"),
   };
 }
 
@@ -856,7 +889,16 @@ function main(argv: string[]): void {
   }
 
   if (parsed.scope === "user") {
-    setupUserSkills(context.dotfilesRoot, context.home, context.tmpdir, parsed.profiles, parsed.agents, context.dryRun);
+    setupUserSkills(
+      context.dotfilesRoot,
+      context.home,
+      context.tmpdir,
+      parsed.profiles,
+      parsed.agents,
+      context.dryRun,
+      context.skipUserLocalSkillLinks,
+      context.skipUserAgentSkillLinks,
+    );
     return;
   }
 
