@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local Code Review"
+  short_description: "Review local changes with Codex or Claude CLI"
+  default_prompt: "Use local-code-review to run a read-only local code review with the selected provider."

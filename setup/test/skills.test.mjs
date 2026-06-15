@@ -34,6 +34,12 @@ const azureDevOpsLocalSkills = [
   "azure-devops-pr-review",
   "azure-devops-merge-cleanup",
 ];
+const baseLocalSkills = [
+  "execution-context-first-repo-onboarding",
+  "local-code-review",
+  "local-runtime-port-isolation",
+  "serena-session-init",
+];
 const beadsLocalSkills = [
   "beads-issue-create",
   "beads-issue-triage",
@@ -323,6 +329,7 @@ test("repository profiles keep provider workflow skills separated", async () => 
 
   assert.equal(base.description, "Provider-neutral baseline workflow skills for repository work.");
   assert.deepEqual(skillsForSource(base, "github/awesome-copilot"), ["git-commit"]);
+  assert.deepEqual(base.local, baseLocalSkills);
   for (const skillName of githubLocalSkills) {
     assert.equal(base.local.includes(skillName), false, `${skillName} should not be in base`);
   }
@@ -337,6 +344,9 @@ test("repository profiles keep provider workflow skills separated", async () => 
   assert.deepEqual(beads.local, beadsLocalSkills);
 
   for (const skillName of azureDevOpsLocalSkills) {
+    assert.equal(existsSync(path.join(repoRoot, "skills", "local", skillName, "SKILL.md")), true);
+  }
+  for (const skillName of baseLocalSkills) {
     assert.equal(existsSync(path.join(repoRoot, "skills", "local", skillName, "SKILL.md")), true);
   }
   for (const skillName of beadsLocalSkills) {

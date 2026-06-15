@@ -57,6 +57,7 @@
   ],
   "local": [
     "execution-context-first-repo-onboarding",
+    "local-code-review",
     "local-runtime-port-isolation",
     "serena-session-init"
   ]

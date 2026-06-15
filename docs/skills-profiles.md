@@ -146,7 +146,7 @@ Include:
 - `brainstorming`
 - `grill-me`
 - planning, debugging, TDD, verification, and code review workflow skills
-- repository onboarding and runtime isolation local skills
+- repository onboarding, local code review, and runtime isolation local skills
 - `git-commit`
 
 Use `base,github` when you want the previous GitHub-enabled baseline.
