@@ -54,6 +54,7 @@ terraform = "1.14"
 typst = "0.14"
 shellcheck = "0.11"
 bats = "1.13"
+"aqua:gastownhall/beads" = "1.0"
 
 [settings]
 cargo.binstall = false
