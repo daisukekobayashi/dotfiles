@@ -36,6 +36,7 @@ const azureDevOpsLocalSkills = [
 ];
 const beadsLocalSkills = [
   "beads-issue-create",
+  "beads-issue-triage",
   "beads-issue-worktree",
   "beads-merge-cleanup",
 ];

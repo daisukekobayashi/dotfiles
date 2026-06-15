@@ -165,6 +165,7 @@ GitHub `issue` skills map to Azure DevOps `work-item` skills when using the Azur
 Beads workflow skills:
 
 - `beads-issue-create`
+- `beads-issue-triage`
 - `beads-issue-worktree`
 - `beads-merge-cleanup`
 

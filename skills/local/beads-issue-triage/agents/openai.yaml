@@ -1,0 +1,4 @@
+interface:
+  display_name: "Beads Issue Triage"
+  short_description: "Triage Beads issues and recommend next work"
+  default_prompt: "Use beads-issue-triage to rank ready Beads issues and identify safe parallel work."
