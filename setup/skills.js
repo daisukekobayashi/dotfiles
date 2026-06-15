@@ -355,6 +355,24 @@ function copyDirectoryContents(sourceDir, targetDir) {
         });
     }
 }
+function copyMissingDirectoryEntries(sourceDir, targetDir) {
+    if (!fs.existsSync(sourceDir)) {
+        return;
+    }
+    fs.mkdirSync(targetDir, { recursive: true });
+    for (const entry of fs.readdirSync(sourceDir)) {
+        const targetEntry = path.join(targetDir, entry);
+        if (fs.existsSync(targetEntry) || getLinkTarget(targetEntry)) {
+            continue;
+        }
+        fs.cpSync(path.join(sourceDir, entry), targetEntry, {
+            recursive: true,
+            dereference: false,
+            force: false,
+            verbatimSymlinks: true,
+        });
+    }
+}
 function normalizePath(targetPath) {
     return path.resolve(targetPath);
 }
@@ -701,6 +719,15 @@ function rollbackProjectTargets(records) {
     }
     warn("Restored previous project skills after failed install");
 }
+function restoreUnmanagedProjectSkills(records, projectRoot, agents) {
+    const agentSkillDirs = new Set(agents.map((agent) => agentSkillDir(projectRoot, agent)));
+    for (const record of records) {
+        if (!record.backupPath || !agentSkillDirs.has(record.targetPath)) {
+            continue;
+        }
+        copyMissingDirectoryEntries(record.backupPath, record.targetPath);
+    }
+}
 function gitProjectRoot(cwd) {
     const gitCommand = resolveCommand("git");
     const result = (0, node_child_process_1.spawnSync)(gitCommand, ["-C", cwd, "rev-parse", "--show-toplevel"], {
@@ -749,6 +776,7 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
     try {
         runExternalInstalls(projectRoot, plan, agents, npmCacheDir);
         linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
+        restoreUnmanagedProjectSkills(backups, projectRoot, agents);
         writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
     }
     catch (error) {

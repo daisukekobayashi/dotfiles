@@ -563,6 +563,86 @@ test("project scope installs external and local skills for selected agents", asy
   }
 });
 
+test("project scope preserves unmanaged existing skills when install refreshes targets", async () => {
+  const fixture = await createFixture({
+    npxBody: `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+
+if [ "$#" -lt 3 ] || [ "$1" != "skills" ] || [ "$2" != "add" ]; then
+  printf 'unexpected npx invocation: %s\\n' "$*" >&2
+  exit 1
+fi
+
+shift 2
+source_name="$1"
+shift
+
+agents=()
+skills=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --agent)
+      agents+=("$2")
+      shift 2
+      ;;
+    --skill)
+      skills+=("$2")
+      shift 2
+      ;;
+    --copy|--yes)
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [ ! -f .refresh-targets-once ]; then
+  rm -rf .agents/skills .claude/skills
+  touch .refresh-targets-once
+fi
+mkdir -p .agents/skills .claude/skills
+printf '{"version":3,"source":"%s"}\\n' "\${source_name}" > skills-lock.json
+for skill_name in "\${skills[@]}"; do
+  for agent_name in "\${agents[@]}"; do
+    case "\${agent_name}" in
+      codex)
+        mkdir -p ".agents/skills/\${skill_name}"
+        printf '%s\\n' "\${skill_name}" > ".agents/skills/\${skill_name}/SKILL.md"
+        ;;
+      claude-code)
+        mkdir -p ".claude/skills/\${skill_name}"
+        printf '%s\\n' "\${skill_name}" > ".claude/skills/\${skill_name}/SKILL.md"
+        ;;
+    esac
+  done
+done
+`,
+  });
+  try {
+    await mkdir(path.join(fixture.project, ".agents", "skills", "beads-generated"), { recursive: true });
+    await mkdir(path.join(fixture.project, ".claude", "skills", "beads-generated"), { recursive: true });
+    await writeFile(path.join(fixture.project, ".agents", "skills", "beads-generated", "SKILL.md"), "codex beads\n");
+    await writeFile(path.join(fixture.project, ".claude", "skills", "beads-generated", "SKILL.md"), "claude beads\n");
+
+    const result = runSkills(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "beads-generated", "SKILL.md")), "codex beads\n");
+    assert.equal(await readText(path.join(fixture.project, ".claude", "skills", "beads-generated", "SKILL.md")), "claude beads\n");
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills", "docx")), true);
+    assert.equal(existsSync(path.join(fixture.project, ".claude", "skills", "docx")), true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("project scope requires an explicit profile", async () => {
   const fixture = await createFixture();
   try {

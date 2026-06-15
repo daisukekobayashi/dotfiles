@@ -316,7 +316,7 @@ npx skills add <owner/repo> \
 
 Run this from the repository root and let the CLI manage `skills-lock.json` and agent-specific project output paths.
 
-If an existing `skills-lock.json` or agent skill directory will be replaced, create a backup first and restore it if installation fails. Dirty Git state should produce a warning, not block execution.
+If an existing `skills-lock.json` or agent skill directory will be replaced, create a backup first and restore it if installation fails. On successful installs, copy back pre-existing agent skill entries that were not recreated by the selected profile. Entries with the same name as profile-managed skills are replaced by the profile-managed version. Dirty Git state should produce a warning, not block execution.
 
 ## Local Skills
 

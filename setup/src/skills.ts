@@ -443,6 +443,25 @@ function copyDirectoryContents(sourceDir: string, targetDir: string): void {
   }
 }
 
+function copyMissingDirectoryEntries(sourceDir: string, targetDir: string): void {
+  if (!fs.existsSync(sourceDir)) {
+    return;
+  }
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const entry of fs.readdirSync(sourceDir)) {
+    const targetEntry = path.join(targetDir, entry);
+    if (fs.existsSync(targetEntry) || getLinkTarget(targetEntry)) {
+      continue;
+    }
+    fs.cpSync(path.join(sourceDir, entry), targetEntry, {
+      recursive: true,
+      dereference: false,
+      force: false,
+      verbatimSymlinks: true,
+    });
+  }
+}
+
 function normalizePath(targetPath: string): string {
   return path.resolve(targetPath);
 }
@@ -828,6 +847,16 @@ function rollbackProjectTargets(records: BackupRecord[]): void {
   warn("Restored previous project skills after failed install");
 }
 
+function restoreUnmanagedProjectSkills(records: BackupRecord[], projectRoot: string, agents: Agent[]): void {
+  const agentSkillDirs = new Set(agents.map((agent) => agentSkillDir(projectRoot, agent)));
+  for (const record of records) {
+    if (!record.backupPath || !agentSkillDirs.has(record.targetPath)) {
+      continue;
+    }
+    copyMissingDirectoryEntries(record.backupPath, record.targetPath);
+  }
+}
+
 function gitProjectRoot(cwd: string): string {
   const gitCommand = resolveCommand("git");
   const result = spawnSync(gitCommand, ["-C", cwd, "rev-parse", "--show-toplevel"], {
@@ -882,6 +911,7 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
   try {
     runExternalInstalls(projectRoot, plan, agents, npmCacheDir);
     linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
+    restoreUnmanagedProjectSkills(backups, projectRoot, agents);
     writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
   } catch (error) {
     rollbackProjectTargets(backups);

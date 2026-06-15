@@ -86,6 +86,8 @@ Custom local skills live in `skills/local/`.
 
 Project scope installs third-party skills with `npx skills add` from the repository root and lets the official CLI manage the repository `skills-lock.json`. Dotfiles local skills are symlinked from `skills/local/` and are not written to `skills-lock.json`.
 
+When project scope refreshes agent skill directories, pre-existing skill entries that are not recreated by the selected profile are preserved. Entries with the same name as a profile-managed skill are replaced by the profile-managed version.
+
 Profile-based skills setup is authored in TypeScript and runs through the committed Node runtime at `setup/skills.js`; Bash and PowerShell are thin wrappers around that runtime.
 
 Profiles are edited by hand. Validate them with:

@@ -316,7 +316,7 @@ npx skills add <owner/repo> \
 
 これはリポジトリ root で実行し、`skills-lock.json` と agent ごとの project output path は CLI に管理させます。
 
-既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Git の dirty state は warning に留め、実行自体は止めません。
+既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、profile 管理版に置き換えます。Git の dirty state は warning に留め、実行自体は止めません。
 
 ## Local Skills
 
