@@ -23,6 +23,7 @@ Expected command shape:
 ```sh
 ~/.dotfiles/setup.sh skills --scope project --profile office
 ~/.dotfiles/setup.sh skills --scope project --profile base,github --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,beads
 ~/.dotfiles/setup.sh skills --scope project --profile base,azure-devops
 ~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
@@ -86,6 +87,7 @@ skills/
     office.json
     azure.json
     azure-devops.json
+    beads.json
     frontend.json
     browser.json
     data.json
@@ -157,6 +159,16 @@ GitHub workflow skills:
 - custom GitHub issue, pull request, AI review, and merge cleanup skills from `skills/local/`
 
 GitHub `issue` skills map to Azure DevOps `work-item` skills when using the Azure DevOps provider profile.
+
+### `beads`
+
+Beads workflow skills:
+
+- `beads-issue-create`
+- `beads-issue-worktree`
+- `beads-merge-cleanup`
+
+Use `base,beads` for repositories that track work with `bd`/Beads.
 
 ### `workbench`
 

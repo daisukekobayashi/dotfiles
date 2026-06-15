@@ -1,0 +1,9 @@
+{
+  "description": "Beads workflow skills for issue creation, worktrees, and merge cleanup.",
+  "external": [],
+  "local": [
+    "beads-issue-create",
+    "beads-issue-worktree",
+    "beads-merge-cleanup"
+  ]
+}

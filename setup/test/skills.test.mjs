@@ -34,6 +34,11 @@ const azureDevOpsLocalSkills = [
   "azure-devops-pr-review",
   "azure-devops-merge-cleanup",
 ];
+const beadsLocalSkills = [
+  "beads-issue-create",
+  "beads-issue-worktree",
+  "beads-merge-cleanup",
+];
 
 async function writeExecutable(filePath, content) {
   await writeFile(filePath, content, { mode: 0o755 });
@@ -275,7 +280,7 @@ function skillsForSource(profile, source) {
 }
 
 test("repository profiles keep provider workflow skills separated", async () => {
-  for (const profileName of ["base", "github", "azure", "azure-devops"]) {
+  for (const profileName of ["base", "github", "azure", "azure-devops", "beads"]) {
     assert.equal(existsSync(path.join(repoRoot, "skills", "profiles", `${profileName}.json`)), true);
   }
 
@@ -283,6 +288,7 @@ test("repository profiles keep provider workflow skills separated", async () => 
   const github = await readRepoProfile("github");
   const azure = await readRepoProfile("azure");
   const azureDevOps = await readRepoProfile("azure-devops");
+  const beads = await readRepoProfile("beads");
 
   assert.equal(base.description, "Provider-neutral baseline workflow skills for repository work.");
   assert.deepEqual(skillsForSource(base, "github/awesome-copilot"), ["git-commit"]);
@@ -296,14 +302,19 @@ test("repository profiles keep provider workflow skills separated", async () => 
   assert.deepEqual(skillsForSource(azure, "github/awesome-copilot"), []);
   assert.deepEqual(skillsForSource(azureDevOps, "github/awesome-copilot"), ["azure-devops-cli"]);
   assert.deepEqual(azureDevOps.local, azureDevOpsLocalSkills);
+  assert.deepEqual(beads.external, []);
+  assert.deepEqual(beads.local, beadsLocalSkills);
 
   for (const skillName of azureDevOpsLocalSkills) {
+    assert.equal(existsSync(path.join(repoRoot, "skills", "local", skillName, "SKILL.md")), true);
+  }
+  for (const skillName of beadsLocalSkills) {
     assert.equal(existsSync(path.join(repoRoot, "skills", "local", skillName, "SKILL.md")), true);
   }
 
   const result = spawnSync(
     process.execPath,
-    [skillsRuntime, "profile", "validate", "--profile", "base,github,azure,azure-devops"],
+    [skillsRuntime, "profile", "validate", "--profile", "base,github,azure,azure-devops,beads"],
     {
       cwd: repoRoot,
       env: {

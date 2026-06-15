@@ -23,6 +23,7 @@ Git リポジトリ内のどこから実行しても、`git rev-parse --show-top
 ```sh
 ~/.dotfiles/setup.sh skills --scope project --profile office
 ~/.dotfiles/setup.sh skills --scope project --profile base,github --agent codex
+~/.dotfiles/setup.sh skills --scope project --profile base,beads
 ~/.dotfiles/setup.sh skills --scope project --profile base,azure-devops
 ~/.dotfiles/setup.sh skills --scope project --profile workbench
 ```
@@ -86,6 +87,7 @@ skills/
     office.json
     azure.json
     azure-devops.json
+    beads.json
     frontend.json
     browser.json
     data.json
@@ -157,6 +159,16 @@ GitHub workflow skill:
 - `skills/local/` 配下の自作 GitHub issue, pull request, AI review, merge cleanup skill
 
 Azure DevOps provider profile では, GitHub の `issue` skill に相当するものを `work-item` skill として扱います.
+
+### `beads`
+
+Beads workflow skill:
+
+- `beads-issue-create`
+- `beads-issue-worktree`
+- `beads-merge-cleanup`
+
+`bd`/Beads で作業を追跡するリポジトリでは `base,beads` を使います.
 
 ### `workbench`
 
