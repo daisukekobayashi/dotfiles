@@ -318,6 +318,29 @@ function validateProfiles(dotfilesRoot, profilesCsv) {
 function removePath(targetPath) {
     fs.rmSync(targetPath, { recursive: true, force: true });
 }
+function isCrossDeviceRenameError(error) {
+    return error.code === "EXDEV";
+}
+function movePath(sourcePath, targetPath) {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    try {
+        fs.renameSync(sourcePath, targetPath);
+        return;
+    }
+    catch (error) {
+        if (!isCrossDeviceRenameError(error)) {
+            throw error;
+        }
+    }
+    removePath(targetPath);
+    fs.cpSync(sourcePath, targetPath, {
+        recursive: true,
+        dereference: false,
+        force: true,
+        verbatimSymlinks: true,
+    });
+    removePath(sourcePath);
+}
 function copyDirectoryContents(sourceDir, targetDir) {
     if (!fs.existsSync(sourceDir)) {
         return;
@@ -527,23 +550,23 @@ function swapUserSkillsView(restoreRoot, restoreSkillsDir, stagingSkillsDir, sta
     removePath(backupSkillsDir);
     removePath(backupMetadata);
     if (fs.existsSync(restoreSkillsDir) || getLinkTarget(restoreSkillsDir)) {
-        fs.renameSync(restoreSkillsDir, backupSkillsDir);
+        movePath(restoreSkillsDir, backupSkillsDir);
     }
     if (fs.existsSync(metadataFile) || getLinkTarget(metadataFile)) {
-        fs.renameSync(metadataFile, backupMetadata);
+        movePath(metadataFile, backupMetadata);
     }
     try {
-        fs.renameSync(stagingSkillsDir, restoreSkillsDir);
-        fs.renameSync(stagingMetadata, metadataFile);
+        movePath(stagingSkillsDir, restoreSkillsDir);
+        movePath(stagingMetadata, metadataFile);
     }
     catch (error) {
         removePath(restoreSkillsDir);
         removePath(metadataFile);
         if (fs.existsSync(backupSkillsDir) || getLinkTarget(backupSkillsDir)) {
-            fs.renameSync(backupSkillsDir, restoreSkillsDir);
+            movePath(backupSkillsDir, restoreSkillsDir);
         }
         if (fs.existsSync(backupMetadata) || getLinkTarget(backupMetadata)) {
-            fs.renameSync(backupMetadata, metadataFile);
+            movePath(backupMetadata, metadataFile);
         }
         throw error;
     }
@@ -643,7 +666,7 @@ function backupPath(targetPath, backupRoot, records) {
     const backupName = `${path.basename(path.dirname(targetPath))}-${path.basename(targetPath)}`;
     const backupTarget = path.join(backupRoot, `${backupName}.${timestamp()}.${process.pid}`);
     fs.mkdirSync(backupRoot, { recursive: true });
-    fs.renameSync(targetPath, backupTarget);
+    movePath(targetPath, backupTarget);
     records.push({ targetPath, backupPath: backupTarget });
     warn(`Backed up existing skills path to ${backupTarget}`);
 }
@@ -673,7 +696,7 @@ function rollbackProjectTargets(records) {
         removePath(record.targetPath);
         if (record.backupPath && (fs.existsSync(record.backupPath) || getLinkTarget(record.backupPath))) {
             fs.mkdirSync(path.dirname(record.targetPath), { recursive: true });
-            fs.renameSync(record.backupPath, record.targetPath);
+            movePath(record.backupPath, record.targetPath);
         }
     }
     warn("Restored previous project skills after failed install");

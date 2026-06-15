@@ -252,6 +252,36 @@ require(runtime);
   });
 }
 
+function runSkillsWithCrossDeviceBackupRenameError(args, fixture, options = {}) {
+  const launcher = `
+const fs = require("node:fs");
+const path = require("node:path");
+const runtime = process.argv[1];
+const args = process.argv.slice(2);
+const backupRoot = path.resolve(process.env.SETUP_TMPDIR, "dotfiles-skills-backup");
+const originalRenameSync = fs.renameSync;
+function underBackupRoot(candidate) {
+  const resolved = path.resolve(candidate);
+  return resolved === backupRoot || resolved.startsWith(backupRoot + path.sep);
+}
+fs.renameSync = (oldPath, newPath) => {
+  if (underBackupRoot(oldPath) || underBackupRoot(newPath)) {
+    const error = new Error("EXDEV: cross-device link not permitted, rename");
+    error.code = "EXDEV";
+    throw error;
+  }
+  return originalRenameSync(oldPath, newPath);
+};
+process.argv = [process.execPath, runtime, ...args];
+require(runtime);
+`;
+  return spawnSync(process.execPath, ["-e", launcher, skillsRuntime, ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: fixture.env,
+    encoding: "utf8",
+  });
+}
+
 function runSkillsAsWindows(args, fixture, options = {}) {
   const launcher = `
 const runtime = process.argv[1];
@@ -568,6 +598,44 @@ exit 42
     );
 
     assert.notEqual(result.status, 0);
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "old-lock\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), "old-profile\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
+    assert.equal(await readText(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md")), "old-claude\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope restores existing outputs when backup moves cross devices", async () => {
+  const fixture = await createFixture({
+    npxBody: `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+mkdir -p .agents/skills/partial .claude/skills/partial
+printf 'partial-lock\\n' > skills-lock.json
+printf 'partial-agent\\n' > .agents/skills/partial/SKILL.md
+printf 'partial-claude\\n' > .claude/skills/partial/SKILL.md
+exit 42
+`,
+  });
+  try {
+    await mkdir(path.join(fixture.project, ".agents", "skills", "old-agent"), { recursive: true });
+    await mkdir(path.join(fixture.project, ".claude", "skills", "old-claude"), { recursive: true });
+    await writeFile(path.join(fixture.project, "skills-lock.json"), "old-lock\n");
+    await writeFile(path.join(fixture.project, ".agents", "skills-profile.json"), "old-profile\n");
+    await writeFile(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md"), "old-agent\n");
+    await writeFile(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md"), "old-claude\n");
+
+    const result = runSkillsWithCrossDeviceBackupRenameError(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.stderr, /EXDEV/);
+    assert.match(await readText(fixture.log), /skills add anthropics\/skills/);
     assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "old-lock\n");
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), "old-profile\n");
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
