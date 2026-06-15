@@ -1,0 +1,4 @@
+interface:
+  display_name: "Beads Merge Cleanup"
+  short_description: "Merge completed Beads work and clean up local resources"
+  default_prompt: "Use beads-merge-cleanup to commit, merge, close the Beads issue, and clean up."

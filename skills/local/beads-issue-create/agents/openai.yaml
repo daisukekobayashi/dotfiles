@@ -1,0 +1,4 @@
+interface:
+  display_name: "Beads Issue Create"
+  short_description: "Create Beads issues from plans and discussions"
+  default_prompt: "Use beads-issue-create to turn this into one or more Beads issues."

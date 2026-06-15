@@ -1,0 +1,4 @@
+interface:
+  display_name: "Beads Issue Worktree"
+  short_description: "Start Beads issue work in an isolated worktree"
+  default_prompt: "Use beads-issue-worktree to claim this Beads issue and create a worktree."
