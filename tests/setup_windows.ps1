@@ -61,12 +61,16 @@ Invoke-Test "psmux config lives under tmux and loads only static plugin hooks" {
   Assert-True ($config -notmatch "run '~/.psmux/plugins/ppm/ppm.ps1'") "psmux config should not run ppm.ps1 during startup"
 }
 
-Invoke-Test "psmux config lets psmux choose the default shell" {
+Invoke-Test "psmux config delegates shell and terminal defaults to psmux" {
   $configPath = Join-Path $RepoRoot "tmux\psmux.conf"
   $config = Get-Content -Raw $configPath
+  Assert-True ($config -match 'Let psmux resolve the Windows shell') "psmux config should document why shell defaults are delegated"
+  Assert-True ($config -notmatch '\$\{SHELL\}') "psmux config should not reference POSIX SHELL"
   Assert-True ($config -notmatch '(?m)^set\s+-g\s+default-shell\b') "psmux config should not override default-shell"
   Assert-True ($config -notmatch '(?m)^set\s+-g\s+default-command\b') "psmux config should not override default-command"
-  Assert-True ($config -notmatch '(?m)^set\s+-g\s+default-terminal\b') "psmux config should not set tmux-only default-terminal"
+  Assert-True ($config -notmatch '(?m)^set\s+-g\s+default-terminal\b') "psmux config should not force TERM"
+  Assert-True ($config -notmatch '(?m)^set\s+-[ag]+\s+terminal-overrides\b') "psmux config should not carry tmux terminfo overrides"
+  Assert-True ($config -notmatch '(?m)^set\s+-[ag]+\s+update-environment\b') "psmux config should not override psmux environment refresh defaults"
 }
 
 Invoke-Test "psmux config uses native Windows clipboard support" {
