@@ -69,6 +69,19 @@ Invoke-Test "psmux config lets psmux choose the default shell" {
   Assert-True ($config -notmatch '(?m)^set\s+-g\s+default-terminal\b') "psmux config should not set tmux-only default-terminal"
 }
 
+Invoke-Test "psmux config uses native Windows clipboard support" {
+  $configPath = Join-Path $RepoRoot "tmux\psmux.conf"
+  $config = Get-Content -Raw $configPath
+  Assert-True ($config -match '(?m)^set\s+-g\s+set-clipboard\s+on\s*$') "psmux config should keep native clipboard integration enabled"
+  Assert-True ($config -notmatch 'pbcopy') "psmux config should not use macOS pbcopy"
+  Assert-True ($config -notmatch 'reattach-to-user-namespace') "psmux config should not use macOS reattach-to-user-namespace"
+  Assert-True ($config -notmatch 'copy-pipe') "psmux config should not pipe copy-mode selections through an external clipboard command"
+  Assert-True ($config -notmatch '(?m)^bind(?:-key)?\s+-T\s+copy-mode-vi\s+y\b') "psmux config should use the built-in copy-mode y binding"
+  Assert-True ($config -notmatch '(?m)^bind(?:-key)?\s+-T\s+copy-mode-vi\s+Enter\b') "psmux config should use the built-in copy-mode Enter binding"
+  Assert-True ($config -notmatch "tmux-plugins/tmux-yank") "psmux config should not use tmux-yank"
+  Assert-True ($config -notmatch "psmux-plugins/psmux-yank") "psmux config should not add psmux-yank because psmux copies natively"
+}
+
 Invoke-Test "psmux config explicitly binds prefix split keys" {
   $configPath = Join-Path $RepoRoot "tmux\psmux.conf"
   $config = Get-Content -Raw $configPath
