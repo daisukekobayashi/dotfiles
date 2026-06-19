@@ -20,7 +20,7 @@ Subcommands:
   all         Run Windows setup for the current privilege level
   links       Create Windows symbolic links only
   skills      Restore skills and wire agent skill directories
-  packages    Install or verify Scoop only
+  packages    Install or verify Scoop and psmux PPM
   help        Show this help
 
 Behavior:

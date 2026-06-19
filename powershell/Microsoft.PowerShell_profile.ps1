@@ -1,4 +1,9 @@
 $Env:MISE_ENV = "windows"
 $env:MISE_QUIET = "true"
 $env:MISE_AUTO_INSTALL = "false"
-(&mise activate pwsh --shims) | Out-String | Invoke-Expression
+if (Get-Command mise -ErrorAction SilentlyContinue) {
+  $miseActivation = (& mise activate pwsh --shims) | Out-String
+  if (-not [string]::IsNullOrWhiteSpace($miseActivation)) {
+    Invoke-Expression $miseActivation
+  }
+}

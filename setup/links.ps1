@@ -45,6 +45,10 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "mcphub"
     },
     @{
+      Link = Join-Path $setupContext.HomeDir ".psmux.conf"
+      Target = Join-Path $setupContext.DotfilesRoot "tmux\psmux.conf"
+    },
+    @{
       Link = Join-Path $setupContext.HomeDir ".codex\config.toml"
       Target = Join-Path $setupContext.DotfilesRoot "codex\config.toml"
     },
