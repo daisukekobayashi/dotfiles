@@ -7,24 +7,62 @@ $ErrorActionPreference = "Stop"
 $DEFAULT_DOTFILES_ROOT = Split-Path -Parent $PSScriptRoot
 . (Join-Path $DEFAULT_DOTFILES_ROOT "lib/common.ps1")
 
-function Install-PsmuxPluginManager {
+function Install-PsmuxPlugins {
   param (
     [Parameter(Mandatory = $true)]
     [string]$HomeDir
   )
 
-  $ppmRoot = Join-Path $HomeDir ".psmux\plugins\ppm"
-  $ppmEntry = Join-Path $ppmRoot "ppm.ps1"
-  if (Test-Path -LiteralPath $ppmEntry) {
-    Write-Output "PPM is already installed."
+  $pluginSpecs = @(
+    @{
+      Name = "ppm"
+      Entry = "ppm.ps1"
+      Label = "PPM for psmux"
+    },
+    @{
+      Name = "psmux-sensible"
+      Entry = "plugin.conf"
+      Label = "psmux-sensible for psmux"
+    },
+    @{
+      Name = "psmux-pain-control"
+      Entry = "plugin.conf"
+      Label = "psmux-pain-control for psmux"
+    },
+    @{
+      Name = "psmux-resurrect"
+      Entry = "plugin.conf"
+      Label = "psmux-resurrect for psmux"
+    },
+    @{
+      Name = "psmux-continuum"
+      Entry = "plugin.conf"
+      Label = "psmux-continuum for psmux"
+    },
+    @{
+      Name = "psmux-theme-kanagawa"
+      Entry = "plugin.conf"
+      Label = "psmux-theme-kanagawa for psmux"
+    }
+  )
+
+  $pluginsRoot = Join-Path $HomeDir ".psmux\plugins"
+  $missingPlugins = @(
+    $pluginSpecs | Where-Object {
+      $entryPath = Join-Path (Join-Path $pluginsRoot $_.Name) $_.Entry
+      -not (Test-Path -LiteralPath $entryPath)
+    }
+  )
+
+  if ($missingPlugins.Count -eq 0) {
+    Write-Output "Psmux plugins are already installed."
     return
   }
 
   if (-not (Test-CommandAvailable -Name "git")) {
-    throw "git is required to install PPM for psmux."
+    throw "git is required to install psmux plugins."
   }
 
-  $pluginsRoot = Join-Path $HomeDir ".psmux\plugins"
   $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "dotfiles-psmux-plugins-$([System.Guid]::NewGuid().ToString('N'))"
   $tempRepo = Join-Path $tempRoot "psmux-plugins"
 
@@ -37,16 +75,19 @@ function Install-PsmuxPluginManager {
       throw "Failed to clone psmux plugins repository."
     }
 
-    $sourcePpm = Join-Path $tempRepo "ppm"
-    if (-not (Test-Path -LiteralPath (Join-Path $sourcePpm "ppm.ps1"))) {
-      throw "PPM entry point was not found in cloned psmux plugins repository."
-    }
+    foreach ($plugin in $missingPlugins) {
+      $sourcePlugin = Join-Path $tempRepo $plugin.Name
+      if (-not (Test-Path -LiteralPath (Join-Path $sourcePlugin $plugin.Entry))) {
+        throw "$($plugin.Label) entry point was not found in cloned psmux plugins repository."
+      }
 
-    if (Test-Path -LiteralPath $ppmRoot) {
-      Remove-Item -LiteralPath $ppmRoot -Force -Recurse
+      $targetPlugin = Join-Path $pluginsRoot $plugin.Name
+      if (Test-Path -LiteralPath $targetPlugin) {
+        Remove-Item -LiteralPath $targetPlugin -Force -Recurse
+      }
+      Copy-Item -LiteralPath $sourcePlugin -Destination $targetPlugin -Recurse
+      Write-Output "Installed $($plugin.Label): $targetPlugin"
     }
-    Copy-Item -LiteralPath $sourcePpm -Destination $ppmRoot -Recurse
-    Write-Output "Installed PPM for psmux: $ppmRoot"
   } finally {
     if (Test-Path -LiteralPath $tempRoot) {
       Remove-Item -LiteralPath $tempRoot -Force -Recurse
@@ -65,7 +106,7 @@ try {
   $scoopShim = Join-Path $setupContext.HomeDir "scoop\shims\scoop.ps1"
   if (Test-Path -LiteralPath $scoopShim) {
     Write-Output "Scoop is already installed."
-    Install-PsmuxPluginManager -HomeDir $setupContext.HomeDir
+    Install-PsmuxPlugins -HomeDir $setupContext.HomeDir
     exit 0
   }
 
@@ -78,7 +119,7 @@ try {
   }
 
   Write-Output "Scoop installation completed."
-  Install-PsmuxPluginManager -HomeDir $setupContext.HomeDir
+  Install-PsmuxPlugins -HomeDir $setupContext.HomeDir
 } catch {
   Write-Error $_.Exception.Message
   exit 1

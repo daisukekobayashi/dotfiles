@@ -44,13 +44,20 @@ function Invoke-Test {
   }
 }
 
-Invoke-Test "psmux config lives under tmux and avoids startup plugin hooks" {
+Invoke-Test "psmux config lives under tmux and loads only static plugin hooks" {
   $configPath = Join-Path $RepoRoot "tmux\psmux.conf"
   Assert-True (Test-Path -LiteralPath $configPath) "missing tmux\psmux.conf"
 
   $config = Get-Content -Raw $configPath
-  Assert-True ($config -notmatch '(?m)^set\s+-g\s+@plugin\b') "psmux config should not declare plugins during startup"
-  Assert-True ($config -notmatch 'source-file\s+[''"]?~/.psmux/plugins/ppm/plugin.conf') "psmux config should not source PPM during startup"
+  $pluginDeclarations = @([regex]::Matches($config, "(?m)^set\s+-g\s+@plugin\s+['""]([^'""]+)['""]\s*$") | ForEach-Object { $_.Groups[1].Value })
+  Assert-True (($pluginDeclarations -join ',') -eq 'psmux-plugins/psmux-sensible,psmux-plugins/psmux-pain-control,psmux-plugins/psmux-resurrect,psmux-plugins/psmux-continuum,psmux-plugins/psmux-theme-kanagawa') "psmux config should declare only expected psmux plugins"
+  Assert-True ($config -match '(?m)^source-file\s+[''"]?~/.psmux/plugins/ppm/plugin\.conf[''"]?\s*$') "psmux config should source static PPM key bindings"
+  Assert-True ($config -match '(?m)^source-file\s+[''"]?~/.psmux/plugins/psmux-sensible/plugin\.conf[''"]?\s*$') "psmux config should source static psmux-sensible settings"
+  Assert-True ($config -match '(?m)^source-file\s+[''"]?~/.psmux/plugins/psmux-pain-control/plugin\.conf[''"]?\s*$') "psmux config should source static psmux-pain-control bindings"
+  Assert-True ($config -match '(?m)^source-file\s+[''"]?~/.psmux/plugins/psmux-resurrect/plugin\.conf[''"]?\s*$') "psmux config should source static psmux-resurrect bindings"
+  Assert-True ($config -match '(?m)^source-file\s+[''"]?~/.psmux/plugins/psmux-continuum/plugin\.conf[''"]?\s*$') "psmux config should source static psmux-continuum hooks"
+  Assert-True ($config -match '(?m)^source-file\s+[''"]?~/.psmux/plugins/psmux-theme-kanagawa/plugin\.conf[''"]?\s*$') "psmux config should source static psmux kanagawa theme"
+  Assert-True ($config -match "(?m)^set\s+-g\s+@continuum-restore\s+'on'\s*$") "psmux config should enable continuum restore like tmux config"
   Assert-True ($config -notmatch "run '~/.psmux/plugins/ppm/ppm.ps1'") "psmux config should not run ppm.ps1 during startup"
 }
 
@@ -69,6 +76,13 @@ Invoke-Test "psmux config explicitly binds prefix split keys" {
   Assert-True ($config -match '(?m)^bind(?:-key)?\s+-T\s+prefix\s+-[^`r`n]*split-window\s+-v') "missing prefix - vertical split binding"
   Assert-True ($config -match '(?m)^bind(?:-key)?\s+-T\s+prefix\s+h[^`r`n]*split-window\s+-h') "missing prefix h horizontal split binding"
   Assert-True ($config -match '(?m)^bind(?:-key)?\s+-T\s+prefix\s+v[^`r`n]*split-window\s+-v') "missing prefix v vertical split binding"
+
+  $painControlSourceIndex = $config.IndexOf("source-file '~/.psmux/plugins/psmux-pain-control/plugin.conf'")
+  $lastPrefixHIndex = $config.LastIndexOf("bind -T prefix h split-window -h")
+  $lastPrefixVIndex = $config.LastIndexOf("bind -T prefix v split-window -v")
+  Assert-True ($painControlSourceIndex -ge 0) "missing psmux-pain-control source line"
+  Assert-True ($lastPrefixHIndex -gt $painControlSourceIndex) "prefix h split binding should override psmux-pain-control navigation"
+  Assert-True ($lastPrefixVIndex -gt $painControlSourceIndex) "prefix v split binding should be kept after plugin sources"
 }
 
 Invoke-Test "Windows links setup wires psmux config to the user profile" {
@@ -129,6 +143,16 @@ if "%1"=="clone" (
   :doneargs
   mkdir "%DEST%\ppm" >nul 2>nul
   echo # fake ppm>"%DEST%\ppm\ppm.ps1"
+  mkdir "%DEST%\psmux-sensible" >nul 2>nul
+  echo # fake psmux-sensible>"%DEST%\psmux-sensible\plugin.conf"
+  mkdir "%DEST%\psmux-pain-control" >nul 2>nul
+  echo # fake psmux-pain-control>"%DEST%\psmux-pain-control\plugin.conf"
+  mkdir "%DEST%\psmux-resurrect" >nul 2>nul
+  echo # fake psmux-resurrect>"%DEST%\psmux-resurrect\plugin.conf"
+  mkdir "%DEST%\psmux-continuum" >nul 2>nul
+  echo # fake psmux-continuum>"%DEST%\psmux-continuum\plugin.conf"
+  mkdir "%DEST%\psmux-theme-kanagawa" >nul 2>nul
+  echo # fake psmux-theme-kanagawa>"%DEST%\psmux-theme-kanagawa\plugin.conf"
   exit /b 0
 )
 exit /b 1
@@ -153,7 +177,17 @@ exit /b 1
     }
 
     $ppmPath = Join-Path $homeDir ".psmux\plugins\ppm\ppm.ps1"
+    $sensiblePath = Join-Path $homeDir ".psmux\plugins\psmux-sensible\plugin.conf"
+    $painControlPath = Join-Path $homeDir ".psmux\plugins\psmux-pain-control\plugin.conf"
+    $resurrectPath = Join-Path $homeDir ".psmux\plugins\psmux-resurrect\plugin.conf"
+    $continuumPath = Join-Path $homeDir ".psmux\plugins\psmux-continuum\plugin.conf"
+    $kanagawaPath = Join-Path $homeDir ".psmux\plugins\psmux-theme-kanagawa\plugin.conf"
     Assert-True (Test-Path -LiteralPath $ppmPath) "PPM was not installed"
+    Assert-True (Test-Path -LiteralPath $sensiblePath) "psmux-sensible was not installed"
+    Assert-True (Test-Path -LiteralPath $painControlPath) "psmux-pain-control was not installed"
+    Assert-True (Test-Path -LiteralPath $resurrectPath) "psmux-resurrect was not installed"
+    Assert-True (Test-Path -LiteralPath $continuumPath) "psmux-continuum was not installed"
+    Assert-True (Test-Path -LiteralPath $kanagawaPath) "psmux-theme-kanagawa was not installed"
     Assert-True ((Get-Content -Raw $gitLog) -match 'https://github.com/psmux/psmux-plugins.git') "git clone did not use psmux-plugins"
   } finally {
     Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
