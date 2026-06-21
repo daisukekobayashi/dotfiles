@@ -54,6 +54,70 @@ load 'helpers/test_helper.bash'
   [ "$status" -eq 0 ]
 }
 
+@test "tmux note popup uses toggle-popup instead of floax" {
+  run node -e '
+const fs = require("fs");
+const config = fs.readFileSync(process.argv[1], "utf8");
+
+if (config.includes("omerxx/tmux-floax")) {
+  throw new Error("floax should be removed while prefix+g is used for note popups");
+}
+if (config.includes("@floax-bind")) {
+  throw new Error("floax key options should be removed with the floax plugin");
+}
+
+const continuumIndex = config.indexOf("set -g @plugin '\''tmux-plugins/tmux-continuum'\''");
+const toggleIndex = config.indexOf("set -g @plugin '\''loichyan/tmux-toggle-popup'\''");
+const tpmIndex = config.indexOf("run -b '\''~/.tmux/plugins/tpm/tpm'\''");
+
+if (toggleIndex === -1) {
+  throw new Error("tmux-toggle-popup plugin is missing");
+}
+if (continuumIndex === -1 || continuumIndex > toggleIndex) {
+  throw new Error("tmux-toggle-popup should load after tmux-continuum");
+}
+if (tpmIndex === -1 || toggleIndex > tpmIndex) {
+  throw new Error("tmux-toggle-popup should be listed before TPM initialization");
+}
+if (config.includes("@popup-autostart on")) {
+  throw new Error("note popup config should not autostart the popup server");
+}
+' "$(repo_root)/.tmux.conf"
+
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux note popup binds prefix g and prefix G position mode" {
+  run node -e '
+const fs = require("fs");
+const config = fs.readFileSync(process.argv[1], "utf8");
+const expectedLines = [
+  "bind -T prefix g run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -w80% -h80% --name=notes\"",
+  "bind -T prefix G switch-client -T notes-popup",
+  "bind -T notes-popup c run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -w80% -h80% --name=notes\"",
+  "bind -T notes-popup h run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y0 -w45% -h100% --name=notes\"",
+  "bind -T notes-popup j run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y'\''##{e|-:##{client_height},##{popup_height}}'\'' -w100% -h40% --name=notes\"",
+  "bind -T notes-popup k run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y0 -w100% -h40% --name=notes\"",
+  "bind -T notes-popup l run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x'\''##{e|-:##{client_width},##{popup_width}}'\'' -y0 -w45% -h100% --name=notes\"",
+  "bind -T notes-popup q switch-client -T prefix",
+  "bind -T notes-popup Escape switch-client -T prefix",
+];
+
+for (const line of expectedLines) {
+  if (!config.includes(line)) {
+    throw new Error(`missing note popup binding: ${line}`);
+  }
+}
+for (const paneRelativePosition of ["-yP", "-xR"]) {
+  if (config.includes(paneRelativePosition)) {
+    throw new Error(`note popup binding should avoid pane-relative or ambiguous position: ${paneRelativePosition}`);
+  }
+}
+' "$(repo_root)/.tmux.conf"
+
+  [ "$status" -eq 0 ]
+}
+
 @test "tmux-palette opens direct tools from PATH without relaunching palette" {
   run node -e '
 const fs = require("fs");
