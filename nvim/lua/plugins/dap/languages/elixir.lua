@@ -9,8 +9,33 @@ local function use_compose_elixir_dap(config)
     and util.has_env(config, 'DAP_DOCKER_SERVICE')
 end
 
-local function compose_adapter_env(config)
+local function elixir_debugger_opts(env)
+  if type(env.ELS_ELIXIR_OPTS) == 'string' and env.ELS_ELIXIR_OPTS ~= '' then
+    return env.ELS_ELIXIR_OPTS
+  end
+  if type(env.DAP_ELIXIR_OPTS) == 'string' and env.DAP_ELIXIR_OPTS ~= '' then
+    return env.DAP_ELIXIR_OPTS
+  end
+  if
+    type(env.DAP_ELIXIR_LS_NODE) == 'string'
+    and env.DAP_ELIXIR_LS_NODE ~= ''
+    and type(env.DAP_ERL_COOKIE) == 'string'
+    and env.DAP_ERL_COOKIE ~= ''
+  then
+    return '--sname ' .. env.DAP_ELIXIR_LS_NODE .. ' --cookie ' .. env.DAP_ERL_COOKIE
+  end
+
+  return nil
+end
+
+local function adapter_env(config)
   local env = vim.deepcopy(util.config_env(config))
+  env.ELS_ELIXIR_OPTS = elixir_debugger_opts(env)
+  return env
+end
+
+local function compose_adapter_env(config)
+  local env = adapter_env(config)
   env.DAP_COMPOSE_PROJECT_DIR = env.DAP_COMPOSE_PROJECT_DIR
     or env.COMPOSE_PROJECT_DIR
     or util.workspace_root({ 'compose.yaml', 'docker-compose.yml', 'mix.exs', '.git' })
@@ -118,7 +143,7 @@ local function setup_adapter(dap)
       command = elixir_ls_debugger,
       args = {},
       options = {
-        env = util.process_env(util.config_env(config)),
+        env = util.process_env(adapter_env(config)),
       },
     })
   end

@@ -75,6 +75,18 @@ assert_not_contains() {
   assert_contains "${content}" "postAttachBreakpointSyncDelayMs"
 }
 
+@test "elixir dap derives debugger node opts from repo environment" {
+  local root content
+  root="$(repo_root)"
+  content="$(cat "${root}/nvim/lua/plugins/dap/languages/elixir.lua")"
+
+  assert_contains "${content}" "elixir_debugger_opts"
+  assert_contains "${content}" "DAP_ELIXIR_OPTS"
+  assert_contains "${content}" "DAP_ELIXIR_LS_NODE"
+  assert_contains "${content}" "DAP_ERL_COOKIE"
+  assert_contains "${content}" "ELS_ELIXIR_OPTS"
+}
+
 @test "rust dap setup uses codelldb instead of cppdbg aliasing" {
   local root content
   root="$(repo_root)"
