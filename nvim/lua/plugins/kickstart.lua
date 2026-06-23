@@ -358,6 +358,7 @@ return {
         'shellcheck',
         'cpptools',
         'clang-format',
+        'codelldb',
         'ruff',
         'black',
         'isort',
@@ -369,6 +370,7 @@ return {
         'taplo',
         'markdownlint',
         'buildifier',
+        'js-debug-adapter',
       })
 
       require('mason-tool-installer').setup({ ensure_installed = ensure_installed })

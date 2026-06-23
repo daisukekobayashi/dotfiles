@@ -110,3 +110,22 @@ assert_not_contains() {
   assert_contains "${content}" "javascript"
   assert_contains "${content}" "typescript"
 }
+
+@test "mason installs rust and node dap adapters" {
+  local root content
+  root="$(repo_root)"
+  content="$(cat "${root}/nvim/lua/plugins/kickstart.lua")"
+
+  assert_contains "${content}" "'codelldb'"
+  assert_contains "${content}" "'js-debug-adapter'"
+}
+
+@test "node dap setup uses mason js debug adapter directly" {
+  local root content
+  root="$(repo_root)"
+  content="$(cat "${root}/nvim/lua/plugins/dap/languages/node.lua")"
+
+  assert_contains "${content}" "js-debug-adapter"
+  assert_contains "${content}" "dap.adapters['pwa-node']"
+  assert_not_contains "${content}" "dap-vscode-js"
+}

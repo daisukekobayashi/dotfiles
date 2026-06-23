@@ -1,24 +1,32 @@
+local util = require('plugins.dap.util')
+
 local M = {}
 
 local languages = { 'javascript', 'typescript', 'javascriptreact', 'typescriptreact' }
 
-local function setup_adapter()
-  local ok, dap_vscode_js = pcall(require, 'dap-vscode-js')
-  if not ok then
-    return false
-  end
+local function setup_adapter(dap)
+  dap.adapters['pwa-node'] = function(callback)
+    local js_debug_adapter = util.executable('js-debug-adapter')
+    if js_debug_adapter == '' then
+      util.notify_missing_adapter('JS Debug', 'js-debug-adapter')
+      return
+    end
 
-  dap_vscode_js.setup({
-    adapters = { 'pwa-node' },
-  })
-  return true
+    callback({
+      type = 'server',
+      host = '127.0.0.1',
+      port = '${port}',
+      executable = {
+        command = js_debug_adapter,
+        args = { '${port}' },
+      },
+    })
+  end
 end
 
 function M.setup()
   local dap = require('dap')
-  if not setup_adapter() then
-    return
-  end
+  setup_adapter(dap)
 
   local configurations = {
     {
