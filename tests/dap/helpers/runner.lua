@@ -73,6 +73,33 @@ local function require_env(name)
   return value
 end
 
+local function docker_exec_args(target, command_args, opts)
+  opts = opts or {}
+
+  local args
+  if target == 'docker' then
+    args = { 'exec' }
+    if opts.interactive then
+      table.insert(args, '-i')
+    end
+    table.insert(args, os.getenv('DAP_DOCKER_CONTAINER') or require_env('DAP_E2E_DOCKER_CONTAINER'))
+  elseif target == 'compose' then
+    args = {
+      'compose',
+      '--project-directory',
+      require_env('DAP_COMPOSE_PROJECT_DIR'),
+      'exec',
+      '-T',
+      os.getenv('DAP_DOCKER_SERVICE') or 'app',
+    }
+  else
+    fail('unsupported docker exec target: ' .. tostring(target))
+  end
+
+  vim.list_extend(args, command_args)
+  return args
+end
+
 local function adapter_config(target, fixture)
   local env = {
     DAP_ELIXIR_LS_NODE = os.getenv('DAP_ELIXIR_LS_NODE') or 'dap_e2e_ls',
@@ -309,36 +336,23 @@ local function setup_real_dap(language, target, fixture)
 end
 
 local function configure_python_docker_adapter(dap, target)
-  if target == 'docker' then
-    dap.adapters.python = {
-      type = 'executable',
+  dap.adapters.python = {
+    type = 'executable',
+    command = 'docker',
+    args = docker_exec_args(target, { 'python', '-m', 'debugpy.adapter' }, { interactive = true }),
+  }
+end
+
+local function configure_node_docker_adapter(dap, target)
+  dap.adapters['pwa-node'] = {
+    type = 'server',
+    host = '127.0.0.1',
+    port = '${port}',
+    executable = {
       command = 'docker',
-      args = {
-        'exec',
-        '-i',
-        os.getenv('DAP_DOCKER_CONTAINER') or require_env('DAP_E2E_DOCKER_CONTAINER'),
-        'python',
-        '-m',
-        'debugpy.adapter',
-      },
-    }
-  elseif target == 'compose' then
-    dap.adapters.python = {
-      type = 'executable',
-      command = 'docker',
-      args = {
-        'compose',
-        '--project-directory',
-        require_env('DAP_COMPOSE_PROJECT_DIR'),
-        'exec',
-        '-T',
-        os.getenv('DAP_DOCKER_SERVICE') or 'app',
-        'python',
-        '-m',
-        'debugpy.adapter',
-      },
-    }
-  end
+      args = docker_exec_args(target, { 'js-debug-adapter', '${port}' }),
+    },
+  }
 end
 
 local function run_dap(language, target, fixture)
@@ -347,6 +361,8 @@ local function run_dap(language, target, fixture)
 
   if language == 'python' and (target == 'docker' or target == 'compose') then
     configure_python_docker_adapter(dap, target)
+  elseif language == 'node' and (target == 'docker' or target == 'compose') then
+    configure_node_docker_adapter(dap, target)
   end
 
   if language == 'elixir' and target == 'local' then
@@ -380,10 +396,10 @@ local function run_dap(language, target, fixture)
       cwd = fixture,
       console = 'internalConsole',
     }
-  elseif language == 'node' and target == 'local' then
+  elseif language == 'node' and (target == 'local' or target == 'docker' or target == 'compose') then
     config = {
       type = 'pwa-node',
-      name = 'dap e2e node local',
+      name = 'dap e2e node ' .. target,
       request = 'launch',
       program = fixture .. '/main.js',
       cwd = fixture,

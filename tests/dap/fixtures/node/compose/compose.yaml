@@ -1,0 +1,10 @@
+services:
+  app:
+    image: ${DAP_E2E_IMAGE}
+    network_mode: host
+    volumes:
+      - ${DAP_E2E_PROJECT_DIR}:${DAP_E2E_PROJECT_DIR}
+    working_dir: ${DAP_E2E_PROJECT_DIR}
+    command:
+      - sleep
+      - infinity

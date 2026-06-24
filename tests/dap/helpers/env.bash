@@ -203,6 +203,9 @@ dap_e2e_image_tag() {
     python)
       printf '%s\n' "dotfiles-dap-e2e-python:3.14-debugpy-1.8.17"
       ;;
+    node)
+      printf '%s\n' "dotfiles-dap-e2e-node:24-js-debug-1.117.0"
+      ;;
     *)
       printf 'unknown DAP E2E image language: %s\n' "${language}" >&2
       return 1
@@ -297,6 +300,15 @@ dap_e2e_start_docker_container() {
         "${image}" \
         sleep infinity
       ;;
+    node)
+      docker run -d \
+        --name "${DAP_E2E_DOCKER_CONTAINER}" \
+        --network host \
+        -v "${project_dir}:${project_dir}" \
+        -w "${project_dir}" \
+        "${image}" \
+        sleep infinity
+      ;;
     *)
       printf 'unknown DAP E2E docker language: %s\n' "${language}" >&2
       return 1
@@ -362,6 +374,10 @@ dap_e2e_start_compose() {
     python)
       docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" exec -T app \
         python -c 'import debugpy'
+      ;;
+    node)
+      docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" exec -T app \
+        test -x /usr/local/bin/js-debug-adapter
       ;;
     *)
       printf 'unknown DAP E2E compose language: %s\n' "${language}" >&2
