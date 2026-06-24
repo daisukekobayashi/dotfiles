@@ -87,6 +87,19 @@ assert_not_contains() {
   assert_contains "${content}" "ELS_ELIXIR_OPTS"
 }
 
+@test "elixir dap supports direct docker container attach" {
+  local root content
+  root="$(repo_root)"
+  content="$(cat "${root}/nvim/lua/plugins/dap/languages/elixir.lua")"
+
+  assert_contains "${content}" "use_container_elixir_dap"
+  assert_contains "${content}" "use_remote_elixir_dap"
+  assert_contains "${content}" "DAP_DOCKER_CONTAINER"
+  assert_contains "${content}" "command = 'docker'"
+  assert_contains "${content}" "'exec'"
+  assert_contains "${content}" "ELIXIR_LS_DEBUGGER_IN_CONTAINER"
+}
+
 @test "rust dap setup uses codelldb instead of cppdbg aliasing" {
   local root content
   root="$(repo_root)"

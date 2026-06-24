@@ -9,6 +9,17 @@ local function use_compose_elixir_dap(config)
     and util.has_env(config, 'DAP_DOCKER_SERVICE')
 end
 
+local function use_container_elixir_dap(config)
+  return config
+    and config.request == 'attach'
+    and type(config.remoteNode) == 'string'
+    and util.has_env(config, 'DAP_DOCKER_CONTAINER')
+end
+
+local function use_remote_elixir_dap(config)
+  return use_compose_elixir_dap(config) or use_container_elixir_dap(config)
+end
+
 local function elixir_debugger_opts(env)
   if type(env.ELS_ELIXIR_OPTS) == 'string' and env.ELS_ELIXIR_OPTS ~= '' then
     return env.ELS_ELIXIR_OPTS
@@ -43,6 +54,28 @@ local function compose_adapter_env(config)
   env.SHELL = env.SHELL or '/bin/bash'
   env.ELIXIR_ERL_OPTIONS = env.ELIXIR_ERL_OPTIONS or ''
   return env
+end
+
+local function container_adapter_env(config)
+  local env = adapter_env(config)
+  env.ELIXIR_LS_DEBUGGER_IN_CONTAINER = env.ELIXIR_LS_DEBUGGER_IN_CONTAINER or '/opt/elixir-ls/debug_adapter.sh'
+  env.ELIXIR_ERL_OPTIONS = env.ELIXIR_ERL_OPTIONS or ''
+  return env
+end
+
+local function container_adapter_args(env)
+  return {
+    'exec',
+    '-i',
+    '-e',
+    'SHELL=' .. (env.DAP_CONTAINER_SHELL or '/bin/bash'),
+    '-e',
+    'ELIXIR_ERL_OPTIONS=' .. env.ELIXIR_ERL_OPTIONS,
+    '-e',
+    'ELS_ELIXIR_OPTS=' .. env.ELS_ELIXIR_OPTS,
+    env.DAP_DOCKER_CONTAINER,
+    env.ELIXIR_LS_DEBUGGER_IN_CONTAINER,
+  }
 end
 
 local function infer_ns_from_mixfile(dir)
@@ -138,6 +171,24 @@ local function setup_adapter(dap)
       return
     end
 
+    if use_container_elixir_dap(config) then
+      local env = container_adapter_env(config)
+      if type(env.ELS_ELIXIR_OPTS) ~= 'string' or env.ELS_ELIXIR_OPTS == '' then
+        vim.notify('ELS_ELIXIR_OPTS is required for Docker Elixir DAP attach.', vim.log.levels.ERROR)
+        return
+      end
+
+      callback({
+        type = 'executable',
+        command = 'docker',
+        args = container_adapter_args(env),
+        options = {
+          env = util.process_env(env),
+        },
+      })
+      return
+    end
+
     callback({
       type = 'executable',
       command = elixir_ls_debugger,
@@ -150,8 +201,8 @@ local function setup_adapter(dap)
 end
 
 local function setup_breakpoint_sync(dap)
-  dap.listeners.after.configurationDone.elixir_compose_breakpoint_sync = function(session, err)
-    if err or not use_compose_elixir_dap(session.config) then
+  dap.listeners.after.configurationDone.elixir_remote_breakpoint_sync = function(session, err)
+    if err or not use_remote_elixir_dap(session.config) then
       return
     end
 
