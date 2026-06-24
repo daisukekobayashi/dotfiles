@@ -29,11 +29,13 @@ This skill is not for:
    ```bash
    gh api repos/<owner>/<repo>/pulls/<PR> --jq \
      '{url: .html_url, requested_reviewers: [.requested_reviewers[].login]}'
-   gh api repos/<owner>/<repo>/issues/<PR>/comments --jq \
-     '[.[] | select(.body | startswith("@codex review")) | {user: .user.login, body: .body, url: .html_url}]'
    ```
 6. Report separate outcomes: Copilot is verified from requested reviewers, and
-   Codex is verified from a PR comment containing `@codex review`.
+   Codex uses the outcome from `github-pr-codex-review-request`:
+   - `Codex acknowledged` means the posted `@codex review` comment received an
+     `eyes` reaction.
+   - `Codex request posted but not acknowledged` means the trigger comment
+     exists, but no `eyes` reaction appeared before the timeout.
 
 ## Guardrails
 
