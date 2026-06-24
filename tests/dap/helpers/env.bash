@@ -168,6 +168,18 @@ dap_e2e_local_node_preflight() {
     skip "js-debug-adapter is required for local Node DAP E2E"
 }
 
+dap_e2e_local_rust_preflight() {
+  dap_e2e_require_command cargo
+  dap_e2e_mason_bin_path codelldb >/dev/null || \
+    skip "codelldb is required for local Rust DAP E2E"
+}
+
+dap_e2e_build_rust_fixture() {
+  local project_dir
+  project_dir="$1"
+  cargo build --manifest-path "${project_dir}/Cargo.toml"
+}
+
 dap_e2e_require_docker() {
   dap_e2e_require_command docker
   docker info >/dev/null 2>&1 || skip "Docker daemon is required for this DAP E2E test"

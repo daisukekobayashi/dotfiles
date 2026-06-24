@@ -176,6 +176,12 @@ local function language_config(language, fixture)
       source_match = 'main.js',
       breakpoint_line = 2,
     }
+  elseif language == 'rust' then
+    return {
+      source = fixture .. '/src/main.rs',
+      source_match = 'src/main.rs',
+      breakpoint_line = 2,
+    }
   end
 
   fail('unknown language: ' .. tostring(language))
@@ -242,6 +248,8 @@ local function setup_language_dap(language)
     require('plugins.dap.languages.python').setup()
   elseif language == 'node' then
     require('plugins.dap.languages.node').setup()
+  elseif language == 'rust' then
+    require('plugins.dap.languages.rust').setup()
   else
     fail('unknown language: ' .. tostring(language))
   end
@@ -334,6 +342,15 @@ local function run_dap(language, target, fixture)
       request = 'launch',
       program = fixture .. '/main.js',
       cwd = fixture,
+    }
+  elseif language == 'rust' and target == 'local' then
+    config = {
+      type = 'codelldb',
+      name = 'dap e2e rust local',
+      request = 'launch',
+      program = fixture .. '/target/debug/dap-e2e-rust',
+      cwd = fixture,
+      stopOnEntry = false,
     }
   else
     fail('unsupported runner target: language=' .. tostring(language) .. ' target=' .. tostring(target))

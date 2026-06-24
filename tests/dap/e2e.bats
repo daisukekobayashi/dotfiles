@@ -113,6 +113,26 @@ teardown() {
   [[ "${output}" == *"main.js"* ]]
 }
 
+@test "runner stops at a rust breakpoint locally" {
+  local root project_dir
+  dap_e2e_local_rust_preflight
+
+  root="$(dap_e2e_repo_root)"
+  project_dir="$(dap_e2e_copy_fixture "${root}/tests/dap/fixtures/rust/local")"
+  dap_e2e_build_rust_fixture "${project_dir}"
+
+  run dap_e2e_nvim \
+    --language rust \
+    --mode local \
+    --fixture "${project_dir}"
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"status=stopped"* ]]
+  [[ "${output}" == *"language=rust"* ]]
+  [[ "${output}" == *"target=local"* ]]
+  [[ "${output}" == *"src/main.rs"* ]]
+}
+
 @test "runner stops at an elixir breakpoint in a direct docker container" {
   local root project_dir
   dap_e2e_require_docker
