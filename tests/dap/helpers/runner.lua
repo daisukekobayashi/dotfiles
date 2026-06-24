@@ -35,6 +35,9 @@ local function parse_args(args)
     elseif key == '--mode' then
       parsed.mode = args[index + 1]
       index = index + 2
+    elseif key == '--language' then
+      parsed.language = args[index + 1]
+      index = index + 2
     elseif key == '--fixture' then
       parsed.fixture = args[index + 1]
       index = index + 2
@@ -154,23 +157,44 @@ local function finish(dap, status, fields, code)
   end
 end
 
-local function validate_stopped_frame(target, fixture, session, body)
+local function language_config(language, fixture)
+  if language == 'elixir' then
+    return {
+      source = fixture .. '/lib/dap_e2e.ex',
+      source_match = 'lib/dap_e2e.ex',
+      breakpoint_line = 3,
+    }
+  elseif language == 'python' then
+    return {
+      source = fixture .. '/main.py',
+      source_match = 'main.py',
+      breakpoint_line = 2,
+    }
+  end
+
+  fail('unknown language: ' .. tostring(language))
+end
+
+local function validate_stopped_frame(language, target, fixture, session, body)
   local thread_id = body and body.threadId
   if not thread_id then
-    finish(require('dap'), 'failed', { reason = 'stopped event had no threadId', target = target }, 1)
+    finish(require('dap'), 'failed', { language = language, reason = 'stopped event had no threadId', target = target }, 1)
     return
   end
 
+  local lang = language_config(language, fixture)
+
   session:request('stackTrace', { threadId = thread_id, startFrame = 0 }, function(err, response)
     if err then
-      finish(require('dap'), 'failed', { reason = tostring(err), target = target }, 1)
+      finish(require('dap'), 'failed', { language = language, reason = tostring(err), target = target }, 1)
       return
     end
 
     for _, frame in ipairs((response and response.stackFrames) or {}) do
       local source_path = frame.source and frame.source.path or ''
-      if source_path:find('lib/dap_e2e.ex', 1, true) then
+      if source_path:find(lang.source_match, 1, true) then
         finish(require('dap'), 'stopped', {
+          language = language,
           target = target,
           source = source_path,
           line = frame.line,
@@ -180,7 +204,7 @@ local function validate_stopped_frame(target, fixture, session, body)
       end
     end
 
-    finish(require('dap'), 'failed', { reason = 'expected source not found', target = target }, 1)
+    finish(require('dap'), 'failed', { language = language, reason = 'expected source not found', target = target }, 1)
   end)
 end
 
@@ -204,31 +228,42 @@ local function hermetic_elixir_env(fixture)
   }
 end
 
-local function setup_real_dap(target, fixture)
+local function setup_language_dap(language)
+  if language == 'elixir' then
+    require('plugins.dap.languages.elixir').setup()
+  elseif language == 'python' then
+    add_plugin_runtime('nvim-dap-python')
+    require('plugins.dap.languages.python').setup()
+  else
+    fail('unknown language: ' .. tostring(language))
+  end
+end
+
+local function setup_real_dap(language, target, fixture)
   local root = repo_root()
   add_plugin_runtime('nvim-dap')
   setup_module_path(root)
   vim.fn.chdir(fixture)
 
   local dap = require('dap')
-  require('plugins.dap.languages.elixir').setup()
+  setup_language_dap(language)
 
-  local source = fixture .. '/lib/dap_e2e.ex'
-  vim.cmd('edit ' .. vim.fn.fnameescape(source))
+  local lang = language_config(language, fixture)
+  vim.cmd('edit ' .. vim.fn.fnameescape(lang.source))
   local bufnr = vim.api.nvim_get_current_buf()
-  require('dap.breakpoints').set({}, bufnr, 3)
+  require('dap.breakpoints').set({}, bufnr, lang.breakpoint_line)
 
   dap.listeners.after.event_stopped['dap-e2e'] = function(session, body)
-    validate_stopped_frame(target, fixture, session, body)
+    validate_stopped_frame(language, target, fixture, session, body)
   end
   dap.listeners.after.event_terminated['dap-e2e'] = function()
-    finish(dap, 'failed', { reason = 'terminated before breakpoint', target = target }, 1)
+    finish(dap, 'failed', { language = language, reason = 'terminated before breakpoint', target = target }, 1)
   end
   dap.listeners.after.event_exited['dap-e2e'] = function()
-    finish(dap, 'failed', { reason = 'exited before breakpoint', target = target }, 1)
+    finish(dap, 'failed', { language = language, reason = 'exited before breakpoint', target = target }, 1)
   end
   dap.listeners.after.configurationDone['dap-e2e-trigger'] = function()
-    if target == 'local' then
+    if target == 'local' or language ~= 'elixir' then
       return
     end
 
@@ -243,17 +278,17 @@ local function setup_real_dap(target, fixture)
   end
 
   vim.defer_fn(function()
-    finish(dap, 'failed', { reason = 'timeout', target = target }, 1)
+    finish(dap, 'failed', { language = language, reason = 'timeout', target = target }, 1)
   end, tonumber(os.getenv('DAP_E2E_TIMEOUT_MS')) or 120000)
 
   return dap
 end
 
-local function run_dap(target, fixture)
-  local dap = setup_real_dap(target, fixture)
+local function run_dap(language, target, fixture)
+  local dap = setup_real_dap(language, target, fixture)
   local config
 
-  if target == 'local' then
+  if language == 'elixir' and target == 'local' then
     config = {
       type = 'mix_task',
       name = 'dap e2e local',
@@ -266,7 +301,7 @@ local function run_dap(target, fixture)
       debugInterpretModulesPatterns = { 'DapE2E*' },
       env = hermetic_elixir_env(fixture),
     }
-  elseif target == 'docker' or target == 'compose' then
+  elseif language == 'elixir' and (target == 'docker' or target == 'compose') then
     config = vim.tbl_extend('force', adapter_config(target, fixture), {
       type = 'mix_task',
       name = 'dap e2e ' .. target,
@@ -275,8 +310,17 @@ local function run_dap(target, fixture)
       debugInterpretModulesPatterns = { 'DapE2E*' },
       postAttachBreakpointSyncDelayMs = 1000,
     })
+  elseif language == 'python' and target == 'local' then
+    config = {
+      type = 'python',
+      name = 'dap e2e python local',
+      request = 'launch',
+      program = fixture .. '/main.py',
+      cwd = fixture,
+      console = 'internalConsole',
+    }
   else
-    fail('unknown runner mode: ' .. tostring(target))
+    fail('unsupported runner target: language=' .. tostring(language) .. ' target=' .. tostring(target))
   end
 
   dap.run(config, { new = true })
@@ -287,7 +331,7 @@ local function run_dap(target, fixture)
   end, 50)
 
   if not finished then
-    finish(dap, 'failed', { reason = 'timeout', target = target }, 1)
+    finish(dap, 'failed', { language = language, reason = 'timeout', target = target }, 1)
   end
 end
 
@@ -313,7 +357,7 @@ if args.mode == 'local' or args.mode == 'docker' or args.mode == 'compose' then
   if type(args.fixture) ~= 'string' or vim.fn.isdirectory(args.fixture) ~= 1 then
     fail('fixture directory is required')
   end
-  run_dap(args.mode, args.fixture)
+  run_dap(args.language or 'elixir', args.mode, args.fixture)
   return
 end
 

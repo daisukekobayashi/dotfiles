@@ -119,6 +119,32 @@ dap_e2e_local_elixir_ls_preflight() {
   fi
 }
 
+dap_e2e_python_path() {
+  if command -v mise >/dev/null 2>&1; then
+    local mise_python
+    mise_python="$(mise which python 2>/dev/null || true)"
+    if [ -n "${mise_python}" ]; then
+      printf '%s\n' "${mise_python}"
+      return
+    fi
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    command -v python3
+    return
+  fi
+
+  command -v python 2>/dev/null
+}
+
+dap_e2e_local_python_preflight() {
+  local python
+  python="$(dap_e2e_python_path)" || skip "python is required for this DAP E2E test"
+
+  "${python}" -c 'import debugpy' >/dev/null 2>&1 || \
+    skip "debugpy is required in ${python} for local Python DAP E2E"
+}
+
 dap_e2e_require_docker() {
   dap_e2e_require_command docker
   docker info >/dev/null 2>&1 || skip "Docker daemon is required for this DAP E2E test"
