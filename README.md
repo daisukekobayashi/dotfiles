@@ -119,7 +119,9 @@ bats tests/dap/e2e.bats
 DAP_E2E=1 bats tests/dap/e2e.bats
 ```
 
-`DAP_E2E=1` verifies Elixir debugging through local launch, direct Docker attach, and Docker Compose attach. The Docker checks require Docker Compose v2 and build a pinned Elixir/ElixirLS fixture image on first run. The local check uses the installed `elixir-ls-debugger` and skips with an explicit reason when the host ElixirLS toolchain is known incompatible. Set `DAP_E2E_KEEP=1` to keep per-test logs under the temporary run directory.
+`DAP_E2E=1` verifies real breakpoint stops for Elixir, Python, Node, and Rust across local, direct Docker, and Docker Compose targets. The Docker checks require Docker Compose v2 and build pinned fixture images on first run. Node and Rust Docker checks use host networking for server-style debug adapters; Rust also grants `SYS_PTRACE` with `seccomp=unconfined`.
+
+Local checks use host-installed adapters and skip with explicit reasons when a compatible toolchain is missing: Elixir needs `elixir-ls-debugger`, Python needs `debugpy`, Node needs `js-debug-adapter`, and Rust needs `cargo` plus `codelldb`. Docker and Compose checks install the language-specific adapter inside the fixture image. Set `DAP_E2E_KEEP=1` to keep per-test logs under the temporary run directory.
 
 Static checks.
 
