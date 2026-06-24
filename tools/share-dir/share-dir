@@ -5,6 +5,8 @@ DEFAULT_IMAGE="dotfiles/share-dir-filebrowser:stable-slim"
 CONTAINER_PORT="80"
 CONTAINER_DATA_DIR="/home/filebrowser/data"
 CONTAINER_SHARE_DIR="/srv"
+CONTAINER_DATABASE_PATH="${CONTAINER_DATA_DIR}/database.db"
+CONTAINER_CACHE_DIR="${CONTAINER_DATA_DIR}/cache"
 SHARE_DIR_CLEANUP_DATA_DIR=""
 
 usage() {
@@ -39,6 +41,24 @@ require_value() {
 
 command_exists() {
   command -v "$1" >/dev/null 2>&1
+}
+
+script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  local dir
+  local target
+
+  while [ -L "${source}" ]; do
+    dir="$(cd -P "$(dirname "${source}")" >/dev/null 2>&1 && pwd)"
+    target="$(readlink "${source}")"
+    if [[ "${target}" = /* ]]; then
+      source="${target}"
+    else
+      source="${dir}/${target}"
+    fi
+  done
+
+  cd -P "$(dirname "${source}")" >/dev/null 2>&1 && pwd
 }
 
 cleanup() {
@@ -113,6 +133,8 @@ write_config() {
 
   cat > "${config_path}" <<EOF
 server:
+  database: ${CONTAINER_DATABASE_PATH}
+  cacheDir: ${CONTAINER_CACHE_DIR}
   sources:
     - path: ${CONTAINER_SHARE_DIR}
       name: Shared
@@ -146,7 +168,7 @@ main() {
   local -a docker_run_args=()
 
   run_user="$(id -u):$(id -g)"
-  tool_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+  tool_dir="$(script_dir)"
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
