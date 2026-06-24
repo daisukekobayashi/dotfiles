@@ -21,5 +21,6 @@ __pycache__/
 # General caches
 .cache/
 .agents/
+.superpowers/
 .worktrees/
 setup/node_modules/
