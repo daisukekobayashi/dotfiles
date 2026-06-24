@@ -1,5 +1,5 @@
 dap_e2e_repo_root() {
-  cd "${BATS_TEST_DIRNAME}/../.." >/dev/null 2>&1 && pwd
+  git -C "${BATS_TEST_DIRNAME}" rev-parse --show-toplevel
 }
 
 dap_e2e_setup() {
@@ -12,6 +12,17 @@ dap_e2e_setup() {
   mkdir -p "${DAP_E2E_LOG_DIR}" "${DAP_E2E_RUN_DIR}/runtime"
   chmod 700 "${DAP_E2E_RUN_DIR}/runtime"
   export DAP_E2E_RUN_ID DAP_E2E_SAFE_ID DAP_E2E_RUN_DIR DAP_E2E_LOG_DIR
+}
+
+dap_e2e_suite_setup() {
+  if [ "${DAP_E2E:-}" != "1" ]; then
+    skip "set DAP_E2E=1 to run DAP E2E tests"
+  fi
+  dap_e2e_setup
+}
+
+dap_e2e_suite_teardown() {
+  dap_e2e_teardown
 }
 
 dap_e2e_teardown() {

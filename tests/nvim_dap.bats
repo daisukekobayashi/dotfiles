@@ -36,6 +36,29 @@ assert_not_contains() {
   assert_not_contains "${content}" "dap.configurations.rust = dap.configurations.cpp"
 }
 
+@test "dap e2e tests are split by language with target cases colocated" {
+  local root root_suite language_suite
+  root="$(repo_root)"
+  root_suite="$(cat "${root}/tests/dap/e2e.bats")"
+
+  assert_contains "${root_suite}" "dap e2e runner supports dry run"
+  assert_contains "${root_suite}" "runner resolves elixir dap adapters"
+  assert_not_contains "${root_suite}" "runner stops at an elixir breakpoint"
+  assert_not_contains "${root_suite}" "runner stops at a python breakpoint"
+  assert_not_contains "${root_suite}" "runner stops at a node breakpoint"
+  assert_not_contains "${root_suite}" "runner stops at a rust breakpoint"
+
+  for language in elixir python node rust; do
+    [ -f "${root}/tests/dap/e2e/${language}.bats" ]
+    language_suite="$(cat "${root}/tests/dap/e2e/${language}.bats")"
+
+    assert_contains "${language_suite}" "load '../helpers/env.bash'"
+    assert_contains "${language_suite}" "locally"
+    assert_contains "${language_suite}" "direct docker container"
+    assert_contains "${language_suite}" "docker compose"
+  done
+}
+
 @test "dap project loader imports vscode launch json and repo-local lua" {
   local root content
   root="$(repo_root)"
