@@ -1,0 +1,14 @@
+services:
+  app:
+    image: ${DAP_E2E_IMAGE}
+    network_mode: host
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - ${DAP_E2E_PROJECT_DIR}:${DAP_E2E_PROJECT_DIR}
+    working_dir: ${DAP_E2E_PROJECT_DIR}
+    command:
+      - sleep
+      - infinity

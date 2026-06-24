@@ -355,6 +355,18 @@ local function configure_node_docker_adapter(dap, target)
   }
 end
 
+local function configure_rust_docker_adapter(dap, target)
+  dap.adapters.codelldb = {
+    type = 'server',
+    host = '127.0.0.1',
+    port = '${port}',
+    executable = {
+      command = 'docker',
+      args = docker_exec_args(target, { 'codelldb', '--port', '${port}' }),
+    },
+  }
+end
+
 local function run_dap(language, target, fixture)
   local dap = setup_real_dap(language, target, fixture)
   local config
@@ -363,6 +375,8 @@ local function run_dap(language, target, fixture)
     configure_python_docker_adapter(dap, target)
   elseif language == 'node' and (target == 'docker' or target == 'compose') then
     configure_node_docker_adapter(dap, target)
+  elseif language == 'rust' and (target == 'docker' or target == 'compose') then
+    configure_rust_docker_adapter(dap, target)
   end
 
   if language == 'elixir' and target == 'local' then
@@ -404,10 +418,10 @@ local function run_dap(language, target, fixture)
       program = fixture .. '/main.js',
       cwd = fixture,
     }
-  elseif language == 'rust' and target == 'local' then
+  elseif language == 'rust' and (target == 'local' or target == 'docker' or target == 'compose') then
     config = {
       type = 'codelldb',
-      name = 'dap e2e rust local',
+      name = 'dap e2e rust ' .. target,
       request = 'launch',
       program = fixture .. '/target/debug/dap-e2e-rust',
       cwd = fixture,
