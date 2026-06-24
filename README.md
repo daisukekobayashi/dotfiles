@@ -112,6 +112,15 @@ npm --prefix setup test
 bats tests
 ```
 
+Neovim DAP full E2E checks are opt-in because they start real debug adapters and Docker services.
+
+```bash
+bats tests/dap/e2e.bats
+DAP_E2E=1 bats tests/dap/e2e.bats
+```
+
+`DAP_E2E=1` verifies Elixir debugging through local launch, direct Docker attach, and Docker Compose attach. The Docker checks require Docker Compose v2 and build a pinned Elixir/ElixirLS fixture image on first run. The local check uses the installed `elixir-ls-debugger` and skips with an explicit reason when the host ElixirLS toolchain is known incompatible. Set `DAP_E2E_KEEP=1` to keep per-test logs under the temporary run directory.
+
 Static checks.
 
 ```bash
