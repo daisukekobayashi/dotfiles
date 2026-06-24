@@ -42,9 +42,11 @@ dap_e2e_teardown() {
 
   if [ -n "${DAP_E2E_DOCKER_CONTAINER:-}" ]; then
     if [ -n "${DAP_E2E_PROJECT_DIR:-}" ]; then
+      local chown_image
+      chown_image="${DAP_E2E_IMAGE:-$(dap_e2e_image_tag)}"
       docker exec "${DAP_E2E_DOCKER_CONTAINER}" \
         chown -R "$(id -u):$(id -g)" "${DAP_E2E_PROJECT_DIR}" >/dev/null 2>&1 || true
-      docker run --rm -v "${DAP_E2E_PROJECT_DIR}:${DAP_E2E_PROJECT_DIR}" "$(dap_e2e_image_tag)" \
+      docker run --rm -v "${DAP_E2E_PROJECT_DIR}:${DAP_E2E_PROJECT_DIR}" "${chown_image}" \
         chown -R "$(id -u):$(id -g)" "${DAP_E2E_PROJECT_DIR}" >/dev/null 2>&1 || true
     fi
     docker rm -f "${DAP_E2E_DOCKER_CONTAINER}" >/dev/null 2>&1 || true
@@ -191,18 +193,33 @@ dap_e2e_require_compose() {
 }
 
 dap_e2e_image_tag() {
-  printf '%s\n' "${DAP_E2E_IMAGE:-dotfiles-dap-e2e-elixir:0.29.3-elixir-1.18.4-otp-27}"
+  local language
+  language="${1:-elixir}"
+
+  case "${language}" in
+    elixir)
+      printf '%s\n' "dotfiles-dap-e2e-elixir:0.29.3-elixir-1.18.4-otp-27"
+      ;;
+    python)
+      printf '%s\n' "dotfiles-dap-e2e-python:3.14-debugpy-1.8.17"
+      ;;
+    *)
+      printf 'unknown DAP E2E image language: %s\n' "${language}" >&2
+      return 1
+      ;;
+  esac
 }
 
 dap_e2e_build_image() {
-  local root image
+  local language root image
+  language="${1:-elixir}"
   root="$(dap_e2e_repo_root)"
-  image="$(dap_e2e_image_tag)"
+  image="$(dap_e2e_image_tag "${language}")"
 
   docker build \
     -t "${image}" \
-    -f "${root}/tests/dap/fixtures/elixir/docker/Dockerfile" \
-    "${root}/tests/dap/fixtures/elixir/docker"
+    -f "${root}/tests/dap/fixtures/${language}/docker/Dockerfile" \
+    "${root}/tests/dap/fixtures/${language}/docker"
 }
 
 dap_e2e_remote_node_name() {
@@ -234,43 +251,74 @@ dap_e2e_wait_for_docker_node() {
 }
 
 dap_e2e_start_docker_container() {
-  local project_dir image node cookie hostname
-  project_dir="$1"
-  image="$(dap_e2e_image_tag)"
+  local language project_dir image node cookie hostname
+  if [ "$#" -eq 1 ]; then
+    language="elixir"
+    project_dir="$1"
+  else
+    language="$1"
+    project_dir="$2"
+  fi
+
+  image="$(dap_e2e_image_tag "${language}")"
   node="$(dap_e2e_remote_node_name)"
   cookie="$(dap_e2e_remote_cookie)"
   hostname="$(dap_e2e_remote_hostname)"
 
   DAP_E2E_DOCKER_CONTAINER="dap-e2e-${DAP_E2E_SAFE_ID}"
   DAP_E2E_PROJECT_DIR="${project_dir}"
+  DAP_E2E_IMAGE="${image}"
   DAP_E2E_COOKIE="${cookie}"
   DAP_E2E_NODE="${node}"
   DAP_E2E_HOSTNAME="${hostname}"
   DAP_E2E_REMOTE_NODE="${node}@${hostname}"
-  export DAP_E2E_DOCKER_CONTAINER DAP_E2E_PROJECT_DIR DAP_E2E_COOKIE
+  export DAP_E2E_DOCKER_CONTAINER DAP_E2E_PROJECT_DIR DAP_E2E_IMAGE DAP_E2E_COOKIE
   export DAP_E2E_NODE DAP_E2E_HOSTNAME DAP_E2E_REMOTE_NODE
 
-  docker run -d \
-    --name "${DAP_E2E_DOCKER_CONTAINER}" \
-    --hostname "${hostname}" \
-    -e DAP_E2E_NODE="${node}" \
-    -e DAP_E2E_COOKIE="${cookie}" \
-    -v "${project_dir}:${project_dir}" \
-    -w "${project_dir}" \
-    "${image}" \
-    bash -lc 'mix compile && elixir --sname "${DAP_E2E_NODE}" --cookie "${DAP_E2E_COOKIE}" -S mix run --no-halt -e "DapE2E.Waiter.wait()"'
+  case "${language}" in
+    elixir)
+      docker run -d \
+        --name "${DAP_E2E_DOCKER_CONTAINER}" \
+        --hostname "${hostname}" \
+        -e DAP_E2E_NODE="${node}" \
+        -e DAP_E2E_COOKIE="${cookie}" \
+        -v "${project_dir}:${project_dir}" \
+        -w "${project_dir}" \
+        "${image}" \
+        bash -lc 'mix compile && elixir --sname "${DAP_E2E_NODE}" --cookie "${DAP_E2E_COOKIE}" -S mix run --no-halt -e "DapE2E.Waiter.wait()"'
 
-  dap_e2e_wait_for_docker_node "${DAP_E2E_DOCKER_CONTAINER}" "${node}"
+      dap_e2e_wait_for_docker_node "${DAP_E2E_DOCKER_CONTAINER}" "${node}"
+      ;;
+    python)
+      docker run -d \
+        --name "${DAP_E2E_DOCKER_CONTAINER}" \
+        -v "${project_dir}:${project_dir}" \
+        -w "${project_dir}" \
+        "${image}" \
+        sleep infinity
+      ;;
+    *)
+      printf 'unknown DAP E2E docker language: %s\n' "${language}" >&2
+      return 1
+      ;;
+  esac
 }
 
 dap_e2e_prepare_compose() {
-  local root project_dir
+  local language root project_dir
+  if [ "$#" -eq 1 ]; then
+    language="elixir"
+    project_dir="$1"
+  else
+    language="$1"
+    project_dir="$2"
+  fi
+
   root="$(dap_e2e_repo_root)"
-  project_dir="$1"
 
   DAP_E2E_COMPOSE_DIR="${DAP_E2E_RUN_DIR}/compose"
   DAP_E2E_PROJECT_DIR="${project_dir}"
-  DAP_E2E_IMAGE="$(dap_e2e_image_tag)"
+  DAP_E2E_IMAGE="$(dap_e2e_image_tag "${language}")"
   DAP_E2E_NODE="$(dap_e2e_remote_node_name)"
   DAP_E2E_COOKIE="$(dap_e2e_remote_cookie)"
   DAP_E2E_HOSTNAME="$(dap_e2e_remote_hostname)"
@@ -278,25 +326,46 @@ dap_e2e_prepare_compose() {
   COMPOSE_PROJECT_NAME="dape2e${DAP_E2E_SAFE_ID}"
 
   mkdir -p "${DAP_E2E_COMPOSE_DIR}"
-  cp "${root}/tests/dap/fixtures/elixir/compose/compose.yaml" "${DAP_E2E_COMPOSE_DIR}/compose.yaml"
+  cp "${root}/tests/dap/fixtures/${language}/compose/compose.yaml" "${DAP_E2E_COMPOSE_DIR}/compose.yaml"
 
   export DAP_E2E_COMPOSE_DIR DAP_E2E_PROJECT_DIR DAP_E2E_IMAGE
   export DAP_E2E_NODE DAP_E2E_COOKIE DAP_E2E_HOSTNAME DAP_E2E_REMOTE_NODE COMPOSE_PROJECT_NAME
 }
 
 dap_e2e_start_compose() {
-  dap_e2e_prepare_compose "$1"
+  local language project_dir
+  if [ "$#" -eq 1 ]; then
+    language="elixir"
+    project_dir="$1"
+  else
+    language="$1"
+    project_dir="$2"
+  fi
+
+  dap_e2e_prepare_compose "${language}" "${project_dir}"
 
   docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" up -d
 
-  local attempt
-  for attempt in $(seq 1 60); do
-    if docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" exec -T app epmd -names 2>/dev/null | grep -Fq "name ${DAP_E2E_NODE}"; then
-      return 0
-    fi
-    sleep 1
-  done
+  case "${language}" in
+    elixir)
+      local attempt
+      for attempt in $(seq 1 60); do
+        if docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" exec -T app epmd -names 2>/dev/null | grep -Fq "name ${DAP_E2E_NODE}"; then
+          return 0
+        fi
+        sleep 1
+      done
 
-  docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" logs app >&3 || true
-  return 1
+      docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" logs app >&3 || true
+      return 1
+      ;;
+    python)
+      docker compose --project-directory "${DAP_E2E_COMPOSE_DIR}" exec -T app \
+        python -c 'import debugpy'
+      ;;
+    *)
+      printf 'unknown DAP E2E compose language: %s\n' "${language}" >&2
+      return 1
+      ;;
+  esac
 }

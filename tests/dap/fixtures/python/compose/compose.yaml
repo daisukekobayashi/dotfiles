@@ -1,0 +1,9 @@
+services:
+  app:
+    image: ${DAP_E2E_IMAGE}
+    volumes:
+      - ${DAP_E2E_PROJECT_DIR}:${DAP_E2E_PROJECT_DIR}
+    working_dir: ${DAP_E2E_PROJECT_DIR}
+    command:
+      - sleep
+      - infinity

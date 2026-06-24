@@ -65,6 +65,14 @@ local function add_plugin_runtime(name)
   vim.opt.runtimepath:append(path)
 end
 
+local function require_env(name)
+  local value = os.getenv(name)
+  if value == nil or value == '' then
+    fail(name .. ' is required')
+  end
+  return value
+end
+
 local function adapter_config(target, fixture)
   local env = {
     DAP_ELIXIR_LS_NODE = os.getenv('DAP_ELIXIR_LS_NODE') or 'dap_e2e_ls',
@@ -300,9 +308,46 @@ local function setup_real_dap(language, target, fixture)
   return dap
 end
 
+local function configure_python_docker_adapter(dap, target)
+  if target == 'docker' then
+    dap.adapters.python = {
+      type = 'executable',
+      command = 'docker',
+      args = {
+        'exec',
+        '-i',
+        os.getenv('DAP_DOCKER_CONTAINER') or require_env('DAP_E2E_DOCKER_CONTAINER'),
+        'python',
+        '-m',
+        'debugpy.adapter',
+      },
+    }
+  elseif target == 'compose' then
+    dap.adapters.python = {
+      type = 'executable',
+      command = 'docker',
+      args = {
+        'compose',
+        '--project-directory',
+        require_env('DAP_COMPOSE_PROJECT_DIR'),
+        'exec',
+        '-T',
+        os.getenv('DAP_DOCKER_SERVICE') or 'app',
+        'python',
+        '-m',
+        'debugpy.adapter',
+      },
+    }
+  end
+end
+
 local function run_dap(language, target, fixture)
   local dap = setup_real_dap(language, target, fixture)
   local config
+
+  if language == 'python' and (target == 'docker' or target == 'compose') then
+    configure_python_docker_adapter(dap, target)
+  end
 
   if language == 'elixir' and target == 'local' then
     config = {
@@ -326,10 +371,10 @@ local function run_dap(language, target, fixture)
       debugInterpretModulesPatterns = { 'DapE2E*' },
       postAttachBreakpointSyncDelayMs = 1000,
     })
-  elseif language == 'python' and target == 'local' then
+  elseif language == 'python' and (target == 'local' or target == 'docker' or target == 'compose') then
     config = {
       type = 'python',
-      name = 'dap e2e python local',
+      name = 'dap e2e python ' .. target,
       request = 'launch',
       program = fixture .. '/main.py',
       cwd = fixture,
