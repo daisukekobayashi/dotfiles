@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEFAULT_IMAGE="dotfiles/share-dir-filebrowser:stable-slim"
+CONTAINER_PORT="80"
+CONTAINER_DATA_DIR="/home/filebrowser/data"
+CONTAINER_SHARE_DIR="/srv"
+SHARE_DIR_CLEANUP_DATA_DIR=""
+
+usage() {
+  cat <<'EOF'
+Usage: share-dir [DIR] [options]
+
+Options:
+  --host HOST          Host bind address. Default: 0.0.0.0
+  --port PORT          Host port. Default: auto-select a free port
+  --user UID:GID       Container user. Default: current host uid:gid
+  --readonly           Bind the shared directory read-only
+  --name NAME          Container name override
+  --image IMAGE        Use a specific Docker image instead of the local wrapper image
+  --no-build           Do not build the local wrapper image before running
+  --help               Show this help
+EOF
+}
+
+die() {
+  printf 'share-dir: %s\n' "$*" >&2
+  exit 1
+}
+
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+
+  if [ -z "${value}" ]; then
+    die "${option} requires a value"
+  fi
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+cleanup() {
+  if [ -n "${SHARE_DIR_CLEANUP_DATA_DIR:-}" ]; then
+    rm -rf -- "${SHARE_DIR_CLEANUP_DATA_DIR}"
+  fi
+}
+
+absolute_dir() {
+  local path="$1"
+
+  if [ ! -e "${path}" ]; then
+    die "Shared path does not exist: ${path}"
+  fi
+  if [ ! -d "${path}" ]; then
+    die "Shared path is not a directory: ${path}"
+  fi
+
+  (
+    cd -P "${path}" >/dev/null 2>&1
+    pwd
+  )
+}
+
+random_password() {
+  if command_exists openssl; then
+    openssl rand -base64 24 | tr -d '\n'
+    return 0
+  fi
+
+  local password=""
+  while [ "${#password}" -lt 32 ]; do
+    password+="$(
+      LC_ALL=C od -An -N32 -tx1 /dev/urandom |
+        tr -d ' \n' |
+        cut -c1-32
+    )"
+  done
+  printf '%s' "${password:0:32}"
+}
+
+free_port() {
+  if command_exists python3; then
+    python3 - <<'PY'
+import socket
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("", 0))
+    print(sock.getsockname()[1])
+PY
+    return 0
+  fi
+
+  if command_exists python; then
+    python - <<'PY'
+import socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    sock.bind(("", 0))
+    print(sock.getsockname()[1])
+finally:
+    sock.close()
+PY
+    return 0
+  fi
+
+  die "Cannot auto-select a port because python3 or python was not found. Use --port."
+}
+
+write_config() {
+  local data_dir="$1"
+  local config_path="${data_dir}/config.yaml"
+
+  cat > "${config_path}" <<EOF
+server:
+  sources:
+    - path: ${CONTAINER_SHARE_DIR}
+      name: Shared
+      config:
+        defaultEnabled: true
+auth:
+  adminUsername: admin
+  methods:
+    password:
+      enabled: true
+      signup: false
+EOF
+}
+
+main() {
+  local shared_arg="."
+  local shared_arg_set=0
+  local host="0.0.0.0"
+  local port=""
+  local run_user
+  local readonly=0
+  local container_name=""
+  local image="${DEFAULT_IMAGE}"
+  local build_image=1
+  local tool_dir
+  local shared_dir
+  local data_dir
+  local password
+  local mount_suffix=""
+  local mode="read-write"
+  local -a docker_run_args=()
+
+  run_user="$(id -u):$(id -g)"
+  tool_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --help)
+        usage
+        return 0
+        ;;
+      --host)
+        require_value "$1" "${2:-}"
+        host="$2"
+        shift 2
+        ;;
+      --host=*)
+        host="${1#--host=}"
+        require_value "--host" "${host}"
+        shift
+        ;;
+      --port)
+        require_value "$1" "${2:-}"
+        port="$2"
+        shift 2
+        ;;
+      --port=*)
+        port="${1#--port=}"
+        require_value "--port" "${port}"
+        shift
+        ;;
+      --user)
+        require_value "$1" "${2:-}"
+        run_user="$2"
+        shift 2
+        ;;
+      --user=*)
+        run_user="${1#--user=}"
+        require_value "--user" "${run_user}"
+        shift
+        ;;
+      --readonly)
+        readonly=1
+        shift
+        ;;
+      --name)
+        require_value "$1" "${2:-}"
+        container_name="$2"
+        shift 2
+        ;;
+      --name=*)
+        container_name="${1#--name=}"
+        require_value "--name" "${container_name}"
+        shift
+        ;;
+      --image)
+        require_value "$1" "${2:-}"
+        image="$2"
+        build_image=0
+        shift 2
+        ;;
+      --image=*)
+        image="${1#--image=}"
+        require_value "--image" "${image}"
+        build_image=0
+        shift
+        ;;
+      --no-build)
+        build_image=0
+        shift
+        ;;
+      --)
+        shift
+        if [ "$#" -gt 0 ]; then
+          if [ "${shared_arg_set}" -eq 1 ]; then
+            die "Only one shared directory can be specified"
+          fi
+          shared_arg="$1"
+          shared_arg_set=1
+          shift
+        fi
+        if [ "$#" -gt 0 ]; then
+          die "Unexpected argument: $1"
+        fi
+        ;;
+      -*)
+        die "Unknown option: $1"
+        ;;
+      *)
+        if [ "${shared_arg_set}" -eq 1 ]; then
+          die "Only one shared directory can be specified"
+        fi
+        shared_arg="$1"
+        shared_arg_set=1
+        shift
+        ;;
+    esac
+  done
+
+  if [ -n "${port}" ] && [[ ! "${port}" =~ ^[0-9]+$ ]]; then
+    die "Port must be numeric: ${port}"
+  fi
+
+  shared_dir="$(absolute_dir "${shared_arg}")"
+  if [ "${shared_dir}" = "/" ]; then
+    die "Refusing to share /"
+  fi
+
+  require_value "--host" "${host}"
+  require_value "--user" "${run_user}"
+  require_value "--image" "${image}"
+
+  if ! command_exists docker; then
+    die "Required command not found: docker"
+  fi
+
+  if [ -z "${port}" ]; then
+    port="$(free_port)"
+  fi
+
+  if [ -z "${container_name}" ]; then
+    container_name="share-dir-${USER:-user}-$$"
+  fi
+
+  data_dir="$(mktemp -d "${TMPDIR:-/tmp}/share-dir.XXXXXX")"
+  SHARE_DIR_CLEANUP_DATA_DIR="${data_dir}"
+  chmod 1777 "${data_dir}"
+  trap cleanup EXIT
+
+  password="$(random_password)"
+  write_config "${data_dir}"
+
+  if [ "${readonly}" -eq 1 ]; then
+    mount_suffix=":ro"
+    mode="read-only"
+  fi
+
+  if [ "${build_image}" -eq 1 ]; then
+    docker build -t "${image}" "${tool_dir}"
+  fi
+
+  printf 'URL: http://%s:%s\n' "${host}" "${port}"
+  printf 'Username: admin\n'
+  printf 'Password: %s\n' "${password}"
+  printf 'Shared path: %s\n' "${shared_dir}"
+  printf 'Mode: %s\n' "${mode}"
+  printf 'Container: %s\n' "${container_name}"
+  printf 'Stop: Ctrl-C\n'
+  if [ "${host}" = "0.0.0.0" ]; then
+    printf 'Warning: bound to 0.0.0.0; reachable from other hosts if network and firewall rules allow it.\n' >&2
+  fi
+
+  docker_run_args=(
+    run --rm -it
+    --name "${container_name}"
+    --user "${run_user}"
+    --security-opt no-new-privileges
+    --cap-drop ALL
+    -e "FILEBROWSER_ADMIN_PASSWORD=${password}"
+    -v "${shared_dir}:${CONTAINER_SHARE_DIR}${mount_suffix}"
+    -v "${data_dir}:${CONTAINER_DATA_DIR}"
+    -p "${host}:${port}:${CONTAINER_PORT}"
+    "${image}"
+  )
+
+  docker "${docker_run_args[@]}"
+}
+
+main "$@"

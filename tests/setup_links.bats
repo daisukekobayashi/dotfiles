@@ -49,6 +49,8 @@ make_links_fixture_root() {
   [ "$(readlink "${TEST_HOME}/.config/process-compose/shortcuts.yaml")" = "${root}/process-compose/shortcuts.yaml" ]
   [ -L "${TEST_HOME}/.config/process-compose/settings.yaml" ]
   [ "$(readlink "${TEST_HOME}/.config/process-compose/settings.yaml")" = "${root}/process-compose/settings.yaml" ]
+  [ -L "${TEST_HOME}/.local/bin/share-dir" ]
+  [ "$(readlink "${TEST_HOME}/.local/bin/share-dir")" = "${root}/tools/share-dir/share-dir" ]
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
   [ -f "${TEST_HOME}/.gemini/GEMINI.md" ]
   [ -f "${TEST_HOME}/.claude/CLAUDE.md" ]

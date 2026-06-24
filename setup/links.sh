@@ -21,6 +21,9 @@ setup_links() {
   link_file "${dotfiles_root}/tmux/tmux-palette/theme.json" "${setup_home}/.config/tmux-palette/theme.json" "${dry_run}"
   link_file "${dotfiles_root}/tmux/tmux-palette/palettes" "${setup_home}/.config/tmux-palette/palettes" "${dry_run}"
 
+  make_directory "${setup_home}/.local/bin" "${dry_run}"
+  link_file "${dotfiles_root}/tools/share-dir/share-dir" "${setup_home}/.local/bin/share-dir" "${dry_run}"
+
   make_directory "${setup_home}/.vim/vim/undo" "${dry_run}"
   make_directory "${setup_home}/.vim/vim/tmp" "${dry_run}"
   make_directory "${setup_home}/.vim/nvim/undo" "${dry_run}"
