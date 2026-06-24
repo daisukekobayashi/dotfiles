@@ -145,6 +145,29 @@ dap_e2e_local_python_preflight() {
     skip "debugpy is required in ${python} for local Python DAP E2E"
 }
 
+dap_e2e_mason_bin_path() {
+  local command_name mason_command
+  command_name="$1"
+  if command -v "${command_name}" >/dev/null 2>&1; then
+    command -v "${command_name}"
+    return
+  fi
+
+  mason_command="${HOME}/.local/share/nvim/mason/bin/${command_name}"
+  if [ -x "${mason_command}" ]; then
+    printf '%s\n' "${mason_command}"
+    return
+  fi
+
+  return 1
+}
+
+dap_e2e_local_node_preflight() {
+  dap_e2e_require_command node
+  dap_e2e_mason_bin_path js-debug-adapter >/dev/null || \
+    skip "js-debug-adapter is required for local Node DAP E2E"
+}
+
 dap_e2e_require_docker() {
   dap_e2e_require_command docker
   docker info >/dev/null 2>&1 || skip "Docker daemon is required for this DAP E2E test"

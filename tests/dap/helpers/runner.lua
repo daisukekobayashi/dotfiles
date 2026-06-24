@@ -170,6 +170,12 @@ local function language_config(language, fixture)
       source_match = 'main.py',
       breakpoint_line = 2,
     }
+  elseif language == 'node' then
+    return {
+      source = fixture .. '/main.js',
+      source_match = 'main.js',
+      breakpoint_line = 2,
+    }
   end
 
   fail('unknown language: ' .. tostring(language))
@@ -234,6 +240,8 @@ local function setup_language_dap(language)
   elseif language == 'python' then
     add_plugin_runtime('nvim-dap-python')
     require('plugins.dap.languages.python').setup()
+  elseif language == 'node' then
+    require('plugins.dap.languages.node').setup()
   else
     fail('unknown language: ' .. tostring(language))
   end
@@ -318,6 +326,14 @@ local function run_dap(language, target, fixture)
       program = fixture .. '/main.py',
       cwd = fixture,
       console = 'internalConsole',
+    }
+  elseif language == 'node' and target == 'local' then
+    config = {
+      type = 'pwa-node',
+      name = 'dap e2e node local',
+      request = 'launch',
+      program = fixture .. '/main.js',
+      cwd = fixture,
     }
   else
     fail('unsupported runner target: language=' .. tostring(language) .. ' target=' .. tostring(target))

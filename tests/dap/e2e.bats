@@ -94,6 +94,25 @@ teardown() {
   [[ "${output}" == *"main.py"* ]]
 }
 
+@test "runner stops at a node breakpoint locally" {
+  local root project_dir
+  dap_e2e_local_node_preflight
+
+  root="$(dap_e2e_repo_root)"
+  project_dir="$(dap_e2e_copy_fixture "${root}/tests/dap/fixtures/node/local")"
+
+  run dap_e2e_nvim \
+    --language node \
+    --mode local \
+    --fixture "${project_dir}"
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"status=stopped"* ]]
+  [[ "${output}" == *"language=node"* ]]
+  [[ "${output}" == *"target=local"* ]]
+  [[ "${output}" == *"main.js"* ]]
+}
+
 @test "runner stops at an elixir breakpoint in a direct docker container" {
   local root project_dir
   dap_e2e_require_docker
