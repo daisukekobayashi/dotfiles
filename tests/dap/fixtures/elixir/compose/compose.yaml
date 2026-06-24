@@ -1,0 +1,14 @@
+services:
+  app:
+    image: ${DAP_E2E_IMAGE}
+    hostname: ${DAP_E2E_HOSTNAME}
+    environment:
+      DAP_E2E_COOKIE: ${DAP_E2E_COOKIE}
+      DAP_E2E_NODE: ${DAP_E2E_NODE}
+    volumes:
+      - ${DAP_E2E_PROJECT_DIR}:${DAP_E2E_PROJECT_DIR}
+    working_dir: ${DAP_E2E_PROJECT_DIR}
+    command:
+      - bash
+      - -lc
+      - mix compile && elixir --sname "$${DAP_E2E_NODE}" --cookie "$${DAP_E2E_COOKIE}" -S mix run --no-halt -e "DapE2E.Waiter.wait()"

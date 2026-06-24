@@ -7,4 +7,10 @@ defmodule DapE2E do
   def run do
     IO.puts("dap-e2e-result=#{tripwire()}")
   end
+
+  def loop do
+    tripwire()
+    Process.sleep(250)
+    loop()
+  end
 end
