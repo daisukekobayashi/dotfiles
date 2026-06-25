@@ -54,6 +54,58 @@ load 'helpers/test_helper.bash'
   [ "$status" -eq 0 ]
 }
 
+@test "tmux ukiyo uses the kanagawa theme without pane window colors" {
+  run grep -Eq '^set[[:space:]]+-g[[:space:]]+@plugin[[:space:]]+'\''Nybkox/tmux-ukiyo'\''([[:space:]]|$)' "$(repo_root)/.tmux.conf"
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^set[[:space:]]+-g[[:space:]]+@ukiyo-theme[[:space:]]+"kanagawa/wave"([[:space:]]|$)' "$(repo_root)/.tmux.conf"
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^set[[:space:]]+-g[[:space:]]+@ukiyo-plugins[[:space:]]+"battery cpu-usage weather time"([[:space:]]|$)' "$(repo_root)/.tmux.conf"
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^set[[:space:]]+-g[[:space:]]+@ukiyo-ignore-window-colors[[:space:]]+true([[:space:]]|$)' "$(repo_root)/.tmux.conf"
+  [ "$status" -eq 0 ]
+
+  run grep -Eq 'Nybkox/tmux-kanagawa|@kanagawa-' "$(repo_root)/.tmux.conf"
+  [ "$status" -ne 0 ]
+}
+
+@test "tmux delegates pane border colors to the theme" {
+  for config in "$(repo_root)/.tmux.conf" "$(repo_root)/tmux/psmux.conf"; do
+    run grep -Eq 'pane-border-style|pane-active-border-style|pane-border-status|pane-border-format' "${config}"
+    [ "$status" -ne 0 ]
+  done
+
+  run grep -Eq '@kanagawa-border-contrast|@ukiyo-border-contrast' "$(repo_root)/.tmux.conf"
+  [ "$status" -ne 0 ]
+}
+
+@test "tmux does not override theme pane styling after plugins load" {
+  run node -e '
+const fs = require("fs");
+
+const tmuxConfig = fs.readFileSync(process.argv[1], "utf8");
+const tpmLine = tmuxConfig.match(/run -b '\''([^'\'']+)'\''/g)?.at(-1) ?? "";
+if (tpmLine !== "run -b '\''~/.tmux/plugins/tpm/tpm'\''") {
+  throw new Error("TPM initialization line is missing");
+}
+for (const command of ["pane-border-style", "pane-active-border-style", "window-style", "window-active-style"]) {
+  if (tpmLine.includes(command)) {
+    throw new Error(`TPM initialization should not override: ${command}`);
+  }
+}
+
+const psmuxConfig = fs.readFileSync(process.argv[2], "utf8");
+const psmuxThemeIndex = psmuxConfig.indexOf("source-file '\''~/.psmux/plugins/psmux-theme-kanagawa/plugin.conf'\''");
+if (psmuxThemeIndex === -1) {
+  throw new Error("psmux theme source line is missing");
+}
+' "$(repo_root)/.tmux.conf" "$(repo_root)/tmux/psmux.conf"
+
+  [ "$status" -eq 0 ]
+}
+
 @test "tmux note popup uses toggle-popup instead of floax" {
   run node -e '
 const fs = require("fs");
@@ -68,7 +120,7 @@ if (config.includes("@floax-bind")) {
 
 const continuumIndex = config.indexOf("set -g @plugin '\''tmux-plugins/tmux-continuum'\''");
 const toggleIndex = config.indexOf("set -g @plugin '\''loichyan/tmux-toggle-popup'\''");
-const tpmIndex = config.indexOf("run -b '\''~/.tmux/plugins/tpm/tpm'\''");
+const tpmCommandIndex = config.indexOf("~/.tmux/plugins/tpm/tpm");
 
 if (toggleIndex === -1) {
   throw new Error("tmux-toggle-popup plugin is missing");
@@ -76,7 +128,7 @@ if (toggleIndex === -1) {
 if (continuumIndex === -1 || continuumIndex > toggleIndex) {
   throw new Error("tmux-toggle-popup should load after tmux-continuum");
 }
-if (tpmIndex === -1 || toggleIndex > tpmIndex) {
+if (tpmCommandIndex === -1 || toggleIndex > tpmCommandIndex) {
   throw new Error("tmux-toggle-popup should be listed before TPM initialization");
 }
 if (config.includes("@popup-autostart on")) {
