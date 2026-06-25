@@ -13,6 +13,7 @@ network_access = true
 [features]
 rmcp_client = true
 goals = true
+memories = true
 
 [model_providers.azure]
 name = "Azure"
