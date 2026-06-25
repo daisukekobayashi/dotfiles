@@ -106,7 +106,7 @@ if (psmuxThemeIndex === -1) {
   [ "$status" -eq 0 ]
 }
 
-@test "tmux note popup uses toggle-popup instead of floax" {
+@test "tmux popup uses toggle-popup instead of floax" {
   run node -e '
 const fs = require("fs");
 const config = fs.readFileSync(process.argv[1], "utf8");
@@ -132,37 +132,70 @@ if (tpmCommandIndex === -1 || toggleIndex > tpmCommandIndex) {
   throw new Error("tmux-toggle-popup should be listed before TPM initialization");
 }
 if (config.includes("@popup-autostart on")) {
-  throw new Error("note popup config should not autostart the popup server");
+  throw new Error("popup config should not autostart the popup server");
 }
 ' "$(repo_root)/.tmux.conf"
 
   [ "$status" -eq 0 ]
 }
 
-@test "tmux note popup binds prefix g and prefix G position mode" {
+@test "tmux popup copies through the caller buffer" {
+  run node -e '
+const fs = require("fs");
+const config = fs.readFileSync(process.argv[1], "utf8");
+
+const popupBlockIndex = config.indexOf("if -F '\''#{TMUX_POPUP_SERVER}'\'' {");
+const tpmCommandIndex = config.indexOf("~/.tmux/plugins/tpm/tpm");
+if (popupBlockIndex === -1) {
+  throw new Error("popup-specific config block is missing");
+}
+if (tpmCommandIndex === -1 || popupBlockIndex > tpmCommandIndex) {
+  throw new Error("popup copy overrides must be set before TPM loads tmux-yank");
+}
+
+for (const expected of [
+  "set -g copy-command '\''#{@popup-proxy} loadb -w -'\''",
+  "set -g @override_copy_command '\''#{@popup-proxy} loadb -w -'\''",
+  "bind -T copy-mode-vi Enter send-keys -X copy-pipe-and-cancel",
+  "bind -T prefix ] run '\''#{@popup-sync-buffer}'\'' \\; paste-buffer -p",
+]) {
+  if (!config.includes(expected)) {
+    throw new Error(`missing popup buffer sharing config: ${expected}`);
+  }
+}
+' "$(repo_root)/.tmux.conf"
+
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux popup is window-scoped and binds prefix g and prefix G position mode" {
   run node -e '
 const fs = require("fs");
 const config = fs.readFileSync(process.argv[1], "utf8");
 const expectedLines = [
-  "bind -T prefix g run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -w80% -h80% --name=notes\"",
-  "bind -T prefix G switch-client -T notes-popup",
-  "bind -T notes-popup c run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -w80% -h80% --name=notes\"",
-  "bind -T notes-popup h run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y0 -w45% -h100% --name=notes\"",
-  "bind -T notes-popup j run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y'\''##{e|-:##{client_height},##{popup_height}}'\'' -w100% -h40% --name=notes\"",
-  "bind -T notes-popup k run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y0 -w100% -h40% --name=notes\"",
-  "bind -T notes-popup l run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x'\''##{e|-:##{client_width},##{popup_width}}'\'' -y0 -w45% -h100% --name=notes\"",
-  "bind -T notes-popup q switch-client -T prefix",
-  "bind -T notes-popup Escape switch-client -T prefix",
+  "set -g @popup-id-format '\''#{b:socket_path}/#{session_name}/#{window_id}/{popup_name}'\''",
+  "bind -T prefix g run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -w80% -h80% --name=popup\"",
+  "bind -T prefix G switch-client -T popup-position",
+  "bind -T popup-position c run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -w80% -h80% --name=popup\"",
+  "bind -T popup-position h run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y0 -w45% -h100% --name=popup\"",
+  "bind -T popup-position j run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y'\''##{e|-:##{client_height},##{popup_height}}'\'' -w100% -h40% --name=popup\"",
+  "bind -T popup-position k run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x0 -y0 -w100% -h40% --name=popup\"",
+  "bind -T popup-position l run \"#{@popup-toggle} -Ed'\''##{pane_current_path}'\'' -x'\''##{e|-:##{client_width},##{popup_width}}'\'' -y0 -w45% -h100% --name=popup\"",
+  "bind -T popup-position q switch-client -T prefix",
+  "bind -T popup-position Escape switch-client -T prefix",
 ];
 
 for (const line of expectedLines) {
   if (!config.includes(line)) {
-    throw new Error(`missing note popup binding: ${line}`);
+    throw new Error(`missing popup binding: ${line}`);
   }
+}
+if (config.includes("--name=notes") || config.includes("notes-popup")) {
+  throw new Error("popup bindings should use generic popup names");
 }
 for (const paneRelativePosition of ["-yP", "-xR"]) {
   if (config.includes(paneRelativePosition)) {
-    throw new Error(`note popup binding should avoid pane-relative or ambiguous position: ${paneRelativePosition}`);
+    throw new Error(`popup binding should avoid pane-relative or ambiguous position: ${paneRelativePosition}`);
   }
 }
 ' "$(repo_root)/.tmux.conf"
