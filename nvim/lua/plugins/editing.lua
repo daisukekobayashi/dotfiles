@@ -23,7 +23,7 @@ return {
     priority = 49,
     opts = {
       preview = {
-        filetypes = { 'markdown', 'codecompanion' },
+        filetypes = { 'codecompanion', 'quarto', 'rmd' },
         ignore_buftypes = {},
       },
     },
