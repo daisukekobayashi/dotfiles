@@ -28,17 +28,13 @@ model_provider = "azure"
 model_reasoning_effort = "xhigh"
 
 [mcp_servers.serena]
-command = "uvx"
+command = "serena"
 args = [
-  "--from",
-  "git+https://github.com/oraios/serena",
-  "serena",
   "start-mcp-server",
-  "--context",
-  "codex",
-  "--enable-web-dashboard=false",
-  "--project",
-  "$(pwd)",
+  "--project-from-cwd",
+  "--context=codex",
+  "--open-web-dashboard",
+  "false",
 ]
 startup_timeout_sec = 30
 [notice.model_migrations]
