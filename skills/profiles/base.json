@@ -56,6 +56,7 @@
     }
   ],
   "local": [
+    "design-preflight",
     "execution-context-first-repo-onboarding",
     "local-code-review",
     "local-runtime-port-isolation",

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Preflight"
+  short_description: "Controlled grilling for design decisions"
+  default_prompt: "Use $design-preflight before implementation to ask only high-impact design questions."
