@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: betterleaks-scan [staged|repo|dir] [TARGET] [BETTERLEAKS_ARGS...]
+
+Modes:
+  staged  Scan staged changes in the current Git repository. This is the default.
+  repo    Scan Git history for TARGET, or the current Git repository when omitted.
+  dir     Scan filesystem TARGET, or the current directory when omitted.
+
+Examples:
+  betterleaks-scan
+  betterleaks-scan staged
+  betterleaks-scan repo --git-workers 8
+  betterleaks-scan dir .
+EOF
+}
+
+fail() {
+  printf 'betterleaks-scan: %s\n' "$*" >&2
+  exit 1
+}
+
+require_betterleaks() {
+  if ! command -v betterleaks >/dev/null 2>&1; then
+    printf 'betterleaks-scan: Required command not found: betterleaks\n' >&2
+    printf 'betterleaks-scan: Install betterleaks first, then retry.\n' >&2
+    exit 127
+  fi
+}
+
+git_root() {
+  git rev-parse --show-toplevel 2>/dev/null || return 1
+}
+
+target_or_default() {
+  if [ "$#" -gt 0 ] && [[ "$1" != -* ]]; then
+    printf '%s' "$1"
+    return 0
+  fi
+
+  printf '.'
+}
+
+if [ "${BETTERLEAKS_SCAN_SKIP:-0}" = "1" ]; then
+  printf 'betterleaks-scan: skipped because BETTERLEAKS_SCAN_SKIP=1\n' >&2
+  exit 0
+fi
+
+mode="${1:-staged}"
+case "${mode}" in
+  -h | --help | help)
+    usage
+    exit 0
+    ;;
+  staged | hook | pre-commit)
+    shift || true
+    mode="staged"
+    ;;
+  repo | history | git)
+    shift || true
+    mode="repo"
+    ;;
+  dir | filesystem)
+    shift || true
+    mode="dir"
+    ;;
+  *)
+    usage >&2
+    fail "unknown mode: ${mode}"
+    ;;
+esac
+
+require_betterleaks
+
+case "${mode}" in
+  staged)
+    repo_root="$(git_root)" || fail "staged mode must be run inside a Git repository"
+    cd "${repo_root}"
+    exec betterleaks git . --pre-commit --staged --redact --verbose "$@"
+    ;;
+  repo)
+    target="$(target_or_default "$@")"
+    if [ "$#" -gt 0 ] && [[ "$1" != -* ]]; then
+      shift
+    elif repo_root="$(git_root)"; then
+      cd "${repo_root}"
+    fi
+    exec betterleaks git "${target}" --redact --verbose "$@"
+    ;;
+  dir)
+    target="$(target_or_default "$@")"
+    if [ "$#" -gt 0 ] && [[ "$1" != -* ]]; then
+      shift
+    fi
+    exec betterleaks dir "${target}" --redact --verbose "$@"
+    ;;
+esac

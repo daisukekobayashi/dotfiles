@@ -18,7 +18,7 @@ make_links_fixture_root() {
 
   mkdir -p "${fixture_root}"
 
-  for path in sheldon zsh mise zellij nvim lazygit gitui mcphub tmux codex gemini claude ai-rules ipython; do
+  for path in sheldon zsh mise zellij nvim lazygit gitui mcphub tmux codex gemini claude ai-rules ipython tools; do
     ln -s "${source_root}/${path}" "${fixture_root}/${path}"
   done
 
@@ -51,6 +51,8 @@ make_links_fixture_root() {
   [ "$(readlink "${TEST_HOME}/.config/process-compose/settings.yaml")" = "${root}/process-compose/settings.yaml" ]
   [ -L "${TEST_HOME}/.local/bin/share-dir" ]
   [ "$(readlink "${TEST_HOME}/.local/bin/share-dir")" = "${root}/tools/share-dir/share-dir" ]
+  [ -L "${TEST_HOME}/.local/bin/betterleaks-scan" ]
+  [ "$(readlink "${TEST_HOME}/.local/bin/betterleaks-scan")" = "${root}/tools/betterleaks/betterleaks-scan" ]
   [ -L "${TEST_HOME}/.codex/config.toml" ]
   [ "$(readlink "${TEST_HOME}/.codex/config.toml")" = "${root}/codex/config.toml" ]
   [ -L "${TEST_HOME}/.codex/azure.config.toml" ]

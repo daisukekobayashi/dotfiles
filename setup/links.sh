@@ -23,6 +23,7 @@ setup_links() {
 
   make_directory "${setup_home}/.local/bin" "${dry_run}"
   link_file "${dotfiles_root}/tools/share-dir/share-dir" "${setup_home}/.local/bin/share-dir" "${dry_run}"
+  link_file "${dotfiles_root}/tools/betterleaks/betterleaks-scan" "${setup_home}/.local/bin/betterleaks-scan" "${dry_run}"
 
   make_directory "${setup_home}/.vim/vim/undo" "${dry_run}"
   make_directory "${setup_home}/.vim/vim/tmp" "${dry_run}"

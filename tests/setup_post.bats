@@ -494,3 +494,14 @@ EOF
   run grep -F '"github:aristocratos/btop" = "1.4"' "$(repo_root)/mise/config.wsl.toml"
   [ "$status" -eq 0 ]
 }
+
+@test "linux and wsl mise configs install betterleaks through github backend" {
+  run grep -F 'betterleaks = "1.6.0"' "$(repo_root)/mise/config.linux.toml" "$(repo_root)/mise/config.wsl.toml"
+  [ "$status" -ne 0 ]
+
+  run grep -F '"github:betterleaks/betterleaks" = "1.6.0"' "$(repo_root)/mise/config.linux.toml"
+  [ "$status" -eq 0 ]
+
+  run grep -F '"github:betterleaks/betterleaks" = "1.6.0"' "$(repo_root)/mise/config.wsl.toml"
+  [ "$status" -eq 0 ]
+}

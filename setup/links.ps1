@@ -49,6 +49,10 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "tmux\psmux.conf"
     },
     @{
+      Link = Join-Path $setupContext.HomeDir ".local\bin\betterleaks-scan.ps1"
+      Target = Join-Path $setupContext.DotfilesRoot "tools\betterleaks\betterleaks-scan.ps1"
+    },
+    @{
       Link = Join-Path $setupContext.HomeDir ".codex\config.toml"
       Target = Join-Path $setupContext.DotfilesRoot "codex\config.toml"
     },

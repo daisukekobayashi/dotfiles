@@ -13,3 +13,9 @@ load 'helpers/test_helper.bash'
 
   [ "$status" -eq 0 ]
 }
+
+@test "pre-commit hook leaves betterleaks as a manual scan" {
+  run grep -F "tools/betterleaks/betterleaks-scan\" staged" "$(repo_root)/.githooks/pre-commit"
+
+  [ "$status" -ne 0 ]
+}

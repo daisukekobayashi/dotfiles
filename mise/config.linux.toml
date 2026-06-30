@@ -57,6 +57,7 @@ bats = "1.13"
 "aqua:quarto-dev/quarto-cli" = "1.9"
 "github:aristocratos/btop" = "1.4"
 "aqua:gastownhall/beads" = "1.0"
+"github:betterleaks/betterleaks" = "1.6.0"
 
 [settings]
 cargo.binstall = false

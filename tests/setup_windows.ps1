@@ -114,6 +114,12 @@ Invoke-Test "Windows links setup wires the Codex Azure profile config" {
   Assert-True ($linksScript -match 'codex\\azure\.config\.toml') "setup\links.ps1 does not target codex\azure.config.toml"
 }
 
+Invoke-Test "Windows links setup wires the Betterleaks scan helper" {
+  $linksScript = Get-Content -Raw (Join-Path $RepoRoot "setup\links.ps1")
+  Assert-True ($linksScript -match '\.local\\bin\\betterleaks-scan\.ps1') "setup\links.ps1 does not link ~/.local/bin/betterleaks-scan.ps1"
+  Assert-True ($linksScript -match 'tools\\betterleaks\\betterleaks-scan\.ps1') "setup\links.ps1 does not target tools\betterleaks\betterleaks-scan.ps1"
+}
+
 Invoke-Test "Windows setup help describes PPM package setup" {
   $setupScript = Get-Content -Raw (Join-Path $RepoRoot "setup.ps1")
   Assert-True ($setupScript -match 'PPM') "setup.ps1 help does not mention PPM"
