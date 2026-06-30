@@ -53,6 +53,10 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "codex\config.toml"
     },
     @{
+      Link = Join-Path $setupContext.HomeDir ".codex\azure.config.toml"
+      Target = Join-Path $setupContext.DotfilesRoot "codex\azure.config.toml"
+    },
+    @{
       Link = Join-Path $setupContext.HomeDir ".codex\rules\user.rules"
       Target = Join-Path $setupContext.DotfilesRoot "codex\rules\user.rules"
     },

@@ -32,6 +32,7 @@ setup_links() {
   make_directory "${setup_home}/.codex" "${dry_run}"
   make_directory "${setup_home}/.codex/rules" "${dry_run}"
   link_file "${dotfiles_root}/codex/config.toml" "${setup_home}/.codex/config.toml" "${dry_run}"
+  link_file "${dotfiles_root}/codex/azure.config.toml" "${setup_home}/.codex/azure.config.toml" "${dry_run}"
   link_file "${dotfiles_root}/codex/rules/user.rules" "${setup_home}/.codex/rules/user.rules" "${dry_run}"
   link_file "${dotfiles_root}/codex/prompts" "${setup_home}/.codex/prompts" "${dry_run}"
 
