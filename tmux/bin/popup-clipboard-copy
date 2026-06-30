@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -u
+
+script_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)" || exit 1
+clipboard_helper="${script_dir}/clipboard-copy"
+
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/tmux-popup-clipboard.XXXXXX")" || exit 1
+trap 'rm -f "${tmp_file}"' EXIT
+cat > "${tmp_file}"
+
+popup_proxy=""
+if command -v tmux >/dev/null 2>&1; then
+  popup_proxy="$(tmux show-options -gqv @popup-proxy 2>/dev/null || true)"
+fi
+
+mirror_to_caller_buffer() {
+  if [ -n "${popup_proxy}" ]; then
+    "${popup_proxy}" "$@" < "${tmp_file}" >/dev/null 2>&1
+    return $?
+  fi
+
+  if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+    tmux "$@" < "${tmp_file}" >/dev/null 2>&1
+    return $?
+  fi
+
+  return 1
+}
+
+if [ -x "${clipboard_helper}" ] && "${clipboard_helper}" < "${tmp_file}"; then
+  mirror_to_caller_buffer load-buffer -w - || true
+  exit 0
+fi
+
+if mirror_to_caller_buffer load-buffer -w -; then
+  exit 0
+fi
+
+printf '%s\n' "tmux popup-clipboard-copy: no usable clipboard command found" >&2
+exit 1

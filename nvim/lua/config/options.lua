@@ -48,7 +48,22 @@ vim.opt.showmode = false
 --  See `:help 'clipboard'`
 vim.schedule(function()
   vim.opt.clipboard = 'unnamedplus'
-  if vim.fn.has('win32') == 1 or vim.fn.has('win64') == 1 then
+  if vim.env.TMUX_POPUP_SERVER ~= nil and vim.env.TMUX_POPUP_SERVER ~= '' then
+    local popup_clipboard_copy = vim.fn.expand('~/.dotfiles/tmux/bin/popup-clipboard-copy')
+    local popup_clipboard_paste = vim.fn.expand('~/.dotfiles/tmux/bin/popup-clipboard-paste')
+    vim.g.clipboard = {
+      name = 'tmux popup clipboard',
+      copy = {
+        ['+'] = { popup_clipboard_copy },
+        ['*'] = { popup_clipboard_copy },
+      },
+      paste = {
+        ['+'] = { popup_clipboard_paste },
+        ['*'] = { popup_clipboard_paste },
+      },
+      cache_enabled = 0,
+    }
+  elseif vim.fn.has('win32') == 1 or vim.fn.has('win64') == 1 then
     vim.g.clipboard = {
       name = 'clip+pwsh hybrid',
       copy = {

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -u
+
+popup_sync_buffer=""
+if command -v tmux >/dev/null 2>&1; then
+  popup_sync_buffer="$(tmux show-options -gqv @popup-sync-buffer 2>/dev/null || true)"
+fi
+
+if [ -n "${popup_sync_buffer}" ]; then
+  "${popup_sync_buffer}" >/dev/null 2>&1 || true
+fi
+
+if command -v tmux >/dev/null 2>&1; then
+  tmux save-buffer -
+  exit $?
+fi
+
+printf '%s\n' "tmux popup-clipboard-paste: tmux is not available" >&2
+exit 1

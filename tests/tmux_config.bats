@@ -139,11 +139,15 @@ if (config.includes("@popup-autostart on")) {
   [ "$status" -eq 0 ]
 }
 
-@test "tmux popup copies through the caller buffer" {
+@test "tmux popup copies through the shared clipboard helper and caller buffer" {
   run node -e '
 const fs = require("fs");
 const config = fs.readFileSync(process.argv[1], "utf8");
 
+const helperConfig = "set -g copy-command '\''~/.dotfiles/tmux/bin/clipboard-copy'\''";
+const helperOverride = "set -g @override_copy_command '\''~/.dotfiles/tmux/bin/clipboard-copy'\''";
+const popupHelperConfig = "set -g copy-command '\''~/.dotfiles/tmux/bin/popup-clipboard-copy'\''";
+const popupHelperOverride = "set -g @override_copy_command '\''~/.dotfiles/tmux/bin/popup-clipboard-copy'\''";
 const popupBlockIndex = config.indexOf("if -F '\''#{TMUX_POPUP_SERVER}'\'' {");
 const tpmCommandIndex = config.indexOf("~/.tmux/plugins/tpm/tpm");
 if (popupBlockIndex === -1) {
@@ -152,10 +156,19 @@ if (popupBlockIndex === -1) {
 if (tpmCommandIndex === -1 || popupBlockIndex > tpmCommandIndex) {
   throw new Error("popup copy overrides must be set before TPM loads tmux-yank");
 }
+for (const expected of [helperConfig, helperOverride]) {
+  const index = config.indexOf(expected);
+  if (index === -1) {
+    throw new Error(`missing default clipboard helper config: ${expected}`);
+  }
+  if (index > popupBlockIndex) {
+    throw new Error(`default clipboard helper config must be set before popup override: ${expected}`);
+  }
+}
 
 for (const expected of [
-  "set -g copy-command '\''#{@popup-proxy} loadb -w -'\''",
-  "set -g @override_copy_command '\''#{@popup-proxy} loadb -w -'\''",
+  popupHelperConfig,
+  popupHelperOverride,
   "bind -T copy-mode-vi Enter send-keys -X copy-pipe-and-cancel",
   "bind -T prefix ] run '\''#{@popup-sync-buffer}'\'' \\; paste-buffer -p",
 ]) {
@@ -163,7 +176,158 @@ for (const expected of [
     throw new Error(`missing popup buffer sharing config: ${expected}`);
   }
 }
+for (const staleCommand of [
+  "bind -T copy-mode-vi y send-keys -X copy-pipe-and-cancel \"reattach-to-user-namespace pbcopy\"",
+  "bind -T copy-mode-vi Enter send-keys -X copy-pipe-and-cancel \"reattach-to-user-namespace pbcopy\"",
+]) {
+  if (config.includes(staleCommand)) {
+    throw new Error(`copy binding should use copy-command instead of a mac-only command: ${staleCommand}`);
+  }
+}
 ' "$(repo_root)/.tmux.conf"
+
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux popup clipboard helper uses system clipboard and mirrors caller buffer" {
+  local root fake_bin log_file system_text buffer_text proxy_script
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/popup-clipboard.log"
+  system_text="${BATS_TEST_TMPDIR}/system-clipboard.txt"
+  buffer_text="${BATS_TEST_TMPDIR}/caller-buffer.txt"
+  proxy_script="${BATS_TEST_TMPDIR}/popup-proxy"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/xclip" <<'EOF'
+#!/usr/bin/env bash
+printf 'xclip %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_SYSTEM_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/xclip"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+if [ "$*" = "show-options -gqv @popup-proxy" ]; then
+  printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
+  exit 0
+fi
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CALLER_BUFFER_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  cat > "${proxy_script}" <<'EOF'
+#!/usr/bin/env bash
+printf 'popup-proxy %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CALLER_BUFFER_TEXT}"
+EOF
+  chmod +x "${proxy_script}"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    DISPLAY=":99" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_SYSTEM_CLIPBOARD_TEXT="${system_text}" \
+    TMUX_CALLER_BUFFER_TEXT="${buffer_text}" \
+    TMUX_POPUP_PROXY_SCRIPT="${proxy_script}" \
+    bash -c "printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -F "xclip -selection clipboard" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "popup-proxy load-buffer -w -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "popup copy" "${system_text}"
+  [ "$status" -eq 0 ]
+  run grep -F "popup copy" "${buffer_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux clipboard helper falls back to OSC 52 without a Linux display" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/clipboard.log"
+  copied_text="${BATS_TEST_TMPDIR}/clipboard.txt"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/xclip" <<'EOF'
+#!/usr/bin/env bash
+printf 'xclip should not run without DISPLAY\n' >> "${TMUX_CLIPBOARD_LOG}"
+exit 47
+EOF
+  chmod +x "${fake_bin}/xclip"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CLIPBOARD_TEXT="${copied_text}" \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -F "tmux load-buffer -w -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "xclip should not run" "${log_file}"
+  [ "$status" -ne 0 ]
+  run grep -F "popup copy" "${copied_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "neovim inside tmux popup copies through the popup clipboard helper" {
+  # shellcheck disable=SC2016
+  run node -e '
+const fs = require("fs");
+const config = fs.readFileSync(process.argv[1], "utf8");
+
+const popupCondition = "vim.env.TMUX_POPUP_SERVER";
+const popupCopyVar = "local popup_clipboard_copy = vim.fn.expand('\''~/.dotfiles/tmux/bin/popup-clipboard-copy'\'')";
+const popupPasteVar = "local popup_clipboard_paste = vim.fn.expand('\''~/.dotfiles/tmux/bin/popup-clipboard-paste'\'')";
+const windowsCondition = "vim.fn.has('\''win32'\'') == 1 or vim.fn.has('\''win64'\'') == 1";
+const popupIndex = config.indexOf(popupCondition);
+const windowsIndex = config.indexOf(windowsCondition);
+
+if (popupIndex === -1) {
+  throw new Error("Neovim config should detect tmux popup sessions");
+}
+if (windowsIndex === -1 || popupIndex > windowsIndex) {
+  throw new Error("tmux popup clipboard override should run before the generic Windows clipboard branch");
+}
+for (const expected of [popupCopyVar, popupPasteVar]) {
+  if (!config.includes(expected)) {
+    throw new Error(`Neovim popup clipboard should expand helper path: ${expected}`);
+  }
+}
+for (const forbidden of [
+  "['\''+'\''] = '\''~/.dotfiles/tmux/bin/popup-clipboard-copy'\''",
+  "['\''*'\''] = '\''~/.dotfiles/tmux/bin/popup-clipboard-copy'\''",
+  "['\''+'\''] = '\''~/.dotfiles/tmux/bin/popup-clipboard-paste'\''",
+  "['\''*'\''] = '\''~/.dotfiles/tmux/bin/popup-clipboard-paste'\''",
+]) {
+  if (config.includes(forbidden)) {
+    throw new Error(`Neovim popup clipboard should not pass unexpanded shell paths: ${forbidden}`);
+  }
+}
+for (const register of ["['\''+'\'']", "['\''*'\'']"]) {
+  const copyPattern = `${register} = { popup_clipboard_copy }`;
+  const pastePattern = `${register} = { popup_clipboard_paste }`;
+  if (!config.includes(copyPattern)) {
+    throw new Error(`missing popup clipboard copy mapping: ${copyPattern}`);
+  }
+  if (!config.includes(pastePattern)) {
+    throw new Error(`missing popup clipboard paste mapping: ${pastePattern}`);
+  }
+}
+' "$(repo_root)/nvim/lua/config/options.lua"
 
   [ "$status" -eq 0 ]
 }

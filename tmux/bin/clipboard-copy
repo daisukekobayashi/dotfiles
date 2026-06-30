@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -u
+
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/tmux-clipboard.XXXXXX")" || exit 1
+trap 'rm -f "${tmp_file}"' EXIT
+cat > "${tmp_file}"
+
+copy_with() {
+  "$@" < "${tmp_file}" >/dev/null 2>&1
+}
+
+if [ "$(uname -s 2>/dev/null)" = "Darwin" ] && command -v pbcopy >/dev/null 2>&1; then
+  if command -v reattach-to-user-namespace >/dev/null 2>&1; then
+    copy_with reattach-to-user-namespace pbcopy && exit 0
+  fi
+  copy_with pbcopy && exit 0
+fi
+
+if command -v clip.exe >/dev/null 2>&1; then
+  copy_with clip.exe && exit 0
+fi
+
+if [ -n "${WAYLAND_DISPLAY:-}" ] && command -v wl-copy >/dev/null 2>&1; then
+  copy_with wl-copy && exit 0
+fi
+
+if [ -n "${DISPLAY:-}" ]; then
+  if command -v xsel >/dev/null 2>&1; then
+    copy_with xsel -i --clipboard && exit 0
+  fi
+  if command -v xclip >/dev/null 2>&1; then
+    copy_with xclip -selection clipboard && exit 0
+  fi
+fi
+
+if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+  copy_with tmux load-buffer -w - && exit 0
+fi
+
+printf '%s\n' "tmux clipboard-copy: no usable clipboard command found" >&2
+exit 1
