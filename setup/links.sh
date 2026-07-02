@@ -13,6 +13,7 @@ setup_links() {
   link_file "${dotfiles_root}/lazygit" "${setup_home}/.config/lazygit" "${dry_run}"
   link_file "${dotfiles_root}/gitui" "${setup_home}/.config/gitui" "${dry_run}"
   link_file "${dotfiles_root}/mcphub" "${setup_home}/.config/mcphub" "${dry_run}"
+  link_file "${dotfiles_root}/atuin" "${setup_home}/.config/atuin" "${dry_run}"
   make_directory "${setup_home}/.config/process-compose" "${dry_run}"
   link_file "${dotfiles_root}/process-compose/shortcuts.yaml" "${setup_home}/.config/process-compose/shortcuts.yaml" "${dry_run}"
   link_file "${dotfiles_root}/process-compose/settings.yaml" "${setup_home}/.config/process-compose/settings.yaml" "${dry_run}"
@@ -24,6 +25,7 @@ setup_links() {
   make_directory "${setup_home}/.local/bin" "${dry_run}"
   link_file "${dotfiles_root}/tools/share-dir/share-dir" "${setup_home}/.local/bin/share-dir" "${dry_run}"
   link_file "${dotfiles_root}/tools/betterleaks/betterleaks-scan" "${setup_home}/.local/bin/betterleaks-scan" "${dry_run}"
+  link_file "${dotfiles_root}/tools/atuin/cwd-history" "${setup_home}/.local/bin/cwd-history" "${dry_run}"
 
   make_directory "${setup_home}/.vim/vim/undo" "${dry_run}"
   make_directory "${setup_home}/.vim/vim/tmp" "${dry_run}"

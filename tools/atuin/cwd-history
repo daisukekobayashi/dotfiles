@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v atuin >/dev/null 2>&1; then
+  printf 'Required command not found: atuin\n' >&2
+  exit 127
+fi
+
+exec atuin search -i --filter-mode directory "$@"
