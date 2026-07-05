@@ -17,6 +17,7 @@ const githubLocalSkills = [
   "github-pr",
   "github-pr-ai-review-followup",
   "github-pr-ai-review-request",
+  "github-pr-codex-review-cycle",
   "github-pr-codex-review-request",
   "github-pr-copilot-review-request",
   "github-pr-publish",
@@ -35,6 +36,7 @@ const azureDevOpsLocalSkills = [
   "azure-devops-merge-cleanup",
 ];
 const baseLocalSkills = [
+  "design-preflight",
   "execution-context-first-repo-onboarding",
   "local-code-review",
   "local-runtime-port-isolation",
