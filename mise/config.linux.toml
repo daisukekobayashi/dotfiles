@@ -1,5 +1,4 @@
 [tools]
-r = "4.5.2"
 neovim = "0.12"
 zellij = "0.43"
 ripgrep = "15"
