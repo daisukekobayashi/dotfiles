@@ -123,24 +123,57 @@ EOF
 }
 
 uv_tool_is_installed() {
-  local setup_home="$1"
-  local tool="$2"
+  local tool="$1"
+  shift
 
-  env HOME="${setup_home}" uv tool list |
+  "$@" tool list |
     awk '{ print $1 }' |
     grep -Fxq "${tool}"
+}
+
+build_uv_command() {
+  local setup_home="$1"
+  local -n uv_cmd_ref="$2"
+  local mise_env
+
+  if command_exists mise; then
+    mise_env="$(detect_mise_env)"
+    uv_cmd_ref=(env HOME="${setup_home}" mise exec)
+    if [ -n "${mise_env}" ]; then
+      uv_cmd_ref+=(-E "${mise_env}")
+    fi
+    uv_cmd_ref+=(-- uv)
+    return 0
+  fi
+
+  if command_exists uv; then
+    uv_cmd_ref=(env HOME="${setup_home}" uv)
+    return 0
+  fi
+
+  return 1
 }
 
 install_uv_tools() {
   local setup_home="$1"
   local dry_run="$2"
+  local mise_shims="${setup_home}/.local/share/mise/shims"
+  local local_bin="${setup_home}/.local/bin"
   local tool
   local args
   local -a extra_args=()
   local -a cmd=()
+  local -a uv_cmd=()
   local -a failed_tools=()
 
-  if ! command_exists uv; then
+  if [ -d "${mise_shims}" ]; then
+    PATH="${mise_shims}:${PATH}"
+  fi
+  if [ -d "${local_bin}" ]; then
+    PATH="${local_bin}:${PATH}"
+  fi
+
+  if ! build_uv_command "${setup_home}" uv_cmd; then
     log_warn "Skipping uv tool install because uv is not available."
     return 0
   fi
@@ -148,13 +181,13 @@ install_uv_tools() {
   while IFS='|' read -r tool args; do
     [ -n "${tool}" ] || continue
 
-    if [ "${dry_run}" != "1" ] && uv_tool_is_installed "${setup_home}" "${tool}"; then
+    if [ "${dry_run}" != "1" ] && uv_tool_is_installed "${tool}" "${uv_cmd[@]}"; then
       log_info "Skipping installed uv tool: ${tool}"
       continue
     fi
 
     log_info "Installing uv tool: ${tool}"
-    cmd=(env HOME="${setup_home}" uv tool install)
+    cmd=("${uv_cmd[@]}" tool install)
     if [ -n "${args}" ]; then
       read -r -a extra_args <<< "${args}"
       cmd+=("${extra_args[@]}")
@@ -201,22 +234,26 @@ setup_post() {
   if command_exists tmux; then
     local bootstrap_session=""
     local tpm_status=0
+    local source_status=0
     run_cmd "${dry_run}" tmux start-server
-    # TPM's install script reads this from the tmux server environment.
-    run_cmd "${dry_run}" tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "${setup_home}/.tmux/plugins/"
     if [ "${dry_run}" != "1" ] && ! tmux list-sessions >/dev/null 2>&1; then
       bootstrap_session="dotfiles-tpm-bootstrap-$$"
       run_cmd "${dry_run}" tmux new-session -d -s "${bootstrap_session}"
     fi
+    # TPM's install script reads this from the tmux server environment.
+    run_cmd "${dry_run}" tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "${setup_home}/.tmux/plugins/"
     run_cmd "${dry_run}" "${tpm_dir}/scripts/install_plugins.sh" || tpm_status=$?
+    if [ "${tpm_status}" -eq 0 ] && [ -f "${setup_home}/.tmux.conf" ]; then
+      run_cmd "${dry_run}" tmux source-file "${setup_home}/.tmux.conf" || source_status=$?
+    fi
     if [ -n "${bootstrap_session}" ]; then
       run_cmd "${dry_run}" tmux kill-session -t "${bootstrap_session}"
     fi
     if [ "${tpm_status}" -ne 0 ]; then
-      return "${tpm_status}"
+      log_warn "tmux plugin install failed. Continuing setup."
     fi
-    if [ -f "${setup_home}/.tmux.conf" ]; then
-      run_cmd "${dry_run}" tmux source-file "${setup_home}/.tmux.conf"
+    if [ "${source_status}" -ne 0 ]; then
+      log_warn "tmux config reload failed. Continuing setup."
     fi
   else
     log_warn "Skipping tmux plugin install because tmux is not available."
@@ -226,7 +263,9 @@ setup_post() {
   if [ ! -f "${vim_plug}" ]; then
     run_cmd "${dry_run}" curl -fLo "${vim_plug}" --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
     if command_exists vim; then
-      run_cmd "${dry_run}" vim +'PlugInstall --sync' +qall
+      if ! run_cmd "${dry_run}" env HOME="${setup_home}" TERM=xterm-256color vim -n -es -i NONE +'set nomore' +'PlugInstall --sync' +qall; then
+        log_warn "PlugInstall failed. Continuing setup."
+      fi
     else
       log_warn "Skipping PlugInstall because vim is not available."
     fi

@@ -17,6 +17,8 @@
 - WSL: `mise/config.wsl.toml`
 - macOS: `mise/config.macos.toml`
 
+任意利用の mise env config は `mise/README.md` に記載しています.
+
 macOS のパッケージセットアップは Homebrew と `brew/Brewfile` で管理します.
 
 ## Setup
@@ -107,6 +109,16 @@ npm --prefix setup install
 npm --prefix setup run build
 npm --prefix setup test
 bats tests
+```
+
+Manual bootstrap E2E は opt-in です. 新しい Docker container で実行し,
+package download や build を伴うため, 通常の `bats tests` には含めません.
+手動入口は `scripts/bootstrap-e2e.sh` です. suite, GitHub credential 転送,
+Bats wrapper, known diagnostics は `tests/bootstrap/README.md` を参照してください.
+
+```bash
+scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite dry-run
+bats tests/bootstrap/bootstrap-e2e.bats
 ```
 
 静的チェック.

@@ -17,6 +17,8 @@ The setup scripts are designed around this stack.
 - WSL: `mise/config.wsl.toml`
 - macOS: `mise/config.macos.toml`
 
+Optional mise env configs are documented in `mise/README.md`.
+
 On macOS, package bootstrap is handled with Homebrew and `brew/Brewfile`.
 
 ## Setup
@@ -128,6 +130,16 @@ DAP_E2E=1 bats tests/dap/e2e.bats tests/dap/e2e/*.bats
 `DAP_E2E=1` verifies real breakpoint stops for Elixir, Python, Node, and Rust across local, direct Docker, and Docker Compose targets. The Docker checks require Docker Compose v2 and build pinned fixture images on first run. Node and Rust Docker checks use host networking for server-style debug adapters; Rust also grants `SYS_PTRACE` with `seccomp=unconfined`.
 
 Local checks use host-installed adapters and skip with explicit reasons when a compatible toolchain is missing: Elixir needs `elixir-ls-debugger`, Python needs `debugpy`, Node needs `js-debug-adapter`, and Rust needs `cargo` plus `codelldb`. Docker and Compose checks install the language-specific adapter inside the fixture image. Run one language with `DAP_E2E=1 bats tests/dap/e2e/python.bats`, or filter targets with Bats, for example `DAP_E2E=1 bats --filter 'direct docker container' tests/dap/e2e/*.bats`. Set `DAP_E2E_KEEP=1` to keep per-test logs under the temporary run directory.
+
+Manual bootstrap E2E checks are opt-in because they start fresh Docker
+containers and may download packages or build tools. The manual entrypoint is
+`scripts/bootstrap-e2e.sh`; see `tests/bootstrap/README.md` for suites,
+GitHub credential forwarding, Bats wrapper usage, and known diagnostics.
+
+```bash
+scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite dry-run
+bats tests/bootstrap/bootstrap-e2e.bats
+```
 
 Static checks.
 

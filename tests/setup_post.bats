@@ -28,6 +28,135 @@ teardown() {
   [[ "$output" == *"DRY-RUN tmux source-file ${TEST_HOME}/.tmux.conf"* ]]
 }
 
+@test "post step runs Vim PlugInstall non-interactively with a stable TERM" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local log_file="${TEST_ROOT}/commands.log"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
+    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+  cat > "${fake_bin}/mise" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  "config ls --no-header -E linux")
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/mise"
+
+  cat > "${fake_bin}/git" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/git"
+
+  cat > "${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/curl"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  cat > "${fake_bin}/vim" <<'EOF'
+#!/usr/bin/env bash
+printf 'vim TERM=%s ARGS=%s\n' "${TERM:-}" "$*" >> "${LOG_FILE}"
+exit 0
+EOF
+  chmod +x "${fake_bin}/vim"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    post
+
+  [ "$status" -eq 0 ]
+  run grep -F "vim TERM=xterm-256color ARGS=-n -es -i NONE +set nomore +PlugInstall --sync +qall" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "post step treats Vim PlugInstall as best effort" {
+  local fake_bin="${TEST_ROOT}/bin"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
+    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+  cat > "${fake_bin}/mise" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  "config ls --no-header -E linux")
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/mise"
+
+  cat > "${fake_bin}/git" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/git"
+
+  cat > "${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/curl"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  cat > "${fake_bin}/vim" <<'EOF'
+#!/usr/bin/env bash
+exit 7
+EOF
+  chmod +x "${fake_bin}/vim"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    post
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PlugInstall failed. Continuing setup."* ]]
+}
+
+@test "vimrc tolerates a missing solarized8 colorscheme during bootstrap" {
+  run grep -Fx "silent! colorscheme solarized8" "$(repo_root)/.vimrc"
+  [ "$status" -eq 0 ]
+}
+
+@test "vimrc does not pin vim-signify to the removed legacy branch" {
+  run grep -F "Plug 'mhinz/vim-signify', { 'branch': 'legacy' }" "$(repo_root)/.vimrc"
+  [ "$status" -ne 0 ]
+
+  run grep -F "Plug 'mhinz/vim-signify'" "$(repo_root)/.vimrc"
+  [ "$status" -eq 0 ]
+}
+
 @test "post step does not create a tmux session when sessions already exist" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
@@ -160,7 +289,165 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step cleans up the tmux bootstrap session when plugin install fails" {
+@test "post step creates a tmux bootstrap session before setting server environment when no sessions exist" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local log_file="${TEST_ROOT}/commands.log"
+  local session_state="${TEST_ROOT}/tmux-session-exists"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
+    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  : > "${TEST_HOME}/.vim/autoload/plug.vim"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'install_plugins\n' >> "${LOG_FILE}"
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+  cat > "${fake_bin}/mise" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  "config ls --no-header -E linux")
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/mise"
+
+  cat > "${fake_bin}/git" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/git"
+
+  cat > "${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/curl"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf 'tmux %s\n' "$*" >> "${LOG_FILE}"
+case "$*" in
+  "list-sessions")
+    [ -f "${TMUX_SESSION_STATE}" ]
+    ;;
+  new-session*)
+    : > "${TMUX_SESSION_STATE}"
+    ;;
+  "set-environment -g TMUX_PLUGIN_MANAGER_PATH "*)
+    [ -f "${TMUX_SESSION_STATE}" ]
+    ;;
+  kill-session*)
+    rm -f "${TMUX_SESSION_STATE}"
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    TMUX_SESSION_STATE="${session_state}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    post
+
+  [ "$status" -eq 0 ]
+  run grep -nF "tmux new-session -d -s dotfiles-tpm-bootstrap-" "${log_file}"
+  [ "$status" -eq 0 ]
+  local new_session_line="${output%%:*}"
+  run grep -nF "tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH ${TEST_HOME}/.tmux/plugins/" "${log_file}"
+  [ "$status" -eq 0 ]
+  local set_environment_line="${output%%:*}"
+  [ "${new_session_line}" -lt "${set_environment_line}" ]
+  [ ! -f "${session_state}" ]
+}
+
+@test "post step sources tmux config before removing the only bootstrap session" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local log_file="${TEST_ROOT}/commands.log"
+  local session_state="${TEST_ROOT}/tmux-session-exists"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
+    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  : > "${TEST_HOME}/.vim/autoload/plug.vim"
+  : > "${TEST_HOME}/.tmux.conf"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'install_plugins\n' >> "${LOG_FILE}"
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+  cat > "${fake_bin}/mise" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  "config ls --no-header -E linux")
+    exit 0
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/mise"
+
+  cat > "${fake_bin}/git" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/git"
+
+  cat > "${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/curl"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf 'tmux %s\n' "$*" >> "${LOG_FILE}"
+case "$*" in
+  "list-sessions")
+    [ -f "${TMUX_SESSION_STATE}" ]
+    ;;
+  new-session*)
+    : > "${TMUX_SESSION_STATE}"
+    ;;
+  "set-environment -g TMUX_PLUGIN_MANAGER_PATH "*)
+    [ -f "${TMUX_SESSION_STATE}" ]
+    ;;
+  source-file*)
+    [ -f "${TMUX_SESSION_STATE}" ]
+    ;;
+  kill-session*)
+    rm -f "${TMUX_SESSION_STATE}"
+    ;;
+esac
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    TMUX_SESSION_STATE="${session_state}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    post
+
+  [ "$status" -eq 0 ]
+  run grep -nF "tmux source-file ${TEST_HOME}/.tmux.conf" "${log_file}"
+  [ "$status" -eq 0 ]
+  local source_file_line="${output%%:*}"
+  run grep -nF "tmux kill-session -t dotfiles-tpm-bootstrap-" "${log_file}"
+  [ "$status" -eq 0 ]
+  local kill_session_line="${output%%:*}"
+  [ "${source_file_line}" -lt "${kill_session_line}" ]
+  [ ! -f "${session_state}" ]
+}
+
+@test "post step treats tmux plugin install as best effort and cleans up the bootstrap session" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
@@ -216,7 +503,8 @@ EOF
     "$(setup_script_path)" \
     post
 
-  [ "$status" -eq 7 ]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tmux plugin install failed. Continuing setup."* ]]
   run grep -F "tmux new-session -d -s dotfiles-tpm-bootstrap-" "${log_file}"
   [ "$status" -eq 0 ]
   run grep -F "install_plugins" "${log_file}"
@@ -481,6 +769,74 @@ EOF
   run grep -F "uv tool install --python 3.13 posting" "${log_file}"
   [ "$status" -eq 0 ]
   run grep -F "uv tool install --python 3.13 nvitop" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "post step runs uv-managed cli tools through mise exec when mise is available" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local log_file="${TEST_ROOT}/commands.log"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
+    "${TEST_HOME}/.vim/autoload" "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  : > "${TEST_HOME}/.vim/autoload/plug.vim"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+cat > "${fake_bin}/mise" <<'EOF'
+#!/usr/bin/env bash
+printf 'mise %s\n' "$*" >> "${LOG_FILE}"
+case "$*" in
+  "config ls --no-header -E linux")
+    exit 0
+    ;;
+  "exec -E linux -- uv tool list")
+    exit 0
+    ;;
+  "exec -E linux -- uv tool install --python 3.13 posting")
+    exit 0
+    ;;
+  "exec -E linux -- uv tool install --python 3.13 nvitop")
+    exit 0
+    ;;
+esac
+exit 1
+EOF
+  chmod +x "${fake_bin}/mise"
+
+  cat > "${fake_bin}/git" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/git"
+
+  cat > "${fake_bin}/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/curl"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    post
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Installing uv tool: posting"* ]]
+  run grep -F "mise exec -E linux -- uv tool list" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "mise exec -E linux -- uv tool install --python 3.13 posting" "${log_file}"
   [ "$status" -eq 0 ]
 }
 

@@ -73,7 +73,7 @@ Plug 'sheerun/vim-polyglot'
 Plug 'thinca/vim-qfreplace'
 Plug 'thinca/vim-quickrun'
 Plug 'tpope/vim-repeat'
-Plug 'mhinz/vim-signify', { 'branch': 'legacy' }
+Plug 'mhinz/vim-signify'
 Plug 'honza/vim-snippets'
 Plug 'tpope/vim-surround'
 Plug 'dhruvasagar/vim-table-mode'
@@ -155,7 +155,7 @@ if g:os != "Linux" && g:os != "Darwin"
 endif
 
 set background=dark
-colorscheme solarized8
+silent! colorscheme solarized8
 
 "colorscheme molokai
 "let g:molokai_original=1

@@ -1,0 +1,5 @@
+[tools]
+"asdf:mise-plugins/mise-r" = {
+  version = "4.6.1",
+  install_env = { R_EXTRA_CONFIGURE_OPTIONS = "--enable-R-shlib --with-cairo" },
+}
