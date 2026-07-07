@@ -8,6 +8,25 @@ tmp_file="$(mktemp "${TMPDIR:-/tmp}/tmux-popup-clipboard.XXXXXX")" || exit 1
 trap 'rm -f "${tmp_file}"' EXIT
 cat > "${tmp_file}"
 
+should_write_terminal_clipboard() {
+  local osc52_max_bytes clipboard_bytes
+
+  if [ "${TMUX_POPUP_CLIPBOARD_OSC52_MAX_BYTES+x}" = "x" ]; then
+    osc52_max_bytes="${TMUX_POPUP_CLIPBOARD_OSC52_MAX_BYTES}"
+  else
+    osc52_max_bytes=32768
+  fi
+
+  case "${osc52_max_bytes}" in
+    ''|*[!0-9]*) osc52_max_bytes=32768 ;;
+  esac
+
+  [ "${osc52_max_bytes}" -gt 0 ] || return 1
+
+  clipboard_bytes="$(wc -c < "${tmp_file}" | tr -d '[:space:]')" || return 1
+  [ "${clipboard_bytes}" -le "${osc52_max_bytes}" ]
+}
+
 popup_proxy=""
 if command -v tmux >/dev/null 2>&1; then
   popup_proxy="$(tmux show-options -gqv @popup-proxy 2>/dev/null || true)"
@@ -15,24 +34,48 @@ fi
 
 mirror_to_caller_buffer() {
   if [ -n "${popup_proxy}" ]; then
-    "${popup_proxy}" "$@" < "${tmp_file}" >/dev/null 2>&1
-    return $?
+    if "${popup_proxy}" "$@" < "${tmp_file}" >/dev/null 2>&1; then
+      return 0
+    fi
   fi
 
-  if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
-    tmux "$@" < "${tmp_file}" >/dev/null 2>&1
-    return $?
+  if [ -n "${__tmux_popup_caller:-}" ] && command -v tmux >/dev/null 2>&1; then
+    local caller_tmux
+    caller_tmux="${__tmux_popup_caller#*:}"
+    if [ -n "${caller_tmux}" ] && [ "${caller_tmux}" != "${__tmux_popup_caller}" ]; then
+      TMUX="${caller_tmux}" tmux "$@" < "${tmp_file}" >/dev/null 2>&1
+      return $?
+    fi
   fi
 
   return 1
 }
 
-if [ -x "${clipboard_helper}" ] && "${clipboard_helper}" < "${tmp_file}"; then
-  mirror_to_caller_buffer load-buffer -w - || true
-  exit 0
+mirror_to_caller_clipboard() {
+  # OSC 52 sends the payload through the terminal; large copies can stall SSH clients.
+  if should_write_terminal_clipboard && mirror_to_caller_buffer load-buffer -w -; then
+    return 0
+  fi
+
+  mirror_to_caller_buffer load-buffer -
+}
+
+requires_caller_mirror() {
+  [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ]
+}
+
+mirror_status=1
+if mirror_to_caller_clipboard; then
+  mirror_status=0
 fi
 
-if mirror_to_caller_buffer load-buffer -w -; then
+if [ -x "${clipboard_helper}" ] && "${clipboard_helper}" < "${tmp_file}"; then
+  if [ "${mirror_status}" -eq 0 ] || ! requires_caller_mirror; then
+    exit 0
+  fi
+fi
+
+if [ "${mirror_status}" -eq 0 ]; then
   exit 0
 fi
 

@@ -9,6 +9,36 @@ copy_with() {
   "$@" < "${tmp_file}" >/dev/null 2>&1
 }
 
+should_write_terminal_clipboard() {
+  local osc52_max_bytes clipboard_bytes
+
+  if [ "${TMUX_CLIPBOARD_OSC52_MAX_BYTES+x}" = "x" ]; then
+    osc52_max_bytes="${TMUX_CLIPBOARD_OSC52_MAX_BYTES}"
+  elif [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ]; then
+    osc52_max_bytes=0
+  else
+    osc52_max_bytes=32768
+  fi
+
+  case "${osc52_max_bytes}" in
+    ''|*[!0-9]*) osc52_max_bytes=32768 ;;
+  esac
+
+  [ "${osc52_max_bytes}" -gt 0 ] || return 1
+
+  clipboard_bytes="$(wc -c < "${tmp_file}" | tr -d '[:space:]')" || return 1
+  [ "${clipboard_bytes}" -le "${osc52_max_bytes}" ]
+}
+
+copy_with_tmux_buffer() {
+  # OSC 52 sends the payload through the terminal; large copies can stall SSH clients.
+  if should_write_terminal_clipboard && copy_with tmux load-buffer -w -; then
+    exit 0
+  fi
+
+  copy_with tmux load-buffer - && exit 0
+}
+
 if [ "$(uname -s 2>/dev/null)" = "Darwin" ] && command -v pbcopy >/dev/null 2>&1; then
   if command -v reattach-to-user-namespace >/dev/null 2>&1; then
     copy_with reattach-to-user-namespace pbcopy && exit 0
@@ -34,7 +64,7 @@ if [ -n "${DISPLAY:-}" ]; then
 fi
 
 if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
-  copy_with tmux load-buffer -w - && exit 0
+  copy_with_tmux_buffer
 fi
 
 printf '%s\n' "tmux clipboard-copy: no usable clipboard command found" >&2

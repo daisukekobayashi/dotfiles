@@ -232,7 +232,7 @@ EOF
     TMUX_SYSTEM_CLIPBOARD_TEXT="${system_text}" \
     TMUX_CALLER_BUFFER_TEXT="${buffer_text}" \
     TMUX_POPUP_PROXY_SCRIPT="${proxy_script}" \
-    bash -c "printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
+    bash -c "unset SSH_CONNECTION SSH_TTY; printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
 
   [ "$status" -eq 0 ]
   run grep -F "xclip -selection clipboard" "${log_file}"
@@ -272,7 +272,7 @@ EOF
     TMUX="/tmp/tmux-test/default,1,0" \
     TMUX_CLIPBOARD_LOG="${log_file}" \
     TMUX_CLIPBOARD_TEXT="${copied_text}" \
-    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/clipboard-copy'"
+    bash -c "unset DISPLAY WAYLAND_DISPLAY SSH_CONNECTION SSH_TTY; printf 'popup copy\n' | '${root}/tmux/bin/clipboard-copy'"
 
   [ "$status" -eq 0 ]
   run grep -F "tmux load-buffer -w -" "${log_file}"
@@ -280,6 +280,278 @@ EOF
   run grep -F "xclip should not run" "${log_file}"
   [ "$status" -ne 0 ]
   run grep -F "popup copy" "${copied_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux clipboard helper avoids OSC 52 by default over SSH" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/clipboard-ssh.log"
+  copied_text="${BATS_TEST_TMPDIR}/clipboard-ssh.txt"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    SSH_CONNECTION="192.0.2.10 12345 192.0.2.20 22" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CLIPBOARD_TEXT="${copied_text}" \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'x\n' | '${root}/tmux/bin/clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -Fx "tmux load-buffer -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -Fx "tmux load-buffer -w -" "${log_file}"
+  [ "$status" -ne 0 ]
+  run grep -F "x" "${copied_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux clipboard helper can opt in to OSC 52 over SSH" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/clipboard-ssh-opt-in.log"
+  copied_text="${BATS_TEST_TMPDIR}/clipboard-ssh-opt-in.txt"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    SSH_CONNECTION="192.0.2.10 12345 192.0.2.20 22" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CLIPBOARD_TEXT="${copied_text}" \
+    TMUX_CLIPBOARD_OSC52_MAX_BYTES=32768 \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'x\n' | '${root}/tmux/bin/clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -Fx "tmux load-buffer -w -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "x" "${copied_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux clipboard helper keeps oversized OSC 52 fallback in the tmux buffer" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/clipboard-large.log"
+  copied_text="${BATS_TEST_TMPDIR}/clipboard-large.txt"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CLIPBOARD_TEXT="${copied_text}" \
+    TMUX_CLIPBOARD_OSC52_MAX_BYTES=4 \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -Fx "tmux load-buffer -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -Fx "tmux load-buffer -w -" "${log_file}"
+  [ "$status" -ne 0 ]
+  run grep -F "popup copy" "${copied_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux popup clipboard helper keeps oversized caller mirror in the tmux buffer" {
+  local root fake_bin log_file popup_text caller_text proxy_script
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/popup-clipboard-large.log"
+  popup_text="${BATS_TEST_TMPDIR}/popup-buffer-large.txt"
+  caller_text="${BATS_TEST_TMPDIR}/caller-buffer-large.txt"
+  proxy_script="${BATS_TEST_TMPDIR}/popup-proxy-large"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+if [ "$*" = "show-options -gqv @popup-proxy" ]; then
+  printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
+  exit 0
+fi
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_POPUP_BUFFER_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  cat > "${proxy_script}" <<'EOF'
+#!/usr/bin/env bash
+printf 'popup-proxy %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CALLER_BUFFER_TEXT}"
+EOF
+  chmod +x "${proxy_script}"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_POPUP_BUFFER_TEXT="${popup_text}" \
+    TMUX_CALLER_BUFFER_TEXT="${caller_text}" \
+    TMUX_POPUP_PROXY_SCRIPT="${proxy_script}" \
+    TMUX_POPUP_CLIPBOARD_OSC52_MAX_BYTES=4 \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -Fx "tmux load-buffer -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -Fx "popup-proxy load-buffer -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -Fx "popup-proxy load-buffer -w -" "${log_file}"
+  [ "$status" -ne 0 ]
+  run grep -F "popup copy" "${caller_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux popup clipboard helper writes OSC 52 to the caller over SSH by default" {
+  local root fake_bin log_file caller_text proxy_script
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/popup-clipboard-ssh.log"
+  caller_text="${BATS_TEST_TMPDIR}/caller-buffer-ssh.txt"
+  proxy_script="${BATS_TEST_TMPDIR}/popup-proxy-ssh"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+if [ "$*" = "show-options -gqv @popup-proxy" ]; then
+  printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
+  exit 0
+fi
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat >/dev/null
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  cat > "${proxy_script}" <<'EOF'
+#!/usr/bin/env bash
+printf 'popup-proxy %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CALLER_BUFFER_TEXT}"
+EOF
+  chmod +x "${proxy_script}"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/popup,1,0" \
+    SSH_CONNECTION="192.0.2.10 12345 192.0.2.20 22" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CALLER_BUFFER_TEXT="${caller_text}" \
+    TMUX_POPUP_PROXY_SCRIPT="${proxy_script}" \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -Fx "popup-proxy load-buffer -w -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "popup copy" "${caller_text}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux popup clipboard helper fails over SSH when caller mirror is unavailable" {
+  local root fake_bin log_file popup_text proxy_script
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/popup-clipboard-mirror-failure.log"
+  popup_text="${BATS_TEST_TMPDIR}/popup-buffer-mirror-failure.txt"
+  proxy_script="${BATS_TEST_TMPDIR}/popup-proxy-fails"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+if [ "$*" = "show-options -gqv @popup-proxy" ]; then
+  printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
+  exit 0
+fi
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_POPUP_BUFFER_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  cat > "${proxy_script}" <<'EOF'
+#!/usr/bin/env bash
+printf 'popup-proxy failed %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+exit 42
+EOF
+  chmod +x "${proxy_script}"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/popup,1,0" \
+    SSH_CONNECTION="192.0.2.10 12345 192.0.2.20 22" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_POPUP_BUFFER_TEXT="${popup_text}" \
+    TMUX_POPUP_PROXY_SCRIPT="${proxy_script}" \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tmux popup-clipboard-copy: no usable clipboard command found"* ]]
+  run grep -Fx "popup-proxy failed load-buffer -w -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -Fx "popup-proxy failed load-buffer -" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux popup clipboard helper falls back to popup caller environment" {
+  local root fake_bin log_file caller_text popup_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/popup-clipboard-caller-env.log"
+  caller_text="${BATS_TEST_TMPDIR}/caller-buffer-env.txt"
+  popup_text="${BATS_TEST_TMPDIR}/popup-buffer-env.txt"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+if [ "$*" = "show-options -gqv @popup-proxy" ]; then
+  exit 0
+fi
+printf 'TMUX=%s tmux %s\n' "${TMUX:-}" "$*" >> "${TMUX_CLIPBOARD_LOG}"
+if [ "${TMUX:-}" = "${TMUX_CALLER}" ]; then
+  cat > "${TMUX_CALLER_BUFFER_TEXT}"
+else
+  cat > "${TMUX_POPUP_BUFFER_TEXT}"
+fi
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/popup,1,0" \
+    __tmux_popup_caller="%1:/tmp/tmux-test/default,2,0" \
+    SSH_CONNECTION="192.0.2.10 12345 192.0.2.20 22" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CALLER="/tmp/tmux-test/default,2,0" \
+    TMUX_CALLER_BUFFER_TEXT="${caller_text}" \
+    TMUX_POPUP_BUFFER_TEXT="${popup_text}" \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run grep -F "TMUX=/tmp/tmux-test/default,2,0 tmux load-buffer -w -" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -F "popup copy" "${caller_text}"
   [ "$status" -eq 0 ]
 }
 
