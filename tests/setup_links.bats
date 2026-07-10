@@ -65,6 +65,8 @@ make_links_fixture_root() {
   [ "$(readlink "${TEST_HOME}/.local/bin/betterleaks-scan")" = "${root}/tools/betterleaks/betterleaks-scan" ]
   [ -L "${TEST_HOME}/.local/bin/cwd-history" ]
   [ "$(readlink "${TEST_HOME}/.local/bin/cwd-history")" = "${root}/tools/atuin/cwd-history" ]
+  [ -L "${TEST_HOME}/.local/bin/codex-pick" ]
+  [ "$(readlink "${TEST_HOME}/.local/bin/codex-pick")" = "${root}/tools/codex/codex-pick" ]
   [ -L "${TEST_HOME}/.codex/config.toml" ]
   [ "$(readlink "${TEST_HOME}/.codex/config.toml")" = "${root}/codex/config.toml" ]
   [ -L "${TEST_HOME}/.codex/azure.config.toml" ]

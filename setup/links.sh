@@ -26,6 +26,7 @@ setup_links() {
   link_file "${dotfiles_root}/tools/share-dir/share-dir" "${setup_home}/.local/bin/share-dir" "${dry_run}"
   link_file "${dotfiles_root}/tools/betterleaks/betterleaks-scan" "${setup_home}/.local/bin/betterleaks-scan" "${dry_run}"
   link_file "${dotfiles_root}/tools/atuin/cwd-history" "${setup_home}/.local/bin/cwd-history" "${dry_run}"
+  link_file "${dotfiles_root}/tools/codex/codex-pick" "${setup_home}/.local/bin/codex-pick" "${dry_run}"
 
   make_directory "${setup_home}/.vim/vim/undo" "${dry_run}"
   make_directory "${setup_home}/.vim/vim/tmp" "${dry_run}"

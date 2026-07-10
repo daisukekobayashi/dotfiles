@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: codex-pick [MODEL [EFFORT]] [-- CODEX_ARGS...]
+
+Choose a Codex model and reasoning effort for one invocation.
+
+MODEL may be a full model slug or an unambiguous slug suffix.
+Missing MODEL or EFFORT values are selected interactively with fzf.
+Arguments after -- are forwarded to codex unchanged.
+EOF
+}
+
+die() {
+  local status="$1"
+  shift
+  printf 'codex-pick: %s\n' "$*" >&2
+  exit "${status}"
+}
+
+require_command() {
+  local command_name="$1"
+  if ! command -v "${command_name}" >/dev/null 2>&1; then
+    die 127 "Required command not found: ${command_name}"
+  fi
+}
+
+load_catalog() {
+  local catalog
+
+  if catalog="$(codex debug models 2>/dev/null)" &&
+    jq -e '
+      (.models | type == "array")
+      and ([.models[] | select(.visibility == "list")] | length > 0)
+    ' >/dev/null 2>&1 <<< "${catalog}"; then
+    printf '%s\n' "${catalog}"
+    return 0
+  fi
+
+  if catalog="$(codex debug models --bundled 2>/dev/null)" &&
+    jq -e '
+      (.models | type == "array")
+      and ([.models[] | select(.visibility == "list")] | length > 0)
+    ' >/dev/null 2>&1 <<< "${catalog}"; then
+    printf '%s\n' "${catalog}"
+    return 0
+  fi
+
+  die 1 "Unable to read the Codex model catalog; codex debug models is required"
+}
+
+visible_model_list() {
+  local catalog="$1"
+  jq -r '[.models[] | select(.visibility == "list") | .slug] | join(", ")' <<< "${catalog}"
+}
+
+resolve_model() {
+  local query="$1"
+  local catalog="$2"
+  local exact
+  local -a matches
+
+  exact="$(
+    jq -r --arg query "${query}" \
+      'first(.models[] | select(.visibility == "list" and .slug == $query) | .slug) // empty' \
+      <<< "${catalog}"
+  )"
+  if [[ -n "${exact}" ]]; then
+    printf '%s\n' "${exact}"
+    return 0
+  fi
+
+  mapfile -t matches < <(
+    jq -r --arg query "${query}" \
+      '.models[] | select(.visibility == "list" and (.slug | endswith("-" + $query))) | .slug' \
+      <<< "${catalog}"
+  )
+
+  case "${#matches[@]}" in
+    0)
+      die 2 "Unknown model: ${query}. Available models: $(visible_model_list "${catalog}")"
+      ;;
+    1)
+      printf '%s\n' "${matches[0]}"
+      ;;
+    *)
+      die 2 "Ambiguous model: ${query}. Matches: ${matches[*]}"
+      ;;
+  esac
+}
+
+pick_model() {
+  local catalog="$1"
+  local rows selected
+
+  rows="$(
+    jq -r '
+      .models[]
+      | select(.visibility == "list")
+      | [.slug, .display_name, ("default: " + .default_reasoning_level)]
+      | @tsv
+    ' <<< "${catalog}"
+  )"
+
+  selected="$(
+    printf '%s\n' "${rows}" |
+      fzf --delimiter=$'\t' --with-nth=2,1,3 --prompt='Model> '
+  )" || return $?
+
+  printf '%s\n' "${selected%%$'\t'*}"
+}
+
+effort_list() {
+  local model="$1"
+  local catalog="$2"
+  jq -r --arg model "${model}" '
+    [.models[]
+      | select(.slug == $model)
+      | .supported_reasoning_levels[].effort]
+    | join(", ")
+  ' <<< "${catalog}"
+}
+
+validate_effort() {
+  local model="$1"
+  local effort="$2"
+  local catalog="$3"
+
+  if ! jq -e --arg model "${model}" --arg effort "${effort}" '
+    [.models[]
+      | select(.slug == $model)
+      | .supported_reasoning_levels[]
+      | select(.effort == $effort)]
+    | length == 1
+  ' >/dev/null <<< "${catalog}"; then
+    die 2 "Unsupported effort for ${model}: ${effort}. Valid efforts: $(effort_list "${model}" "${catalog}")"
+  fi
+}
+
+pick_effort() {
+  local model="$1"
+  local catalog="$2"
+  local rows selected
+
+  rows="$(
+    jq -r --arg model "${model}" '
+      .models[]
+      | select(.slug == $model) as $selected_model
+      | $selected_model.supported_reasoning_levels[]
+      | [
+          .effort,
+          .description,
+          (if .effort == $selected_model.default_reasoning_level then "default" else "" end)
+        ]
+      | @tsv
+    ' <<< "${catalog}"
+  )"
+
+  selected="$(
+    printf '%s\n' "${rows}" |
+      fzf --delimiter=$'\t' --with-nth=1,2,3 --prompt='Effort> '
+  )" || return $?
+
+  printf '%s\n' "${selected%%$'\t'*}"
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+model_query=""
+effort_query=""
+declare -a codex_args=()
+
+if [[ $# -gt 0 && "$1" != "--" ]]; then
+  model_query="$1"
+  shift
+fi
+
+if [[ $# -gt 0 && "$1" != "--" ]]; then
+  effort_query="$1"
+  shift
+fi
+
+if [[ $# -gt 0 ]]; then
+  if [[ "$1" != "--" ]]; then
+    die 2 "Unexpected argument: $1. Place Codex arguments after --"
+  fi
+  shift
+  codex_args=("$@")
+fi
+
+require_command codex
+require_command jq
+if [[ -z "${model_query}" || -z "${effort_query}" ]]; then
+  require_command fzf
+fi
+
+catalog="$(load_catalog)"
+
+if [[ -n "${model_query}" ]]; then
+  model="$(resolve_model "${model_query}" "${catalog}")"
+else
+  model="$(pick_model "${catalog}")" || exit $?
+fi
+
+if [[ -n "${effort_query}" ]]; then
+  effort="${effort_query}"
+  validate_effort "${model}" "${effort}" "${catalog}"
+else
+  effort="$(pick_effort "${model}" "${catalog}")" || exit $?
+fi
+
+exec codex \
+  -m "${model}" \
+  -c "model_reasoning_effort='${effort}'" \
+  "${codex_args[@]}"
