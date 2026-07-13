@@ -40,7 +40,6 @@ const baseLocalSkills = [
   "execution-context-first-repo-onboarding",
   "local-code-review",
   "local-runtime-port-isolation",
-  "serena-session-init",
 ];
 const beadsLocalSkills = [
   "beads-issue-create",

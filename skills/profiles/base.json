@@ -59,7 +59,6 @@
     "design-preflight",
     "execution-context-first-repo-onboarding",
     "local-code-review",
-    "local-runtime-port-isolation",
-    "serena-session-init"
+    "local-runtime-port-isolation"
   ]
 }
