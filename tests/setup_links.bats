@@ -107,6 +107,40 @@ make_links_fixture_root() {
   [ "$status" -eq 0 ]
 }
 
+@test "claude settings configure Serena lifecycle integration" {
+  local root
+  root="$(repo_root)"
+
+  run node -e '
+    const assert = require("node:assert/strict");
+    const fs = require("node:fs");
+    const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+
+    assert.deepEqual(config.hooks, {
+      PreToolUse: [
+        {
+          matcher: "",
+          hooks: [{ type: "command", command: "serena-hooks remind --client=claude-code" }],
+        },
+        {
+          matcher: "mcp__serena__*",
+          hooks: [{ type: "command", command: "serena-hooks auto-approve --client=claude-code" }],
+        },
+      ],
+      SessionStart: [{
+        matcher: "",
+        hooks: [{ type: "command", command: "serena-hooks activate --client=claude-code" }],
+      }],
+      SessionEnd: [{
+        matcher: "",
+        hooks: [{ type: "command", command: "serena-hooks cleanup --client=claude-code" }],
+      }],
+    });
+  ' "${root}/claude/settings.json"
+
+  [ "$status" -eq 0 ]
+}
+
 @test "links preserves environment-specific tmux-palette sizing config" {
   mkdir -p "${TEST_HOME}/.config/tmux-palette"
   printf '{"width":100}\n' > "${TEST_HOME}/.config/tmux-palette/sizing.json"
