@@ -114,6 +114,12 @@ Invoke-Test "Windows links setup wires the Codex Azure profile config" {
   Assert-True ($linksScript -match 'codex\\azure\.config\.toml') "setup\links.ps1 does not target codex\azure.config.toml"
 }
 
+Invoke-Test "Windows links setup wires the Codex hooks config" {
+  $linksScript = Get-Content -Raw (Join-Path $RepoRoot "setup\links.ps1")
+  Assert-True ($linksScript -match '\.codex\\hooks\.json') "setup\links.ps1 does not link ~/.codex/hooks.json"
+  Assert-True ($linksScript -match 'codex\\hooks\.json') "setup\links.ps1 does not target codex\hooks.json"
+}
+
 Invoke-Test "Windows links setup wires the Betterleaks scan helper" {
   $linksScript = Get-Content -Raw (Join-Path $RepoRoot "setup\links.ps1")
   Assert-True ($linksScript -match '\.local\\bin\\betterleaks-scan\.ps1') "setup\links.ps1 does not link ~/.local/bin/betterleaks-scan.ps1"

@@ -11,6 +11,7 @@ approvals_reviewer = "guardian_subagent"
 network_access = true
 
 [features]
+hooks = true
 rmcp_client = true
 goals = true
 memories = true

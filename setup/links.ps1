@@ -57,6 +57,10 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "codex\config.toml"
     },
     @{
+      Link = Join-Path $setupContext.HomeDir ".codex\hooks.json"
+      Target = Join-Path $setupContext.DotfilesRoot "codex\hooks.json"
+    },
+    @{
       Link = Join-Path $setupContext.HomeDir ".codex\azure.config.toml"
       Target = Join-Path $setupContext.DotfilesRoot "codex\azure.config.toml"
     },

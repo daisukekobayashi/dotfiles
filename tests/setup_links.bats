@@ -69,11 +69,42 @@ make_links_fixture_root() {
   [ "$(readlink "${TEST_HOME}/.local/bin/codex-pick")" = "${root}/tools/codex/codex-pick" ]
   [ -L "${TEST_HOME}/.codex/config.toml" ]
   [ "$(readlink "${TEST_HOME}/.codex/config.toml")" = "${root}/codex/config.toml" ]
+  [ -L "${TEST_HOME}/.codex/hooks.json" ]
+  [ "$(readlink "${TEST_HOME}/.codex/hooks.json")" = "${root}/codex/hooks.json" ]
   [ -L "${TEST_HOME}/.codex/azure.config.toml" ]
   [ "$(readlink "${TEST_HOME}/.codex/azure.config.toml")" = "${root}/codex/azure.config.toml" ]
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
   [ -f "${TEST_HOME}/.gemini/GEMINI.md" ]
   [ -f "${TEST_HOME}/.claude/CLAUDE.md" ]
+}
+
+@test "codex hooks configure Serena lifecycle integration" {
+  local root
+  root="$(repo_root)"
+
+  run node -e '
+    const assert = require("node:assert/strict");
+    const fs = require("node:fs");
+    const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+
+    assert.deepEqual(config, {
+      hooks: {
+        PreToolUse: [{
+          matcher: "Bash",
+          hooks: [{ type: "command", command: "serena-hooks remind --client=codex" }],
+        }],
+        SessionStart: [{
+          matcher: "startup|resume",
+          hooks: [{ type: "command", command: "serena-hooks activate --client=codex" }],
+        }],
+        Stop: [{
+          hooks: [{ type: "command", command: "serena-hooks cleanup --client=codex" }],
+        }],
+      },
+    });
+  ' "${root}/codex/hooks.json"
+
+  [ "$status" -eq 0 ]
 }
 
 @test "links preserves environment-specific tmux-palette sizing config" {
