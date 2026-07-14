@@ -78,6 +78,33 @@ make_links_fixture_root() {
   [ -f "${TEST_HOME}/.claude/CLAUDE.md" ]
 }
 
+@test "gemini settings configure Serena project activation" {
+  local root
+  root="$(repo_root)"
+
+  run node -e '
+    const assert = require("node:assert/strict");
+    const fs = require("node:fs");
+    const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+
+    assert.deepEqual(config.mcpServers.serena, {
+      command: "serena",
+      args: [
+        "start-mcp-server",
+        "--context",
+        "ide",
+        "--project-from-cwd",
+        "--open-web-dashboard",
+        "false",
+      ],
+      cwd: ".",
+    });
+    assert.equal(fs.existsSync(process.argv[2]), false);
+  ' "${root}/gemini/settings.json" "${root}/gemini/commands/serena-init.toml"
+
+  [ "$status" -eq 0 ]
+}
+
 @test "codex hooks configure Serena lifecycle integration" {
   local root
   root="$(repo_root)"
