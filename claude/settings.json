@@ -12,6 +12,10 @@
       "Read(./secrets/**)"
     ]
   },
+  "model": "claude-fable-5[1m]",
+  "enabledMcpjsonServers": [
+    "serena"
+  ],
   "hooks": {
     "PreToolUse": [
       {
@@ -56,13 +60,9 @@
       }
     ]
   },
-  "model": "opus[1m]",
-  "enabledMcpjsonServers": [
-    "serena"
-  ],
   "enabledPlugins": {
     "claude-mem@thedotmack": true,
-    "oh-my-claudecode@omc": true,
+    "oh-my-claudecode@omc": false,
     "codex@openai-codex": true
   },
   "extraKnownMarketplaces": {
@@ -85,6 +85,8 @@
       }
     }
   },
-  "effortLevel": "xhigh",
+  "effortLevel": "high",
+  "tui": "fullscreen",
+  "theme": "dark-ansi",
   "skipAutoPermissionPrompt": true
 }
