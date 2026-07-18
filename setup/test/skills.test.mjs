@@ -38,6 +38,7 @@ const azureDevOpsLocalSkills = [
 const baseLocalSkills = [
   "design-preflight",
   "execution-context-first-repo-onboarding",
+  "find-unknowns",
   "local-code-review",
   "local-runtime-port-isolation",
 ];

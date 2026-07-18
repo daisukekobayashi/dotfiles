@@ -1,0 +1,7 @@
+interface:
+  display_name: "Find Unknowns"
+  short_description: "Surface unknowns before design and implementation"
+  default_prompt: "Use $find-unknowns to clarify this work before design or implementation."
+
+policy:
+  allow_implicit_invocation: false
