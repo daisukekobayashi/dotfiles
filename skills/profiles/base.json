@@ -57,10 +57,10 @@
   ],
   "local": [
     "adversarial-review",
+    "code-review",
     "design-preflight",
     "execution-context-first-repo-onboarding",
     "find-unknowns",
-    "local-code-review",
     "local-runtime-port-isolation"
   ]
 }

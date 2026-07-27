@@ -1,12 +1,11 @@
 ---
-name: adversarial-review
-description: Use only when explicitly invoked with `$adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping.
+name: code-review
+description: Use only when explicitly invoked with `$code-review` to review a repository change, branch, worktree, commit, pull request, or issue before shipping.
 ---
 
-# Adversarial Review
+# Code Review
 
-Challenge the implementation and design without inventing failures. This is a
-read-only, review-only workflow.
+Find material defects. This is a read-only, review-only workflow.
 
 ## Resolve and Collect
 
@@ -32,49 +31,50 @@ large changes, inspect stats, high-risk paths, and nearby contracts first. Do
 not print secrets or blindly load large, binary, generated, or untracked files.
 Stop if all requested layers are empty.
 
-## Attack the Change
+## Review the Change
 
-Challenge the approach, not code style. Prioritize:
+Review the patch as introduced behavior, not as a general codebase audit.
+Prioritize:
 
-- invariants, guards, assumptions, auth, permissions, and trust boundaries
-- data loss, corruption, duplication, migrations, and irreversible actions
-- retries, partial failure, rollback, idempotency, races, and ordering
-- stale state, timeouts, degraded dependencies, recovery, and observability
-- compatibility, issue alignment, and safer or simpler alternatives
+- correctness, regressions, and user-visible failures
+- security, privacy, permissions, and trust boundaries
+- data loss, corruption, migrations, compatibility, and rollback hazards
+- error handling, retries, concurrency, idempotency, and resource lifecycle
+- missing tests for realistic failure paths and changed contracts
+- operational, configuration, documentation, and maintainability defects
+  affecting use or support
 
-Trace concrete failure paths and weight the user's focus heavily. A material
-finding states what fails, why, its impact, and a risk reduction. Exclude praise,
-style, cleanup, and speculation. Prefer one strong finding; mark inferences.
+Trace each finding through the changed code and nearby contracts. A material
+finding states what fails, the conditions that trigger it, its impact, and a
+specific correction. Exclude praise, style-only preferences, unrelated legacy
+problems, and unsupported speculation. Weight the user's focus heavily.
 
 ## Output
 
 Respond in the user's language:
 
 ```markdown
-**Verdict**
-- Do not ship | Needs attention | No material blocker found
-- <terse reason>
+**Findings**
+- [High|Medium|Low] <title> - <file:line or diff context> - confidence <0-1>
+  <failure, trigger, evidence, impact, and recommended correction>
+- If none: No material findings found.
 
 **Review Target**
 - <worktree, target, base, merge-base, issue/PR, layers>
 
-**Material Findings**
-- [High|Medium] <title> - <location> - confidence <0-1>
-  <failure, evidence, impact, recommendation>
-- If none: No material findings found.
-
-**Challenged Assumptions and Alternatives**
-- <material challenge, safer alternative, or "None supported">
-
-**Issue Alignment**
-- <include only with issue or PR context>
+**Test Gaps**
+- <missing verification or "None found">
 
 **Coverage and Residual Risk**
-- <coverage, skipped evidence, test gaps, stale refs, uncertainty>
+- <coverage, skipped evidence, stale refs, and uncertainty>
+
+**Verdict**
+- Request changes | Comment | Approve
 ```
 
-Use `Do not ship` only for a defensible blocker. A clean result means no
-material finding was supported, not that safety was proven.
+Use `Request changes` only for a defensible blocker. `Approve` means no
+material finding was supported by the reviewed evidence, not that the change
+was proven correct.
 
 ## Guardrails
 
