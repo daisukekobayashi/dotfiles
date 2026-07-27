@@ -36,6 +36,7 @@ const azureDevOpsLocalSkills = [
   "azure-devops-merge-cleanup",
 ];
 const baseLocalSkills = [
+  "adversarial-review",
   "design-preflight",
   "execution-context-first-repo-onboarding",
   "find-unknowns",
@@ -369,6 +370,21 @@ test("repository profiles keep provider workflow skills separated", async () => 
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test("adversarial review is explicit-only and covers the full issue worktree change", async () => {
+  const skillRoot = path.join(repoRoot, "skills", "local", "adversarial-review");
+  const skill = await readText(path.join(skillRoot, "SKILL.md"));
+  const metadata = await readText(path.join(skillRoot, "agents", "openai.yaml"));
+
+  assert.match(skill, /Use only when explicitly invoked with `\$adversarial-review`/);
+  assert.match(metadata, /allow_implicit_invocation:\s*false/);
+  assert.match(skill, /git worktree list --porcelain/);
+  assert.match(skill, /merge-base/);
+  assert.match(skill, /git diff --cached/);
+  assert.match(skill, /Issue Context/);
+  assert.match(skill, /review-only/i);
+  assert.doesNotMatch(skill, /local-code-review/);
 });
 
 test("profile validate accepts selected profiles", async () => {

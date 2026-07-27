@@ -1,0 +1,7 @@
+interface:
+  display_name: "Adversarial Review"
+  short_description: "Challenge implementation direction and hidden risks"
+  default_prompt: "Use $adversarial-review to pressure-test this repository change before shipping."
+
+policy:
+  allow_implicit_invocation: false
