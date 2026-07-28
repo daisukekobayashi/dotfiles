@@ -372,6 +372,18 @@ test("repository profiles keep provider workflow skills separated", async () => 
   assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
+test("design preflight delegates to the installed grilling primitive", async () => {
+  const base = await readRepoProfile("base");
+  const designPreflight = await readText(
+    path.join(repoRoot, "skills", "local", "design-preflight", "SKILL.md"),
+  );
+
+  assert.equal(skillsForSource(base, "mattpocock/skills").includes("grilling"), true);
+  assert.match(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grilling`\./);
+  assert.match(designPreflight, /\| `\$design-preflight open` \| Raw `grilling`;/);
+  assert.doesNotMatch(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grill-me`\./);
+});
+
 test("review skills are explicit-only and share target selection", async () => {
   const adversarialRoot = path.join(repoRoot, "skills", "local", "adversarial-review");
   const codeReviewRoot = path.join(repoRoot, "skills", "local", "code-review");

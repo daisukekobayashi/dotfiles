@@ -1,17 +1,17 @@
 ---
 name: design-preflight
-description: Use only when explicitly invoked with $design-preflight before design or implementation work to control grill-me for hard-to-change decisions, durable architecture, compatibility assumptions, and one-way-door risks.
+description: Use only when explicitly invoked with $design-preflight before design or implementation work to control grilling for hard-to-change decisions, durable architecture, compatibility assumptions, and one-way-door risks.
 ---
 
 # Design Preflight
 
-Run a controlled `grill-me` pass before design or implementation. Keep the interface small and the default lightweight.
+Run a controlled `grilling` pass before design or implementation. Keep the interface small and the default lightweight.
 
 ## Required Sub-Skill
 
-**REQUIRED SUB-SKILL:** Use `grill-me`.
+**REQUIRED SUB-SKILL:** Use `grilling`.
 
-This skill is a wrapper, not a replacement. Use `grill-me` as the questioning engine and provide it with the brief below.
+This skill is a wrapper, not a replacement. Use `grilling` as the questioning engine and provide it with the brief below.
 
 ## Public Interface
 
@@ -20,7 +20,7 @@ This skill is a wrapper, not a replacement. Use `grill-me` as the questioning en
 | `$design-preflight` | Same as `durable`. |
 | `$design-preflight durable` | Controlled grilling for high-impact, hard-to-change design decisions. |
 | `$design-preflight quick` | Blocker-only preflight. Ask at most 3 questions. |
-| `$design-preflight open` | Raw `grill-me`; do not apply this skill's filtering. |
+| `$design-preflight open` | Raw `grilling`; do not apply this skill's filtering. |
 
 Treat unknown words as context hints, not CLI errors. Natural-language limits like "3 questions max" or "blockers only" are upper bounds.
 
@@ -52,11 +52,11 @@ Ask only questions where a wrong default is likely to force rework, migration, o
 
 ### open
 
-Use raw `grill-me`. Do not impose this skill's one-way-door filter, compatibility stance, or question budget.
+Use raw `grilling`. Do not impose this skill's one-way-door filter, compatibility stance, or question budget.
 
-## Brief To Give Grill-Me
+## Brief To Give Grilling
 
-For `durable` and `quick`, start the `grill-me` session with this brief:
+For `durable` and `quick`, start the `grilling` session with this brief:
 
 ```text
 This is a design preflight, not an open-ended interview.
@@ -90,4 +90,4 @@ Do not ask about:
 
 ## Output
 
-Let `grill-me` conduct the session. If no question clears the bar, say so briefly and proceed with the user's stated preference and the repo conventions.
+Let `grilling` conduct the session. If no question clears the bar, say so briefly and proceed with the user's stated preference and the repo conventions.
