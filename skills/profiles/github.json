@@ -1,11 +1,6 @@
 {
   "description": "GitHub workflow skills for issues, pull requests, and merge cleanup.",
-  "external": [
-    {
-      "source": "github/awesome-copilot",
-      "skills": ["gh-cli"]
-    }
-  ],
+  "external": [],
   "local": [
     "github-issue-create",
     "github-issue-review",

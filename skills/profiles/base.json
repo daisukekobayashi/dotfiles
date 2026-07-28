@@ -27,8 +27,7 @@
     {
       "source": "mattpocock/skills",
       "skills": [
-        "caveman",
-        "diagnose",
+        "diagnosing-bugs",
         "grill-me",
         "grill-with-docs",
         "grilling",
@@ -36,11 +35,10 @@
         "prototype",
         "setup-matt-pocock-skills",
         "tdd",
-        "to-issues",
-        "to-prd",
+        "to-spec",
+        "to-tickets",
         "triage",
-        "write-a-skill",
-        "zoom-out"
+        "writing-great-skills"
       ]
     },
     {

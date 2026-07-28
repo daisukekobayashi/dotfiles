@@ -332,12 +332,26 @@ test("repository profiles keep provider workflow skills separated", async () => 
 
   assert.equal(base.description, "Provider-neutral baseline workflow skills for repository work.");
   assert.deepEqual(skillsForSource(base, "github/awesome-copilot"), ["git-commit"]);
+  assert.deepEqual(skillsForSource(base, "mattpocock/skills"), [
+    "diagnosing-bugs",
+    "grill-me",
+    "grill-with-docs",
+    "grilling",
+    "improve-codebase-architecture",
+    "prototype",
+    "setup-matt-pocock-skills",
+    "tdd",
+    "to-spec",
+    "to-tickets",
+    "triage",
+    "writing-great-skills",
+  ]);
   assert.deepEqual(base.local, baseLocalSkills);
   for (const skillName of githubLocalSkills) {
     assert.equal(base.local.includes(skillName), false, `${skillName} should not be in base`);
   }
 
-  assert.deepEqual(skillsForSource(github, "github/awesome-copilot"), ["gh-cli"]);
+  assert.deepEqual(skillsForSource(github, "github/awesome-copilot"), []);
   assert.deepEqual(github.local, githubLocalSkills);
 
   assert.deepEqual(skillsForSource(azure, "github/awesome-copilot"), []);
