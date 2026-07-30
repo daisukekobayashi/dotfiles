@@ -20,10 +20,10 @@ When multiple instruction files apply, follow the most specific one for the file
 
 ## Agent Artifacts
 
-- Treat agent-generated scratch files, plans, transcripts, tool logs, and process-heavy drafts as temporary implementation state, not durable project documentation.
-- Keep temporary agent artifacts in ignored or temporary locations such as `.superpowers/`, `.codex/`, `.agents/`, or `/tmp`, unless the user or project instructions explicitly request a tracked location.
-- Do not stage or commit agent-generated scratch artifacts, including raw plans, transcripts, and tool logs, unless explicitly requested and reviewed for durable value.
-- When temporary work produces durable project documentation, rewrite it for future maintainers and place it in the repository's existing documentation structure. Do not move raw transcripts, scratch plans, or tool logs into curated documentation.
+- Classify agent-generated artifacts by their content, intended audience, and expected lifetime, not by the tool, filename, directory, or workflow that created them.
+- Treat artifacts as durable documentation when they preserve stable requirements, contracts, decisions, long-term plans, or operational knowledge for future maintainers. Treat exploration, task-specific plans, commands, progress, review state, and session-specific details as temporary implementation state.
+- When content is mixed, rewrite the durable portion into the repository's existing documentation structure and keep the process-heavy source in an ignored agent-work directory or `/tmp`. If uncertain, default to temporary.
+- State the classification and chosen location before writing. Do not stage or commit agent-generated artifacts unless the applicable approval requirements are satisfied.
 
 ## Repository State and User-Owned Changes
 
