@@ -6,25 +6,6 @@
       "skills": ["find-skills"]
     },
     {
-      "source": "obra/superpowers",
-      "skills": [
-        "using-superpowers",
-        "brainstorming",
-        "dispatching-parallel-agents",
-        "executing-plans",
-        "finishing-a-development-branch",
-        "receiving-code-review",
-        "requesting-code-review",
-        "subagent-driven-development",
-        "systematic-debugging",
-        "test-driven-development",
-        "using-git-worktrees",
-        "verification-before-completion",
-        "writing-plans",
-        "writing-skills"
-      ]
-    },
-    {
       "source": "mattpocock/skills",
       "skills": [
         "diagnosing-bugs",

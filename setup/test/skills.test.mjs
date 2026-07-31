@@ -331,6 +331,7 @@ test("repository profiles keep provider workflow skills separated", async () => 
   const beads = await readRepoProfile("beads");
 
   assert.equal(base.description, "Provider-neutral baseline workflow skills for repository work.");
+  assert.deepEqual(skillsForSource(base, "obra/superpowers"), []);
   assert.deepEqual(skillsForSource(base, "github/awesome-copilot"), ["git-commit"]);
   assert.deepEqual(skillsForSource(base, "mattpocock/skills"), [
     "diagnosing-bugs",

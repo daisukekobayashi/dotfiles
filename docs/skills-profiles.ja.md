@@ -142,12 +142,11 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 含めるもの:
 
 - `find-skills`
-- `using-superpowers`
-- `brainstorming`
-- `grill-me`
-- 計画, debug, TDD, verification, code review 系の workflow skill
+- debug、TDD、grilling、prototype、spec、ticket、triage、skill authoring 用の Matt Pocock workflow skill
 - repository onboarding, local code review, runtime isolation の local skill
 - `git-commit`
+
+Superpowers は `base` に含めません。
 
 以前の GitHub 対応込みの baseline が必要な場合は `base,github` を使います.
 

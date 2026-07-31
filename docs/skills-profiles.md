@@ -142,12 +142,11 @@ Provider-neutral workflow skills used broadly across repositories.
 Include:
 
 - `find-skills`
-- `using-superpowers`
-- `brainstorming`
-- `grill-me`
-- planning, debugging, TDD, verification, and code review workflow skills
+- Matt Pocock workflow skills for debugging, TDD, grilling, prototyping, specs, tickets, triage, and skill authoring
 - repository onboarding, local code review, and runtime isolation local skills
 - `git-commit`
+
+Superpowers is not included in `base`.
 
 Use `base,github` when you want the previous GitHub-enabled baseline.
 
