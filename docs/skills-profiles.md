@@ -142,10 +142,11 @@ Provider-neutral workflow skills used broadly across repositories.
 Include:
 
 - `find-skills`
-- Matt Pocock workflow skills for debugging, TDD, grilling, prototyping, specs, tickets, triage, and skill authoring
-- repository onboarding, local code review, and runtime isolation local skills
+- all published Matt Pocock Engineering and Productivity skills
+- repository onboarding, `review-change`, `adversarial-review`, and runtime isolation local skills
 - `git-commit`
 
+Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
 Superpowers is not included in `base`.
 
 Use `base,github` when you want the previous GitHub-enabled baseline.

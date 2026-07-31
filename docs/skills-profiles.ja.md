@@ -142,10 +142,11 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 含めるもの:
 
 - `find-skills`
-- debug、TDD、grilling、prototype、spec、ticket、triage、skill authoring 用の Matt Pocock workflow skill
-- repository onboarding, local code review, runtime isolation の local skill
+- 公開済みの Matt Pocock Engineering / Productivity skill 一式
+- repository onboarding、`review-change`、`adversarial-review`、runtime isolation の local skill
 - `git-commit`
 
+Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
 Superpowers は `base` に含めません。
 
 以前の GitHub 対応込みの baseline が必要な場合は `base,github` を使います.

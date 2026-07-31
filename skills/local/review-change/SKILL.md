@@ -1,9 +1,9 @@
 ---
-name: code-review
-description: Use only when explicitly invoked with `$code-review` to review a repository change, branch, worktree, commit, pull request, or issue before shipping.
+name: review-change
+description: Use only when explicitly invoked with `$review-change` to review a repository change, branch, worktree, commit, pull request, or issue before shipping.
 ---
 
-# Code Review
+# Review Change
 
 Find material defects. This is a read-only, review-only workflow.
 

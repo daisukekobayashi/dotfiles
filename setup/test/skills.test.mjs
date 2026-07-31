@@ -37,11 +37,11 @@ const azureDevOpsLocalSkills = [
 ];
 const baseLocalSkills = [
   "adversarial-review",
-  "code-review",
   "design-preflight",
   "execution-context-first-repo-onboarding",
   "find-unknowns",
   "local-runtime-port-isolation",
+  "review-change",
 ];
 const beadsLocalSkills = [
   "beads-issue-create",
@@ -334,17 +334,27 @@ test("repository profiles keep provider workflow skills separated", async () => 
   assert.deepEqual(skillsForSource(base, "obra/superpowers"), []);
   assert.deepEqual(skillsForSource(base, "github/awesome-copilot"), ["git-commit"]);
   assert.deepEqual(skillsForSource(base, "mattpocock/skills"), [
+    "ask-matt",
+    "code-review",
+    "codebase-design",
     "diagnosing-bugs",
+    "domain-modeling",
     "grill-me",
     "grill-with-docs",
     "grilling",
+    "handoff",
+    "implement",
     "improve-codebase-architecture",
     "prototype",
+    "research",
+    "resolving-merge-conflicts",
     "setup-matt-pocock-skills",
     "tdd",
+    "teach",
     "to-spec",
     "to-tickets",
     "triage",
+    "wayfinder",
     "writing-great-skills",
   ]);
   assert.deepEqual(base.local, baseLocalSkills);
@@ -401,29 +411,32 @@ test("design preflight delegates to the installed grilling primitive", async () 
 
 test("review skills are explicit-only and share target selection", async () => {
   const adversarialRoot = path.join(repoRoot, "skills", "local", "adversarial-review");
-  const codeReviewRoot = path.join(repoRoot, "skills", "local", "code-review");
+  const reviewChangeRoot = path.join(repoRoot, "skills", "local", "review-change");
   const adversarial = await readText(path.join(adversarialRoot, "SKILL.md"));
-  const codeReview = await readText(path.join(codeReviewRoot, "SKILL.md"));
+  const reviewChange = await readText(path.join(reviewChangeRoot, "SKILL.md"));
   const adversarialMetadata = await readText(path.join(adversarialRoot, "agents", "openai.yaml"));
-  const codeReviewMetadata = await readText(path.join(codeReviewRoot, "agents", "openai.yaml"));
+  const reviewChangeMetadata = await readText(
+    path.join(reviewChangeRoot, "agents", "openai.yaml"),
+  );
   const targetSection = (skill) => skill.match(/## Resolve and Collect\n[\s\S]*?(?=\n## )/)?.[0];
 
   assert.match(adversarial, /Use only when explicitly invoked with `\$adversarial-review`/);
-  assert.match(codeReview, /Use only when explicitly invoked with `\$code-review`/);
+  assert.match(reviewChange, /Use only when explicitly invoked with `\$review-change`/);
   assert.match(adversarialMetadata, /allow_implicit_invocation:\s*false/);
-  assert.match(codeReviewMetadata, /allow_implicit_invocation:\s*false/);
+  assert.match(reviewChangeMetadata, /allow_implicit_invocation:\s*false/);
   assert.ok(targetSection(adversarial));
-  assert.equal(targetSection(codeReview), targetSection(adversarial));
-  assert.match(targetSection(codeReview), /git worktree list --porcelain/);
-  assert.match(targetSection(codeReview), /merge-base/);
-  assert.match(targetSection(codeReview), /git diff --cached/);
-  assert.match(targetSection(codeReview), /Issue Context/);
-  assert.match(codeReview, /correctness/i);
-  assert.match(codeReview, /regression/i);
+  assert.equal(targetSection(reviewChange), targetSection(adversarial));
+  assert.match(targetSection(reviewChange), /git worktree list --porcelain/);
+  assert.match(targetSection(reviewChange), /merge-base/);
+  assert.match(targetSection(reviewChange), /git diff --cached/);
+  assert.match(targetSection(reviewChange), /Issue Context/);
+  assert.match(reviewChange, /correctness/i);
+  assert.match(reviewChange, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
   assert.match(adversarial, /review-only/i);
+  assert.equal(existsSync(path.join(repoRoot, "skills", "local", "code-review")), false);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "local-code-review")), false);
-  assert.doesNotMatch(`${codeReview}\n${adversarial}`, /local-code-review/);
+  assert.doesNotMatch(`${reviewChange}\n${adversarial}`, /\$code-review|local-code-review/);
 });
 
 test("profile validate accepts selected profiles", async () => {

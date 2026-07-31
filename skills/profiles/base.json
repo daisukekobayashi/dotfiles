@@ -8,17 +8,27 @@
     {
       "source": "mattpocock/skills",
       "skills": [
+        "ask-matt",
+        "code-review",
+        "codebase-design",
         "diagnosing-bugs",
+        "domain-modeling",
         "grill-me",
         "grill-with-docs",
         "grilling",
+        "handoff",
+        "implement",
         "improve-codebase-architecture",
         "prototype",
+        "research",
+        "resolving-merge-conflicts",
         "setup-matt-pocock-skills",
         "tdd",
+        "teach",
         "to-spec",
         "to-tickets",
         "triage",
+        "wayfinder",
         "writing-great-skills"
       ]
     },
@@ -37,10 +47,10 @@
   ],
   "local": [
     "adversarial-review",
-    "code-review",
     "design-preflight",
     "execution-context-first-repo-onboarding",
     "find-unknowns",
-    "local-runtime-port-isolation"
+    "local-runtime-port-isolation",
+    "review-change"
   ]
 }
