@@ -33,5 +33,17 @@ args = [
   "false",
 ]
 startup_timeout_sec = 30
+
+[tui]
+status_line = [
+  "model-with-reasoning",
+  "project-name",
+  "git-branch",
+  "context-used",
+  "five-hour-limit",
+  "weekly-limit",
+]
+status_line_use_colors = true
+
 [notice.model_migrations]
 "gpt-5.3-codex" = "gpt-5.4"
