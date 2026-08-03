@@ -131,6 +131,26 @@ Invoke-Test "Windows setup help describes PPM package setup" {
   Assert-True ($setupScript -match 'PPM') "setup.ps1 help does not mention PPM"
 }
 
+Invoke-Test "PowerShell profile adds user local bin to PATH once" {
+  $profilePath = Join-Path $RepoRoot "powershell\Microsoft.PowerShell_profile.ps1"
+  $escapedProfilePath = $profilePath.Replace("'", "''")
+  $powershellPath = (Get-Process -Id $PID).Path
+  $command = @"
+`$separator = [IO.Path]::PathSeparator
+`$localBin = Join-Path `$HOME '.local\bin'
+`$Env:PATH = ((`$Env:PATH -split `$separator) | Where-Object { `$_ -ne `$localBin }) -join `$separator
+. '$escapedProfilePath'
+. '$escapedProfilePath'
+`$matches = @(`$Env:PATH -split `$separator | Where-Object { `$_ -eq `$localBin })
+if (`$matches.Count -ne 1) {
+  throw "Expected one user local bin PATH entry, found `$(`$matches.Count)"
+}
+"@
+
+  $output = & $powershellPath -NoLogo -NoProfile -Command $command 2>&1 | Out-String
+  Assert-True ($LASTEXITCODE -eq 0) "profile PATH command failed with exit $LASTEXITCODE`: $output"
+}
+
 Invoke-Test "PowerShell profile tolerates empty mise activation output" {
   $testRoot = New-TestDirectory
   try {
