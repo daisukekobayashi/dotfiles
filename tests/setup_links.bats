@@ -26,6 +26,34 @@ make_links_fixture_root() {
   ln -s "${source_root}/.zshenv" "${fixture_root}/.zshenv"
 }
 
+assert_link_target_is_tracked() {
+  local root="$1"
+  local target="$2"
+
+  [ -n "$(git -C "${root}" ls-files -- "${target}")" ] || {
+    echo "link target is not present in tracked repository content: ${target}" >&2
+    return 1
+  }
+}
+
+@test "setup link targets exist in tracked repository content" {
+  local root target
+  root="$(repo_root)"
+
+  # The sed pattern intentionally matches the literal shell variable reference.
+  # shellcheck disable=SC2016
+  while IFS= read -r target; do
+    assert_link_target_is_tracked "${root}" "${target}"
+  done < <(sed -n 's/.*link_file "${dotfiles_root}\/\([^\"]*\)".*/\1/p' "${root}/setup/links.sh")
+
+  # The sed pattern intentionally matches the literal PowerShell variable reference.
+  # shellcheck disable=SC2016
+  while IFS= read -r target; do
+    target="${target//\\//}"
+    assert_link_target_is_tracked "${root}" "${target}"
+  done < <(sed -n 's/.*Target = Join-Path \$setupContext.DotfilesRoot "\([^\"]*\)".*/\1/p' "${root}/setup/links.ps1")
+}
+
 @test "links writes symlinks and generated agent docs under SETUP_HOME" {
   local root
   root="$(repo_root)"

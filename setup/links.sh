@@ -39,7 +39,6 @@ setup_links() {
   link_file "${dotfiles_root}/codex/hooks.json" "${setup_home}/.codex/hooks.json" "${dry_run}"
   link_file "${dotfiles_root}/codex/azure.config.toml" "${setup_home}/.codex/azure.config.toml" "${dry_run}"
   link_file "${dotfiles_root}/codex/rules/user.rules" "${setup_home}/.codex/rules/user.rules" "${dry_run}"
-  link_file "${dotfiles_root}/codex/prompts" "${setup_home}/.codex/prompts" "${dry_run}"
 
   make_directory "${setup_home}/.gemini" "${dry_run}"
   link_file "${dotfiles_root}/gemini/settings.json" "${setup_home}/.gemini/settings.json" "${dry_run}"
@@ -47,7 +46,6 @@ setup_links() {
 
   make_directory "${setup_home}/.claude" "${dry_run}"
   link_file "${dotfiles_root}/claude/settings.json" "${setup_home}/.claude/settings.json" "${dry_run}"
-  link_file "${dotfiles_root}/claude/commands" "${setup_home}/.claude/commands" "${dry_run}"
 
   local rules_composer="${dotfiles_root}/ai-rules/scripts/compose-rules.sh"
   if [ ! -f "${rules_composer}" ]; then

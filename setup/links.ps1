@@ -69,10 +69,6 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "codex\rules\user.rules"
     },
     @{
-      Link = Join-Path $setupContext.HomeDir ".codex\prompts"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\prompts"
-    },
-    @{
       Link = Join-Path $setupContext.HomeDir ".gemini\settings.json"
       Target = Join-Path $setupContext.DotfilesRoot "gemini\settings.json"
     },
@@ -83,10 +79,6 @@ try {
     @{
       Link = Join-Path $setupContext.HomeDir ".claude\settings.json"
       Target = Join-Path $setupContext.DotfilesRoot "claude\settings.json"
-    },
-    @{
-      Link = Join-Path $setupContext.HomeDir ".claude\commands"
-      Target = Join-Path $setupContext.DotfilesRoot "claude\commands"
     }
   )
 
