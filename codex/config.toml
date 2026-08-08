@@ -39,7 +39,7 @@ status_line = [
   "model-with-reasoning",
   "project-name",
   "git-branch",
-  "context-used",
+  "context-remaining",
   "five-hour-limit",
   "weekly-limit",
 ]
