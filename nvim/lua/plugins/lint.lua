@@ -1,7 +1,7 @@
 return {
   {
     'mfussenegger/nvim-lint',
-    event = { 'BufWritePost', 'BufReadPost', 'InsertLeave' },
+    event = { 'BufWritePost' },
     config = function()
       local lint = require('lint')
       lint.linters.textlint = require('plugins.lint.linters.textlint')
@@ -35,7 +35,7 @@ return {
         end
       end
 
-      vim.api.nvim_create_autocmd({ 'BufWritePost', 'BufReadPost', 'InsertLeave' }, {
+      vim.api.nvim_create_autocmd({ 'BufWritePost' }, {
         callback = function()
           safe_try_lint()
         end,
