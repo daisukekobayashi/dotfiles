@@ -359,6 +359,7 @@ return {
         'cpptools',
         'clang-format',
         'codelldb',
+        'debugpy',
         'ruff',
         'black',
         'isort',

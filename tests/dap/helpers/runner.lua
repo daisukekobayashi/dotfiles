@@ -409,6 +409,7 @@ local function run_dap(language, target, fixture)
       program = fixture .. '/main.py',
       cwd = fixture,
       console = 'internalConsole',
+      pythonPath = target == 'local' and require_env('DAP_E2E_PYTHON') or nil,
     }
   elseif language == 'node' and (target == 'local' or target == 'docker' or target == 'compose') then
     config = {

@@ -151,11 +151,14 @@ dap_e2e_python_path() {
 }
 
 dap_e2e_local_python_preflight() {
-  local python
+  local adapter python
   python="$(dap_e2e_python_path)" || skip "python is required for this DAP E2E test"
+  adapter="$(dap_e2e_mason_bin_path debugpy-adapter)" || \
+    skip "debugpy-adapter is required for local Python DAP E2E"
 
-  "${python}" -c 'import debugpy' >/dev/null 2>&1 || \
-    skip "debugpy is required in ${python} for local Python DAP E2E"
+  DAP_E2E_PYTHON="${python}"
+  PATH="$(dirname "${adapter}"):${PATH}"
+  export DAP_E2E_PYTHON PATH
 }
 
 dap_e2e_mason_bin_path() {
