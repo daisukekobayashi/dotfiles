@@ -79,20 +79,50 @@ return {
         },
       })
       local runner = require('quarto.runner')
-      vim.keymap.set(
-        'n',
-        '<localleader>qp',
-        quarto.quartoPreview,
-        { desc = 'Preview the Quarto document', silent = true, noremap = true }
-      )
-      vim.keymap.set('n', '<localleader>rc', runner.run_cell, { desc = 'run cell', silent = true })
-      vim.keymap.set('n', '<localleader>ra', runner.run_above, { desc = 'run cell and above', silent = true })
-      vim.keymap.set('n', '<localleader>rA', runner.run_all, { desc = 'run all cells', silent = true })
-      vim.keymap.set('n', '<localleader>rl', runner.run_line, { desc = 'run line', silent = true })
-      vim.keymap.set('v', '<localleader>r', runner.run_range, { desc = 'run visual range', silent = true })
-      vim.keymap.set('n', '<localleader>RA', function()
-        runner.run_all(true)
-      end, { desc = 'run all cells of all languages', silent = true })
+
+      local function is_quarto_document(bufnr)
+        local filetype = vim.bo[bufnr].filetype
+        if filetype == 'quarto' then
+          return true
+        elseif filetype ~= 'markdown' then
+          return false
+        end
+
+        local path = vim.api.nvim_buf_get_name(bufnr)
+        return path:match('%.qmd$') ~= nil
+          or path:match('%.ipynb$') ~= nil
+          or vim.fs.root(bufnr, { '_quarto.yml' }) ~= nil
+      end
+
+      local function set_quarto_keymaps(bufnr)
+        local function map(mode, lhs, rhs, desc)
+          vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc, silent = true })
+        end
+
+        map('n', '<localleader>qp', quarto.quartoPreview, 'Preview the Quarto document')
+        map('n', '<localleader>rc', runner.run_cell, 'run cell')
+        map('n', '<localleader>ra', runner.run_above, 'run cell and above')
+        map('n', '<localleader>rA', runner.run_all, 'run all cells')
+        map('n', '<localleader>rl', runner.run_line, 'run line')
+        map('v', '<localleader>r', runner.run_range, 'run visual range')
+        map('n', '<localleader>RA', function()
+          runner.run_all(true)
+        end, 'run all cells of all languages')
+      end
+
+      vim.api.nvim_create_autocmd('FileType', {
+        group = vim.api.nvim_create_augroup('quarto-keymaps', { clear = true }),
+        pattern = { 'quarto', 'markdown' },
+        callback = function(args)
+          if is_quarto_document(args.buf) then
+            set_quarto_keymaps(args.buf)
+          end
+        end,
+      })
+
+      if is_quarto_document(0) then
+        set_quarto_keymaps(0)
+      end
     end,
   },
 
