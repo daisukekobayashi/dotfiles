@@ -48,7 +48,7 @@ return {
       'jmbuhr/otter.nvim',
       'nvim-treesitter/nvim-treesitter',
     },
-    ft = { 'quarto', 'markdown' },
+    ft = { 'quarto' },
     config = function()
       local quarto = require('quarto')
       quarto.setup({
