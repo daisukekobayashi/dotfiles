@@ -46,15 +46,6 @@ return {
   },
 
   {
-    'OXY2DEV/markview.nvim',
-    ft = { 'markdown', 'quarto', 'rmd' },
-    dependencies = {
-      'nvim-treesitter/nvim-treesitter',
-    },
-    opts = {},
-  },
-
-  {
     'nvim-treesitter/nvim-treesitter-context',
     event = { 'BufNewFile', 'BufReadPre' },
     dependencies = {
