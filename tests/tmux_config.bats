@@ -125,21 +125,43 @@ if (config.includes("@floax-bind")) {
   throw new Error("floax key options should be removed with the floax plugin");
 }
 
-const continuumIndex = config.indexOf("set -g @plugin '\''tmux-plugins/tmux-continuum'\''");
 const toggleIndex = config.indexOf("set -g @plugin '\''loichyan/tmux-toggle-popup'\''");
 const tpmCommandIndex = config.indexOf("~/.tmux/plugins/tpm/tpm");
 
 if (toggleIndex === -1) {
   throw new Error("tmux-toggle-popup plugin is missing");
 }
-if (continuumIndex === -1 || continuumIndex > toggleIndex) {
-  throw new Error("tmux-toggle-popup should load after tmux-continuum");
-}
 if (tpmCommandIndex === -1 || toggleIndex > tpmCommandIndex) {
   throw new Error("tmux-toggle-popup should be listed before TPM initialization");
 }
 if (config.includes("@popup-autostart on")) {
   throw new Error("popup config should not autostart the popup server");
+}
+' "$(repo_root)/.tmux.conf"
+
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux loads continuum after themes and every other TPM plugin" {
+  run node -e '
+const fs = require("fs");
+const config = fs.readFileSync(process.argv[1], "utf8");
+const plugins = [...config.matchAll(/^set -g @plugin '\''([^'\'']+)'\''$/gm)].map((match) => match[1]);
+const continuum = "tmux-plugins/tmux-continuum";
+const resurrect = "tmux-plugins/tmux-resurrect";
+const ukiyo = "Nybkox/tmux-ukiyo";
+
+if (!plugins.includes(resurrect)) {
+  throw new Error("tmux-resurrect plugin is missing");
+}
+if (!plugins.includes(ukiyo)) {
+  throw new Error("tmux-ukiyo plugin is missing");
+}
+if (plugins.at(-1) !== continuum) {
+  throw new Error("tmux-continuum must load after themes and every other TPM plugin");
+}
+if (plugins.indexOf(resurrect) > plugins.indexOf(continuum)) {
+  throw new Error("tmux-resurrect must load before tmux-continuum");
 }
 ' "$(repo_root)/.tmux.conf"
 
