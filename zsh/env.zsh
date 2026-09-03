@@ -9,6 +9,19 @@ export LANG=en_US.UTF-8
 export LC_CTYPE=en_US.UTF-8
 export AUTOFEATURE=true
 
+load_dotfiles_env() {
+  emulate -L zsh
+
+  local env_file="$HOME/.dotfiles/.env"
+  if [[ ! -r "$env_file" ]]; then
+    print -u2 -- "load_dotfiles_env: cannot read $env_file"
+    return 1
+  fi
+
+  setopt allexport
+  source "$env_file"
+}
+
 unamestr="$(uname)"
 if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
    [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||

@@ -1,5 +1,1 @@
-if [ -f "$HOME/.dotfiles/.env" ]; then
-  set -a
-  . "$HOME/.dotfiles/.env"
-  set +a
-fi
+# Service credentials are loaded explicitly with load_dotfiles_env.
