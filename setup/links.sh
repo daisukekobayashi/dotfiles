@@ -37,7 +37,8 @@ setup_links() {
   make_directory "${setup_home}/.codex/rules" "${dry_run}"
   link_file "${dotfiles_root}/codex/config.toml" "${setup_home}/.codex/config.toml" "${dry_run}"
   link_file "${dotfiles_root}/codex/hooks.json" "${setup_home}/.codex/hooks.json" "${dry_run}"
-  link_file "${dotfiles_root}/codex/azure.config.toml" "${setup_home}/.codex/azure.config.toml" "${dry_run}"
+  link_file "${dotfiles_root}/codex/azure_gpt-5_6-sol_xhigh.config.toml" "${setup_home}/.codex/azure_gpt-5_6-sol_xhigh.config.toml" "${dry_run}"
+  link_file "${dotfiles_root}/codex/azure_gpt-5_6-luna_max.config.toml" "${setup_home}/.codex/azure_gpt-5_6-luna_max.config.toml" "${dry_run}"
   link_file "${dotfiles_root}/codex/rules/user.rules" "${setup_home}/.codex/rules/user.rules" "${dry_run}"
 
   make_directory "${setup_home}/.gemini" "${dry_run}"

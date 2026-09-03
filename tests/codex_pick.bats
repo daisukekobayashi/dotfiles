@@ -12,8 +12,12 @@ setup() {
   CODEX_LOG="${TEST_ROOT}/codex.log"
   CODEX_DEBUG_LOG="${TEST_ROOT}/codex-debug.log"
   FZF_CHOICES="${TEST_ROOT}/fzf-choices"
+  FZF_LOG="${TEST_ROOT}/fzf.log"
+  CODEX_HOME="${TEST_ROOT}/codex-home"
 
-  mkdir -p "${FAKE_BIN}"
+  mkdir -p "${FAKE_BIN}" "${CODEX_HOME}"
+  touch "${CODEX_HOME}/azure_gpt-5_6-sol_xhigh.config.toml"
+  touch "${CODEX_HOME}/azure_gpt-5_6-luna_max.config.toml"
   ln -s "$(command -v jq)" "${FAKE_BIN}/jq"
   write_fake_codex
   write_fake_fzf
@@ -49,6 +53,18 @@ catalog_json() {
     {"effort":"xhigh","description":"Extra high depth"},
     {"effort":"max","description":"Maximum depth"}
   ]},
+  {"slug":"gpt-5.5","display_name":"GPT-5.5","visibility":"list","default_reasoning_level":"medium","supported_reasoning_levels":[
+    {"effort":"low","description":"Fast responses"},
+    {"effort":"medium","description":"Balanced"},
+    {"effort":"high","description":"Greater depth"},
+    {"effort":"xhigh","description":"Extra high depth"}
+  ]},
+  {"slug":"gpt-5.3-codex-spark","display_name":"GPT-5.3-Codex-Spark","visibility":"list","default_reasoning_level":"medium","supported_reasoning_levels":[
+    {"effort":"low","description":"Fast responses"},
+    {"effort":"medium","description":"Balanced"},
+    {"effort":"high","description":"Greater depth"},
+    {"effort":"xhigh","description":"Extra high depth"}
+  ]},
   {"slug":"codex-auto-review","display_name":"Codex Auto Review","visibility":"hide","default_reasoning_level":"medium","supported_reasoning_levels":[
     {"effort":"medium","description":"Balanced"}
   ]}
@@ -71,10 +87,15 @@ write_fake_codex() {
 #!/usr/bin/env bash
 set -euo pipefail
 
+original_args=("$@")
+if [[ "${1:-}" == "--profile" ]]; then
+  shift 2
+fi
+
 if [[ "${1:-}" == "debug" && "${2:-}" == "models" ]]; then
   {
     printf 'argv='
-    printf '<%s>' "$@"
+    printf '<%s>' "${original_args[@]}"
     printf '\n'
   } >> "${CODEX_DEBUG_LOG}"
 
@@ -93,7 +114,7 @@ fi
 
 {
   printf 'argv='
-  printf '<%s>' "$@"
+  printf '<%s>' "${original_args[@]}"
   printf '\n'
 } > "${CODEX_LOG}"
 BASH
@@ -104,6 +125,12 @@ write_fake_fzf() {
   cat > "${FAKE_BIN}/fzf" <<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail
+
+{
+  printf 'argv='
+  printf '<%s>' "$@"
+  printf '\n'
+} >> "${FZF_LOG}"
 
 mapfile -t rows
 IFS= read -r choice < "${FZF_CHOICES}"
@@ -134,6 +161,8 @@ run_picker() {
     CODEX_LOG="${CODEX_LOG}" \
     CODEX_DEBUG_LOG="${CODEX_DEBUG_LOG}" \
     FZF_CHOICES="${FZF_CHOICES}" \
+    FZF_LOG="${FZF_LOG}" \
+    CODEX_HOME="${CODEX_HOME}" \
     "${ROOT}/tools/codex/codex-pick" "$@"
 }
 
@@ -141,7 +170,7 @@ run_picker() {
   run env PATH="/usr/bin:/bin" "${ROOT}/tools/codex/codex-pick" --help
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"codex-pick [MODEL [EFFORT]] [-- CODEX_ARGS...]"* ]]
+  [[ "$output" == *"codex-pick [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]"* ]]
 }
 
 @test "codex-pick resolves a unique model suffix and forwards Codex arguments" {
@@ -158,13 +187,67 @@ run_picker() {
   grep -F "argv=<-m><gpt-5.6-sol><-c><model_reasoning_effort='max'>" "${CODEX_LOG}"
 }
 
-@test "codex-pick selects both missing values interactively" {
-  printf '%s\n' gpt-5.6-terra high > "${FZF_CHOICES}"
+@test "codex-pick selects a ChatGPT model and effort in one step" {
+  printf '%s\n' chatgpt_gpt-5.6-terra_high > "${FZF_CHOICES}"
 
   run_picker
 
   [ "$status" -eq 0 ]
   grep -F "argv=<-m><gpt-5.6-terra><-c><model_reasoning_effort='high'>" "${CODEX_LOG}"
+}
+
+@test "codex-pick passes an initial query to the configuration picker" {
+  printf '%s\n' azure_gpt-5_6-luna_max > "${FZF_CHOICES}"
+
+  run_picker --query azure
+
+  [ "$status" -eq 0 ]
+  grep -F -- '<--query=azure>' "${FZF_LOG}"
+}
+
+@test "codex-pick offers GPT-5.3-Codex-Spark in the ChatGPT picker" {
+  printf '%s\n' chatgpt_gpt-5.3-codex-spark_xhigh > "${FZF_CHOICES}"
+
+  run_picker
+
+  [ "$status" -eq 0 ]
+  grep -F "argv=<-m><gpt-5.3-codex-spark><-c><model_reasoning_effort='xhigh'>" "${CODEX_LOG}"
+}
+
+@test "codex-pick excludes older non-Spark models from the ChatGPT picker" {
+  printf '%s\n' chatgpt_gpt-5.5_high > "${FZF_CHOICES}"
+
+  run_picker
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fake fzf choice not found: chatgpt_gpt-5.5_high"* ]]
+  [ ! -e "${CODEX_LOG}" ]
+}
+
+@test "codex-pick applies an interactively selected profile to launch" {
+  printf '%s\n' azure_gpt-5_6-luna_max > "${FZF_CHOICES}"
+
+  run_picker
+
+  [ "$status" -eq 0 ]
+  grep -Fx 'argv=<debug><models>' "${CODEX_DEBUG_LOG}"
+  grep -Fx "argv=<--profile><azure_gpt-5_6-luna_max>" "${CODEX_LOG}"
+}
+
+@test "codex-pick launches an explicit profile without model overrides" {
+  run_picker --profile azure_gpt-5_6-sol_xhigh -- -C /tmp/project
+
+  [ "$status" -eq 0 ]
+  [ ! -e "${CODEX_DEBUG_LOG}" ]
+  grep -Fx "argv=<--profile><azure_gpt-5_6-sol_xhigh><-C></tmp/project>" "${CODEX_LOG}"
+}
+
+@test "codex-pick rejects a missing profile" {
+  run_picker --profile missing terra high
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Profile not found: missing"* ]]
+  [ ! -e "${CODEX_LOG}" ]
 }
 
 @test "codex-pick selects only effort when model is supplied" {
@@ -176,6 +259,15 @@ run_picker() {
   grep -F "argv=<-m><gpt-5.6-sol><-c><model_reasoning_effort='ultra'>" "${CODEX_LOG}"
 }
 
+@test "codex-pick passes an initial query to the effort picker" {
+  printf '%s\n' high > "${FZF_CHOICES}"
+
+  run_picker -q high sol
+
+  [ "$status" -eq 0 ]
+  grep -F -- '<--query=high>' "${FZF_LOG}"
+}
+
 @test "codex-pick falls back to the bundled catalog" {
   run env \
     PATH="${FAKE_BIN}:/usr/bin:/bin" \
@@ -184,6 +276,7 @@ run_picker() {
     CODEX_LOG="${CODEX_LOG}" \
     CODEX_DEBUG_LOG="${CODEX_DEBUG_LOG}" \
     FZF_CHOICES="${FZF_CHOICES}" \
+    CODEX_HOME="${CODEX_HOME}" \
     "${ROOT}/tools/codex/codex-pick" luna medium
 
   [ "$status" -eq 0 ]
@@ -198,6 +291,7 @@ run_picker() {
     CODEX_LOG="${CODEX_LOG}" \
     CODEX_DEBUG_LOG="${CODEX_DEBUG_LOG}" \
     FZF_CHOICES="${FZF_CHOICES}" \
+    CODEX_HOME="${CODEX_HOME}" \
     "${ROOT}/tools/codex/codex-pick" sol medium
 
   [ "$status" -eq 1 ]
@@ -221,6 +315,7 @@ run_picker() {
     CODEX_LOG="${CODEX_LOG}" \
     CODEX_DEBUG_LOG="${CODEX_DEBUG_LOG}" \
     FZF_CHOICES="${FZF_CHOICES}" \
+    CODEX_HOME="${CODEX_HOME}" \
     "${ROOT}/tools/codex/codex-pick" terra medium
 
   [ "$status" -eq 2 ]
@@ -239,7 +334,7 @@ run_picker() {
   [ ! -e "${CODEX_LOG}" ]
 }
 
-@test "codex-pick preserves model picker cancellation status" {
+@test "codex-pick preserves configuration picker cancellation status" {
   printf '%s\n' __CANCEL__ > "${FZF_CHOICES}"
 
   run_picker

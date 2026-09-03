@@ -3,12 +3,16 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: codex-pick [MODEL [EFFORT]] [-- CODEX_ARGS...]
+Usage: codex-pick [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]
 
-Choose a Codex model and reasoning effort for one invocation.
+Choose a Codex launch configuration for one invocation.
 
+PROFILE names a $CODEX_HOME/PROFILE.config.toml file.
+QUERY sets the initial fzf search query for an interactive picker.
 MODEL may be a full model slug or an unambiguous slug suffix.
-Missing MODEL or EFFORT values are selected interactively with fzf.
+With no arguments, fzf selects either a ChatGPT model/effort combination or a
+named profile. An explicitly named profile launches without model overrides.
+When MODEL is supplied, a missing EFFORT is selected interactively with fzf.
 Arguments after -- are forwarded to codex unchanged.
 EOF
 }
@@ -25,6 +29,86 @@ require_command() {
   if ! command -v "${command_name}" >/dev/null 2>&1; then
     die 127 "Required command not found: ${command_name}"
   fi
+}
+
+profile_rows() {
+  local codex_home="$1"
+  local file name
+  local -a files=()
+
+  shopt -s nullglob
+  files=("${codex_home}"/*.config.toml)
+  shopt -u nullglob
+
+  for file in "${files[@]}"; do
+    [[ -f "${file}" ]] || continue
+    name="${file##*/}"
+    name="${name%.config.toml}"
+    if [[ "${name}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+      printf '%s\tprofile\t-\t-\tCodex profile\t%s\n' "${name}" "${file}"
+    fi
+  done
+}
+
+chatgpt_rows() {
+  local catalog="$1"
+
+  jq -r '
+    .models[]
+    | select(
+        .visibility == "list"
+        and (
+          .slug == "gpt-5.6"
+          or (.slug | startswith("gpt-5.6-"))
+          or .slug == "gpt-5.3-codex-spark"
+        )
+      ) as $model
+    | $model.supported_reasoning_levels[]
+    | [
+        ("chatgpt_" + $model.slug + "_" + .effort),
+        "chatgpt",
+        $model.slug,
+        .effort,
+        $model.display_name,
+        .description,
+        (if .effort == $model.default_reasoning_level then "default effort" else "" end)
+      ]
+    | @tsv
+  ' <<< "${catalog}"
+}
+
+validate_profile() {
+  local profile="$1"
+  local codex_home="$2"
+
+  if [[ ! "${profile}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    die 2 "Invalid profile name: ${profile}. Use letters, numbers, hyphens, or underscores"
+  fi
+
+  if [[ ! -f "${codex_home}/${profile}.config.toml" ]]; then
+    die 2 "Profile not found: ${profile} (${codex_home}/${profile}.config.toml)"
+  fi
+}
+
+pick_configuration() {
+  local catalog="$1"
+  local codex_home="$2"
+  local initial_query="$3"
+  local rows
+  local selected
+
+  rows="$(
+    profile_rows "${codex_home}"
+    chatgpt_rows "${catalog}"
+  )"
+
+  selected="$(
+    printf '%s\n' "${rows}" |
+      fzf --delimiter=$'\t' --with-nth=1,5,6,7 --prompt='Config> ' \
+        --query="${initial_query}"
+  )" || return $?
+
+  printf '%s\n' "${selected}"
 }
 
 load_catalog() {
@@ -91,27 +175,6 @@ resolve_model() {
   esac
 }
 
-pick_model() {
-  local catalog="$1"
-  local rows selected
-
-  rows="$(
-    jq -r '
-      .models[]
-      | select(.visibility == "list")
-      | [.slug, .display_name, ("default: " + .default_reasoning_level)]
-      | @tsv
-    ' <<< "${catalog}"
-  )"
-
-  selected="$(
-    printf '%s\n' "${rows}" |
-      fzf --delimiter=$'\t' --with-nth=2,1,3 --prompt='Model> '
-  )" || return $?
-
-  printf '%s\n' "${selected%%$'\t'*}"
-}
-
 effort_list() {
   local model="$1"
   local catalog="$2"
@@ -142,6 +205,7 @@ validate_effort() {
 pick_effort() {
   local model="$1"
   local catalog="$2"
+  local initial_query="$3"
   local rows selected
 
   rows="$(
@@ -160,61 +224,116 @@ pick_effort() {
 
   selected="$(
     printf '%s\n' "${rows}" |
-      fzf --delimiter=$'\t' --with-nth=1,2,3 --prompt='Effort> '
+      fzf --delimiter=$'\t' --with-nth=1,2,3 --prompt='Effort> ' \
+        --query="${initial_query}"
   )" || return $?
 
   printf '%s\n' "${selected%%$'\t'*}"
 }
 
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  usage
-  exit 0
-fi
-
+profile_query=""
+profile_requested=0
+initial_query=""
 model_query=""
 effort_query=""
+declare -a positionals=()
 declare -a codex_args=()
 
-if [[ $# -gt 0 && "$1" != "--" ]]; then
-  model_query="$1"
-  shift
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -p | --profile)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        die 2 "$1 requires a profile name"
+      fi
+      profile_query="$2"
+      profile_requested=1
+      shift 2
+      ;;
+    -q | --query)
+      if [[ $# -lt 2 ]]; then
+        die 2 "$1 requires a query"
+      fi
+      initial_query="$2"
+      shift 2
+      ;;
+    --query=*)
+      initial_query="${1#--query=}"
+      shift
+      ;;
+    --profile=*)
+      profile_query="${1#--profile=}"
+      if [[ -z "${profile_query}" ]]; then
+        die 2 "--profile requires a profile name"
+      fi
+      profile_requested=1
+      shift
+      ;;
+    --)
+      shift
+      codex_args=("$@")
+      break
+      ;;
+    *)
+      positionals+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ "${#positionals[@]}" -gt 2 ]]; then
+  die 2 "Unexpected argument: ${positionals[2]}. Place Codex arguments after --"
 fi
 
-if [[ $# -gt 0 && "$1" != "--" ]]; then
-  effort_query="$1"
-  shift
-fi
-
-if [[ $# -gt 0 ]]; then
-  if [[ "$1" != "--" ]]; then
-    die 2 "Unexpected argument: $1. Place Codex arguments after --"
-  fi
-  shift
-  codex_args=("$@")
-fi
+model_query="${positionals[0]:-}"
+effort_query="${positionals[1]:-}"
+codex_home="${CODEX_HOME:-${HOME}/.codex}"
 
 require_command codex
-require_command jq
-if [[ -z "${model_query}" || -z "${effort_query}" ]]; then
-  require_command fzf
+
+profile=""
+if [[ "${profile_requested}" -eq 1 ]]; then
+  validate_profile "${profile_query}" "${codex_home}"
+  profile="${profile_query}"
 fi
 
+if [[ -n "${profile}" && -z "${model_query}" ]]; then
+  exec codex --profile "${profile}" "${codex_args[@]}"
+fi
+
+require_command jq
 catalog="$(load_catalog)"
 
-if [[ -n "${model_query}" ]]; then
-  model="$(resolve_model "${model_query}" "${catalog}")"
+if [[ -z "${model_query}" ]]; then
+  require_command fzf
+  configuration="$(pick_configuration "${catalog}" "${codex_home}" "${initial_query}")" || exit $?
+  IFS=$'\t' read -r configuration_name configuration_kind model effort _ <<< "${configuration}"
+
+  if [[ "${configuration_kind}" == "profile" ]]; then
+    exec codex --profile "${configuration_name}" "${codex_args[@]}"
+  fi
 else
-  model="$(pick_model "${catalog}")" || exit $?
+  model="$(resolve_model "${model_query}" "${catalog}")"
+
+  if [[ -n "${effort_query}" ]]; then
+    effort="${effort_query}"
+    validate_effort "${model}" "${effort}" "${catalog}"
+  else
+    require_command fzf
+    effort="$(pick_effort "${model}" "${catalog}" "${initial_query}")" || exit $?
+  fi
 fi
 
-if [[ -n "${effort_query}" ]]; then
-  effort="${effort_query}"
-  validate_effort "${model}" "${effort}" "${catalog}"
-else
-  effort="$(pick_effort "${model}" "${catalog}")" || exit $?
+declare -a profile_args=()
+if [[ -n "${profile}" ]]; then
+  profile_args=(--profile "${profile}")
 fi
 
 exec codex \
+  "${profile_args[@]}" \
   -m "${model}" \
   -c "model_reasoning_effort='${effort}'" \
   "${codex_args[@]}"

@@ -61,8 +61,12 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "codex\hooks.json"
     },
     @{
-      Link = Join-Path $setupContext.HomeDir ".codex\azure.config.toml"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\azure.config.toml"
+      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-5_6-sol_xhigh.config.toml"
+      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-5_6-sol_xhigh.config.toml"
+    },
+    @{
+      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-5_6-luna_max.config.toml"
+      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-5_6-luna_max.config.toml"
     },
     @{
       Link = Join-Path $setupContext.HomeDir ".codex\rules\user.rules"

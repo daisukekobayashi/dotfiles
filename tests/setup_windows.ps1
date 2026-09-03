@@ -108,10 +108,13 @@ Invoke-Test "Windows links setup wires psmux config to the user profile" {
   Assert-True ($linksScript -match 'tmux\\psmux\.conf') "setup\links.ps1 does not target tmux\psmux.conf"
 }
 
-Invoke-Test "Windows links setup wires the Codex Azure profile config" {
+Invoke-Test "Windows links setup wires the Codex Azure profile configs" {
   $linksScript = Get-Content -Raw (Join-Path $RepoRoot "setup\links.ps1")
-  Assert-True ($linksScript -match '\.codex\\azure\.config\.toml') "setup\links.ps1 does not link ~/.codex/azure.config.toml"
-  Assert-True ($linksScript -match 'codex\\azure\.config\.toml') "setup\links.ps1 does not target codex\azure.config.toml"
+  Assert-True ($linksScript -match '\.codex\\azure_gpt-5_6-sol_xhigh\.config\.toml') "setup\links.ps1 does not link ~/.codex/azure_gpt-5_6-sol_xhigh.config.toml"
+  Assert-True ($linksScript -match 'codex\\azure_gpt-5_6-sol_xhigh\.config\.toml') "setup\links.ps1 does not target codex\azure_gpt-5_6-sol_xhigh.config.toml"
+  Assert-True ($linksScript -match '\.codex\\azure_gpt-5_6-luna_max\.config\.toml') "setup\links.ps1 does not link ~/.codex/azure_gpt-5_6-luna_max.config.toml"
+  Assert-True ($linksScript -match 'codex\\azure_gpt-5_6-luna_max\.config\.toml') "setup\links.ps1 does not target codex\azure_gpt-5_6-luna_max.config.toml"
+  Assert-True ($linksScript -notmatch '\.codex\\azure\.config\.toml') "setup\links.ps1 still links ~/.codex/azure.config.toml"
 }
 
 Invoke-Test "Windows links setup wires the Codex hooks config" {
