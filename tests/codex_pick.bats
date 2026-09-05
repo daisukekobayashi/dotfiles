@@ -30,6 +30,14 @@ teardown() {
 catalog_json() {
   cat <<'JSON'
 {"models":[
+  {"slug":"gpt-6-astra","display_name":"GPT-6-Astra","visibility":"list","default_reasoning_level":"low","supported_reasoning_levels":[
+    {"effort":"low","description":"Fast responses"},
+    {"effort":"medium","description":"Balanced"},
+    {"effort":"high","description":"Greater depth"},
+    {"effort":"xhigh","description":"Extra high depth"},
+    {"effort":"max","description":"Maximum depth"},
+    {"effort":"ultra","description":"Automatic delegation"}
+  ]},
   {"slug":"gpt-5.6-sol","display_name":"GPT-5.6-Sol","visibility":"list","default_reasoning_level":"low","supported_reasoning_levels":[
     {"effort":"low","description":"Fast responses"},
     {"effort":"medium","description":"Balanced"},
@@ -212,6 +220,15 @@ run_picker() {
 
   [ "$status" -eq 0 ]
   grep -F "argv=<-m><gpt-5.3-codex-spark><-c><model_reasoning_effort='xhigh'>" "${CODEX_LOG}"
+}
+
+@test "codex-pick offers GPT-6-Astra in the ChatGPT picker" {
+  printf '%s\n' chatgpt_gpt-6-astra_medium > "${FZF_CHOICES}"
+
+  run_picker -q astra
+
+  [ "$status" -eq 0 ]
+  grep -Fx "argv=<-m><gpt-6-astra><-c><model_reasoning_effort='medium'>" "${CODEX_LOG}"
 }
 
 @test "codex-pick excludes older non-Spark models from the ChatGPT picker" {
