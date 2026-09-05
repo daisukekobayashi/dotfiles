@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Preflight With Docs"
+  short_description: "Focused design questions with glossary and ADRs"
+  default_prompt: "Use $design-preflight-with-docs to clarify this design and capture durable terminology and decisions."

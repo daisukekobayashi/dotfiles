@@ -48,6 +48,7 @@
   "local": [
     "adversarial-review",
     "design-preflight",
+    "design-preflight-with-docs",
     "execution-context-first-repo-onboarding",
     "find-unknowns",
     "local-runtime-port-isolation",
