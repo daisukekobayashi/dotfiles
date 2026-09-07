@@ -1,9 +1,9 @@
 ---
-name: github-merge-cleanup
+name: github-worktree-cleanup
 description: Use when the user says the work is already merged or otherwise complete and wants to safely clean up the local feature branch and worktree that were used for that task in the current repository.
 ---
 
-# GitHub Merge Cleanup
+# GitHub Worktree Cleanup
 
 ## Workflow
 

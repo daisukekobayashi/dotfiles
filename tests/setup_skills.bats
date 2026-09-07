@@ -144,13 +144,13 @@ teardown() {
 }
 
 @test "github issue workflow skill documents type-prefixed branch naming" {
-  run grep -F "\`type/<id>-<slug>\`" "$(repo_root)/skills/local/github-issue-worktree/SKILL.md"
+  run grep -F "\`type/<id>-<slug>\`" "$(repo_root)/skills/local/github-issue-start/SKILL.md"
   [ "$status" -eq 0 ]
 
-  run grep -F 'current-repo only' "$(repo_root)/skills/local/github-issue-worktree/SKILL.md"
+  run grep -F 'current-repo only' "$(repo_root)/skills/local/github-issue-start/SKILL.md"
   [ "$status" -eq 0 ]
 
-  run grep -F 'conventional-commit-style branch prefix' "$(repo_root)/skills/local/github-issue-worktree/SKILL.md"
+  run grep -F 'conventional-commit-style branch prefix' "$(repo_root)/skills/local/github-issue-start/SKILL.md"
   [ "$status" -eq 0 ]
 }
 

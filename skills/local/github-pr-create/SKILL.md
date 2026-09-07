@@ -1,9 +1,9 @@
 ---
-name: github-pr
-description: Use only when the user explicitly invokes `$github-pr` or names `github-pr` for creating or resolving a GitHub pull request from the current branch without committing, pushing, or requesting review.
+name: github-pr-create
+description: Use only when the user explicitly invokes `$github-pr-create` or names `github-pr-create` for creating or resolving a GitHub pull request from the current branch without committing, pushing, or requesting review.
 ---
 
-# GitHub PR
+# GitHub PR Create
 
 ## Scope
 

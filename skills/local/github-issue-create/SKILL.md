@@ -53,7 +53,7 @@ issues easier to implement and review.
    - a short summary of each issue
    - dependencies or suggested implementation order
    - safe parallel groups, if any
-   - the recommended next command, such as `$github-issue-worktree #<n>` or `$github-issue-worktree #<a> #<b>`
+   - the recommended next command, such as `$github-issue-start #<n>` or `$github-issue-start #<a> #<b>`
 
 ## Guardrails
 

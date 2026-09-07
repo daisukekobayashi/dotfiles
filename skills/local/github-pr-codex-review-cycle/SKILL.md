@@ -17,7 +17,7 @@ workflows here.
 
 Required sub-skills:
 - `github-pr-publish`
-- `github-pr-codex-review-request`
+- `github-pr-review-request`
 - `github-pr-ai-review-followup`
 
 Use `github:gh-address-comments` whenever thread-level review state, inline
@@ -65,7 +65,7 @@ Still stop and ask before:
 2. Use `github-pr-publish`.
    - Preserve that skill's verification, staging, commit, push, and PR rules.
    - Capture the PR number, PR URL, branch, commit, and verification result.
-3. Use `github-pr-codex-review-request` for the resolved PR.
+3. Use `github-pr-review-request` with provider `codex` for the resolved PR.
    - Treat `Codex acknowledged` as acknowledgement only.
    - Treat `Codex request posted but not acknowledged` as a blocker unless the
      user explicitly asks to continue waiting or retry.

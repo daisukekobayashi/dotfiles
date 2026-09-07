@@ -34,7 +34,7 @@ This skill is not for:
    - Capture the branch, commit, push target, PR number/URL, and verification result.
    - If publication fails or is blocked, stop before requesting review or moving
      to another target.
-3. Use `github-pr-ai-review-request` for that exact PR.
+3. Use `github-pr-review-request` with provider `both` for that exact PR.
    - An explicit request to run this combined workflow includes requesting both
      reviews, subject to governing approval rules.
    - Let that skill handle both requests and their separate verification.

@@ -78,8 +78,8 @@ Target layout:
 ```text
 skills/
   local/
-    github-pr/
-    github-issue-worktree/
+    github-pr-create/
+    github-issue-start/
     ...
   profiles/
     base.json
@@ -97,6 +97,27 @@ skills/
 ```
 
 Custom skills live under `skills/local/<name>`.
+
+### GitHub Workflow Composition
+
+Issue tasks use `github-issue-create`, `github-issue-triage`,
+`github-issue-review`, and `github-issue-start` as needed. The start skill
+prepares an isolated worktree and continues implementation.
+`github-worktree-cleanup` removes completed local worktrees and branches after
+safety checks and approval.
+
+`github-pr-create` creates or reuses a PR from a published branch;
+`github-pr-publish` owns verification, commit, push, and PR creation.
+`github-pr-review` provides a read-only review. Request AI review with
+`$github-pr-review-request #123 codex`, `copilot`, or `both`. Provider-specific
+procedures live in that skill's `references/` directory.
+
+`github-pr-publish-and-ai-review-request` composes publication and requests to
+both providers. `github-pr-codex-review-cycle` publishes, requests Codex, waits
+for one review, prepares fixes through `github-pr-ai-review-followup`, publishes
+the verified fixes, and invokes its Writeback phase. It does not automatically
+request another review after fixes. Composite skills own ordering and handoffs;
+underlying skills own operation details.
 
 Do not add a separate external skill pool/catalog file. Profiles are the source of truth for curated external skill groups.
 
@@ -226,11 +247,11 @@ GitHub to Azure DevOps workflow mapping:
 | `github-issue-create` | `azure-devops-work-item-create` |
 | `github-issue-review` | `azure-devops-work-item-review` |
 | `github-issue-triage` | `azure-devops-work-item-triage` |
-| `github-issue-worktree` | `azure-devops-work-item-worktree` |
-| `github-pr` | `azure-devops-pr` |
+| `github-issue-start` | `azure-devops-work-item-worktree` |
+| `github-pr-create` | `azure-devops-pr` |
 | `github-pr-publish` | `azure-devops-pr-publish` |
 | `github-pr-review` | `azure-devops-pr-review` |
-| `github-merge-cleanup` | `azure-devops-merge-cleanup` |
+| `github-worktree-cleanup` | `azure-devops-merge-cleanup` |
 
 ### `frontend`
 

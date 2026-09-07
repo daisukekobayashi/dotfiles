@@ -1,9 +1,9 @@
 ---
-name: github-issue-worktree
+name: github-issue-start
 description: Use when the user wants to start implementation from one or more GitHub issue numbers in the current repository, especially requests involving multiple issue IDs, separate workstreams, parallel issue work, or isolated issue worktrees.
 ---
 
-# GitHub Issue Worktree
+# GitHub Issue Start
 
 ## Overview
 

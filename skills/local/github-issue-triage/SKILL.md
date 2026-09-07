@@ -47,7 +47,7 @@ not start implementation.
    - Mention likely conflict areas such as shared config modules, schemas, migrations, job orchestration, or the same UI files.
 7. Recommend the next step without starting work.
    - Give exactly one best next issue.
-   - If useful, suggest the follow-up command, for example `$github-issue-worktree #23`.
+   - If useful, suggest the follow-up command, for example `$github-issue-start #23`.
 
 ## Output Format
 
@@ -68,7 +68,7 @@ Use this structure:
 - <safe parallel grouping, or "No safe parallel split right now">
 
 **Next Step**
-- Start with `$github-issue-worktree #<n>` if the user wants to implement the top recommendation.
+- Start with `$github-issue-start #<n>` if the user wants to implement the top recommendation.
 ```
 
 Keep the report concise, but include enough reasoning that the recommendation

@@ -78,8 +78,8 @@ Codex の user skill は、OpenAI の Codex skills docs に合わせて `$HOME/.
 ```text
 skills/
   local/
-    github-pr/
-    github-issue-worktree/
+    github-pr-create/
+    github-issue-start/
     ...
   profiles/
     base.json
@@ -97,6 +97,27 @@ skills/
 ```
 
 自作 skill は `skills/local/<name>` に置きます。
+
+### GitHub ワークフローの構成
+
+Issue の仕事には、必要に応じて `github-issue-create`、
+`github-issue-triage`、`github-issue-review`、`github-issue-start` を使います。
+`start` は独立した worktree を準備し、実装まで進めます。
+`github-worktree-cleanup` は安全確認と承認を経て、完了した仕事のローカル
+worktree とブランチを削除します。
+
+`github-pr-create` は公開済みブランチから PR を作成または再利用し、
+`github-pr-publish` は検証・commit・push・PR 作成を担当します。
+`github-pr-review` は読み取り専用のレビューです。AI レビュー依頼は
+`$github-pr-review-request #123 codex`、`copilot`、`both` で対象を指定します。
+対象ごとの手順は、このスキルの `references/` に置きます。
+
+`github-pr-publish-and-ai-review-request` は公開と両方へのレビュー依頼を
+組み合わせます。`github-pr-codex-review-cycle` は公開、Codex への依頼、
+1回のレビュー待機、`github-pr-ai-review-followup` による修正準備、検証済み
+修正の公開、Writeback フェーズによる返信・解決を順に行います。修正後の
+再レビュー依頼は自動では行いません。複合スキルは順序と引き継ぎを担当し、
+個別の処理手順は基本スキルに集約します。
 
 外部 skill 用の pool/catalog ファイルは追加しません。Profile が curated external skill group の正本になります。
 
@@ -226,11 +247,11 @@ GitHub と Azure DevOps の workflow 対応:
 | `github-issue-create` | `azure-devops-work-item-create` |
 | `github-issue-review` | `azure-devops-work-item-review` |
 | `github-issue-triage` | `azure-devops-work-item-triage` |
-| `github-issue-worktree` | `azure-devops-work-item-worktree` |
-| `github-pr` | `azure-devops-pr` |
+| `github-issue-start` | `azure-devops-work-item-worktree` |
+| `github-pr-create` | `azure-devops-pr` |
 | `github-pr-publish` | `azure-devops-pr-publish` |
 | `github-pr-review` | `azure-devops-pr-review` |
-| `github-merge-cleanup` | `azure-devops-merge-cleanup` |
+| `github-worktree-cleanup` | `azure-devops-merge-cleanup` |
 
 ### `frontend`
 
