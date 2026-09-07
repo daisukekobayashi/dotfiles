@@ -80,21 +80,27 @@ Still stop and ask before:
    - If no actual review output appears within a practical bound, report the PR,
      trigger comment, acknowledgement state, and last checked time. Do not run
      review follow-up against stale or absent output.
-5. Use `github-pr-ai-review-followup` on the latest Codex review feedback.
-   - Pass through that this cycle invocation already approves writeback for
-     clearly closed latest AI review items.
-   - Keep per-thread dispositions; do not flatten the review into silent edits.
-   - Apply only worthwhile fixes.
-6. If review fixes changed files, verify, commit, and push.
-   - Run the smallest relevant verification for the changed files.
+5. Use only the **Prepare** phase of `github-pr-ai-review-followup` on the
+   latest Codex review feedback.
+   - Capture its prepared record, including per-thread dispositions, verification,
+     proposed replies, and pending publication. Do not reply or resolve yet,
+     even though this cycle authorizes later writeback.
+6. If review fixes changed files, commit and push the verified fixes.
+   - Reuse Prepare's successful verification if no relevant files changed after
+     it; otherwise run the smallest relevant verification for the changed files.
    - Stage only review-follow-up changes.
    - Use a normal commit and normal push of the same feature branch.
-   - If verification fails, stop before commit, push, reply, or resolve.
-7. Reply and resolve handled review threads.
-   - Use thread-aware targets, not flat PR-comment guesses.
-   - Reply briefly with outcome and verification.
-   - Resolve only unresolved threads whose disposition clearly closes them under
-     the Approval Model.
+   - If verification is unsuccessful or unavailable, stop before commit or push.
+     If verification, commit, or push fails, stop before reply or resolution.
+   - Confirm the fixes are present in the remote PR head and add the published
+     commit to the prepared record.
+7. Use only the **Writeback** phase of `github-pr-ai-review-followup`.
+   - Pass the prepared record, publication evidence, and existing authorization
+     for clearly closed latest AI review items under the Approval Model.
+   - Delegate target revalidation, replies, resolutions, and writeback verification
+     to that phase. Do not reapply fixes or duplicate its writeback procedure.
+   - Without code changes, proceed using the evidence from the published PR;
+     no empty commit is needed.
 8. Verify final PR state when possible.
    - Re-read thread state after writeback.
    - Report unresolved, skipped, ambiguous, or human-decision items.
@@ -108,18 +114,20 @@ The cycle is complete only when one of these is true:
   replied to and resolved.
 - Codex produced no actionable feedback, and final thread/comment state was
   checked.
-- A blocker occurred and was reported with the exact next approval or external
-  state needed.
+
+If a blocker prevents completion, report `Blocked`, or `Partial` when only some
+targets or writebacks completed, with the exact next approval or external state
+needed. Reporting a blocker does not make the cycle complete.
 
 ## Final Report
 
 Use this structure:
 
 ```markdown
-**Cycle Complete**
+**Cycle Status: <Complete | Blocked | Partial>**
 - Branch: `<branch>`
 - PR: <url>
-- Publish: `<commit or no new commit>`; verification `<command>` passed
+- Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result>`
 - Codex: `<acknowledged/completed/blocked summary>`
 - Follow-up: `<applied/explained/skipped/stale/duplicate counts>`
 - Review fix commit: `<sha>` or "No review-fix commit needed"

@@ -9,7 +9,17 @@ description: Use when the user wants to follow up on GitHub Copilot or Codex rev
 
 This skill covers GitHub Copilot and Codex review feedback and the decision record for each AI review thread. It is not for human review sweeps, generic bot spam, unattended GitHub writeback, PR publishing, or merge handling.
 
-## Workflow
+## Phase Selection
+
+Use two phases: **Prepare** for inspection, local fixes, verification, and a
+writeback preview; **Writeback** for approved GitHub replies and resolutions.
+Run Prepare by default. A caller can request Prepare only even when writeback
+is already authorized; authorization does not bypass publication prerequisites.
+Run Writeback only when requested or approved and its prerequisites below hold.
+For a Writeback-only handoff, consume the prepared record without reapplying fixes.
+This skill does not commit or push; the user or an orchestration skill owns publication.
+
+## Prepare
 
 1. Resolve the current-repo PR from a provided number/URL or the current branch; ask if ambiguous.
 2. Fetch PR metadata and AI review comments with the GitHub plugin.
@@ -17,10 +27,18 @@ This skill covers GitHub Copilot and Codex review feedback and the decision reco
 4. Identify the latest Copilot or Codex review feedback. If the source is ambiguous, say so instead of guessing.
 5. Split feedback into actionable, explanation-only, stale/resolved/duplicate/non-actionable, and ambiguous/conflicting/risky items.
 6. Apply only the worthwhile local fixes. Skip speculative churn, style-only noise, and anything likely to cause regression.
-7. Assign a disposition to every latest AI feedback item, even when no code changed.
-8. Draft a GitHub writeback preview: comments, resolve targets, open threads, and human-decision items.
-9. Perform only writeback the user explicitly requested or approved. Otherwise, report the preview without writing to GitHub.
-10. Summarize changes, skips, comments/resolutions, open items, and verification.
+7. Run the smallest relevant verification for local fixes and record its result.
+   If it fails or cannot run, report the cause and leave the fixes unpublished;
+   do not represent them as verified or ready for writeback.
+8. Assign a disposition to every latest AI feedback item, even when no code changed.
+9. Return a prepared record with the repository/PR, inspected head commit,
+   review/comment/thread IDs, per-item disposition and supporting evidence,
+   changed files, verification result, proposed replies, resolve candidates,
+   open items, and any publication still needed. Mark dispositions based on
+   local changes as pending publication, including `stale` or `duplicate` when
+   their justification depends on those changes.
+10. For Prepare-only calls, stop here without GitHub writes. Otherwise enter
+    Writeback only if authorized and all prerequisites are satisfied.
 
 ## Dispositions
 
@@ -31,7 +49,23 @@ This skill covers GitHub Copilot and Codex review feedback and the decision reco
 - `duplicate`: Covered elsewhere. Reference the covering item and mark as a resolve candidate.
 - `needs-human-decision`: Ambiguous, conflicting, policy-sensitive, or risky. Draft the question or tradeoff and leave open.
 
-## GitHub Writeback
+## Writeback
+
+1. Require a prepared record identifying the exact PR and feedback items.
+   If it is missing, reconstruct it from read-only evidence or report what is
+   missing. A Writeback-only request does not authorize new local fixes.
+2. For any item whose reply or resolution depends on local fixes, require
+   successful relevant verification and confirmation that the fixes are in the
+   remote PR head. A local commit or an attempted push is insufficient. If
+   verification or publication failed, leave writeback pending and report it.
+   Explanation-only items need no new commit when their evidence already holds
+   in the published PR.
+3. Re-read the remote PR head and target thread/comment state. If intervening
+   changes invalidate a prepared disposition or reply, return that item to
+   Prepare. Skip already-completed replies/resolutions on resume.
+4. Perform only authorized replies and resolutions using the rules below,
+   then verify and report their actual outcomes. Preserve per-item partial
+   success so a retry does not repeat successful writes.
 
 - Approval to inspect or fix AI review feedback is not approval to write to GitHub.
 - Prefer the specific review thread or comment. Use a top-level PR comment only when no thread target exists.
