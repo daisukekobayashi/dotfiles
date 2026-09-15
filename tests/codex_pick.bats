@@ -140,7 +140,10 @@ set -euo pipefail
   printf '\n'
 } >> "${FZF_LOG}"
 
-mapfile -t rows
+rows=()
+while IFS= read -r row; do
+  rows+=("${row}")
+done
 IFS= read -r choice < "${FZF_CHOICES}"
 tail -n +2 "${FZF_CHOICES}" > "${FZF_CHOICES}.next"
 mv "${FZF_CHOICES}.next" "${FZF_CHOICES}"
@@ -149,7 +152,7 @@ if [[ "${choice}" == "__CANCEL__" ]]; then
   exit "${FZF_CANCEL_STATUS:-130}"
 fi
 
-for row in "${rows[@]}"; do
+for row in ${rows[@]+"${rows[@]}"}; do
   if [[ "${row%%$'\t'*}" == "${choice}" ]]; then
     printf '%s\n' "${row}"
     exit 0
@@ -192,7 +195,33 @@ run_picker() {
   run_picker gpt-5.6-sol max
 
   [ "$status" -eq 0 ]
-  grep -F "argv=<-m><gpt-5.6-sol><-c><model_reasoning_effort='max'>" "${CODEX_LOG}"
+  grep -Fx "argv=<-m><gpt-5.6-sol><-c><model_reasoning_effort='max'>" "${CODEX_LOG}"
+}
+
+@test "codex-pick launches an explicit profile without extra arguments" {
+  run_picker --profile azure_gpt-5_6-sol_xhigh
+
+  [ "$status" -eq 0 ]
+  grep -Fx 'argv=<--profile><azure_gpt-5_6-sol_xhigh>' "${CODEX_LOG}"
+}
+
+@test "codex-pick preserves profile and empty or spaced Codex arguments with model overrides" {
+  run_picker --profile azure_gpt-5_6-sol_xhigh gpt-5.6-sol max -- "" "two words"
+
+  [ "$status" -eq 0 ]
+  grep -Fx "argv=<--profile><azure_gpt-5_6-sol_xhigh><-m><gpt-5.6-sol><-c><model_reasoning_effort='max'><><two words>" "${CODEX_LOG}"
+}
+
+@test "codex-pick selects a ChatGPT model without profile files" {
+  CODEX_HOME="${TEST_ROOT}/empty-codex-home"
+  mkdir -p "${CODEX_HOME}"
+  printf '%s\n' chatgpt_gpt-5.6-terra_high > "${FZF_CHOICES}"
+
+  run_picker
+
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"unbound variable"* ]]
+  grep -Fx "argv=<-m><gpt-5.6-terra><-c><model_reasoning_effort='high'>" "${CODEX_LOG}"
 }
 
 @test "codex-pick selects a ChatGPT model and effort in one step" {

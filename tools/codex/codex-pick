@@ -40,7 +40,8 @@ profile_rows() {
   files=("${codex_home}"/*.config.toml)
   shopt -u nullglob
 
-  for file in "${files[@]}"; do
+  # Bash 3.2 treats empty arrays as unset under nounset.
+  for file in ${files[@]+"${files[@]}"}; do
     [[ -f "${file}" ]] || continue
     name="${file##*/}"
     name="${name%.config.toml}"
@@ -144,8 +145,8 @@ visible_model_list() {
 resolve_model() {
   local query="$1"
   local catalog="$2"
-  local exact
-  local -a matches
+  local exact match
+  local -a matches=()
 
   exact="$(
     jq -r --arg query "${query}" \
@@ -157,7 +158,9 @@ resolve_model() {
     return 0
   fi
 
-  mapfile -t matches < <(
+  while IFS= read -r match; do
+    matches+=("${match}")
+  done < <(
     jq -r --arg query "${query}" \
       '.models[] | select(.visibility == "list" and (.slug | endswith("-" + $query))) | .slug' \
       <<< "${catalog}"
@@ -302,7 +305,7 @@ if [[ "${profile_requested}" -eq 1 ]]; then
 fi
 
 if [[ -n "${profile}" && -z "${model_query}" ]]; then
-  exec codex --profile "${profile}" "${codex_args[@]}"
+  exec codex --profile "${profile}" ${codex_args[@]+"${codex_args[@]}"}
 fi
 
 require_command jq
@@ -314,7 +317,7 @@ if [[ -z "${model_query}" ]]; then
   IFS=$'\t' read -r configuration_name configuration_kind model effort _ <<< "${configuration}"
 
   if [[ "${configuration_kind}" == "profile" ]]; then
-    exec codex --profile "${configuration_name}" "${codex_args[@]}"
+    exec codex --profile "${configuration_name}" ${codex_args[@]+"${codex_args[@]}"}
   fi
 else
   model="$(resolve_model "${model_query}" "${catalog}")"
@@ -334,7 +337,7 @@ if [[ -n "${profile}" ]]; then
 fi
 
 exec codex \
-  "${profile_args[@]}" \
+  ${profile_args[@]+"${profile_args[@]}"} \
   -m "${model}" \
   -c "model_reasoning_effort='${effort}'" \
-  "${codex_args[@]}"
+  ${codex_args[@]+"${codex_args[@]}"}
