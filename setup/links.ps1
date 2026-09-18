@@ -83,6 +83,10 @@ try {
     @{
       Link = Join-Path $setupContext.HomeDir ".claude\settings.json"
       Target = Join-Path $setupContext.DotfilesRoot "claude\settings.json"
+    },
+    @{
+      Link = Join-Path $setupContext.HomeDir ".claude\statusline.sh"
+      Target = Join-Path $setupContext.DotfilesRoot "claude\statusline.sh"
     }
   )
 

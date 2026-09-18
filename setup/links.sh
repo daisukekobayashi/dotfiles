@@ -47,6 +47,7 @@ setup_links() {
 
   make_directory "${setup_home}/.claude" "${dry_run}"
   link_file "${dotfiles_root}/claude/settings.json" "${setup_home}/.claude/settings.json" "${dry_run}"
+  link_file "${dotfiles_root}/claude/statusline.sh" "${setup_home}/.claude/statusline.sh" "${dry_run}"
 
   local rules_composer="${dotfiles_root}/ai-rules/scripts/compose-rules.sh"
   if [ ! -f "${rules_composer}" ]; then
