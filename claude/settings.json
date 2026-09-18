@@ -15,7 +15,7 @@
   "model": "opus[1m]",
   "statusLine": {
     "type": "command",
-    "command": "bash \"$HOME/.claude/statusline.sh\""
+    "command": "node -e \"require(require('node:path').join(require('node:os').homedir(), '.claude', 'statusline.cjs'))\""
   },
   "attribution": {
     "commit": "",
