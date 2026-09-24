@@ -172,6 +172,81 @@ Superpowers is not included in `base`.
 
 Use `base,github` when you want the previous GitHub-enabled baseline.
 
+### `pstack`
+
+Nine local adaptations of Lauren Tan's pstack. This profile is independent of
+`base` and `github`; it adds no external packages, plugin hooks, model settings,
+or default routing. Existing `tdd` and `teach` skills keep their names and owners.
+
+| Skill | Responsibility |
+|---|---|
+| `how` | Read-only explanation of current execution, data flow, and ownership. |
+| `why` | Read-only design history from Git, PRs, issues, and ADRs, separating evidence from inference. |
+| `architect` | Caller usage and contract design; implementation follows the original request's authorization. |
+| `arena` | Independent candidate comparison with shared criteria, isolated writers, and verified synthesis. |
+| `interrogate` | Read-only independent reviews and evidence-based synthesis. |
+| `blast-radius` | Explicitly requested impact verification using isolated probes, without repairing the implementation. |
+| `create-verification-skill` | Generate and exercise project-local verification procedures and a feature map. |
+| `prove-it-works` | Shared principle for matching completion claims to observed behavior. |
+| `encode-lessons-in-structure` | Shared principle for preventing evidenced recurring failures with focused safeguards. |
+
+Example invocations: `$how trace this request`, `$why was this state persisted?`,
+`$architect design this interface`, `$arena compare these approaches`,
+`$interrogate review this change`, `$blast-radius check this schema change`,
+and `$create-verification-skill for this CLI`. Claude Code exposes installed
+skills through its own invocation interface. The two principles can be consulted
+directly or by the workflow skills.
+
+`arena`, `interrogate`, `blast-radius`, and `create-verification-skill` require
+explicit user invocation. Their descriptions and instructions enforce this
+boundary, with `policy.allow_implicit_invocation: false` for Codex and
+`disable-model-invocation: true` in SKILL.md frontmatter for Claude Code.
+Use `$skill-name` in Codex or `/skill-name` in Claude Code. References from
+another skill do not activate these workflows; `architect` compares alternatives
+directly unless the user explicitly invokes `arena`.
+
+`how`, `why`, and `architect` remain discoverable by their task descriptions.
+The two principles can be consulted when relevant or by another workflow.
+Availability does not mean every task runs all nine workflows. Parallel
+candidates/reviewers are bounded and conditional; unavailable delegation is
+reported as a limitation, not simulated independence.
+
+`architect` consults `codebase-design` when available and leaves explicitly
+requested preflight to `design-preflight`. `interrogate` reads criteria from
+`review-change` and `adversarial-review` when available without invoking those
+explicit-only workflows. Standalone `pstack` provides small fallback criteria.
+Read-only investigation/review stays separate from executable probes and fixes.
+Commit, push, dependency, remote-write, and destructive-operation approvals
+remain governed by the user's instructions.
+
+Install after the sources are in the checkout that should own the live links:
+
+```sh
+./setup.sh skills profile validate --profile base,github,pstack
+SETUP_DRY_RUN=1 ./setup.sh skills --scope user --profile base,github,pstack
+./setup.sh skills --scope user --profile base,github,pstack
+```
+
+User scope rebuilds one shared view; include every profile you want to retain.
+The `pstack` profile itself is local-only, but the combined `base` profile may
+run the external skills CLI. Review that plan and required execution approvals.
+Avoid installing live user links from a temporary worktree that will be removed.
+For a project, use `--scope project --profile base,pstack` instead.
+
+The reusable generator belongs in user scope. Generated verification commands,
+feature maps, and reusable helpers belong in the target project's established
+skill directory. Each generated procedure is a draft until exercised, and its
+reported coverage is limited to the paths actually run. Run-specific evidence
+belongs in ignored temporary storage and survives process cleanup.
+
+The adaptations use upstream revision
+[`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack).
+Each skill includes its source link, local adaptation rationale, and Lauren Tan's
+MIT license. The upstream `principle-prove-it-works` and
+`principle-encode-lessons-in-structure` names are shortened locally.
+These are curated adaptations, not an automatically synchronized plugin fork.
+Compare relevant upstream changes against these local contracts before updating.
+
 ### `github`
 
 GitHub workflow skills:

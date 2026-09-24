@@ -172,6 +172,77 @@ Superpowers は `base` に含めません。
 
 以前の GitHub 対応込みの baseline が必要な場合は `base,github` を使います.
 
+### `pstack`
+
+Lauren Tan の pstack を、この環境の作業範囲と承認ルールに合わせた9つの local skill。
+`base`・`github` から独立した profile で、外部パッケージ、プラグインの hook、
+モデル設定、既定の自動ルーティングは追加しません。既存の `tdd`・`teach` は維持します。
+
+| Skill | 責務 |
+|---|---|
+| `how` | 現在の実行経路・データフロー・責任の所在を読み取り専用で説明する。 |
+| `why` | Git・PR・Issue・ADRから設計理由を調べ、記録と推測を区別する。読み取り専用。 |
+| `architect` | 呼び出し側の使い方と契約を設計する。実装への移行は元の依頼範囲に従う。 |
+| `arena` | 共通基準で独立した候補を比較する。書き込み先を分離し、統合結果を検証する。 |
+| `interrogate` | 独立したレビューを読み取り専用で行い、根拠に基づいて統合する。 |
+| `blast-radius` | 明示起動で、安全性を支える前提を隔離した実験で確かめる。実装修正は行わない。 |
+| `create-verification-skill` | プロジェクト固有の検証手順と feature map を作り、その手順を実行確認する。 |
+| `prove-it-works` | 完了の主張と観測した挙動を対応させる共通原則。 |
+| `encode-lessons-in-structure` | 根拠のある再発パターンを、型・テスト・既存の検査などで防ぐ共通原則。 |
+
+呼び出し例は `$how この処理の経路を説明して`、`$why この状態を永続化した理由は？`、
+`$architect このインターフェースを設計して`、`$arena この案を比較して`、
+`$interrogate この変更をレビューして`、`$blast-radius このスキーマ変更を検証して`、
+`$create-verification-skill このCLIの検証手順を作って`。
+Claude Code では、その環境の skill 呼び出し方法を使います。
+共通原則2つは直接参照するほか、各 workflow skill から必要に応じて読みます。
+
+`arena`・`interrogate`・`blast-radius`・`create-verification-skill` は
+ユーザーによる明示起動に限定します。description と本文に加え、Codex には
+`policy.allow_implicit_invocation: false`、Claude Code には SKILL.md の
+frontmatter に `disable-model-invocation: true` を設定します。
+Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出します。
+他の skill からの参照だけでは起動しません。`architect` は、ユーザーが
+`arena` を明示起動した場合を除き、自身で設計案を比較します。
+
+`how`・`why`・`architect` はタスクの description に従って選択できます。
+共通原則2つは、必要な場面や他の workflow から参照します。
+登録されている全 skill を毎回実行する構成ではありません。
+候補・レビューの並列実行は条件と上限を設け、利用できない場合は独立性の限界を明示します。
+
+`architect` は利用可能な `codebase-design` の設計語彙を参照し、明示依頼された
+事前確認は `design-preflight` に任せます。`interrogate` は利用可能な
+`review-change`・`adversarial-review` の観点を参照しますが、明示起動限定の
+workflow 自体は呼び出しません。`pstack` 単独でも使える最小限の代替基準を持ちます。
+読み取り専用の調査・レビュー、実験による検証、修正の責務を分けます。
+commit・push・依存関係・外部書き込み・破壊的操作の承認は、ユーザーの指示に従います。
+
+live なリンクの正本にする checkout へソースを反映してから実行します。
+
+```sh
+./setup.sh skills profile validate --profile base,github,pstack
+SETUP_DRY_RUN=1 ./setup.sh skills --scope user --profile base,github,pstack
+./setup.sh skills --scope user --profile base,github,pstack
+```
+
+User scope は共通 view を作り直すため、維持したい profile をすべて指定します。
+`pstack` 自体は local skill のみですが、組み合わせた `base` は外部の skills CLI を
+実行する場合があります。実行計画と必要な承認を確認してください。
+後で削除する一時 worktree から live な user link を作らないようにします。
+Project scope では `--scope project --profile base,pstack` を使えます。
+
+共通の生成手順は user scope に置き、生成した検証コマンド・feature map・再利用する
+helper は対象プロジェクトの skill ディレクトリに置きます。生成した手順は実行確認まで
+draft とし、検証済み範囲は実際に通した経路に限定します。実行ごとの証拠は ignore された
+一時領域に保存し、プロセス終了後も残します。
+
+参照した上流リビジョンは
+[`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack)。
+各 skill に出典リンク・ローカルでの調整理由・Lauren Tan の MIT license を含めます。
+上流の `principle-prove-it-works` と `principle-encode-lessons-in-structure` は、
+ローカルでは接頭辞を省略しています。自動同期するプラグイン fork ではなく、
+上流の変更とローカルの契約を照合して更新する構成です。
+
 ### `github`
 
 GitHub workflow skill:

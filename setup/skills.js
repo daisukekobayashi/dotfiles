@@ -700,9 +700,11 @@ function timestamp() {
         pad(now.getSeconds()),
     ].join("");
 }
-function prepareProjectTargets(projectRoot, agents, backupRoot) {
+function prepareProjectTargets(projectRoot, agents, backupRoot, includeLockfile) {
     const records = [];
-    backupPath(path.join(projectRoot, "skills-lock.json"), backupRoot, records);
+    if (includeLockfile) {
+        backupPath(path.join(projectRoot, "skills-lock.json"), backupRoot, records);
+    }
     backupPath(path.join(projectRoot, ".agents", "skills-profile.json"), backupRoot, records);
     for (const agent of agents) {
         backupPath(agentSkillDir(projectRoot, agent), backupRoot, records);
@@ -757,7 +759,9 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
         info(`DRY-RUN mkdir -p ${workDir}`);
         info(`DRY-RUN mkdir -p ${npmCacheDir}`);
         info(`DRY-RUN mkdir -p ${path.join(projectRoot, ".agents")}`);
-        info(`DRY-RUN backup ${path.join(projectRoot, "skills-lock.json")} to ${backupRoot}`);
+        if (plan.external.length > 0) {
+            info(`DRY-RUN backup ${path.join(projectRoot, "skills-lock.json")} to ${backupRoot}`);
+        }
         info(`DRY-RUN backup ${path.join(projectRoot, ".agents", "skills-profile.json")} to ${backupRoot}`);
         for (const agent of agents) {
             info(`DRY-RUN backup ${agentSkillDir(projectRoot, agent)} to ${backupRoot}`);
@@ -772,7 +776,7 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
     fs.mkdirSync(workDir, { recursive: true });
     fs.mkdirSync(npmCacheDir, { recursive: true });
     fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
-    const backups = prepareProjectTargets(projectRoot, agents, backupRoot);
+    const backups = prepareProjectTargets(projectRoot, agents, backupRoot, plan.external.length > 0);
     try {
         runExternalInstalls(projectRoot, plan, agents, npmCacheDir);
         linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);

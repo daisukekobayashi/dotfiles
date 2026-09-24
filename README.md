@@ -80,6 +80,11 @@ Skill profiles live in `skills/profiles/`.
 
 Custom local skills live in `skills/local/`.
 
+The optional `pstack` profile adds nine workflow and principle skills adapted
+from Lauren Tan's pstack. Use `base,github,pstack` to combine them with the
+existing baseline and GitHub workflows. See the [pstack profile](docs/skills-profiles.md#pstack)
+for responsibilities, invocation boundaries, and installation.
+
 `./setup.sh skills` installs the user-scope `base` profile by default and wires `~/.agents/skills` and `~/.claude/skills` to a dotfiles-managed user skill view. The PowerShell entry point `.\setup.ps1 skills` uses the same Node runtime. Use project scope to install repository-specific skills:
 
 ```bash

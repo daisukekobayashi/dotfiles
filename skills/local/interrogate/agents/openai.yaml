@@ -1,0 +1,6 @@
+interface:
+  display_name: "Interrogate"
+  short_description: "Combine independent reviews without editing the target"
+
+policy:
+  allow_implicit_invocation: false

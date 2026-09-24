@@ -1,0 +1,6 @@
+interface:
+  display_name: "Arena"
+  short_description: "Compare independent solutions with shared criteria"
+
+policy:
+  allow_implicit_invocation: false

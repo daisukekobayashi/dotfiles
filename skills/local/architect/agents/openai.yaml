@@ -1,0 +1,3 @@
+interface:
+  display_name: "Architect"
+  short_description: "Shape caller usage and contracts before implementation"

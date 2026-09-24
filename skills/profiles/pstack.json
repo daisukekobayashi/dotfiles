@@ -1,0 +1,15 @@
+{
+  "description": "Selected pstack workflows adapted for scoped, provider-neutral engineering work.",
+  "external": [],
+  "local": [
+    "architect",
+    "arena",
+    "blast-radius",
+    "create-verification-skill",
+    "encode-lessons-in-structure",
+    "how",
+    "interrogate",
+    "prove-it-works",
+    "why"
+  ]
+}
