@@ -11,6 +11,7 @@ When multiple instruction files apply, follow the most specific one for the file
 - Keep changes small and focused on the user's request.
 - Follow existing project style and conventions.
 - Do not perform unrelated refactors, formatting sweeps, or opportunistic cleanup.
+- When the same confirmed failure recurs, prefer a small safeguard near its cause, such as a type, boundary check, test, or lint rule, over repeated reminders. Implement it only within the authorized scope; otherwise propose it.
 - Do not edit generated, vendored, minified, or binary files unless clearly necessary.
 - When generated files need to change, prefer updating the source file and running the documented generation command.
 - Do not run broad formatters, code generators, or snapshot updates unless required for the requested change or explicitly approved.
@@ -71,6 +72,7 @@ When committing with approval, stage only the intended files or hunks. Do not in
 ## Validation
 
 - After changes, run the smallest relevant documented or discoverable check.
+- Match completion claims to observed evidence for the requested outcome. For runtime behavior, check the relevant path in the actual changed artifact; build success or a health check establishes only its limited scope.
 - Prefer focused, bounded checks related to the changed files before broader test suites.
 - Avoid watch modes, long-running servers, or expensive full-suite checks unless necessary for the task.
 - Stop long-running processes when they are no longer needed.
