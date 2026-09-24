@@ -2,6 +2,10 @@
 
 load 'helpers/test_helper.bash'
 
+setup() {
+  unset TMUX_CLIPBOARD_OSC52_MAX_BYTES TMUX_POPUP_CLIPBOARD_OSC52_MAX_BYTES
+}
+
 @test "tmux does not enable C-b as a global secondary prefix" {
   run grep -Eq '^set[[:space:]]+-g[[:space:]]+prefix2[[:space:]]+C-b([[:space:]]|$)' "$(repo_root)/.tmux.conf"
 
@@ -237,6 +241,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 if [ "$*" = "show-options -gqv @popup-proxy" ]; then
   printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
   exit 0
@@ -291,6 +296,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
 cat > "${TMUX_CLIPBOARD_TEXT}"
 EOF
@@ -322,6 +328,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
 cat > "${TMUX_CLIPBOARD_TEXT}"
 EOF
@@ -354,6 +361,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
 cat > "${TMUX_CLIPBOARD_TEXT}"
 EOF
@@ -385,6 +393,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
 cat > "${TMUX_CLIPBOARD_TEXT}"
 EOF
@@ -419,6 +428,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 if [ "$*" = "show-options -gqv @popup-proxy" ]; then
   printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
   exit 0
@@ -467,6 +477,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 if [ "$*" = "show-options -gqv @popup-proxy" ]; then
   printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
   exit 0
@@ -510,6 +521,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 if [ "$*" = "show-options -gqv @popup-proxy" ]; then
   printf '%s\n' "${TMUX_POPUP_PROXY_SCRIPT}"
   exit 0
@@ -554,6 +566,7 @@ EOF
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
 if [ "$*" = "show-options -gqv @popup-proxy" ]; then
   exit 0
 fi
@@ -1941,5 +1954,131 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "[]" ]
   run grep -F "${pane_repo}"$'\t'"issue list" "${log_file}"
+  [ "$status" -eq 0 ]
+}
+
+@test "tmux clipboard follows the current mosh client and respects explicit limits" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/mosh.log"
+  copied_text="${BATS_TEST_TMPDIR}/mosh.txt"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/tmux" <<'SCRIPT'
+#!/usr/bin/env bash
+if [ "$1" = display-message ]; then
+  printf '100\n'
+else
+  printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+  cat > "${TMUX_CLIPBOARD_TEXT}"
+fi
+SCRIPT
+  cat > "${fake_bin}/ps" <<'SCRIPT'
+#!/usr/bin/env bash
+case "$2" in
+  100) printf '90 tmux\n' ;;
+  90) printf '80 zsh\n' ;;
+  80) printf '1 %s\n' "${TEST_CLIENT_PARENT}" ;;
+  *) exit 1 ;;
+esac
+SCRIPT
+  cat > "${fake_bin}/xclip" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'xclip\n' >> "${TMUX_CLIPBOARD_LOG}"
+exit 1
+SCRIPT
+  chmod +x "${fake_bin}/tmux" "${fake_bin}/ps" "${fake_bin}/xclip"
+
+  export PATH="${fake_bin}:/usr/bin:/bin"
+  export TMUX="/tmp/tmux-test/default,1,0"
+  export SSH_CONNECTION="192.0.2.10 12345 192.0.2.20 22"
+  export TMUX_CLIPBOARD_LOG="${log_file}" TMUX_CLIPBOARD_TEXT="${copied_text}"
+  export TEST_CLIENT_PARENT=mosh-server DISPLAY=:99
+  unset WAYLAND_DISPLAY TMUX_CLIPBOARD_OSC52_MAX_BYTES
+
+  run bash -c "printf 'mosh copy\n' | '${root}/tmux/bin/clipboard-copy'"
+  [ "$status" -eq 0 ]
+  [ "$(cat "${log_file}")" = "tmux load-buffer -w -" ]
+  [ "$(cat "${copied_text}")" = "mosh copy" ]
+
+  # A reattached SSH client must not inherit mosh behavior from the server.
+  : > "${log_file}"
+  unset DISPLAY
+  export TEST_CLIENT_PARENT=sshd
+  run bash -c "printf 'ssh copy\n' | '${root}/tmux/bin/clipboard-copy'"
+  [ "$status" -eq 0 ]
+  [ "$(cat "${log_file}")" = "tmux load-buffer -" ]
+
+  export TEST_CLIENT_PARENT=mosh-server
+  for limit in 0 4; do
+    : > "${log_file}"
+    export TMUX_CLIPBOARD_OSC52_MAX_BYTES="${limit}"
+    run bash -c "printf 'mosh copy\n' | '${root}/tmux/bin/clipboard-copy'"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${log_file}")" = "tmux load-buffer -" ]
+    [ "$(cat "${copied_text}")" = "mosh copy" ]
+  done
+}
+
+@test "tmux emits mosh-compatible OSC 52 with the actual clipboard payload" {
+  command -v python3 >/dev/null || skip "python3 is required for the PTY check"
+  command -v tmux >/dev/null || skip "tmux is required for the PTY check"
+  run env TEST_REPO_ROOT="$(repo_root)" python3 - <<'PY'
+import base64
+import fcntl
+import os
+import pty
+import select
+import struct
+import subprocess
+import tempfile
+import termios
+import time
+from pathlib import Path
+
+root = Path(os.environ['TEST_REPO_ROOT'])
+with tempfile.TemporaryDirectory(prefix='tmux-mosh-check-') as directory:
+    socket = directory + '/socket'
+    config = Path(directory) / 'tmux.conf'
+    override = next(line for line in (root / '.tmux.conf').read_text().splitlines()
+                    if 'xterm*:Ms=' in line)
+    config.write_text('set -s set-clipboard external\n' + override + '\n')
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 80, 0, 0))
+    env = dict(os.environ, TERM='xterm-256color')
+    for name in ('TMUX', 'TMUX_PANE', 'DISPLAY', 'WAYLAND_DISPLAY'):
+        env.pop(name, None)
+    client = subprocess.Popen(
+        ['tmux', '-S', socket, '-f', str(config), 'new-session', '/bin/sh'],
+        stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
+    os.close(slave)
+
+    def drain():
+        data = b''
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 0.05)[0]:
+                try:
+                    data += os.read(master, 65536)
+                except OSError:
+                    break
+        return data
+
+    try:
+        drain()
+        env.update(TMUX=socket + ',1,0', TMUX_CLIPBOARD_OSC52_MAX_BYTES='32768')
+        payload = b'mosh-copy-validation'
+        # Exercise tmux's portable output path without an OS clipboard backend.
+        subprocess.run(['tmux', '-S', socket, 'load-buffer', '-w', '-'],
+                       input=payload, env=env, check=True)
+        expected = b'\x1b]52;c;' + base64.b64encode(payload) + b'\x07'
+        assert expected in drain(), 'missing mosh-compatible OSC 52 payload'
+    finally:
+        subprocess.run(['tmux', '-S', socket, 'kill-server'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        client.wait(timeout=5)
+        os.close(master)
+PY
   [ "$status" -eq 0 ]
 }

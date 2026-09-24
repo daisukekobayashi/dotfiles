@@ -9,11 +9,36 @@ copy_with() {
   "$@" < "${tmp_file}" >/dev/null 2>&1
 }
 
+is_mosh_client() {
+  local pid parent command depth
+  # Inspect the attached client, not the persistent tmux server's environment.
+  pid="$(tmux display-message -p '#{client_pid}' 2>/dev/null)" || return 1
+  for ((depth = 0; depth < 64; depth++)); do
+    case "${pid}" in
+      ''|*[!0-9]*|0|1) return 1 ;;
+    esac
+    read -r parent command < <(ps -p "${pid}" -o ppid= -o comm= 2>/dev/null) || return 1
+    case "${command##*/}" in
+      mosh-server) return 0 ;;
+    esac
+    [ "${parent}" != "${pid}" ] || return 1
+    pid="${parent}"
+  done
+  return 1
+}
+
+mosh_client=false
+if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1 && is_mosh_client; then
+  mosh_client=true
+fi
+
 should_write_terminal_clipboard() {
   local osc52_max_bytes clipboard_bytes
 
   if [ "${TMUX_CLIPBOARD_OSC52_MAX_BYTES+x}" = "x" ]; then
     osc52_max_bytes="${TMUX_CLIPBOARD_OSC52_MAX_BYTES}"
+  elif [ "${mosh_client}" = true ]; then
+    osc52_max_bytes=32768
   elif [ -n "${SSH_CONNECTION:-}${SSH_TTY:-}" ]; then
     osc52_max_bytes=0
   else
@@ -38,6 +63,11 @@ copy_with_tmux_buffer() {
 
   copy_with tmux load-buffer - && exit 0
 }
+
+# Remote mosh copies belong to the client even if the server has a display.
+if [ "${mosh_client}" = true ]; then
+  copy_with_tmux_buffer
+fi
 
 if [ "$(uname -s 2>/dev/null)" = "Darwin" ] && command -v pbcopy >/dev/null 2>&1; then
   if command -v reattach-to-user-namespace >/dev/null 2>&1; then
