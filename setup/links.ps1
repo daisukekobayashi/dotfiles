@@ -69,6 +69,14 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-5_6-luna_max.config.toml"
     },
     @{
+      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-6-astra_medium.config.toml"
+      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-6-astra_medium.config.toml"
+    },
+    @{
+      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-6-luna_max.config.toml"
+      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-6-luna_max.config.toml"
+    },
+    @{
       Link = Join-Path $setupContext.HomeDir ".codex\rules\user.rules"
       Target = Join-Path $setupContext.DotfilesRoot "codex\rules\user.rules"
     },
