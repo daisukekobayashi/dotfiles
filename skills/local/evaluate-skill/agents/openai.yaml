@@ -1,0 +1,6 @@
+interface:
+  display_name: "Evaluate Skill"
+  short_description: "Compare skill outcomes with isolated tasks and evidence"
+
+policy:
+  allow_implicit_invocation: false

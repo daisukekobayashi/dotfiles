@@ -174,7 +174,7 @@ Use `base,github` when you want the previous GitHub-enabled baseline.
 
 ### `pstack`
 
-Nine local adaptations of Lauren Tan's pstack. This profile is independent of
+Eleven local adaptations of Lauren Tan's pstack. This profile is independent of
 `base` and `github`; it adds no external packages, plugin hooks, model settings,
 or default routing. Existing `tdd` and `teach` skills keep their names and owners.
 
@@ -187,18 +187,23 @@ or default routing. Existing `tdd` and `teach` skills keep their names and owner
 | `interrogate` | Read-only independent reviews and evidence-based synthesis. |
 | `blast-radius` | Explicitly requested impact verification using isolated probes, without repairing the implementation. |
 | `create-verification-skill` | Generate and exercise project-local verification procedures and a feature map. |
+| `maintain-verification-skill` | Reconcile an existing verification skill with source and live behavior, preserving product contracts. |
+| `evaluate-skill` | Coordinate isolated skill comparisons, blinded grading, and evidence-based recommendations on either agent. |
 | `prove-it-works` | Shared principle for matching completion claims to observed behavior. |
 | `encode-lessons-in-structure` | Shared principle for preventing evidenced recurring failures with focused safeguards. |
 
 Example invocations: `$how trace this request`, `$why was this state persisted?`,
 `$architect design this interface`, `$arena compare these approaches`,
 `$interrogate review this change`, `$blast-radius check this schema change`,
-and `$create-verification-skill for this CLI`. Claude Code exposes installed
-skills through its own invocation interface. The two principles can be consulted
+`$create-verification-skill for this CLI`,
+`$maintain-verification-skill for this app`, and
+`$evaluate-skill maintain-verification-skill`. Claude Code exposes installed skills
+through its own invocation interface. The two principles can be consulted
 directly or by the workflow skills.
 
-`arena`, `interrogate`, `blast-radius`, and `create-verification-skill` require
-explicit user invocation. Their descriptions and instructions enforce this
+`arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
+`maintain-verification-skill`, and `evaluate-skill` require explicit user invocation. Their descriptions
+and instructions enforce this
 boundary, with `policy.allow_implicit_invocation: false` for Codex and
 `disable-model-invocation: true` in SKILL.md frontmatter for Claude Code.
 Use `$skill-name` in Codex or `/skill-name` in Claude Code. References from
@@ -207,7 +212,7 @@ directly unless the user explicitly invokes `arena`.
 
 `how`, `why`, and `architect` remain discoverable by their task descriptions.
 The two principles can be consulted when relevant or by another workflow.
-Availability does not mean every task runs all nine workflows. Parallel
+Availability does not mean every task runs all eleven workflows. Parallel
 candidates/reviewers are bounded and conditional; unavailable delegation is
 reported as a limitation, not simulated independence.
 
@@ -239,11 +244,21 @@ skill directory. Each generated procedure is a draft until exercised, and its
 reported coverage is limited to the paths actually run. Run-specific evidence
 belongs in ignored temporary storage and survives process cleanup.
 
-The adaptations use upstream revision
+`maintain-verification-skill` uses one instruction body on Codex and Claude Code.
+It reports incomplete coverage as blocked and keeps product repairs outside its
+scope. The explicit [evaluate-skill workflow](skill-evaluation.md) owns candidate
+execution, grading, and synthesis, with its preparation helper bundled inside
+the skill. It uses independent fixtures and common criteria for both agents. Preparing fixtures or
+validating metadata does not establish that either model followed the workflow.
+
+The original nine adaptations use upstream revision
 [`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack).
 Each skill includes its source link, local adaptation rationale, and Lauren Tan's
 MIT license. The upstream `principle-prove-it-works` and
 `principle-encode-lessons-in-structure` names are shortened locally.
+The maintenance and evaluation skills record their source revisions in their
+entrypoints. `evaluate-skill` adapts the upstream Eval playbook as a standalone
+local skill; that name is not an upstream standalone skill.
 These are curated adaptations, not an automatically synchronized plugin fork.
 Compare relevant upstream changes against these local contracts before updating.
 

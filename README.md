@@ -80,7 +80,7 @@ Skill profiles live in `skills/profiles/`.
 
 Custom local skills live in `skills/local/`.
 
-The optional `pstack` profile adds nine workflow and principle skills adapted
+The optional `pstack` profile adds eleven workflow and principle skills adapted
 from Lauren Tan's pstack. Use `base,github,pstack` to combine them with the
 existing baseline and GitHub workflows. See the [pstack profile](docs/skills-profiles.md#pstack)
 for responsibilities, invocation boundaries, and installation.
