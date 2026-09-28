@@ -2,6 +2,14 @@
   "description": "Provider-neutral baseline workflow skills for repository work.",
   "external": [
     {
+      "source": "anthropics/skills",
+      "skills": ["frontend-design", "webapp-testing"]
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "skills": ["web-design-guidelines"]
+    },
+    {
       "source": "vercel-labs/skills",
       "skills": ["find-skills"]
     },

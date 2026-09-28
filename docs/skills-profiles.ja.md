@@ -163,6 +163,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 含めるもの:
 
 - `find-skills`
+- UI 作成・テスト・レビュー用の `frontend-design`、`webapp-testing`、`web-design-guidelines`
 - 公開済みの Matt Pocock Engineering / Productivity skill 一式
 - repository onboarding、`review-change`、`adversarial-review`、runtime isolation の local skill
 - `git-commit`
@@ -341,6 +342,8 @@ GitHub と Azure DevOps の workflow 対応:
 ### `frontend`
 
 Frontend、UI、React、Tailwind、SEO、Remotion、web design 系。
+
+`frontend-design`、`webapp-testing`、`web-design-guidelines` は `base` にも含めます。`frontend` 単独でも使えるようにここにも残し、`base,frontend` を組み合わせた場合は重複を除きます。
 
 Browser automation は frontend 開発以外でも使うため、ここにはデフォルトでは含めません。
 

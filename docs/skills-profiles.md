@@ -163,6 +163,7 @@ Provider-neutral workflow skills used broadly across repositories.
 Include:
 
 - `find-skills`
+- `frontend-design`, `webapp-testing`, and `web-design-guidelines` for UI creation, testing, and review
 - all published Matt Pocock Engineering and Productivity skills
 - repository onboarding, `review-change`, `adversarial-review`, and runtime isolation local skills
 - `git-commit`
@@ -346,6 +347,8 @@ GitHub to Azure DevOps workflow mapping:
 ### `frontend`
 
 Frontend, UI, React, Tailwind, SEO, Remotion, and web design skills.
+
+`frontend-design`, `webapp-testing`, and `web-design-guidelines` are also included in `base`. They remain here so `frontend` can be used independently; combining `base,frontend` deduplicates them.
 
 Browser automation is intentionally not included here by default because it is useful outside frontend development.
 
