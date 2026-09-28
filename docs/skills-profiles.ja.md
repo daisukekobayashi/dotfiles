@@ -67,6 +67,8 @@ User scope では dotfiles 管理の user skill view を 1 つ作り、ユーザ
 ~/.claude/skills  -> ~/.dotfiles/.agents/user/skills/
 ```
 
+`synced/` 配下の外部同期スキルは user skill view の再生成時に引き継ぎます。プロファイル管理のスキルは選択した構成で再生成します。
+
 User profile を変更した場合は、profile の組み合わせごとに別 view を持つのではなく、この 1 つの user skill view を作り直します。選択した profile は `skills-profile.json` に記録します。
 
 Codex の user skill は、OpenAI の Codex skills docs に合わせて `$HOME/.agents/skills` を使います。`skills` CLI 側の global Codex path が異なる場合でも、それには依存しません。
@@ -164,12 +166,12 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 
 - `find-skills`
 - UI 作成・テスト・レビュー用の `frontend-design`、`webapp-testing`、`web-design-guidelines`
-- 公開済みの Matt Pocock Engineering / Productivity skill 一式
+- 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - repository onboarding、`review-change`、`adversarial-review`、runtime isolation の local skill
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
-Superpowers は `base` に含めません。
+Superpowers は `base` に含めません。`writing-great-skills` は上流で改名されたため、後継の `writing-for-agents` を使います。
 
 以前の GitHub 対応込みの baseline が必要な場合は `base,github` を使います.
 
@@ -307,6 +309,8 @@ Office/document 系:
 
 利用価値がある Azure skill だけを明示的に入れ, 利用可能な Azure skill を機械的に全部入れないようにします.
 
+`azure-rbac` は配布元のスキル実体を確認できないため含めません。
+
 ### `azure-devops`
 
 Azure DevOps workflow skill:
@@ -360,7 +364,7 @@ Browser automation/debugging 系:
 
 Data/database 系:
 
-- `redis-development`
+- `redis-core`
 - `supabase-postgres-best-practices`
 
 ### `research`
@@ -427,6 +431,8 @@ npx skills add <owner/repo> \
 これはリポジトリ root で実行し、`skills-lock.json` と agent ごとの project output path は CLI に管理させます。
 
 既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、profile 管理版に置き換えます。Git の dirty state は warning に留め、実行自体は止めません。
+
+外部インストール後は、指定した各スキルの `SKILL.md` が存在することを確認します。欠落時は user view を入れ替えず、project scope では既存のバックアップを復元します。`profile validate` は設定の構造を確認するもので、配布元の存在確認や実行評価は行いません。
 
 ## Local Skills
 

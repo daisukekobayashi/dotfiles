@@ -642,6 +642,18 @@ function runExternalInstalls(workDir: string, plan: SkillsPlan, agents: Agent[],
       ...process.env,
       NPM_CONFIG_CACHE: npmCacheDir,
     });
+    for (const agent of agents) {
+      requireInstalledSkills(agentSkillDir(workDir, agent), entry);
+    }
+  }
+}
+
+function requireInstalledSkills(skillsDir: string, entry: ExternalSkillSource): void {
+  for (const name of entry.skills) {
+    const skillFile = path.join(skillsDir, name, "SKILL.md");
+    if (!fs.existsSync(skillFile) || !fs.statSync(skillFile).isFile()) {
+      fail(`Missing installed skill ${name} from ${entry.source}: ${skillFile}`);
+    }
   }
 }
 
@@ -664,7 +676,9 @@ function runUserExternalInstalls(tempInstallDir: string, restoreSkillsDir: strin
       ...process.env,
       NPM_CONFIG_CACHE: npmCacheDir,
     });
-    copyDirectoryContents(path.join(tempInstallDir, ".agents", "skills"), restoreSkillsDir);
+    const installedSkillsDir = path.join(tempInstallDir, ".agents", "skills");
+    requireInstalledSkills(installedSkillsDir, entry);
+    copyDirectoryContents(installedSkillsDir, restoreSkillsDir);
   }
 }
 
@@ -747,6 +761,7 @@ function setupUserSkills(
     info(`DRY-RUN mkdir -p ${stagingSkillsDir}`);
     info(`DRY-RUN mkdir -p ${tempInstallDir}`);
     logDryRunUserExternalInstalls(tempInstallDir, plan, npmCacheDir);
+    info(`DRY-RUN preserve ${path.join(restoreSkillsDir, "synced")} in ${stagingSkillsDir}`);
     if (skipUserLocalSkillLinks) {
       info("DRY-RUN skip user local skill links");
     } else {
@@ -774,6 +789,7 @@ function setupUserSkills(
 
   try {
     runUserExternalInstalls(tempInstallDir, stagingSkillsDir, plan, npmCacheDir);
+    copyMissingDirectoryEntries(path.join(restoreSkillsDir, "synced"), path.join(stagingSkillsDir, "synced"));
     if (skipUserLocalSkillLinks) {
       info("User local skill links skipped");
     } else {

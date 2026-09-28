@@ -36,6 +36,7 @@ const azureDevOpsLocalSkills = [
 const baseLocalSkills = [
   "adversarial-review",
   "design-preflight",
+  "design-preflight-with-docs",
   "execution-context-first-repo-onboarding",
   "find-unknowns",
   "local-runtime-port-isolation",
@@ -353,7 +354,7 @@ test("repository profiles keep provider workflow skills separated", async () => 
     "to-tickets",
     "triage",
     "wayfinder",
-    "writing-great-skills",
+    "writing-for-agents",
   ]);
   assert.deepEqual(base.local, baseLocalSkills);
   for (const skillName of githubLocalSkills) {
@@ -486,6 +487,84 @@ test("user scope copies skill directories when symlinks are denied", async () =>
     assert.equal(existsSync(path.join(homeClaudeSkills, "local-one", "SKILL.md")), true);
     assert.equal((await lstat(restoreLocalSkill)).isSymbolicLink(), false);
     assert.equal((await lstat(homeCodexSkills)).isSymbolicLink(), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("user refresh preserves synced skills but removes deselected managed skills", async () => {
+  const fixture = await createFixture();
+  try {
+    const view = path.join(fixture.dotfiles, ".agents", "user", "skills");
+    const synced = path.join(view, "synced", "account", "custom");
+    await mkdir(synced, { recursive: true });
+    await writeFile(path.join(synced, "SKILL.md"), "synchronized content\n");
+    await writeFile(path.join(synced, "helper.txt"), "supporting content\n");
+    await symlink("helper.txt", path.join(synced, "helper-link"));
+    await mkdir(path.join(view, "old-managed"), { recursive: true });
+    await writeFile(path.join(view, "old-managed", "SKILL.md"), "old\n");
+
+    const result = runSkills(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readText(path.join(synced, "SKILL.md")), "synchronized content\n");
+    assert.equal(await readText(path.join(synced, "helper-link")), "supporting content\n");
+    assert.equal(await readlink(path.join(synced, "helper-link")), "helper.txt");
+    assert.equal(existsSync(path.join(view, "old-managed")), false);
+    assert.equal(existsSync(path.join(view, "find-skills", "SKILL.md")), true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("user install rejects missing skills even when the CLI exits successfully", async () => {
+  const fixture = await createFixture({ npxBody: "#!/bin/sh\nexit 0\n" });
+  try {
+    const root = path.join(fixture.dotfiles, ".agents", "user");
+    const old = path.join(root, "skills", "find-skills");
+    await mkdir(old, { recursive: true });
+    await writeFile(path.join(old, "SKILL.md"), "previous skill\n");
+    await writeFile(path.join(root, "skills-profile.json"), "previous metadata\n");
+
+    const result = runSkills(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr + result.stdout, /Missing installed skill find-skills/);
+    assert.equal(await readText(path.join(old, "SKILL.md")), "previous skill\n");
+    assert.equal(await readText(path.join(root, "skills-profile.json")), "previous metadata\n");
+    assert.equal(existsSync(path.join(fixture.home, ".agents", "skills")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project install restores prior state when a selected agent is missing a skill", async () => {
+  const fixture = await createFixture({ npxBody: `#!/bin/sh
+mkdir -p .agents/skills/find-skills
+printf 'new skill' > .agents/skills/find-skills/SKILL.md
+printf 'new lock' > skills-lock.json
+exit 0
+` });
+  try {
+    const old = path.join(fixture.project, ".claude", "skills", "custom");
+    await mkdir(old, { recursive: true });
+    await writeFile(path.join(old, "SKILL.md"), "previous skill\n");
+    await mkdir(path.join(fixture.project, ".agents"), { recursive: true });
+    const metadata = path.join(fixture.project, ".agents", "skills-profile.json");
+    await writeFile(metadata, "previous metadata\n");
+    await writeFile(path.join(fixture.project, "skills-lock.json"), "previous lock\n");
+
+    const result = runSkills(
+      ["--scope", "project", "--profile", "base", "--agent", "codex", "--agent", "claude-code"],
+      fixture, { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr + result.stdout, /Missing installed skill find-skills/);
+    assert.equal(await readText(path.join(old, "SKILL.md")), "previous skill\n");
+    assert.equal(await readText(metadata), "previous metadata\n");
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "previous lock\n");
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills")), false);
   } finally {
     await fixture.cleanup();
   }

@@ -71,6 +71,8 @@ When user profiles are changed, rebuild this single user skill view instead of k
 
 For Codex user skills, keep using `$HOME/.agents/skills` because that is the path documented by OpenAI Codex skills documentation. Do not rely on the `skills` CLI global Codex path if it differs.
 
+User-scope regeneration preserves externally synchronized skills under `synced/`; profile-managed skills are regenerated from the selected profiles.
+
 ## Dotfiles Layout
 
 Target layout:
@@ -164,12 +166,12 @@ Include:
 
 - `find-skills`
 - `frontend-design`, `webapp-testing`, and `web-design-guidelines` for UI creation, testing, and review
-- all published Matt Pocock Engineering and Productivity skills
+- selected published Matt Pocock Engineering and Productivity skills
 - repository onboarding, `review-change`, `adversarial-review`, and runtime isolation local skills
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
-Superpowers is not included in `base`.
+Superpowers is not included in `base`. Use `writing-for-agents`, the upstream replacement for `writing-great-skills`.
 
 Use `base,github` when you want the previous GitHub-enabled baseline.
 
@@ -312,6 +314,8 @@ Azure cloud and resource management skills selected from the current curated set
 
 Only include Azure skills that are intentionally useful; do not blindly install every available Azure skill.
 
+`azure-rbac` is excluded because its skill files could not be found upstream.
+
 ### `azure-devops`
 
 Azure DevOps workflow skills:
@@ -365,7 +369,7 @@ Browser automation and debugging skills:
 
 Data and database skills:
 
-- `redis-development`
+- `redis-core`
 - `supabase-postgres-best-practices`
 
 ### `research`
@@ -432,6 +436,8 @@ npx skills add <owner/repo> \
 Run this from the repository root and let the CLI manage `skills-lock.json` and agent-specific project output paths.
 
 If an existing `skills-lock.json` or agent skill directory will be replaced, create a backup first and restore it if installation fails. On successful installs, copy back pre-existing agent skill entries that were not recreated by the selected profile. Entries with the same name as profile-managed skills are replaced by the profile-managed version. Dirty Git state should produce a warning, not block execution.
+
+After each external install, setup checks that every requested skill has a `SKILL.md`. Missing skills prevent the user view from being replaced and trigger backup restoration in project scope. `profile validate` checks configuration structure, not upstream availability or runtime behavior.
 
 ## Local Skills
 

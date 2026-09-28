@@ -538,6 +538,17 @@ function runExternalInstalls(workDir, plan, agents, npmCacheDir) {
             ...process.env,
             NPM_CONFIG_CACHE: npmCacheDir,
         });
+        for (const agent of agents) {
+            requireInstalledSkills(agentSkillDir(workDir, agent), entry);
+        }
+    }
+}
+function requireInstalledSkills(skillsDir, entry) {
+    for (const name of entry.skills) {
+        const skillFile = path.join(skillsDir, name, "SKILL.md");
+        if (!fs.existsSync(skillFile) || !fs.statSync(skillFile).isFile()) {
+            fail(`Missing installed skill ${name} from ${entry.source}: ${skillFile}`);
+        }
     }
 }
 function runUserExternalInstalls(tempInstallDir, restoreSkillsDir, plan, npmCacheDir) {
@@ -557,7 +568,9 @@ function runUserExternalInstalls(tempInstallDir, restoreSkillsDir, plan, npmCach
             ...process.env,
             NPM_CONFIG_CACHE: npmCacheDir,
         });
-        copyDirectoryContents(path.join(tempInstallDir, ".agents", "skills"), restoreSkillsDir);
+        const installedSkillsDir = path.join(tempInstallDir, ".agents", "skills");
+        requireInstalledSkills(installedSkillsDir, entry);
+        copyDirectoryContents(installedSkillsDir, restoreSkillsDir);
     }
 }
 function swapUserSkillsView(restoreRoot, restoreSkillsDir, stagingSkillsDir, stagingMetadata) {
@@ -624,6 +637,7 @@ function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agen
         info(`DRY-RUN mkdir -p ${stagingSkillsDir}`);
         info(`DRY-RUN mkdir -p ${tempInstallDir}`);
         logDryRunUserExternalInstalls(tempInstallDir, plan, npmCacheDir);
+        info(`DRY-RUN preserve ${path.join(restoreSkillsDir, "synced")} in ${stagingSkillsDir}`);
         if (skipUserLocalSkillLinks) {
             info("DRY-RUN skip user local skill links");
         }
@@ -650,6 +664,7 @@ function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agen
     fs.mkdirSync(tempInstallDir, { recursive: true });
     try {
         runUserExternalInstalls(tempInstallDir, stagingSkillsDir, plan, npmCacheDir);
+        copyMissingDirectoryEntries(path.join(restoreSkillsDir, "synced"), path.join(stagingSkillsDir, "synced"));
         if (skipUserLocalSkillLinks) {
             info("User local skill links skipped");
         }

@@ -3,7 +3,7 @@
   "external": [
     {
       "source": "redis/agent-skills",
-      "skills": ["redis-development"]
+      "skills": ["redis-core"]
     },
     {
       "source": "supabase/agent-skills",
