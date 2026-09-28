@@ -42,6 +42,7 @@ const baseLocalSkills = [
   "learning-partner",
   "local-runtime-port-isolation",
   "review-change",
+  "writing-partner",
 ];
 const beadsLocalSkills = [
   "beads-issue-create",
