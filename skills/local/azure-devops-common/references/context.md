@@ -63,10 +63,10 @@ Resolution rules:
 
 ## Work Item Links And State Transitions
 
-- For Azure Repos PRs, prefer Azure DevOps Work Item links over GitHub-style
-  prose. Use `az repos pr create --work-items` when creating a PR if the Work
-  Item ID is known and the CLI supports it; otherwise add the link after PR
-  creation with `az repos pr work-item add`.
+- For Azure Repos PRs, use structured Work Item links for known Work Items
+  implemented by the PR; do not rely only on body text when a structured link is
+  available. Use `az repos pr create --work-items` if the CLI supports it;
+  otherwise add the link after PR creation with `az repos pr work-item add`.
 - Use state-transition keywords in the PR description, such as `Fixes #123`,
   `Closes #123`, or `Resolves #123`, only when the user explicitly wants the
   Work Item to transition on PR completion or merge and the PR fully completes

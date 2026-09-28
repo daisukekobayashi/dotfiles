@@ -320,11 +320,20 @@ Azure DevOps workflow skill:
 - `azure-devops-work-item-create`
 - `azure-devops-work-item-review`
 - `azure-devops-work-item-triage`
-- `azure-devops-work-item-worktree`
-- `azure-devops-pr`
+- `azure-devops-work-item-start`
+- `azure-devops-pr-create`
 - `azure-devops-pr-publish`
 - `azure-devops-pr-review`
-- `azure-devops-merge-cleanup`
+- `azure-devops-worktree-cleanup`
+
+`azure-devops-work-item-start` は独立した worktree を準備し、実装まで進めます。
+`azure-devops-pr-create` は PR の作成・再利用を担当し、
+`azure-devops-pr-publish` は検証・commit・push の後に PR 作成を委譲します。
+`azure-devops-worktree-cleanup` は完了した作業のローカル branch と worktree を削除します。
+
+Work Item のリンクと状態遷移のルールは
+[共通文書](../skills/local/azure-devops-common/references/context.md#work-item-links-and-state-transitions)
+に集約します。PR 作成スキルがルールを適用し、公開スキルは Work Item の文脈を渡します。
 
 `azure-devops` は `azure` から独立しています. Azure DevOps リポジトリでは `base,azure-devops` を使います. 同じリポジトリで Azure cloud/resource 作業も必要な場合だけ `base,azure,azure-devops` を使います.
 
@@ -337,11 +346,11 @@ GitHub と Azure DevOps の workflow 対応:
 | `github-issue-create` | `azure-devops-work-item-create` |
 | `github-issue-review` | `azure-devops-work-item-review` |
 | `github-issue-triage` | `azure-devops-work-item-triage` |
-| `github-issue-start` | `azure-devops-work-item-worktree` |
-| `github-pr-create` | `azure-devops-pr` |
+| `github-issue-start` | `azure-devops-work-item-start` |
+| `github-pr-create` | `azure-devops-pr-create` |
 | `github-pr-publish` | `azure-devops-pr-publish` |
 | `github-pr-review` | `azure-devops-pr-review` |
-| `github-worktree-cleanup` | `azure-devops-merge-cleanup` |
+| `github-worktree-cleanup` | `azure-devops-worktree-cleanup` |
 
 ### `frontend`
 

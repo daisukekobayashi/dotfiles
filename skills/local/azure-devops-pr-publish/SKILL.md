@@ -52,11 +52,9 @@ Still stop and ask before:
    - Use the `git-commit` skill.
    - Stage only files belonging to the requested work.
 7. Push normally to the Azure DevOps remote for the current branch.
-8. Use `azure-devops-pr` to create or resolve the PR.
-   - That skill should apply the Azure DevOps common Work Item link and
-     state-transition rules: structured Work Item links for implemented Work
-     Items, transition keywords only for fully completed Work Items, and
-     `Refs #123` for parent trackers, partial work, follow-ups, or context.
+8. Use `azure-devops-pr-create` to create or resolve the PR.
+   - Pass along known Work Item IDs, completion scope, and the user's
+     state-transition intent.
 9. Verify with `az repos pr show` and report branch, commit, push target, PR URL,
    and verification result.
 

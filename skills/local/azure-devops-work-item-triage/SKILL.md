@@ -56,7 +56,7 @@ DevOps.
 - <safe parallel grouping, or "No safe parallel split right now">
 
 **Next Step**
-- Start with `$azure-devops-work-item-worktree <id>` if the user wants to implement the top recommendation.
+- Start with `$azure-devops-work-item-start <id>` if the user wants to implement the top recommendation.
 ```
 
 ## Guardrails

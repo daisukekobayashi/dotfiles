@@ -325,11 +325,21 @@ Azure DevOps workflow skills:
 - `azure-devops-work-item-create`
 - `azure-devops-work-item-review`
 - `azure-devops-work-item-triage`
-- `azure-devops-work-item-worktree`
-- `azure-devops-pr`
+- `azure-devops-work-item-start`
+- `azure-devops-pr-create`
 - `azure-devops-pr-publish`
 - `azure-devops-pr-review`
-- `azure-devops-merge-cleanup`
+- `azure-devops-worktree-cleanup`
+
+`azure-devops-work-item-start` prepares an isolated worktree and continues into
+implementation. `azure-devops-pr-create` creates or reuses a PR, while
+`azure-devops-pr-publish` handles verification, commit, and push before delegating
+PR creation. `azure-devops-worktree-cleanup` removes completed work's local
+branches and worktrees.
+
+Work Item link and state-transition rules are maintained in the
+[common context](../skills/local/azure-devops-common/references/context.md#work-item-links-and-state-transitions).
+PR creation applies those rules; publication passes the Work Item context to it.
 
 `azure-devops` is independent from `azure`. Use `base,azure-devops` for Azure DevOps repositories. Use `base,azure,azure-devops` only when the same repository also needs Azure cloud/resource work.
 
@@ -342,11 +352,11 @@ GitHub to Azure DevOps workflow mapping:
 | `github-issue-create` | `azure-devops-work-item-create` |
 | `github-issue-review` | `azure-devops-work-item-review` |
 | `github-issue-triage` | `azure-devops-work-item-triage` |
-| `github-issue-start` | `azure-devops-work-item-worktree` |
-| `github-pr-create` | `azure-devops-pr` |
+| `github-issue-start` | `azure-devops-work-item-start` |
+| `github-pr-create` | `azure-devops-pr-create` |
 | `github-pr-publish` | `azure-devops-pr-publish` |
 | `github-pr-review` | `azure-devops-pr-review` |
-| `github-worktree-cleanup` | `azure-devops-merge-cleanup` |
+| `github-worktree-cleanup` | `azure-devops-worktree-cleanup` |
 
 ### `frontend`
 

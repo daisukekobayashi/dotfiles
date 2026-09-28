@@ -1,9 +1,9 @@
 ---
-name: azure-devops-merge-cleanup
+name: azure-devops-worktree-cleanup
 description: Use when the user says Azure DevOps work is already merged or complete and wants to safely clean up the local feature branch and worktree.
 ---
 
-# Azure DevOps Merge Cleanup
+# Azure DevOps Worktree Cleanup
 
 ## Scope
 

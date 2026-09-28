@@ -1,9 +1,9 @@
 ---
-name: azure-devops-work-item-worktree
+name: azure-devops-work-item-start
 description: Use when the user wants to start implementation from one or more Azure DevOps Work Item IDs in the current repository.
 ---
 
-# Azure DevOps Work Item Worktree
+# Azure DevOps Work Item Start
 
 ## Scope
 

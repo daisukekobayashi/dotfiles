@@ -27,11 +27,11 @@ const azureDevOpsLocalSkills = [
   "azure-devops-work-item-create",
   "azure-devops-work-item-review",
   "azure-devops-work-item-triage",
-  "azure-devops-work-item-worktree",
-  "azure-devops-pr",
+  "azure-devops-work-item-start",
+  "azure-devops-pr-create",
   "azure-devops-pr-publish",
   "azure-devops-pr-review",
-  "azure-devops-merge-cleanup",
+  "azure-devops-worktree-cleanup",
 ];
 const baseLocalSkills = [
   "adversarial-review",
