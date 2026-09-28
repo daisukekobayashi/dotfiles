@@ -39,6 +39,7 @@ const baseLocalSkills = [
   "design-preflight-with-docs",
   "execution-context-first-repo-onboarding",
   "find-unknowns",
+  "learning-partner",
   "local-runtime-port-isolation",
   "review-change",
 ];
