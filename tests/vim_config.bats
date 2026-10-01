@@ -97,6 +97,91 @@ EOF
   '
 }
 
+@test "Vim stays in normal mode when the terminal reports its cursor position on startup" {
+  command -v python3 >/dev/null || skip "Python is not installed"
+  if ! "${VIM_TEST_BIN}" -Nu NONE -n -es -i NONE \
+    -c 'if !has("termresponse") || !has("timers") | cquit | endif' -c 'qall!'; then
+    skip "Vim terminal response support and timers are required"
+  fi
+  cat > "${TEST_ROOT}/startup.vim" <<'EOF'
+let g:startup_samples = 0
+function! StartupMode(timer) abort
+  call writefile([mode(1)], $VIM_TEST_MODES, 'a')
+  let g:startup_samples += 1
+  if g:startup_samples >= 10
+    qall!
+  endif
+endfunction
+autocmd VimEnter * call timer_start(100, function('StartupMode'), {'repeat': 10})
+EOF
+
+  run python3 - "${VIM_TEST_BIN}" "${TEST_HOME}" "${TEST_ROOT}" <<'PY'
+import os
+from pathlib import Path
+import pty
+import select
+import signal
+import sys
+import time
+
+vim_bin, test_home, test_root = sys.argv[1:]
+modes_file = Path(test_root) / "modes"
+environment = dict(os.environ, HOME=test_home, PATH=test_root + "/bin",
+                   SHELL="/bin/sh", TERM="xterm-256color", DISPLAY="",
+                   WAYLAND_DISPLAY="", TMUX="", TMUX_POPUP_SERVER="",
+                   __tmux_popup_caller="", SSH_CONNECTION="", SSH_TTY="",
+                   VIM_TEST_MODES=str(modes_file))
+pid, terminal = pty.fork()
+if pid == 0:
+    os.execve(vim_bin, [vim_bin, "-n", "-i", "NONE", "-u",
+                       test_home + "/.vimrc", "-S", test_root + "/startup.vim"],
+              environment)
+
+pending = bytearray()
+responses = 0
+status = None
+deadline = time.monotonic() + 5
+try:
+    while time.monotonic() < deadline:
+        if select.select([terminal], [], [], 0.05)[0]:
+            try:
+                chunk = os.read(terminal, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            pending.extend(chunk)
+            # Reply to Vim's real cursor-position query, without typing any keys.
+            while (offset := pending.find(b"\x1b[6n")) >= 0:
+                os.write(terminal, b"\x1b[2;2R")
+                responses += 1
+                del pending[:offset + len(b"\x1b[6n")]
+        stopped, child_status = os.waitpid(pid, os.WNOHANG)
+        if stopped:
+            status = child_status
+            break
+    else:
+        raise AssertionError("Vim startup mode check timed out")
+finally:
+    if status is None:
+        stopped, status = os.waitpid(pid, os.WNOHANG)
+        if not stopped:
+            os.kill(pid, signal.SIGKILL)
+            _, status = os.waitpid(pid, 0)
+    os.close(terminal)
+
+assert os.waitstatus_to_exitcode(status) == 0, "Vim did not exit normally"
+assert responses, "Vim did not query the terminal cursor position"
+modes = modes_file.read_text().splitlines()
+assert len(modes) == 10, f"Missing startup mode samples: {modes}"
+assert all(mode == "n" for mode in modes), f"Vim started outside normal mode: {modes}"
+PY
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$output"
+    return 1
+  fi
+}
+
 @test "Vim copies Unicode and pastes externally changed clipboard text" {
   make_clipboard_tool wl-copy
   make_clipboard_tool wl-paste
