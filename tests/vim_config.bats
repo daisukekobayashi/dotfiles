@@ -115,6 +115,59 @@ EOF
   '
 }
 
+@test "Vim omits picker mappings when the fzf binary is unavailable" {
+  run_vim_check '
+    call dotfiles#fzf#setup("unused")
+    call assert_equal("", maparg("<Space>ff", "n"))
+    call assert_equal("", maparg("<Space>sg", "n"))
+  '
+}
+
+@test "Vim visual word search preserves registers and the external clipboard" {
+  make_clipboard_tool wl-copy
+  make_clipboard_tool wl-paste
+  VIM_TEST_WAYLAND=fixture
+  mkdir -p "${TEST_ROOT}/runtime/autoload/fzf"
+  cat > "${TEST_ROOT}/runtime/autoload/fzf/vim.vim" <<'EOF'
+function! fzf#vim#with_preview() abort
+  return {}
+endfunction
+function! fzf#vim#grep2(command, query, spec, fullscreen) abort
+  let g:test_grep_command = a:command
+  let g:test_grep_query = a:query
+endfunction
+EOF
+  run_vim_check '
+    let &runtimepath = fnamemodify($VIM_TEST_CLIPBOARD, ":h") . "/runtime," . &runtimepath
+    call setreg("z", ["saved named register"], "V")
+    call setreg("0", "saved yank", "v")
+    call setreg("\"", "saved unnamed register", "v")
+    let saved_z = getreginfo("z")
+    let saved_unnamed = getreginfo("\"")
+    let saved_zero = getreginfo("0")
+    call writefile(["external clipboard"], $VIM_TEST_CLIPBOARD, "b")
+    let selection = "日本語.* | quotes \" and $(shell)"
+    call setline(1, selection)
+    execute "normal! gg0v$\<Esc>"
+    call dotfiles#fzf#grep_word(1)
+    call assert_equal(selection, g:test_grep_query)
+    call assert_match("--fixed-strings --$", g:test_grep_command)
+    execute "normal! ggV\<Esc>"
+    call dotfiles#fzf#grep_word(1)
+    call assert_equal(selection, g:test_grep_query)
+    call setline(1, [selection, "second line"])
+    execute "normal! ggVj\<Esc>"
+    call dotfiles#fzf#grep_word(1)
+    call assert_equal(selection . "\nsecond line", g:test_grep_query)
+    call assert_match("--multiline --$", g:test_grep_command)
+    call assert_equal(saved_z, getreginfo("z"))
+    call assert_equal(saved_unnamed, getreginfo("\""))
+    call assert_equal(saved_zero, getreginfo("0"))
+    call assert_equal(["external clipboard"], readfile($VIM_TEST_CLIPBOARD, "b"))
+    call assert_equal([], readfile($VIM_TEST_COMMANDS))
+  '
+}
+
 @test "Vim clipboard paste preserves counts, named registers, and linewise yanks" {
   make_clipboard_tool pbcopy
   make_clipboard_tool pbpaste

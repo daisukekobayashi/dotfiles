@@ -6,7 +6,7 @@ Personal dotfiles for my own development environment.
 
 - Shell: `zsh`
 - Terminal multiplexer: `tmux`
-- Editor: `neovim`, with a plugin-free `vim` fallback
+- Editor: `neovim`, with a `vim` fallback
 - Tool/package management: `mise`
 - `zsh` plugin management: `sheldon`
 
@@ -68,11 +68,55 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 ## Editors
 
-`vim/vimrc` and `vim/gvimrc` provide basic Vim settings without third-party plugins.
+`vim/vimrc` and `vim/gvimrc` provide basic Vim settings that also work without plugins.
 The link step installs them as `~/.vimrc` and `~/.gvimrc` on Linux/macOS,
 or `_vimrc` and `_gvimrc` in the home directory on Windows.
 After updating an existing checkout, run `./setup.sh links`
 (Windows: `.\setup.ps1 links`) to refresh the links.
+
+Vim plugins are defined in `vim/plugins.vim` and managed by vim-plug:
+commentary (`gc`/`gcc`), surround (`ys`/`cs`/`ds`), repeat (`.`), auto-pairs,
+sleuth (indent detection), Kanagawa (wave), and fzf/fzf.vim.
+Install them explicitly from the repository root with Git, curl, and Vim available:
+
+```sh
+vim -Nu vim/vimrc -n -i NONE -S vim/install.vim
+```
+
+The same command works in PowerShell. The installer bootstraps vim-plug 0.14.0
+and installs missing plugins. Runtime files live in `~/.vim/dotfiles/`
+(`~/vimfiles/dotfiles/` on Windows), preserving any older Vim plugin installation.
+Restart Vim after installation. Use `:PlugUpdate` to update plugins explicitly
+and `:PlugStatus` to inspect their state. Normal startup never downloads plugins.
+
+fzf uses the existing external binary (0.54.0 or later); install `rg` for text
+search and optionally `bat` for syntax-highlighted previews. Preview also needs
+Bash (Git Bash on Windows). Linux/WSL mise configs and the macOS Brewfile already
+manage these tools; the Windows mise config manages fzf and rg. Mappings for
+missing tools are omitted, and Kanagawa falls back to the standard colors when
+it is not installed. Kanagawa needs a true-color terminal.
+
+The leader is Space. Search keys follow the Neovim Snacks Picker configuration:
+
+| Keys | Vim action |
+| --- | --- |
+| `<leader>ff`, `<leader><Space>` | Files (`<leader><Space>` uses a regular file picker instead of Smart Find Files) |
+| `<leader>fc` | Files in the dotfiles `vim/` directory |
+| `<leader>fg` | Git files |
+| `<leader>fr` | Recent files |
+| `<leader>,`, `<leader>fb` | Buffers |
+| `<leader>/`, `<leader>sg` | Live grep |
+| `<leader>sw` (normal/visual) | Literal search for the word or selection |
+| `<leader>:`, `<leader>sc` | Command history |
+| `<leader>s/` | Search history |
+| `<leader>sb`, `<leader>sB` | Lines in the current/all open buffers |
+| `<leader>sC` | Commands |
+| `<leader>sh` | Help tags (requires Perl) |
+| `<leader>sj`, `<leader>sk`, `<leader>sm` | Jumps, keymaps, marks |
+| `<leader>uC` | Color schemes |
+
+Pickers use a centered popup with a preview. `Ctrl-U`/`Ctrl-D` scroll the preview,
+`Ctrl-/` toggles it, and `Ctrl-T`/`Ctrl-X`/`Ctrl-V` open selections in a tab or split.
 
 Zsh selects `nvim`, then `vim`, then `vi` for both `EDITOR` and `VISUAL`,
 and refreshes the selection after mise activates its runtime PATH.
@@ -176,3 +220,12 @@ Static checks.
 shellcheck setup.sh lib/common.sh setup/*.sh tests/helpers/*.bash tests/*.bats
 bash -n setup.sh lib/common.sh setup/*.sh tests/helpers/*.bash
 ```
+
+Vim checks use temporary homes and do not download dependencies:
+
+```bash
+bats tests/vim_config.bats tests/vim_plugins.bats
+```
+
+The installed-plugin checks skip when the managed plugins are absent. Set
+`VIM_PLUGIN_RUNTIME` to a separately installed `dotfiles/` runtime to test it.

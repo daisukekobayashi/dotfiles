@@ -6,7 +6,7 @@
 
 - Shell : `zsh`
 - Terminal multiplexer : `tmux`
-- Editor : `neovim`, 補助用にプラグイン不要の `vim`
+- Editor : `neovim`, 補助用の `vim`
 - Tool/package management : `mise`
 - `zsh` plugin management : `sheldon`
 
@@ -68,11 +68,37 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 ## Editors
 
-`vim/vimrc` と `vim/gvimrc` は, 外部プラグインを必要としない Vim の基本設定です.
+`vim/vimrc` と `vim/gvimrc` は, プラグインなしでも使える Vim の基本設定です.
 リンク処理により, Linux/macOS では `~/.vimrc` と `~/.gvimrc`,
 Windows ではホームディレクトリの `_vimrc` と `_gvimrc` に配置します.
 既存のチェックアウトを更新した後は, `./setup.sh links`
 (Windows: `.\setup.ps1 links`) でリンクを更新してください.
+
+プラグインは `vim/plugins.vim` に定義し, vim-plug で管理します.
+commentary (`gc`/`gcc`), surround (`ys`/`cs`/`ds`), repeat (`.`), auto-pairs,
+sleuth (インデント検出), Kanagawa (wave), fzf/fzf.vim を使います.
+Git, curl, Vim がある環境で, リポジトリのルートから次を実行してください.
+
+```sh
+vim -Nu vim/vimrc -n -i NONE -S vim/install.vim
+```
+
+PowerShell でも同じコマンドを使えます. vim-plug 0.14.0 と未導入のプラグインを
+`~/.vim/dotfiles/` (Windows: `~/vimfiles/dotfiles/`) に導入します.
+既存の Vim プラグイン用ディレクトリは保持します. 導入後は Vim を開き直してください.
+更新は `:PlugUpdate`, 状態確認は `:PlugStatus` を使い, 通常の起動時にはダウンロードしません.
+
+fzf 本体は外部コマンドを使い, 全文検索には `rg`, 色付きプレビューには任意で `bat` が必要です.
+プレビューには Bash (Windows: Git Bash) も使います. Linux/WSL の mise 設定と
+macOS の Brewfile はこれらのツールを管理し, Windows の mise 設定は fzf と rg を管理します.
+必要なツールがない検索キーは登録せず, 未導入のテーマは標準の色で起動します.
+Kanagawa にはトゥルーカラー対応の端末が必要です.
+
+leader は Space です. `Space ff` (ファイル), `Space /` / `Space sg` (全文検索),
+`Space ,` / `Space fb` (バッファ), `Space sw` (単語・選択範囲) などを
+Neovim の Snacks Picker と同じキーにしています.
+`Space Space` は通常のファイル選択で, Smart Find Files の代わりに使います.
+[検索キーの一覧](README.md#editors)も参照してください.
 
 Zsh は `nvim`, `vim`, `vi` の順に `EDITOR` と `VISUAL` を選び,
 mise が runtime の PATH を反映した後にも選び直します.

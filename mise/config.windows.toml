@@ -1,6 +1,7 @@
 [tools]
 neovim = "0.12"
 ripgrep = "15"
+fzf = "0.73.1"
 lazygit = "0.59"
 gitui = "0.28"
 github-cli = "2"

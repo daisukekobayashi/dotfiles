@@ -47,5 +47,8 @@ nnoremap <C-l> <C-w>l
 
 " Resolve the symlink so this also works without linking the runtime directory.
 let s:dotfiles_root = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
-let &runtimepath = escape(s:dotfiles_root . '/vim', '\,') . ',' . &runtimepath
+let g:dotfiles_vim_plugin_root = expand((has('win32') || has('win64') ? '~/vimfiles' : '~/.vim') . '/dotfiles')
+let &runtimepath = escape(s:dotfiles_root . '/vim', '\,') . ','
+      \ . escape(g:dotfiles_vim_plugin_root, '\,') . ',' . &runtimepath
+execute 'source ' . fnameescape(s:dotfiles_root . '/vim/plugins.vim')
 call dotfiles#clipboard#setup(s:dotfiles_root)
