@@ -72,3 +72,7 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
     eval "$(atuin init zsh --disable-up-arrow --disable-ai)"
   fi
 fi
+
+if (( $+functions[select_dotfiles_editor] )); then
+  select_dotfiles_editor
+fi

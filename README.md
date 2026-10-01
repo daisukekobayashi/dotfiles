@@ -69,6 +69,8 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 ## Editors
 
 `.vimrc` and `.gvimrc` provide basic Vim settings without third-party plugins.
+Zsh selects `nvim`, then `vim`, then `vi` for both `EDITOR` and `VISUAL`,
+and refreshes the selection after mise activates its runtime PATH.
 
 Vim clipboard integration uses native support when available, or existing
 macOS, Wayland, X11, Windows/WSL, and tmux clipboard commands. The tmux popup

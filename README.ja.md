@@ -69,6 +69,8 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 ## Editors
 
 `.vimrc` と `.gvimrc` は, 外部プラグインを必要としない Vim の基本設定です.
+Zsh は `nvim`, `vim`, `vi` の順に `EDITOR` と `VISUAL` を選び,
+mise が runtime の PATH を反映した後にも選び直します.
 
 Vim のクリップボードは, 組み込み機能, または既存の macOS, Wayland,
 X11, Windows/WSL, tmux のコマンドを使います. tmux popup では Neovim と

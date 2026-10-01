@@ -3,7 +3,6 @@ export HISTSIZE=1000
 export LISTMAX=0
 export SAVEHIST=100000
 
-export EDITOR=vim
 #export LANG=ja_JP.UTF-8
 export LANG=en_US.UTF-8
 export LC_CTYPE=en_US.UTF-8
@@ -20,6 +19,17 @@ load_dotfiles_env() {
 
   setopt allexport
   source "$env_file"
+}
+
+select_dotfiles_editor() {
+  if (( $+commands[nvim] )); then
+    export EDITOR=nvim
+  elif (( $+commands[vim] )); then
+    export EDITOR=vim
+  else
+    export EDITOR=vi
+  fi
+  export VISUAL="$EDITOR"
 }
 
 unamestr="$(uname)"
@@ -65,3 +75,5 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   # ghcup
   export PATH="$HOME/.cabal/bin:$HOME/.ghcup/bin:$PATH"
 fi
+
+select_dotfiles_editor
