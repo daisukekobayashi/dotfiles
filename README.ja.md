@@ -6,7 +6,7 @@
 
 - Shell : `zsh`
 - Terminal multiplexer : `tmux`
-- Editor : `neovim`
+- Editor : `neovim`, 補助用にプラグイン不要の `vim`
 - Tool/package management : `mise`
 - `zsh` plugin management : `sheldon`
 
@@ -65,6 +65,23 @@ cd ~/.dotfiles
 SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 ./setup.sh all --reload-shell
 ```
+
+## Editors
+
+`.vimrc` と `.gvimrc` は, 外部プラグインを必要としない Vim の基本設定です.
+
+Vim のクリップボードは, 組み込み機能, または既存の macOS, Wayland,
+X11, Windows/WSL, tmux のコマンドを使います. tmux popup では Neovim と
+同じヘルパーを使います. 通常の `y`, `p`/`P`, 挿入モードの `Ctrl-R "`
+がクリップボードに連携し, 名前付きレジスタは通常の動作を保ちます.
+`:echo g:dotfiles_clipboard_provider` で現在の方式を確認できます.
+
+クリップボード用コマンドがない SSH 接続では, OSC 52 対応端末にコピーできます.
+この場合の貼り付けは端末のショートカットを使います. OSC 52 のコピーは
+デフォルトで 32 KiB までで, tmux ではそれを超える内容も tmux のバッファに保存します.
+tmux の貼り付け時は, 対応端末にクリップボードの再取得を要求します.
+組み込みの `"+`/`"*` レジスタには `+clipboard` の Vim が必要です.
+外部コマンドによる補助設定は通常のコピー・貼り付け操作を連携します.
 
 ## AI Agent Rules
 

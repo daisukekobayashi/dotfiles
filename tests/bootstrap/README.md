@@ -83,7 +83,7 @@ set:
 - `libclang-dev` for Rust tools that use bindgen
 - Java, ODBC, wxWidgets, WebKitGTK, OpenGL, and GLU dependencies for Erlang
   optional apps
-- `vim-nox` for `PlugInstall`
+- `vim-nox` for the plugin-free Vim fallback
 - `pipx` for pipx-backed mise tools
 
 The harness sets `LANG=C.UTF-8` and `LC_ALL=C.UTF-8`.
@@ -106,8 +106,6 @@ Known non-fatal diagnostics include:
 - Cargo-installed mise tools warning that their install bin directory should be
   added to `PATH`.
 - Upstream Cargo lock warnings, such as `tokei` depending on a yanked crate.
-- `PlugInstall failed. Continuing setup.` when Vim plugin installation reports
-  an error after the rest of bootstrap can continue.
 
 GitHub/aqua-backed mise tools may fail under unauthenticated GitHub API rate
 limits. Prefer `--github-auth auto` or `--github-auth gh` when the host has a

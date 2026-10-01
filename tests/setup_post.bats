@@ -28,133 +28,17 @@ teardown() {
   [[ "$output" == *"DRY-RUN tmux source-file ${TEST_HOME}/.tmux.conf"* ]]
 }
 
-@test "post step runs Vim PlugInstall non-interactively with a stable TERM" {
-  local fake_bin="${TEST_ROOT}/bin"
-  local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
-
-  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
-
-  cat > "${fake_bin}/mise" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  "config ls --no-header -E linux")
-    exit 0
-    ;;
-esac
-EOF
-  chmod +x "${fake_bin}/mise"
-
-  cat > "${fake_bin}/git" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/git"
-
-  cat > "${fake_bin}/curl" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/curl"
-
-  cat > "${fake_bin}/tmux" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/tmux"
-
-  cat > "${fake_bin}/vim" <<'EOF'
-#!/usr/bin/env bash
-printf 'vim TERM=%s ARGS=%s\n' "${TERM:-}" "$*" >> "${LOG_FILE}"
-exit 0
-EOF
-  chmod +x "${fake_bin}/vim"
-
+@test "post step needs no Vim plugin bootstrap" {
   run env \
-    PATH="${fake_bin}:/usr/bin:/bin" \
-    LOG_FILE="${log_file}" \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DRY_RUN=1 \
     "$(setup_script_path)" \
     post
 
   [ "$status" -eq 0 ]
-  run grep -F "vim TERM=xterm-256color ARGS=-n -es -i NONE +set nomore +PlugInstall --sync +qall" "${log_file}"
-  [ "$status" -eq 0 ]
-}
-
-@test "post step treats Vim PlugInstall as best effort" {
-  local fake_bin="${TEST_ROOT}/bin"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
-
-  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
-
-  cat > "${fake_bin}/mise" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  "config ls --no-header -E linux")
-    exit 0
-    ;;
-esac
-EOF
-  chmod +x "${fake_bin}/mise"
-
-  cat > "${fake_bin}/git" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/git"
-
-  cat > "${fake_bin}/curl" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/curl"
-
-  cat > "${fake_bin}/tmux" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/tmux"
-
-  cat > "${fake_bin}/vim" <<'EOF'
-#!/usr/bin/env bash
-exit 7
-EOF
-  chmod +x "${fake_bin}/vim"
-
-  run env \
-    PATH="${fake_bin}:/usr/bin:/bin" \
-    SETUP_HOME="${TEST_HOME}" \
-    SETUP_TMPDIR="${TEST_TMP}" \
-    "$(setup_script_path)" \
-    post
-
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"PlugInstall failed. Continuing setup."* ]]
-}
-
-@test "vimrc tolerates a missing solarized8 colorscheme during bootstrap" {
-  run grep -Fx "silent! colorscheme solarized8" "$(repo_root)/.vimrc"
-  [ "$status" -eq 0 ]
-}
-
-@test "vimrc does not pin vim-signify to the removed legacy branch" {
-  run grep -F "Plug 'mhinz/vim-signify', { 'branch': 'legacy' }" "$(repo_root)/.vimrc"
-  [ "$status" -ne 0 ]
-
-  run grep -F "Plug 'mhinz/vim-signify'" "$(repo_root)/.vimrc"
-  [ "$status" -eq 0 ]
+  [[ "$output" != *"vim-plug"* ]]
+  [[ "$output" != *"PlugInstall"* ]]
 }
 
 @test "post step does not create a tmux session when sessions already exist" {

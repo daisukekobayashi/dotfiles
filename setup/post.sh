@@ -209,7 +209,6 @@ setup_post() {
   local setup_home="$1"
   local dry_run="$2"
   local tpm_dir
-  local vim_plug
 
   if [ "${dry_run}" != "1" ]; then
     require_cmd git
@@ -257,18 +256,6 @@ setup_post() {
     fi
   else
     log_warn "Skipping tmux plugin install because tmux is not available."
-  fi
-
-  vim_plug="${setup_home}/.vim/autoload/plug.vim"
-  if [ ! -f "${vim_plug}" ]; then
-    run_cmd "${dry_run}" curl -fLo "${vim_plug}" --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-    if command_exists vim; then
-      if ! run_cmd "${dry_run}" env HOME="${setup_home}" TERM=xterm-256color vim -n -es -i NONE +'set nomore' +'PlugInstall --sync' +qall; then
-        log_warn "PlugInstall failed. Continuing setup."
-      fi
-    else
-      log_warn "Skipping PlugInstall because vim is not available."
-    fi
   fi
 
   if [ ! -d "${setup_home}/.mintty" ]; then

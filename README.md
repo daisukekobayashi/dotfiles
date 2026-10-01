@@ -6,7 +6,7 @@ Personal dotfiles for my own development environment.
 
 - Shell: `zsh`
 - Terminal multiplexer: `tmux`
-- Editor: `neovim`
+- Editor: `neovim`, with a plugin-free `vim` fallback
 - Tool/package management: `mise`
 - `zsh` plugin management: `sheldon`
 
@@ -65,6 +65,23 @@ Example.
 SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 ./setup.sh all --reload-shell
 ```
+
+## Editors
+
+`.vimrc` and `.gvimrc` provide basic Vim settings without third-party plugins.
+
+Vim clipboard integration uses native support when available, or existing
+macOS, Wayland, X11, Windows/WSL, and tmux clipboard commands. The tmux popup
+backend uses the same helpers as Neovim. Normal `y`, `p`/`P`, and insert-mode
+`Ctrl-R "` use the selected clipboard; named registers keep their usual meaning.
+Run `:echo g:dotfiles_clipboard_provider` to see the active backend.
+
+Without a clipboard command, SSH sessions can copy to a compatible terminal
+using OSC 52. Paste in that case uses the terminal's paste shortcut.
+OSC 52 copies are limited to 32 KiB by default;
+tmux keeps larger copies in its own buffer. tmux paste requests a clipboard
+refresh from the terminal when supported. Native `"+`/`"*` registers require a
+Vim build with `+clipboard`; the external fallback bridges ordinary operations.
 
 ## Tools
 

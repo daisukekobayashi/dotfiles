@@ -37,6 +37,14 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "nvim"
     },
     @{
+      Link = Join-Path $setupContext.HomeDir "_vimrc"
+      Target = Join-Path $setupContext.DotfilesRoot ".vimrc"
+    },
+    @{
+      Link = Join-Path $setupContext.HomeDir "_gvimrc"
+      Target = Join-Path $setupContext.DotfilesRoot ".gvimrc"
+    },
+    @{
       Link = Join-Path $setupContext.HomeDir ".config\gitui"
       Target = Join-Path $setupContext.DotfilesRoot "gitui"
     },
