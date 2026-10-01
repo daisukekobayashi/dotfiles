@@ -11,7 +11,7 @@ setup() {
   VIM_TEST_BIN="$(command -v vim)" || skip "Vim is not installed"
   mkdir -p "${TEST_ROOT}/bin"
   ln -s /bin/sh "${TEST_ROOT}/bin/sh"
-  ln -s "$(repo_root)/.vimrc" "${TEST_HOME}/.vimrc"
+  ln -s "$(repo_root)/vim/vimrc" "${TEST_HOME}/.vimrc"
   : > "${TEST_ROOT}/clipboard"
   : > "${TEST_ROOT}/commands"
   VIM_TEST_DISPLAY=""
@@ -64,7 +64,7 @@ EOF
     SSH_CONNECTION="${VIM_TEST_SSH}" SSH_TTY= TMUX_CLIPBOARD_OSC52_MAX_BYTES= \
     TERM=xterm-256color VIM_TEST_CLIPBOARD="${TEST_ROOT}/clipboard" \
     VIM_TEST_COMMANDS="${TEST_ROOT}/commands" VIM_TEST_ERRORS="${TEST_ROOT}/errors" \
-    VIM_TEST_GVIMRC="$(repo_root)/.gvimrc" \
+    VIM_TEST_GVIMRC="$(repo_root)/vim/gvimrc" \
     "${VIM_TEST_BIN}" -n -es -i NONE -u "${TEST_HOME}/.vimrc" \
     -V1"${TEST_ROOT}/vim.log" -S "${TEST_ROOT}/check.vim"
   if [ "$status" -ne 0 ]; then

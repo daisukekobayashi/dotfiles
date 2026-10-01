@@ -1,2 +1,0 @@
-" GUI Vim uses the shared, plugin-free settings in .vimrc.
-scriptencoding utf-8

@@ -68,7 +68,12 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 ## Editors
 
-`.vimrc` と `.gvimrc` は, 外部プラグインを必要としない Vim の基本設定です.
+`vim/vimrc` と `vim/gvimrc` は, 外部プラグインを必要としない Vim の基本設定です.
+リンク処理により, Linux/macOS では `~/.vimrc` と `~/.gvimrc`,
+Windows ではホームディレクトリの `_vimrc` と `_gvimrc` に配置します.
+既存のチェックアウトを更新した後は, `./setup.sh links`
+(Windows: `.\setup.ps1 links`) でリンクを更新してください.
+
 Zsh は `nvim`, `vim`, `vi` の順に `EDITOR` と `VISUAL` を選び,
 mise が runtime の PATH を反映した後にも選び直します.
 

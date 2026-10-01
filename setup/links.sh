@@ -10,6 +10,8 @@ setup_links() {
   link_file "${dotfiles_root}/mise" "${setup_home}/.config/mise" "${dry_run}"
   link_file "${dotfiles_root}/zellij" "${setup_home}/.config/zellij" "${dry_run}"
   link_file "${dotfiles_root}/nvim" "${setup_home}/.config/nvim" "${dry_run}"
+  link_file "${dotfiles_root}/vim/vimrc" "${setup_home}/.vimrc" "${dry_run}"
+  link_file "${dotfiles_root}/vim/gvimrc" "${setup_home}/.gvimrc" "${dry_run}"
   link_file "${dotfiles_root}/lazygit" "${setup_home}/.config/lazygit" "${dry_run}"
   link_file "${dotfiles_root}/gitui" "${setup_home}/.config/gitui" "${dry_run}"
   link_file "${dotfiles_root}/mcphub" "${setup_home}/.config/mcphub" "${dry_run}"

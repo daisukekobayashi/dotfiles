@@ -68,7 +68,12 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 
 ## Editors
 
-`.vimrc` and `.gvimrc` provide basic Vim settings without third-party plugins.
+`vim/vimrc` and `vim/gvimrc` provide basic Vim settings without third-party plugins.
+The link step installs them as `~/.vimrc` and `~/.gvimrc` on Linux/macOS,
+or `_vimrc` and `_gvimrc` in the home directory on Windows.
+After updating an existing checkout, run `./setup.sh links`
+(Windows: `.\setup.ps1 links`) to refresh the links.
+
 Zsh selects `nvim`, then `vim`, then `vi` for both `EDITOR` and `VISUAL`,
 and refreshes the selection after mise activates its runtime PATH.
 

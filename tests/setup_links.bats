@@ -18,7 +18,7 @@ make_links_fixture_root() {
 
   mkdir -p "${fixture_root}"
 
-  for path in sheldon zsh mise zellij nvim lazygit gitui mcphub atuin tmux codex gemini claude ai-rules ipython tools; do
+  for path in sheldon zsh mise zellij nvim vim lazygit gitui mcphub atuin tmux codex gemini claude ai-rules ipython tools; do
     ln -s "${source_root}/${path}" "${fixture_root}/${path}"
   done
 
@@ -67,6 +67,10 @@ assert_link_target_is_tracked() {
   [ "$status" -eq 0 ]
   [ -L "${TEST_HOME}/.config/nvim" ]
   [ "$(readlink "${TEST_HOME}/.config/nvim")" = "${root}/nvim" ]
+  [ -L "${TEST_HOME}/.vimrc" ]
+  [ "$(readlink "${TEST_HOME}/.vimrc")" = "${root}/vim/vimrc" ]
+  [ -L "${TEST_HOME}/.gvimrc" ]
+  [ "$(readlink "${TEST_HOME}/.gvimrc")" = "${root}/vim/gvimrc" ]
   [ -L "${TEST_HOME}/.config/tmux-palette/commands.json" ]
   [ "$(readlink "${TEST_HOME}/.config/tmux-palette/commands.json")" = "${root}/tmux/tmux-palette/commands.json" ]
   [ -L "${TEST_HOME}/.config/tmux-palette/theme.json" ]
@@ -107,6 +111,31 @@ assert_link_target_is_tracked() {
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
   [ -f "${TEST_HOME}/.gemini/GEMINI.md" ]
   [ -f "${TEST_HOME}/.claude/CLAUDE.md" ]
+}
+
+@test "links replaces legacy Vim symlinks with grouped config files" {
+  local root fixture_root
+  root="$(repo_root)"
+  fixture_root="${TEST_ROOT}/dotfiles"
+
+  make_links_fixture_root "${root}" "${fixture_root}"
+  ln -s "${fixture_root}/.vimrc" "${TEST_HOME}/.vimrc"
+  ln -s "${fixture_root}/.gvimrc" "${TEST_HOME}/.gvimrc"
+
+  run env \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    SETUP_DOTFILES_ROOT="${fixture_root}" \
+    "$(setup_script_path)" \
+    links
+
+  [ "$status" -eq 0 ]
+  [ -L "${TEST_HOME}/.vimrc" ]
+  [ "$(readlink "${TEST_HOME}/.vimrc")" = "${fixture_root}/vim/vimrc" ]
+  [ -f "${TEST_HOME}/.vimrc" ]
+  [ -L "${TEST_HOME}/.gvimrc" ]
+  [ "$(readlink "${TEST_HOME}/.gvimrc")" = "${fixture_root}/vim/gvimrc" ]
+  [ -f "${TEST_HOME}/.gvimrc" ]
 }
 
 @test "gemini settings configure Serena project activation" {

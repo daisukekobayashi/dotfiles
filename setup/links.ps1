@@ -38,11 +38,11 @@ try {
     },
     @{
       Link = Join-Path $setupContext.HomeDir "_vimrc"
-      Target = Join-Path $setupContext.DotfilesRoot ".vimrc"
+      Target = Join-Path $setupContext.DotfilesRoot "vim\vimrc"
     },
     @{
       Link = Join-Path $setupContext.HomeDir "_gvimrc"
-      Target = Join-Path $setupContext.DotfilesRoot ".gvimrc"
+      Target = Join-Path $setupContext.DotfilesRoot "vim\gvimrc"
     },
     @{
       Link = Join-Path $setupContext.HomeDir ".config\gitui"
