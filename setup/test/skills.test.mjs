@@ -348,7 +348,6 @@ test("repository profiles keep provider workflow skills separated", async () => 
     "improve-codebase-architecture",
     "prototype",
     "research",
-    "resolving-merge-conflicts",
     "setup-matt-pocock-skills",
     "tdd",
     "teach",
