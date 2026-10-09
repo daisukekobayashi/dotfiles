@@ -41,4 +41,6 @@ if (spend != null) usage.push(`spend ${Math.floor(spend)}%`);
 const displayDir = path.basename(dir) || dir || '~';
 const location = `\x1b[01;34m${displayDir}\x1b[00m${branch ? ` (${branch})` : ''}`;
 const modelLabel = effort ? `${model} / ${effort}` : model;
-console.log(`${location} [${modelLabel}] | ctx ${used == null ? '--' : Math.floor(used)}% | ${usage.join(' | ') || 'usage --'}`);
+const profile = process.env.CLAUDE_PICK_PROFILE;
+const profileLabel = profile && /^[a-z][a-z0-9_-]{0,63}$/.test(profile) ? `[${profile}] ` : '';
+console.log(`${profileLabel}${location} [${modelLabel}] | ctx ${used == null ? '--' : Math.floor(used)}% | ${usage.join(' | ') || 'usage --'}`);

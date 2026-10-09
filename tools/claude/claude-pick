@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: claude-pick [-p PROFILE] [-m MODEL] [-e EFFORT] [MODEL [EFFORT]] [-- CLAUDE_ARGS...]
+       claude-pick --create NAME [--skill NAME ...]
+
+Without arguments, choose a profile, model, and effort with fzf.
+An explicit profile alone uses its saved model/effort without a picker.
+With a model or effort specified, choose the missing one interactively.
+Use "keep" for model/effort to leave Claude's configuration in control.
+Effort choices: keep, low, medium, high, xhigh, max (support varies by model).
+
+"default" uses ~/.claude; named profiles use ~/.claude-profiles/NAME.
+--create initializes a profile without logging in or launching Claude.
+--skill links an installed dotfiles user skill during creation only.
+Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter.
+Arguments after -- are forwarded unchanged, including Claude's -p/--print.
+Auth and maintenance subcommands skip model/effort selection.
+EOF
+}
+
+die() { printf 'claude-pick: %s\n' "$2" >&2; exit "$1"; }
+require_command() { command -v "$1" >/dev/null 2>&1 || die 127 "Required command not found: $1"; }
+
+# Resolve installed symlinks without GNU readlink -f (macOS ships Bash 3.2).
+script_path="${BASH_SOURCE[0]}"
+while [[ -L "$script_path" ]]; do
+  script_dir="$(cd "$(dirname "$script_path")" && pwd -P)"
+  script_path="$(readlink "$script_path")"
+  [[ "$script_path" = /* ]] || script_path="$script_dir/$script_path"
+done
+dotfiles_root="$(cd "$(dirname "$script_path")/../.." && pwd -P)"
+profiles_root="${HOME}/.claude-profiles"
+
+valid_name() {
+  [[ "$1" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 1
+  case "$1" in default|con|prn|aux|nul|com[0-9]|lpt[0-9]) return 1 ;; esac
+}
+
+validate_name() { valid_name "$1" || die 2 "Invalid or reserved profile name: $1"; }
+
+profile_ready() {
+  [[ -d "$1" && ! -L "$1" && -f "$1/.claude-pick" && -f "$1/settings.json" ]] &&
+    [[ "$(cat "$1/.claude-pick")" = 1 ]]
+}
+
+check_environment() {
+  [[ "$profile" = default ]] && return 0
+  local key pattern
+  local -a conflicts=()
+  while IFS= read -r key; do
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    [[ -n "${!key:-}" ]] || continue
+    while IFS= read -r pattern; do
+      # Patterns are repository-owned environment-variable globs, not values.
+      # shellcheck disable=SC2053
+      if [[ "$key" = $pattern ]]; then
+        conflicts+=("$key")
+        break
+      fi
+    done < "$dotfiles_root/tools/claude/auth-env.txt"
+  done < <(compgen -e)
+  if [[ ${#conflicts[@]} -gt 0 ]]; then
+    die 2 "Named profile blocked by inherited environment: ${conflicts[*]}. Unset these in this shell, or use default. Values are not displayed."
+  fi
+}
+
+pick() {
+  local prompt="$1" rows="$2" selected choice
+  [[ -t 0 && -t 2 ]] || die 2 "Interactive selection needs a terminal. Specify --profile, --model and --effort (or keep)."
+  require_command fzf
+  selected="$(printf '%s\n' "$rows" | fzf --delimiter=$'\t' --with-nth=1,2 --prompt="$prompt> ")" || exit $?
+  [[ -n "$selected" ]] || exit 130
+  choice="${selected%%$'\t'*}"
+  while IFS=$'\t' read -r key _; do
+    if [[ "$choice" = "$key" ]]; then printf '%s\n' "$choice"; return; fi
+  done <<< "$rows"
+  die 2 "Invalid picker selection"
+}
+
+profile_rows() {
+  local candidate name
+  printf 'default\tStandard environment (~/.claude)\n'
+  for candidate in "$profiles_root"/*; do
+    name="${candidate##*/}"
+    if valid_name "$name" && profile_ready "$candidate"; then printf '%s\tNamed profile\n' "$name"; fi
+  done
+  printf '+\tCreate a new profile\n'
+}
+
+pending_dir=""
+created_files=()
+cleanup() {
+  [[ -n "$pending_dir" ]] || return 0
+  local file
+  # Remove only entries created by this invocation, never an existing profile.
+  for file in ${created_files[@]+"${created_files[@]}"}; do rm -f -- "$file"; done
+  rmdir "$pending_dir/rules" "$pending_dir/skills" "$pending_dir" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+create_profile() {
+  local destination="$profiles_root/$profile" skill source target
+  validate_name "$profile"
+  [[ ! -e "$destination" && ! -L "$destination" ]] || die 2 "Profile already exists: $profile"
+  for source in claude/profile-settings.json claude/statusline.cjs ai-rules/base/global.md ai-rules/agents/claude.md; do
+    [[ -f "$dotfiles_root/$source" ]] || die 2 "Missing shared file: $source"
+  done
+  for skill in ${skills[@]+"${skills[@]}"}; do
+    [[ "$skill" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || die 2 "Invalid skill name: $skill"
+    [[ -f "$dotfiles_root/.agents/user/skills/$skill/SKILL.md" ]] || die 2 "Installed skill not found: $skill"
+  done
+  umask 077
+  mkdir -p "$profiles_root"
+  mkdir "$destination" || die 2 "Cannot create profile: $profile"
+  pending_dir="$destination"
+  mkdir "$destination/rules" "$destination/skills"
+  target="$destination/settings.json"
+  created_files+=("$target")
+  cp "$dotfiles_root/claude/profile-settings.json" "$target"
+  chmod 600 "$target"
+  for source in claude/statusline.cjs ai-rules/base/global.md ai-rules/agents/claude.md; do
+    case "$source" in
+      claude/statusline.cjs) target="$destination/statusline.cjs" ;;
+      ai-rules/base/global.md) target="$destination/rules/00-global.md" ;;
+      *) target="$destination/rules/10-claude.md" ;;
+    esac
+    ln -s "$dotfiles_root/$source" "$target"
+    created_files+=("$target")
+  done
+  for skill in ${skills[@]+"${skills[@]}"}; do
+    target="$destination/skills/$skill"
+    [[ -L "$target" ]] && continue
+    ln -s "$dotfiles_root/.agents/user/skills/$skill" "$target"
+    created_files+=("$target")
+  done
+  created_files+=("$destination/.claude-pick")
+  printf '1\n' > "$destination/.claude-pick"
+  pending_dir=""
+  printf 'Created profile: %s\n' "$profile" >&2
+}
+
+profile="" model="" effort="" create_name="" interactive_profile=0
+skills=() positional=() claude_args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    -p|--profile|-m|--model|-e|--effort|--create|--skill)
+      [[ $# -ge 2 && -n "$2" && "$2" != -* ]] || die 2 "$1 requires a value"
+      case "$1" in
+        -p|--profile) profile="$2" ;;
+        -m|--model) model="$2" ;;
+        -e|--effort) effort="$2" ;;
+        --create) create_name="$2" ;;
+        --skill) skills+=("$2") ;;
+      esac
+      shift 2 ;;
+    --) shift; claude_args=("$@"); break ;;
+    -*) die 2 "Unknown option: $1. Put Claude arguments after --" ;;
+    *) positional+=("$1"); shift ;;
+  esac
+done
+[[ ${#positional[@]} -le 2 ]] || die 2 "Too many arguments. Put Claude arguments after --"
+if [[ ${#positional[@]} -gt 0 ]]; then
+  [[ -z "$model" ]] || die 2 "Model specified twice"
+  model="${positional[0]}"
+fi
+if [[ ${#positional[@]} -gt 1 ]]; then
+  [[ -z "$effort" ]] || die 2 "Effort specified twice"
+  effort="${positional[1]}"
+fi
+if [[ -n "$create_name" ]]; then
+  [[ -z "$profile$model$effort" && ${#claude_args[@]} -eq 0 ]] || die 2 "--create cannot be combined with launch arguments"
+  profile="$create_name"
+  create_profile
+  exit 0
+fi
+[[ ${#skills[@]} -eq 0 ]] || die 2 "--skill requires --create"
+require_command claude
+creating=0
+if [[ -z "$profile" ]]; then
+  profile="$(pick Profile "$(profile_rows)")"
+  interactive_profile=1
+  if [[ "$profile" = + ]]; then
+    printf 'New profile name: ' >&2
+    IFS= read -r profile || exit 130
+    [[ -n "$profile" ]] || exit 130
+    validate_name "$profile"
+    creating=1
+  fi
+fi
+if [[ "$profile" = default ]]; then
+  config_dir="$HOME/.claude"
+else
+  validate_name "$profile"
+  config_dir="$profiles_root/$profile"
+  if [[ "$creating" -eq 0 ]]; then
+    profile_ready "$config_dir" || die 2 "Profile missing or incomplete: $profile. Create it with --create NAME."
+  fi
+fi
+check_environment
+
+has_model=0 has_effort=0 has_mcp=0 maintenance=0
+for arg in ${claude_args[@]+"${claude_args[@]}"}; do
+  case "$arg" in
+    --) break ;;
+    --model|--model=*) has_model=1 ;;
+    --effort|--effort=*) has_effort=1 ;;
+    --mcp-config|--mcp-config=*) has_mcp=1 ;;
+  esac
+done
+case "${claude_args[0]:-}" in auth|doctor|update|install|setup-token|mcp|plugin|--help|--version) maintenance=1 ;; esac
+if [[ "$maintenance" -eq 1 ]]; then
+  [[ -z "$model$effort" ]] || die 2 "Model/effort do not apply to this subcommand"
+  model=keep effort=keep
+elif [[ "$interactive_profile" -eq 0 && -z "$model$effort" ]]; then
+  model=keep effort=keep
+fi
+if [[ "$has_model" -eq 1 ]]; then
+  [[ -z "$model" || "$model" = keep ]] || die 2 "Model specified both before and after --"
+  model=keep
+fi
+if [[ "$has_effort" -eq 1 ]]; then
+  [[ -z "$effort" || "$effort" = keep ]] || die 2 "Effort specified both before and after --"
+  effort=keep
+fi
+[[ -n "$model" ]] || model="$(pick Model $'keep\tKeep configured model\nopus\tOpus alias\nsonnet\tSonnet alias\nhaiku\tHaiku alias\ndefault\tReset to account default')"
+[[ -n "$effort" ]] || effort="$(pick Effort $'keep\tKeep configured effort\nlow\tLow\nmedium\tMedium\nhigh\tHigh\nxhigh\tExtra high\nmax\tMaximum')"
+case "$effort" in keep|low|medium|high|xhigh|max) ;; *) die 2 "Invalid effort: $effort" ;; esac
+[[ "$model" != -* && "$model" != *$'\n'* && "$model" != *$'\r'* ]] || die 2 "Invalid model"
+[[ "$creating" -eq 0 ]] || create_profile
+
+launch_args=()
+[[ "$model" = keep ]] || launch_args+=(--model "$model")
+if [[ "$effort" != keep ]]; then
+  # This variable outranks --effort. Set it only in the child process to agree.
+  export CLAUDE_CODE_EFFORT_LEVEL="$effort"
+  launch_args+=(--effort "$effort")
+fi
+if [[ "$has_mcp" -eq 0 && "$maintenance" -eq 0 ]]; then
+  mcp_config="$config_dir/mcp.json"
+  if [[ "$profile" = default ]]; then
+    mcp_config="${CLAUDE_MCP_CONFIG:-$dotfiles_root/claude/mcp/base.json}"
+  fi
+  if [[ -f "$mcp_config" ]]; then launch_args+=(--mcp-config "$mcp_config"); fi
+fi
+export CLAUDE_CONFIG_DIR="$config_dir" CLAUDE_PICK_PROFILE="$profile"
+exec claude ${launch_args[@]+"${launch_args[@]}"} ${claude_args[@]+"${claude_args[@]}"}

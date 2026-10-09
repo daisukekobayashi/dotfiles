@@ -139,6 +139,81 @@ Vim build with `+clipboard`; the external fallback bridges ordinary operations.
 `./setup.sh links` installs dotfiles-managed helper commands into `~/.local/bin`.
 
 - `share-dir`: start a Dockerized FileBrowser Quantum instance for a chosen directory.
+- `claude-pick`: choose a Claude Code profile, model, and effort.
+
+### Claude Code profiles
+
+Run `./setup.sh links` on macOS/Linux, or `.\setup.ps1 links` on Windows.
+This installs `claude-pick` or `claude-pick.ps1` into `~/.local/bin`.
+The launchers use Bash and PowerShell 5.1+, respectively. Interactive selection
+requires `fzf`; explicit arguments do not. Windows requires native `claude.exe`
+and permission to create symbolic links. Use PowerShell 7+ with Developer Mode,
+or an appropriately privileged terminal for profile creation. Windows PowerShell
+5.1 needs the latter even with Developer Mode; see the
+[PowerShell issue](https://github.com/PowerShell/PowerShell/issues/5000).
+Normal launches do not require elevation. The existing status line still requires Node.js.
+
+```sh
+claude-pick                                 # Choose profile, model, effort
+claude-pick --create acme                    # Initialize only; no login or launch
+claude-pick -p acme -- auth login            # Log in separately for this profile
+claude-pick -p acme                          # Launch with its configured defaults
+claude-pick -p acme opus high -- --resume
+claude-pick -p default                       # Use the existing ~/.claude
+```
+
+In PowerShell, use `claude-pick.ps1` and quote the separator as `'--'` so
+[PowerShell preserves it](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing#the-end-of-parameters-token):
+
+```powershell
+claude-pick.ps1 --create acme
+claude-pick.ps1 -p acme '--' auth login
+claude-pick.ps1 -p acme opus high '--' --resume
+```
+
+Before installing links, run `./tools/claude/claude-pick` or `.\tools\claude\claude-pick.ps1`.
+Open a new shell after updating: `claude` is now the original command, while
+`claude-pick -p default` supplies the common MCP config previously added by the
+Zsh wrapper. `claude-raw` remains available for compatibility.
+
+Profiles live in `~/.claude-profiles/<name>`. Names start with a lowercase letter
+and contain up to 64 lowercase letters, digits, `_`, or `-`; `default` and Windows
+device names are reserved. With no profiles, the picker offers `default` and
+creation. An unknown explicit name is an error. Cancelling selection never
+creates a profile or launches Claude, and creation never overwrites a profile.
+
+An explicit profile alone skips model/effort selection. Supplying one of model
+or effort prompts for the other; use `keep` to retain Claude's configuration.
+Use `-m MODEL` and `-e EFFORT` or the positional form shown above. Effort options
+are `low`, `medium`, `high`, `xhigh`, and `max`; support depends on Claude's model
+and version. A selected effort also overrides inherited `CLAUDE_CODE_EFFORT_LEVEL`
+for that child process. Arguments after `--` go to Claude unchanged, including
+its `-p`/`--print`. Auth and maintenance subcommands skip these selections.
+
+| Profile entry | Behavior |
+| --- | --- |
+| `settings.json` | Initial copy of `claude/profile-settings.json`; later edits are independent |
+| `rules/00-global.md`, `rules/10-claude.md` | Symlinks to the shared sources under `ai-rules/` |
+| `statusline.cjs` | Symlink to the shared renderer; shows the selected profile name |
+| `skills/` | Empty initially; `--create acme --skill NAME` links selected installed dotfiles skills |
+| `mcp.json` | Optional per-profile MCP config; explicit `--mcp-config` takes precedence |
+| Login, history, memory, plugins | Managed separately by Claude under the selected config directory |
+
+Existing `~/.claude/settings.json`, credentials, hooks, and plugins are not copied.
+In particular, the new template does not enable `claude-mem`, whose external data
+directory needs separate configuration if you choose to use it. Rules and status
+line updates follow dotfiles symlinks; settings-template changes affect only new
+profiles. There is no automatic settings synchronization or account migration.
+
+Named profiles refuse inherited auth/provider environment variables listed in
+`tools/claude/auth-env.txt`, reporting names only. Clear those variables in the
+calling shell before launching; `default` retains the existing environment.
+`CLAUDE_CONFIG_DIR` is set only for the child process. This separates Claude's
+user configuration and state, but is not an OS security boundary: project
+settings, managed policies, and external plugin stores still need consideration.
+See Claude's [environment variables](https://code.claude.com/docs/en/env-vars),
+[authentication precedence](https://code.claude.com/docs/en/authentication#authentication-precedence),
+and [user-level rules](https://code.claude.com/docs/en/memory#user-level-rules).
 
 ## AI Agent Rules
 
@@ -192,6 +267,19 @@ npm --prefix setup run build
 npm --prefix setup test
 bats tests
 ```
+
+Focused Claude picker checks use temporary homes and fake Claude executables;
+they do not log in or call the API:
+
+```bash
+bats tests/claude_pick.bats tests/claude_wrapper.bats
+shellcheck tools/claude/claude-pick tests/claude_pick.bats tests/claude_wrapper.bats
+```
+
+On native Windows, run `.\tests\claude_pick.ps1` in PowerShell 5.1 or later.
+It compiles a small native fixture with the built-in Windows PowerShell compiler
+to check argument forwarding and process behavior. Successful profile creation
+is skipped when symlink privileges are unavailable; failure rollback is checked.
 
 Neovim DAP full E2E checks are opt-in because they start real debug adapters and Docker services.
 

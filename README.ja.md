@@ -116,6 +116,82 @@ tmux の貼り付け時は, 対応端末にクリップボードの再取得を�
 組み込みの `"+`/`"*` レジスタには `+clipboard` の Vim が必要です.
 外部コマンドによる補助設定は通常のコピー・貼り付け操作を連携します.
 
+## Tools
+
+### Claude Code profiles
+
+macOS/Linux は `./setup.sh links`, Windows は `.\setup.ps1 links` で,
+`~/.local/bin` に `claude-pick` / `claude-pick.ps1` を配置します.
+起動処理は Bash / PowerShell 5.1+ です. 対話選択には `fzf` が必要ですが,
+引数で指定すれば不要です. Windows は native `claude.exe` と symlink 作成権限が
+必要です. profile 作成時は PowerShell 7+ と Developer Mode, または適切な権限の
+端末を使います. Windows PowerShell 5.1 は Developer Mode があっても後者が
+必要です ([PowerShell の報告](https://github.com/PowerShell/PowerShell/issues/5000)).
+通常の起動に権限の昇格は不要です.
+既存の status line には引き続き Node.js を使います.
+
+```sh
+claude-pick                                 # profile, model, effort を選択
+claude-pick --create acme                    # 初期化のみ. ログイン・起動はしない
+claude-pick -p acme -- auth login            # profile ごとにログイン
+claude-pick -p acme                          # 保存済み設定で起動
+claude-pick -p acme opus high -- --resume
+claude-pick -p default                       # 既存の ~/.claude を使う
+```
+
+PowerShell では `claude-pick.ps1` を使い, 区切りは `'--'` と引用して
+[PowerShell に取り除かれないようにします](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing#the-end-of-parameters-token).
+
+```powershell
+claude-pick.ps1 --create acme
+claude-pick.ps1 -p acme '--' auth login
+claude-pick.ps1 -p acme opus high '--' --resume
+```
+
+リンク配置前は `./tools/claude/claude-pick` / `.\tools\claude\claude-pick.ps1` から実行できます.
+更新後はシェルを開き直してください. `claude` は本来のコマンドになり,
+従来の Zsh wrapper が追加していた共通 MCP 設定は `claude-pick -p default`
+で使えます. 互換性のため `claude-raw` は残しています.
+
+保存先は `~/.claude-profiles/<名前>` です. 名前は英小文字で始まる 1〜64 文字の
+英小文字・数字・`_`・`-` で, `default` と Windows のデバイス名は予約名です.
+profile が無い場合は `default` と新規作成を選べます. 存在しない名前を引数で
+指定した場合はエラーになります. 選択中のキャンセルでは作成・起動せず,
+既存 profile の上書きもしません.
+
+profile だけの指定では model/effort 選択を省略します. どちらかを指定すると
+残りを選択し, `keep` なら Claude の設定を維持します. 位置引数の代わりに
+`-m MODEL` / `-e EFFORT` も使えます. effort の候補は `low`, `medium`, `high`,
+`xhigh`, `max` で, 対応範囲は Claude のモデル・バージョンによります.
+選んだ effort は子プロセスの `CLAUDE_CODE_EFFORT_LEVEL` にも反映します.
+`--` 以降は Claude にそのまま渡すため, Claude の `-p` / `--print` もここに書きます.
+`auth` などの管理コマンドでは model/effort を選択しません.
+
+| profile 内の項目 | 扱い |
+| --- | --- |
+| `settings.json` | `claude/profile-settings.json` の初期コピー. 作成後は個別に編集 |
+| `rules/00-global.md`, `rules/10-claude.md` | `ai-rules/` の共通ソースへ symlink |
+| `statusline.cjs` | 共通 renderer へ symlink. 選択した profile 名を表示 |
+| `skills/` | 初期状態は空. `--create acme --skill NAME` で導入済み skill を個別にリンク |
+| `mcp.json` | 任意の profile 固有 MCP 設定. 明示した `--mcp-config` が優先 |
+| ログイン・履歴・メモリ・plugins | 選択した設定ディレクトリで Claude が個別管理 |
+
+既存 `~/.claude/settings.json`・認証情報・hooks・plugins はコピーしません.
+特に, 別のデータ保存先を持つ `claude-mem` は新規 profile では有効にしません.
+使う場合はその保存先も個別に設定してください. rules と status line は dotfiles
+の変更に追従し, 設定テンプレートの変更は次に作る profile にだけ反映します.
+設定の自動同期やアカウントの自動移行は行いません.
+
+名前付き profile では `tools/claude/auth-env.txt` にある認証・接続先の環境変数が
+残っていると起動を止め, 値を表示せず変数名を案内します. 呼び出し元のシェルで
+対象変数を解除してください. `default` は従来の環境変数を維持します.
+`CLAUDE_CONFIG_DIR` の変更は子プロセスにだけ適用します. これは Claude の
+ユーザー設定・状態の分離であり, OS のセキュリティ境界ではありません.
+プロジェクト設定・管理ポリシー・外部 plugin の保存先は別途適用されます.
+公式の[環境変数](https://code.claude.com/docs/en/env-vars),
+[認証の優先順位](https://code.claude.com/docs/en/authentication#authentication-precedence),
+[ユーザールール](https://code.claude.com/docs/en/memory#user-level-rules)も参照してください.
+
 ## AI Agent Rules
 
 `./setup.sh links` は, Codex, Gemini, Claude 向けの生成済み rule file も配置します.
@@ -160,6 +236,19 @@ npm --prefix setup run build
 npm --prefix setup test
 bats tests
 ```
+
+Claude picker の確認は一時 HOME と偽の Claude コマンドを使い,
+ログイン・API 呼び出しは行いません.
+
+```bash
+bats tests/claude_pick.bats tests/claude_wrapper.bats
+shellcheck tools/claude/claude-pick tests/claude_pick.bats tests/claude_wrapper.bats
+```
+
+native Windows では PowerShell 5.1 以降で `.\tests\claude_pick.ps1` を実行します.
+Windows PowerShell 組み込みのコンパイラで確認用の小さな実行ファイルを作り,
+引数やプロセスの動作を確認します. symlink 権限が無い場合, 作成成功の確認は
+skip し, 作成失敗時に途中のファイルが残らないことを確認します.
 
 Manual bootstrap E2E は opt-in です. 新しい Docker container で実行し,
 package download や build を伴うため, 通常の `bats tests` には含めません.

@@ -29,6 +29,7 @@ setup_links() {
   link_file "${dotfiles_root}/tools/betterleaks/betterleaks-scan" "${setup_home}/.local/bin/betterleaks-scan" "${dry_run}"
   link_file "${dotfiles_root}/tools/atuin/cwd-history" "${setup_home}/.local/bin/cwd-history" "${dry_run}"
   link_file "${dotfiles_root}/tools/codex/codex-pick" "${setup_home}/.local/bin/codex-pick" "${dry_run}"
+  link_file "${dotfiles_root}/tools/claude/claude-pick" "${setup_home}/.local/bin/claude-pick" "${dry_run}"
 
   make_directory "${setup_home}/.vim/vim/undo" "${dry_run}"
   make_directory "${setup_home}/.vim/vim/tmp" "${dry_run}"

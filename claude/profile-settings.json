@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node -e \"require(require('node:path').join(process.env.CLAUDE_CONFIG_DIR || require('node:path').join(require('node:os').homedir(), '.claude'), 'statusline.cjs'))\""
+  }
+}

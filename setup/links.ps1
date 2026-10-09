@@ -61,6 +61,10 @@ try {
       Target = Join-Path $setupContext.DotfilesRoot "tools\betterleaks\betterleaks-scan.ps1"
     },
     @{
+      Link = Join-Path $setupContext.HomeDir ".local\bin\claude-pick.ps1"
+      Target = Join-Path $setupContext.DotfilesRoot "tools\claude\claude-pick.ps1"
+    },
+    @{
       Link = Join-Path $setupContext.HomeDir ".codex\config.toml"
       Target = Join-Path $setupContext.DotfilesRoot "codex\config.toml"
     },

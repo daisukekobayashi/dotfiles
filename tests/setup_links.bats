@@ -99,6 +99,8 @@ assert_link_target_is_tracked() {
   [ "$(readlink "${TEST_HOME}/.local/bin/cwd-history")" = "${root}/tools/atuin/cwd-history" ]
   [ -L "${TEST_HOME}/.local/bin/codex-pick" ]
   [ "$(readlink "${TEST_HOME}/.local/bin/codex-pick")" = "${root}/tools/codex/codex-pick" ]
+  [ -L "${TEST_HOME}/.local/bin/claude-pick" ]
+  [ "$(readlink "${TEST_HOME}/.local/bin/claude-pick")" = "${root}/tools/claude/claude-pick" ]
   [ -L "${TEST_HOME}/.codex/config.toml" ]
   [ "$(readlink "${TEST_HOME}/.codex/config.toml")" = "${root}/codex/config.toml" ]
   [ -L "${TEST_HOME}/.codex/hooks.json" ]
