@@ -5,6 +5,11 @@
     "MCP_TIMEOUT": "30000",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
   "permissions": {
     "deny": [
       "Read(./.env)",
@@ -12,16 +17,7 @@
       "Read(./secrets/**)"
     ]
   },
-  "model": "opus[1m]",
-  "statusLine": {
-    "type": "command",
-    "command": "node -e \"require(require('node:path').join(process.env.CLAUDE_CONFIG_DIR || require('node:path').join(require('node:os').homedir(), '.claude'), 'statusline.cjs'))\""
-  },
-  "attribution": {
-    "commit": "",
-    "pr": "",
-    "sessionUrl": false
-  },
+  "model": "opus",
   "enabledMcpjsonServers": [
     "serena"
   ],
@@ -69,6 +65,10 @@
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "node -e \"require(require('node:path').join(process.env.CLAUDE_CONFIG_DIR || require('node:path').join(require('node:os').homedir(), '.claude'), 'statusline.cjs'))\""
+  },
   "enabledPlugins": {
     "claude-mem@thedotmack": true,
     "oh-my-claudecode@omc": false,
@@ -95,6 +95,11 @@
     }
   },
   "effortLevel": "high",
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "medium"
+    }
+  },
   "tui": "fullscreen",
   "theme": "dark-ansi",
   "skipAutoPermissionPrompt": true
