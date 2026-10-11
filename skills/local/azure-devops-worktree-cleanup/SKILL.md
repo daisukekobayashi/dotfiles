@@ -7,8 +7,9 @@ description: Use when the user says Azure DevOps work is already merged or compl
 
 ## Scope
 
-Clean up only local branch and local worktree state after Azure DevOps work is
-complete. This skill does not remove remote branches.
+Clean up only local branch, local worktree, and the worktree's confirmed Compose
+stacks after Azure DevOps work is complete. This skill does not remove remote
+branches.
 
 Read `../azure-devops-common/references/context.md` before checking PR status.
 
@@ -31,6 +32,8 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    confirmation.
 6. Remove the local worktree first when one exists. If you are inside it, change
    to a safe location before removal.
+   - Before removal, follow `../worktree-runtime-cleanup/SKILL.md` for the
+     worktree path. If that file is absent, say so in the summary.
 7. Delete the local branch after the worktree is removed.
 8. Summarize what was removed and what remains.
 

@@ -38,6 +38,7 @@ Complete a Beads-backed development branch with evidence: verify, commit, merge 
    - Add a final `bd note` with commit hash and verification summary when useful.
    - `bd close <id> --reason "Merged <summary> in <hash>."`
 8. Clean up local resources.
+   - Follow `../worktree-runtime-cleanup/SKILL.md` for the worktree path. If that file is absent, say so in the report.
    - Remove the worktree from a safe directory, never from inside the worktree.
    - `git worktree remove <path>`
    - `git worktree prune`

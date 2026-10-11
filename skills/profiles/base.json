@@ -61,6 +61,7 @@
     "learning-partner",
     "local-runtime-port-isolation",
     "review-change",
+    "worktree-runtime-cleanup",
     "writing-partner"
   ]
 }

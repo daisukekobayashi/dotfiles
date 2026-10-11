@@ -18,6 +18,7 @@ description: Use when the user says the work is already merged or otherwise comp
 4. If the branch is not merged or completion is unclear, stop and explain why cleanup is unsafe.
 5. Show the exact local resources that would be removed and require explicit confirmation.
 6. Remove the local worktree first when one exists. If you are inside it, change to a safe location before removal.
+   - Before removal, follow `../worktree-runtime-cleanup/SKILL.md` for the worktree path. If that file is absent, say so in the summary.
 7. Delete the local branch after the worktree is removed.
 8. Summarize what was removed and what remains.
 
@@ -26,6 +27,6 @@ description: Use when the user says the work is already merged or otherwise comp
 - Treat cleanup as destructive and require explicit confirmation.
 - Never delete an unmerged branch.
 - Never remove a remote branch unless the user explicitly asks.
-- This skill removes only the local branch and local worktree.
+- This skill removes only the local branch, the local worktree, and the worktree's confirmed Compose stacks.
 - Never assume the current branch is disposable just because the prompt says "merged."
 - If git refuses removal because the worktree is busy or dirty, stop and report the exact blocker.
