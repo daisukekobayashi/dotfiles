@@ -168,7 +168,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - UI 作成・テスト・レビュー用の `frontend-design`、`webapp-testing`、`web-design-guidelines`
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
-- repository onboarding、`review-change`、`adversarial-review`、runtime isolation の local skill
+- `repo-execution-context`、`review-change`、`adversarial-review`、runtime isolation の local skill
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。

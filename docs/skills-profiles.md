@@ -168,7 +168,7 @@ Include:
 - `frontend-design`, `webapp-testing`, and `web-design-guidelines` for UI creation, testing, and review
 - `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
-- repository onboarding, `review-change`, `adversarial-review`, and runtime isolation local skills
+- `repo-execution-context`, `review-change`, `adversarial-review`, and runtime isolation local skills
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
