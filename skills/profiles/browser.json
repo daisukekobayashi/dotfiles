@@ -12,10 +12,6 @@
     {
       "source": "chromedevtools/chrome-devtools-mcp",
       "skills": ["chrome-devtools"]
-    },
-    {
-      "source": "microsoft/playwright-cli",
-      "skills": ["playwright-cli"]
     }
   ],
   "local": []

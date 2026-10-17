@@ -76,6 +76,8 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/playwright-cli" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
   [ -L "${TEST_DOTFILES}/.agents/user/skills/execution-context-first-repo-onboarding" ]
   [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/execution-context-first-repo-onboarding")" = "${TEST_DOTFILES}/skills/local/execution-context-first-repo-onboarding" ]
   [ -L "${TEST_DOTFILES}/.agents/user/skills/local-runtime-port-isolation" ]
@@ -89,7 +91,8 @@ teardown() {
   [ -L "${TEST_HOME}/.gemini/skills" ]
   [ "$(readlink "${TEST_HOME}/.gemini/skills")" = "/tmp/stale-gemini-skills" ]
   grep -F 'skills add vercel-labs/skills' "${TEST_LOG}"
-  grep -F 'skills add obra/superpowers' "${TEST_LOG}"
+  grep -F 'skills add microsoft/playwright-cli' "${TEST_LOG}"
+  grep -F 'skills add upstash/context7' "${TEST_LOG}"
 }
 
 @test "skills profile validate accepts the repository profiles" {
@@ -108,7 +111,7 @@ teardown() {
   [[ "$output" == *"office"* ]]
 }
 
-@test "docs profile stays independent from base" {
+@test "docs profile remains available without installing base skills" {
   run env \
     HOME="${TEST_HOME}" \
     SETUP_HOME="${TEST_HOME}" \
@@ -120,8 +123,9 @@ teardown() {
     skills --scope user --profile docs
 
   [ "$status" -eq 0 ]
-  [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
+  [ ! -e "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
   [ ! -e "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
+  [ ! -e "${TEST_LOG}" ]
 }
 
 @test "workbench profile composes base docs browser and research" {
@@ -139,6 +143,7 @@ teardown() {
   [ -d "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
   [ -L "${TEST_DOTFILES}/.agents/user/skills/execution-context-first-repo-onboarding" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/playwright-cli" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/agent-browser" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/read-arxiv-paper" ]
 }
