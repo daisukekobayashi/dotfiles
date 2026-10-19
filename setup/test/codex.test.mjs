@@ -9,6 +9,7 @@ import { parse, stringify } from "smol-toml";
 const repo = path.resolve(import.meta.dirname, "../..");
 const runtime = path.join(repo, "setup/codex.js");
 const profile = "azure_gpt-6_1-sol_max";
+const openaiProfile = "openai_gpt-6_1-sol_max";
 const baseUrl = "https://example.openai.azure.com/openai";
 const apiVersion = "2025-04-01-preview";
 
@@ -18,6 +19,7 @@ function fixture(t) {
   const dotfiles = path.join(root, "dot files");
   const home = path.join(root, "user home");
   const azure = path.join(home, ".codex-azure");
+  const openai = path.join(home, ".codex-openai");
   const source = path.join(dotfiles, "codex/config.toml");
   const write = (file, text) => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -58,6 +60,8 @@ trust_level = "trusted"
 trusted_hash = "profile-main-only-hash"
 `);
   write(path.join(dotfiles, "codex/azure_gpt-6-luna_max.config.toml"), 'model = "gpt-6-luna"\nmodel_provider = "azure"\nmodel_reasoning_effort = "max"\n');
+  write(path.join(dotfiles, `codex/${openaiProfile}.config.toml`), 'model = "gpt-6.1-sol"\nmodel_provider = "openai"\nmodel_reasoning_effort = "max"\n');
+  write(path.join(dotfiles, "codex/openai_gpt-6-luna_max.config.toml"), 'model = "gpt-6-luna"\nmodel_provider = "openai"\nmodel_reasoning_effort = "max"\n');
   write(path.join(dotfiles, "codex/hooks.json"), '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"example cleanup"}]}]}}\n');
   write(path.join(dotfiles, "codex/rules/user.rules"), 'prefix_rule(pattern=["git", "status"], decision="allow")\n');
   write(path.join(dotfiles, "ai-rules/base/global.md"), "# Shared rules\n\nKeep changes focused.\n");
@@ -66,25 +70,29 @@ trusted_hash = "profile-main-only-hash"
   fs.symlinkSync(source, path.join(home, ".codex/config.toml"));
   const env = { ...process.env, SETUP_HOME: home, SETUP_DOTFILES_ROOT: dotfiles, SETUP_DRY_RUN: "0" };
   delete env.AZURE_OPENAI_API_KEY;
+  delete env.OPENAI_API_KEY;
   const run = (args = [], extra = {}) => spawnSync(process.execPath, [runtime, ...args], { env: { ...env, ...extra }, encoding: "utf8" });
   const initialize = (args = [], extra = {}) => run(["--azure-base-url", baseUrl, "--azure-api-version", apiVersion, ...args], extra);
   const config = (name = "config.toml") => parse(fs.readFileSync(path.join(azure, name), "utf8"));
+  const openaiConfig = (name = "config.toml") => parse(fs.readFileSync(path.join(openai, name), "utf8"));
+  const initializeOpenAI = (args = [], extra = {}) => run(["--provider", "openai", ...args], extra);
   const updateSource = update => {
     const value = parse(fs.readFileSync(source, "utf8"));
     update(value);
     fs.writeFileSync(source, stringify(value));
   };
-  return { root, dotfiles, home, azure, source, env, run, initialize, config, write, updateSource };
+  return { root, dotfiles, home, azure, openai, source, env, run, initialize, initializeOpenAI, config, openaiConfig, write, updateSource };
 }
 
 function success(result) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
 }
 
-function managedSnapshot(azure) {
-  const marker = fs.readFileSync(path.join(azure, ".dotfiles-azure.json"), "utf8");
-  return Object.fromEntries([".dotfiles-azure.json", ...Object.keys(JSON.parse(marker).files)]
-    .map(name => [name, fs.readFileSync(path.join(azure, name), "utf8")]));
+function managedSnapshot(home, kind = "azure") {
+  const markerName = `.dotfiles-${kind}.json`;
+  const marker = fs.readFileSync(path.join(home, markerName), "utf8");
+  return Object.fromEntries([markerName, ...Object.keys(JSON.parse(marker).files)]
+    .map(name => [name, fs.readFileSync(path.join(home, name), "utf8")]));
 }
 
 test("generates Azure defaults, all profiles and shared assets without altering the main home", t => {
@@ -428,4 +436,173 @@ test("connection changes in dry-run keep the saved and generated provider untouc
   success(f.run());
   assert.equal(f.config().model_providers.azure.base_url, baseUrl);
   assert.equal(f.config().model_providers.azure.query_params["api-version"], apiVersion);
+});
+
+test("OpenAI generates API-only built-in profiles and leaves the subscription and Azure homes untouched", t => {
+  const f = fixture(t);
+  success(f.initialize());
+  const azureBefore = managedSnapshot(f.azure);
+  f.updateSource(value => {
+    value.openai_base_url = "https://subscription.example/v1";
+    value.model_providers = { azure: { base_url: baseUrl } };
+  });
+  const mainBefore = fs.readFileSync(f.source, "utf8");
+  success(f.initializeOpenAI([], { OPENAI_API_KEY: "openai-test-placeholder" }));
+  for (const name of ["config.toml", `${openaiProfile}.config.toml`, "openai_gpt-6-luna_max.config.toml"]) {
+    const value = f.openaiConfig(name);
+    assert.equal(value.model_provider, "openai");
+    assert.equal(value.forced_login_method, "api");
+    assert.equal(value.cli_auth_credentials_store, "file");
+    assert.equal(value.openai_base_url, "https://api.openai.com/v1");
+    assert.equal(value.model_providers, undefined);
+    for (const key of ["projects", "hooks", "forced_chatgpt_workspace_id", "log_dir", "sqlite_home"]) assert.equal(value[key], undefined);
+    assert.equal(value.tui.model_availability_nux, undefined);
+    assert.equal(value.notice.model_migrations, undefined);
+    assert.deepEqual(value.mcp_servers.example.args, ["two words", 'quote " and #']);
+    assert.equal(fs.lstatSync(path.join(f.openai, name)).isSymbolicLink(), false);
+  }
+  assert.equal(f.openaiConfig().model, "gpt-6.1-sol");
+  assert.equal(f.openaiConfig("openai_gpt-6-luna_max.config.toml").model, "gpt-6-luna");
+  for (const name of ["hooks.json", "rules/user.rules", "AGENTS.md"]) {
+    assert.equal(fs.readFileSync(path.join(f.openai, name), "utf8"), fs.readFileSync(path.join(f.azure, name), "utf8"));
+  }
+  for (const name of ["auth.json", "sessions", "plugins", "memories", "skills", `${profile}.config.toml`]) assert.equal(fs.existsSync(path.join(f.openai, name)), false);
+  assert.deepEqual(managedSnapshot(f.azure), azureBefore);
+  assert.equal(fs.readFileSync(f.source, "utf8"), mainBefore);
+  assert.equal(fs.readFileSync(path.join(f.home, ".codex/auth.json"), "utf8"), '{"auth_mode":"chatgpt"}\n');
+  assert.doesNotMatch(JSON.stringify(managedSnapshot(f.openai, "openai")), /openai-test-placeholder/);
+});
+
+test("OpenAI remembers its URL and chosen profile across processes and shared updates", t => {
+  const f = fixture(t);
+  success(f.initializeOpenAI(["--base-url", "https://gateway.example/v1", "--profile", "openai_gpt-6-luna_max"]));
+  const local = f.openaiConfig();
+  local.projects = { "/openai-only": { trust_level: "trusted" } };
+  local.model_reasoning_effort = "high";
+  f.write(path.join(f.openai, "config.toml"), "# Local API settings\n" + stringify(local));
+  f.write(path.join(f.openai, "auth.json"), "openai-local-auth-placeholder\n");
+  f.write(path.join(f.openai, "sessions/local.jsonl"), "openai-session\n");
+  success(f.initializeOpenAI());
+  assert.match(fs.readFileSync(path.join(f.openai, "config.toml"), "utf8"), /^# Local API settings/);
+  f.updateSource(value => { value.sandbox_mode = "read-only"; });
+  success(f.initializeOpenAI());
+  assert.equal(f.openaiConfig().model, "gpt-6-luna");
+  assert.equal(f.openaiConfig().model_reasoning_effort, "high");
+  assert.equal(f.openaiConfig().sandbox_mode, "read-only");
+  assert.equal(f.openaiConfig().projects["/openai-only"].trust_level, "trusted");
+  assert.equal(fs.readFileSync(path.join(f.openai, "auth.json"), "utf8"), "openai-local-auth-placeholder\n");
+  assert.equal(fs.readFileSync(path.join(f.openai, "sessions/local.jsonl"), "utf8"), "openai-session\n");
+  success(f.initializeOpenAI(["--base-url", "https://replacement.example/v1"]));
+  success(f.initializeOpenAI());
+  for (const name of ["config.toml", `${openaiProfile}.config.toml`, "openai_gpt-6-luna_max.config.toml"]) {
+    assert.equal(f.openaiConfig(name).openai_base_url, "https://replacement.example/v1");
+  }
+  const before = managedSnapshot(f.openai, "openai");
+  success(f.initializeOpenAI());
+  assert.deepEqual(managedSnapshot(f.openai, "openai"), before);
+  const marker = JSON.parse(fs.readFileSync(path.join(f.openai, ".dotfiles-openai.json"), "utf8"));
+  assert.equal(marker.openaiProvider.base_url, "https://replacement.example/v1");
+  assert.equal(marker.defaultProfile, "openai_gpt-6-luna_max");
+});
+
+test("OpenAI refuses local changes that weaken API-only credential isolation", t => {
+  for (const [key, value] of [["model_provider", "azure"], ["forced_login_method", "chatgpt"], ["cli_auth_credentials_store", "keyring"]]) {
+    const f = fixture(t);
+    success(f.initializeOpenAI());
+    const local = f.openaiConfig();
+    local[key] = value;
+    f.write(path.join(f.openai, "config.toml"), stringify(local));
+    const before = managedSnapshot(f.openai, "openai");
+    const result = f.initializeOpenAI();
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /OpenAI provider or credential isolation/);
+    assert.deepEqual(managedSnapshot(f.openai, "openai"), before);
+  }
+});
+
+test("OpenAI dry-run through the shell entry point neither creates a home nor saves connection updates", t => {
+  const f = fixture(t);
+  const result = spawnSync("bash", [path.join(repo, "setup.sh"), "codex", "--provider", "openai", "--dry-run"], { env: f.env, encoding: "utf8" });
+  success(result);
+  assert.match(result.stdout, /Would write/);
+  assert.equal(fs.existsSync(f.openai), false);
+  assert.equal(fs.existsSync(f.azure), false);
+  success(f.initializeOpenAI());
+  const before = managedSnapshot(f.openai, "openai");
+  success(f.initializeOpenAI(["--base-url", "https://preview.example/v1", "--dry-run"]));
+  assert.deepEqual(managedSnapshot(f.openai, "openai"), before);
+});
+
+test("OpenAI preserves unmanaged files and refuses symlinked homes and managed targets", t => {
+  for (const target of ["unmanaged", "home", "config.toml", "rules"]) {
+    const f = fixture(t);
+    if (target === "unmanaged") f.write(path.join(f.openai, "hooks.json"), "user-owned\n");
+    else if (target === "home") fs.symlinkSync(path.dirname(f.source), f.openai);
+    else {
+      fs.mkdirSync(f.openai);
+      fs.symlinkSync(target === "config.toml" ? f.source : path.dirname(f.source), path.join(f.openai, target));
+    }
+    const result = f.initializeOpenAI();
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /unmanaged file|symlink/);
+    assert.equal(fs.existsSync(path.join(f.openai, ".dotfiles-openai.json")), false);
+    if (target === "unmanaged") assert.equal(fs.readFileSync(path.join(f.openai, "hooks.json"), "utf8"), "user-owned\n");
+  }
+});
+
+test("OpenAI endpoint conflicts and a failed replacement preserve all generated files and saved connection", t => {
+  const f = fixture(t);
+  success(f.initializeOpenAI());
+  const before = managedSnapshot(f.openai, "openai");
+  const script = `
+    const fs = require('node:fs');
+    const rename = fs.renameSync;
+    let replacements = 0;
+    fs.renameSync = (from, to) => {
+      if (from.endsWith('.new') && ++replacements === 2) throw new Error('injected OpenAI replacement failure');
+      return rename(from, to);
+    };
+    require(${JSON.stringify(runtime)}).main(['--provider', 'openai', '--base-url', 'https://replacement.example/v1']);
+  `;
+  const result = spawnSync(process.execPath, ["-e", script], { env: f.env, encoding: "utf8" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /injected OpenAI replacement failure/);
+  assert.deepEqual(managedSnapshot(f.openai, "openai"), before);
+  assert.equal(fs.readdirSync(f.openai).some(name => name.startsWith(".dotfiles-openai-stage-")), false);
+  success(f.initializeOpenAI(["--base-url", "https://replacement.example/v1"]));
+  const local = f.openaiConfig();
+  local.openai_base_url = "https://local-edit.example/v1";
+  f.write(path.join(f.openai, "config.toml"), stringify(local));
+  const edited = managedSnapshot(f.openai, "openai");
+  const conflict = f.initializeOpenAI(["--base-url", "https://another.example/v1"]);
+  assert.equal(conflict.status, 1);
+  assert.match(conflict.stderr, /Conflicting local and dotfiles changes: .*openai_base_url/);
+  assert.deepEqual(managedSnapshot(f.openai, "openai"), edited);
+});
+
+test("provider-specific arguments and unsafe OpenAI URLs fail without writing files or echoing values", t => {
+  const f = fixture(t);
+  for (const args of [["--provider", "unknown"], ["--provider"], ["--base-url"], ["--api-version"], ["--provider", "openai", "--api-version", "none"], ["--azure-base-url", baseUrl, "--provider", "openai"], ["--provider", "openai", "--profile", profile]]) {
+    const result = f.run(args);
+    assert.equal(result.status, 1);
+    assert.equal(fs.existsSync(f.openai), false);
+    assert.equal(fs.existsSync(f.azure), false);
+  }
+  for (const value of ["not-a-url", "https://user:do-not-echo@example.invalid/v1", "https://example.invalid/v1?key=do-not-echo", "https://example.invalid/v1#fragment"]) {
+    const result = f.initializeOpenAI(["--base-url", value]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /OpenAI base URL/);
+    assert.doesNotMatch(result.stderr, /do-not-echo/);
+    assert.equal(fs.existsSync(f.openai), false);
+  }
+});
+
+test("Azure accepts the generic connection arguments and retains compatibility with the old aliases", t => {
+  const f = fixture(t);
+  success(f.run(["--provider", "azure", "--base-url", baseUrl, "--api-version", apiVersion]));
+  assert.equal(f.config().model_providers.azure.base_url, baseUrl);
+  assert.equal(f.config().model_providers.azure.query_params["api-version"], apiVersion);
+  success(f.run(["--azure-api-version", "none"]));
+  assert.equal(f.config().model_providers.azure.query_params, undefined);
+  assert.equal(fs.existsSync(f.openai), false);
 });

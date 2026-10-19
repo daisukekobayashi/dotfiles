@@ -26,7 +26,7 @@ Subcommands:
   all         Run all setup steps (default): links -> packages -> post
   links       Run symbolic link and local config setup only
   skills      Restore skills and wire agent skill directories
-  codex       Generate the separate Azure Codex home
+  codex       Generate a separate Azure or OpenAI API Codex home
   packages    Run required package/tool install and post-setup steps
   post        Run post-setup steps only
   help        Show this help
@@ -37,10 +37,13 @@ packages args:
   --dry-run      Print commands without executing side effects
 
 codex args:
-  --azure-base-url <url>     Azure base_url (required on first generation)
+  --provider azure|openai    Select the API home (default: azure)
+  --base-url <url>           API base_url (required initially for Azure)
+  --api-version <value>      Azure api-version; use none to remove a saved value
+  --azure-base-url <url>     Azure-only alias for --base-url
   --azure-api-version <value>
-                             Set api-version; use none to remove a saved value
-  --profile <name>           Set the Azure home's default model profile
+                             Azure-only alias for --api-version
+  --profile <name>           Set the selected home's default model profile
   --dry-run                  Preview generation without changing files
 
 skills args:

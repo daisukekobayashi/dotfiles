@@ -20,7 +20,7 @@ Subcommands:
   all         Run Windows setup for the current privilege level
   links       Create Windows symbolic links only
   skills      Restore skills and wire agent skill directories
-  codex       Generate the separate Azure Codex home
+  codex       Generate a separate Azure or OpenAI API Codex home
   packages    Install or verify Scoop and psmux PPM
   help        Show this help
 
@@ -28,8 +28,9 @@ Behavior:
   all (non-admin): runs packages, then links
   all (admin): skips packages and runs links only
   skills: runs the shared Node skills setup runtime
-  codex: accepts --azure-base-url <url>, --azure-api-version <value>,
-         --profile <name> and --dry-run (requires Node.js)
+  codex: accepts --provider azure|openai, --base-url <url>, --api-version <value>,
+         --profile <name> and --dry-run (requires Node.js).
+         The provider defaults to azure. Legacy --azure-* aliases remain available.
 "@
 }
 

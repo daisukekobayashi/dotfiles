@@ -195,6 +195,14 @@ setup_default_homes() {
   touch "${AZURE_HOME}/azure_gpt-6_1-sol_max.config.toml"
 }
 
+setup_openai_home() {
+  OPENAI_HOME="${PICKER_HOME}/.codex-openai"
+  mkdir -p "${OPENAI_HOME}"
+  printf '{}\n' > "${OPENAI_HOME}/.dotfiles-openai.json"
+  printf 'model_provider = "openai"\n' > "${OPENAI_HOME}/config.toml"
+  touch "${OPENAI_HOME}/openai_gpt-6_1-sol_max.config.toml"
+}
+
 run_default_picker() {
   run env -u CODEX_HOME \
     PATH="${FAKE_BIN}:/usr/bin:/bin" \
@@ -534,7 +542,7 @@ run_default_picker() {
   [ "$status" -eq 0 ]
   grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
   [ ! -f "${CODEX_DEBUG_LOG}" ]
-  ! grep -F 'chatgpt_' "${FZF_ROWS}"
+  run ! grep -F 'chatgpt_' "${FZF_ROWS}"
 }
 
 @test "codex-pick keeps working for ChatGPT when no Azure home exists" {
@@ -561,4 +569,94 @@ run_default_picker() {
   run_default_picker -p azure_gpt-6_1-sol_max
   [ "$status" -eq 42 ]
   grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
+}
+
+@test "codex-pick combines all three homes and launches OpenAI with forwarded arguments" {
+  setup_default_homes
+  setup_openai_home
+  printf '%s\n' openai_gpt-6_1-sol_max > "${FZF_CHOICES}"
+
+  run_default_picker -q openai -- "" "two words" --resume
+
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${OPENAI_HOME}" "${CODEX_LOG}"
+  grep -Fx 'argv=<--profile><openai_gpt-6_1-sol_max><><two words><--resume>' "${CODEX_LOG}"
+  grep -F 'azure_gpt-6_1-sol_max' "${FZF_ROWS}"
+  grep -F 'chatgpt_' "${FZF_ROWS}"
+  grep -F 'OpenAI API profile' "${FZF_ROWS}"
+  grep -F '<--query=openai>' "${FZF_LOG}"
+}
+
+@test "codex-pick launches an explicit OpenAI profile without a catalog or picker and preserves its exit status" {
+  setup_default_homes
+  setup_openai_home
+  CODEX_EXIT_STATUS=42
+
+  run_default_picker -p openai_gpt-6_1-sol_max -- --resume
+
+  [ "$status" -eq 42 ]
+  grep -Fx "home=${OPENAI_HOME}" "${CODEX_LOG}"
+  grep -Fx 'argv=<--profile><openai_gpt-6_1-sol_max><--resume>' "${CODEX_LOG}"
+  [ ! -f "${CODEX_DEBUG_LOG}" ]
+  [ ! -f "${FZF_LOG}" ]
+}
+
+@test "codex-pick with an explicit OpenAI home offers only its profiles without loading a catalog" {
+  setup_default_homes
+  setup_openai_home
+  CODEX_HOME="${OPENAI_HOME}"
+  printf '%s\n' openai_gpt-6_1-sol_max > "${FZF_CHOICES}"
+
+  run_picker
+
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${OPENAI_HOME}" "${CODEX_LOG}"
+  [ ! -f "${CODEX_DEBUG_LOG}" ]
+  run ! grep -F 'chatgpt_' "${FZF_ROWS}"
+  run ! grep -F 'azure_' "${FZF_ROWS}"
+}
+
+@test "codex-pick rejects ambiguous OpenAI profiles across homes until a home is specified" {
+  setup_default_homes
+  setup_openai_home
+  touch "${PRIMARY_HOME}/openai_gpt-6_1-sol_max.config.toml"
+
+  run_default_picker -p openai_gpt-6_1-sol_max
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Ambiguous profile"* ]]
+  [ ! -f "${CODEX_LOG}" ]
+  CODEX_HOME="${OPENAI_HOME}"
+  run_picker -p openai_gpt-6_1-sol_max
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${OPENAI_HOME}" "${CODEX_LOG}"
+}
+
+@test "codex-pick detects duplicate profiles between Azure and OpenAI homes" {
+  setup_default_homes
+  setup_openai_home
+  touch "${AZURE_HOME}/openai_gpt-6_1-sol_max.config.toml"
+
+  run_default_picker -p openai_gpt-6_1-sol_max
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Ambiguous profile"* ]]
+  [ ! -f "${CODEX_LOG}" ]
+}
+
+@test "codex-pick omits incomplete OpenAI homes and preserves cancellation with all three homes" {
+  setup_default_homes
+  setup_openai_home
+  mv "${OPENAI_HOME}/.dotfiles-openai.json" "${OPENAI_HOME}/incomplete-marker.json"
+  printf '%s\n' chatgpt_gpt-6-astra_high > "${FZF_CHOICES}"
+
+  run_default_picker
+
+  [ "$status" -eq 0 ]
+  run ! grep -F 'openai_gpt-6_1-sol_max' "${FZF_ROWS}"
+  mv "${OPENAI_HOME}/incomplete-marker.json" "${OPENAI_HOME}/.dotfiles-openai.json"
+  printf '%s\n' __CANCEL__ > "${FZF_CHOICES}"
+  run_default_picker
+  [ "$status" -eq 130 ]
+  [ "$(wc -l < "${CODEX_LOG}")" -eq 2 ]
 }

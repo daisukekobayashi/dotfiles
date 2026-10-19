@@ -8,8 +8,9 @@ Usage: codex-pick [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]
 Choose a Codex launch configuration for one invocation.
 
 PROFILE names a PROFILE.config.toml file in the selected Codex home.
-By default, ChatGPT configurations and the generated ~/.codex-azure profiles
-share one picker. An explicit CODEX_HOME limits selection to that home.
+By default, ChatGPT configurations and the generated ~/.codex-azure and
+~/.codex-openai profiles share one picker. An explicit CODEX_HOME limits
+selection to that home.
 QUERY sets the initial fzf search query for an interactive picker.
 MODEL may be a full model slug or an unambiguous slug suffix.
 With no arguments, fzf selects either a ChatGPT model/effort combination or a
@@ -59,6 +60,8 @@ profile_rows() {
         label="Azure profile"
       elif is_azure_home "${codex_home}"; then
         label="Azure profile"
+      elif is_openai_home "${codex_home}"; then
+        label="OpenAI API profile"
       fi
       printf '%s\tprofile\t-\t-\t%s\t%s\t-\t%s\n' "${name}" "${label}" "${file}" "${target_home}"
     fi
@@ -67,6 +70,14 @@ profile_rows() {
 
 is_azure_home() {
   [[ -f "$1/.dotfiles-azure.json" && -f "$1/config.toml" ]]
+}
+
+is_openai_home() {
+  [[ -f "$1/.dotfiles-openai.json" && -f "$1/config.toml" ]]
+}
+
+is_api_home() {
+  is_azure_home "$1" || is_openai_home "$1"
 }
 
 legacy_azure_profile() {
@@ -81,9 +92,16 @@ require_azure_home() {
   fi
 }
 
+require_openai_home() {
+  if ! is_openai_home "$1"; then
+    die 2 "OpenAI home is not ready: $1. Run ./setup.sh codex --provider openai first"
+  fi
+}
+
 resolve_profile() {
   local profile="$1"
   local main_file="${primary_home}/${profile}.config.toml"
+  local candidate_home selected_home=""
 
   if [[ ! "${profile}" =~ ^[A-Za-z0-9_-]+$ ]]; then
     die 2 "Invalid profile name: ${profile}. Use letters, numbers, hyphens, or underscores"
@@ -96,17 +114,23 @@ resolve_profile() {
       printf '%s\n' "${azure_home}"
       return
     fi
-    if is_azure_home "${azure_home}" && [[ -f "${azure_home}/${profile}.config.toml" ]]; then
-      if [[ -f "${main_file}" ]]; then
-        die 2 "Ambiguous profile: ${profile}. Set CODEX_HOME to select its home"
-      fi
-      printf '%s\n' "${azure_home}"
-      return
-    fi
   fi
 
-  validate_profile "${profile}" "${primary_home}"
-  printf '%s\n' "${primary_home}"
+  for candidate_home in "${primary_home}" "${azure_home}" "${openai_home}"; do
+    [[ -n "${candidate_home}" ]] || continue
+    if [[ "${candidate_home}" != "${primary_home}" ]] && ! is_api_home "${candidate_home}"; then
+      continue
+    fi
+    [[ -f "${candidate_home}/${profile}.config.toml" ]] || continue
+    if [[ -n "${selected_home}" ]]; then
+      die 2 "Ambiguous profile: ${profile}. Set CODEX_HOME to select its home"
+    fi
+    selected_home="${candidate_home}"
+  done
+  if [[ -z "${selected_home}" ]]; then
+    validate_profile "${profile}" "${primary_home}"
+  fi
+  printf '%s\n' "${selected_home}"
 }
 
 launch_codex() {
@@ -114,6 +138,8 @@ launch_codex() {
   shift
   if [[ -n "${azure_home}" && "${target_home}" == "${azure_home}" ]]; then
     require_azure_home "${target_home}"
+  elif [[ -n "${openai_home}" && "${target_home}" == "${openai_home}" ]]; then
+    require_openai_home "${target_home}"
   fi
   exec env CODEX_HOME="${target_home}" codex "$@"
 }
@@ -166,6 +192,9 @@ configuration_rows() {
   profile_rows "${codex_home}"
   if [[ -n "${azure_home}" ]] && is_azure_home "${azure_home}"; then
     profile_rows "${azure_home}"
+  fi
+  if [[ -n "${openai_home}" ]] && is_openai_home "${openai_home}"; then
+    profile_rows "${openai_home}"
   fi
   if [[ -n "${catalog}" ]]; then
     chatgpt_rows "${catalog}"
@@ -375,8 +404,10 @@ effort_query="${positionals[1]:-}"
 codex_home="${CODEX_HOME:-${HOME}/.codex}"
 primary_home="${codex_home}"
 azure_home=""
+openai_home=""
 if [[ -z "${CODEX_HOME:-}" ]]; then
   azure_home="${HOME}/.codex-azure"
+  openai_home="${HOME}/.codex-openai"
 fi
 
 require_command codex
@@ -392,7 +423,7 @@ if [[ -n "${profile}" && -z "${model_query}" ]]; then
 fi
 
 catalog=""
-if [[ -n "${model_query}" ]] || ! is_azure_home "${primary_home}"; then
+if [[ -n "${model_query}" ]] || ! is_api_home "${primary_home}"; then
   require_command jq
   catalog="$(load_catalog)"
 fi

@@ -140,74 +140,106 @@ Vim build with `+clipboard`; the external fallback bridges ordinary operations.
 
 - `share-dir`: start a Dockerized FileBrowser Quantum instance for a chosen directory.
 - `claude-pick`: choose a Claude Code profile, model, and effort.
-- `codex-pick`: choose a ChatGPT model or an Azure profile in one picker (Bash).
+- `codex-pick`: choose a ChatGPT model, Azure profile or OpenAI API profile in one picker (Bash).
 
 ### Codex homes
 
 The primary `~/.codex` remains the usual ChatGPT subscription environment. Its
 configuration and model profiles keep their existing dotfiles symlinks.
-Generate an independent Azure home from the same sources:
+Generate independent API homes from the shared settings:
 
 ```sh
 npm --prefix setup ci
-./setup.sh codex --azure-base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
-./setup.sh codex --azure-base-url 'https://RESOURCE.openai.azure.com/openai/v1'
+./setup.sh codex --provider openai --dry-run
+./setup.sh codex --provider openai
+./setup.sh codex --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
+./setup.sh codex --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1'
 ```
 
 Windows uses `.\setup.ps1 codex` with the same arguments and Node runtime.
 Generation requires Node.js 18+ and the local setup dependencies.
 It is an explicit step; `setup links` and `setup all` keep their existing behavior.
-First generation requires `--azure-base-url`. Dry-run does not save the connection,
-so pass the URL again for the actual generation. Supply the API's exact `base_url`.
+Azure requires `--base-url` on first generation. OpenAI defaults to
+`https://api.openai.com/v1`; use `--base-url` for a Responses-compatible gateway.
+Dry-run does not save the connection, so repeat any connection arguments for the
+actual generation. Supply the API's exact base URL.
 
-The connection and API version are saved within the Azure home. Later runs need
-only `./setup.sh codex`. Pass `--azure-base-url` again to update the connection.
-Use `--azure-api-version 2025-04-01-preview` to set or update the API version, or
-`--azure-api-version none` to remove a saved value. Omitting the version on first
-generation leaves `api-version` unset. Changing the URL alone retains the saved
-API version. Existing Azure homes using the old metadata format automatically
-retain the provider URL and API version from their previous generation.
+The connection and default profile are saved separately in each API home. Refresh
+with `./setup.sh codex --provider openai` or `./setup.sh codex --provider azure`.
+Pass `--base-url` again to update that home's connection. For Azure only, use
+`--api-version 2025-04-01-preview` to set or update the API version, or
+`--api-version none` to remove a saved value. Omitting it initially leaves
+`api-version` unset; changing the URL alone retains a saved version.
+The provider defaults to `azure`, so the existing `./setup.sh codex` command
+and its `--azure-base-url` / `--azure-api-version` aliases continue to work.
+Existing Azure homes using the old metadata format automatically retain the
+provider URL and API version from their previous generation.
 
 | Location | Settings and state |
 | --- | --- |
 | `~/.codex` | Existing ChatGPT login, settings symlinks, sessions, memory and plugins |
 | `~/.codex-azure` | Generated ordinary TOML files, shared rules/hooks, and independent Codex state |
+| `~/.codex-openai` | Generated ordinary TOML files, shared rules/hooks, API-only login and independent Codex state |
 
 `codex/config.toml` supplies common preferences and MCP settings. Existing
-`codex/azure_*.config.toml` files supply Azure model settings. Generation combines
-them with the saved connection and writes `[model_providers.azure]` into the Azure
-default configuration and each named profile. The shared `config.toml` needs no
-Azure provider definition. The initial default is `azure_gpt-6_1-sol_max`; change it with
-`./setup.sh codex --profile azure_gpt-6-luna_max`. Later runs remember that choice.
-The Azure provider reads the existing `AZURE_OPENAI_API_KEY` environment variable
-and uses a file credential store within its home. No ChatGPT credentials, sessions,
+`codex/azure_*.config.toml` files supply Azure model settings, while
+`codex/openai_*.config.toml` files supply OpenAI API model settings. Generation
+combines the selected provider's profiles with its saved connection. Azure gets
+`[model_providers.azure]` and reads `AZURE_OPENAI_API_KEY`. OpenAI uses the built-in
+`openai` provider, `openai_base_url`, and `forced_login_method = "api"`; it does not
+create a `[model_providers.openai]` table. See the official
+[advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced)
+and [authentication](https://learn.chatgpt.com/docs/auth) documentation.
+Neither provider needs a definition in the shared `config.toml`.
+
+The initial defaults are `azure_gpt-6_1-sol_max` and `openai_gpt-6_1-sol_max`.
+Use `--provider openai --profile openai_gpt-6-luna_max` (or the Azure equivalents)
+to change the selected home's default. Later runs remember that choice.
+Both API homes use a file credential store within their own home. No ChatGPT credentials, sessions,
 memory, plugin cache, project trust or hook trust are copied. User skills remain
 available through the existing `~/.agents/skills` setup.
 
-After editing shared settings, Azure model sources, rules or hooks, run
-`./setup.sh codex` again. Azure-local runtime state and independent setting changes
+After editing shared settings, model sources, rules or hooks, regenerate each
+API home you use with its `--provider` argument. Home-local runtime state and independent setting changes
 survive regeneration. Conflicting edits to the same setting stop generation before
 replacement; reconcile the reported setting and rerun. Replaced files are backed
-up under `~/.codex-azure/.dotfiles-azure-backups/`. The adjacent
-`.dotfiles-azure.json` records the connection, default profile and previous source
+up under `.dotfiles-azure-backups/` or `.dotfiles-openai-backups/` inside the
+selected home. The adjacent `.dotfiles-azure.json` or `.dotfiles-openai.json`
+records the connection, default profile and previous source
 settings for synchronization; keep it with the generated files. It does not store
 the API key itself. Unmanaged files and symlinks are never replaced,
 and removing a source profile does not delete its existing generated file.
 
 ```sh
-codex-pick                                  # One picker for ChatGPT and Azure
+codex-pick                                  # One picker for ChatGPT, Azure and OpenAI API
 codex-pick -q azure                         # Start the picker with a search query
 codex-pick -p azure_gpt-6_1-sol_max          # Azure home, no model picker
 codex-pick -p azure_gpt-6-luna_max -- --resume
+codex-pick -p openai_gpt-6_1-sol_max         # OpenAI API home, no model picker
 CODEX_HOME="$HOME/.codex-azure" codex        # Azure default model directly
 CODEX_HOME="$HOME/.codex-azure" claude       # Codex plugin in Claude Code
+CODEX_HOME="$HOME/.codex-openai" codex       # OpenAI API default model directly
+CODEX_HOME="$HOME/.codex-openai" claude      # Codex plugin using OpenAI API
 ```
 
+Before using the OpenAI API home, sign in there once with your existing
+`OPENAI_API_KEY`, following the official CLI login flow:
+
+```sh
+printenv OPENAI_API_KEY | CODEX_HOME="$HOME/.codex-openai" codex login --with-api-key
+```
+
+Setup does not read or save the key. This explicit login stores it only in the
+OpenAI home. In PowerShell, use
+`$env:CODEX_HOME = "$HOME/.codex-openai"` and
+`$env:OPENAI_API_KEY | codex login --with-api-key`, then restore the previous
+`CODEX_HOME` value before using the subscription or another home.
+
 `codex-pick` sets `CODEX_HOME` only for the launched process. An explicit
-`CODEX_HOME` restricts selection to that home; an explicit generated Azure home
+`CODEX_HOME` restricts selection to that home; an explicit generated API home
 offers its profiles without loading the ChatGPT model catalog. Old dotfiles Azure
 profile links in the primary home resolve to the generated home, so existing
-`-p` commands continue to work. Generate the Azure home first; an incomplete home
+`-p` commands continue to work. Generate each API home first; an incomplete home
 causes an error. Interactive selection requires `fzf`; ChatGPT model selection
 also uses `jq` and `codex debug models`.
 

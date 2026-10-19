@@ -5,11 +5,15 @@ import { isDeepStrictEqual } from "node:util";
 import { parse, stringify } from "smol-toml";
 
 type Table = Record<string, unknown>;
-type Baseline = { version: 1 | 2; defaultProfile: string; azureProvider?: Table; files: Record<string, string> };
+type Provider = "azure" | "openai";
+type Baseline = { version: 1 | 2; defaultProfile: string; azureProvider?: Table; openaiProvider?: Table; files: Record<string, string> };
 type Change = { name: string; before: string | undefined; after: string };
 
-const markerName = ".dotfiles-azure.json";
-const defaultProfile = "azure_gpt-6_1-sol_max";
+const providerNames = { azure: "Azure", openai: "OpenAI" };
+
+function markerName(provider: Provider): string {
+  return `.dotfiles-${provider}.json`;
+}
 
 function table(value: unknown): value is Table {
   return value !== null && typeof value === "object" &&
@@ -55,8 +59,8 @@ function overlay(base: Table, overrides: Table): Table {
   return result;
 }
 
-function validateBaseUrl(value: unknown): void {
-  const message = "Azure base URL must be an http(s) base_url without credentials, query parameters or fragment";
+function validateBaseUrl(value: unknown, label = "Azure"): void {
+  const message = `${label} base URL must be an http(s) base_url without credentials, query parameters or fragment`;
   if (typeof value !== "string" || value.trim() !== value || /\s/.test(value)) throw new Error(message);
   try {
     const url = new URL(value);
@@ -74,7 +78,7 @@ function resolveAzureProvider(baseline: Baseline | undefined, baseUrl: string | 
     const previous = readToml(baseline.files["config.toml"] ?? "", "previous config.toml");
     if (table(previous.model_providers) && table(previous.model_providers.azure)) saved = previous.model_providers.azure;
   }
-  if (!saved && baseUrl === undefined) throw new Error("First generation requires --azure-base-url BASE_URL");
+  if (!saved && baseUrl === undefined) throw new Error("First generation requires --azure-base-url BASE_URL (or --base-url BASE_URL)");
   const provider = overlay({ name: "Azure", env_key: "AZURE_OPENAI_API_KEY", wire_api: "responses", requires_openai_auth: false }, saved ?? {});
   if (baseUrl !== undefined) provider.base_url = baseUrl;
   validateBaseUrl(provider.base_url);
@@ -95,7 +99,24 @@ function resolveAzureProvider(baseline: Baseline | undefined, baseUrl: string | 
   return provider;
 }
 
-function azureConfig(config: Table, provider: Table): Table {
+function resolveOpenAIProvider(baseline: Baseline | undefined, baseUrl: string | undefined): Table {
+  const provider = { base_url: baseUrl ?? baseline?.openaiProvider?.base_url ?? "https://api.openai.com/v1" };
+  validateBaseUrl(provider.base_url, "OpenAI");
+  return provider;
+}
+
+function apiConfig(config: Table, kind: Provider, provider: Table): Table {
+  if (kind === "openai") {
+    const result: Table = {
+      ...config,
+      model_provider: "openai",
+      forced_login_method: "api",
+      cli_auth_credentials_store: "file",
+      openai_base_url: provider.base_url,
+    };
+    delete result.model_providers;
+    return result;
+  }
   return {
     ...config,
     model_provider: "azure",
@@ -119,7 +140,15 @@ function mergeLocal(previous: unknown, current: unknown, desired: unknown, key: 
   throw new Error(`Conflicting local and dotfiles changes: ${key}`);
 }
 
-function assertAzure(config: Table, name: string): void {
+function assertProvider(config: Table, name: string, kind: Provider): void {
+  if (kind === "openai") {
+    if (config.model_provider !== "openai" || config.cli_auth_credentials_store !== "file" ||
+        config.forced_login_method !== "api" || (table(config.model_providers) && config.model_providers.openai !== undefined)) {
+      throw new Error(`OpenAI provider or credential isolation was changed locally: ${name}`);
+    }
+    validateBaseUrl(config.openai_base_url, "OpenAI");
+    return;
+  }
   const providers = config.model_providers;
   if (config.model_provider !== "azure" || config.cli_auth_credentials_store !== "file" ||
       !table(providers) || !table(providers.azure) || providers.azure.requires_openai_auth !== false ||
@@ -159,35 +188,37 @@ function checkTarget(home: string, name: string): void {
   }
 }
 
-function readBaseline(home: string): { text: string | undefined; baseline: Baseline | undefined } {
-  checkTarget(home, markerName);
-  const text = readOptional(path.join(home, markerName));
+function readBaseline(home: string, kind: Provider): { text: string | undefined; baseline: Baseline | undefined } {
+  const marker = markerName(kind);
+  checkTarget(home, marker);
+  const text = readOptional(path.join(home, marker));
   if (text === undefined) return { text, baseline: undefined };
   try {
     const value = JSON.parse(text);
-    if (![1, 2].includes(value.version) || (value.version === 2 && !table(value.azureProvider)) ||
+    if (![1, 2].includes(value.version) || (kind === "openai" && value.version !== 2) ||
+        (value.version === 2 && !table(value[kind === "azure" ? "azureProvider" : "openaiProvider"])) ||
         typeof value.defaultProfile !== "string" || !table(value.files) ||
         !Object.values(value.files).every(item => typeof item === "string")) throw new Error();
     return { text, baseline: value };
   } catch {
-    throw new Error(`Invalid Azure generation metadata: ${path.join(home, markerName)}`);
+    throw new Error(`Invalid ${providerNames[kind]} generation metadata: ${path.join(home, marker)}`);
   }
 }
 
-function desiredFiles(root: string, profile: string, provider: Table): Record<string, string> {
+function desiredFiles(root: string, profile: string, kind: Provider, provider: Table): Record<string, string> {
   const codexDir = path.join(root, "codex");
   const base = sharedConfig(readToml(fs.readFileSync(path.join(codexDir, "config.toml"), "utf8"), "codex/config.toml"));
   const profiles: Record<string, Table> = {};
   for (const name of fs.readdirSync(codexDir).sort()) {
-    if (!/^azure_[A-Za-z0-9_-]+\.config\.toml$/.test(name)) continue;
+    if (!new RegExp(`^${kind}_[A-Za-z0-9_-]+\\.config\\.toml$`).test(name)) continue;
     const config = sharedConfig(readToml(fs.readFileSync(path.join(codexDir, name), "utf8"), `codex/${name}`));
-    if (config.model_provider !== "azure" || typeof config.model !== "string") {
-      throw new Error(`Expected an Azure model profile: codex/${name}`);
+    if (config.model_provider !== kind || typeof config.model !== "string") {
+      throw new Error(`Expected an ${providerNames[kind]} model profile: codex/${name}`);
     }
-    profiles[name] = azureConfig(overlay(base, config), provider);
+    profiles[name] = apiConfig(overlay(base, config), kind, provider);
   }
   const selected = profiles[`${profile}.config.toml`];
-  if (!selected) throw new Error(`Azure profile not found in dotfiles: ${profile}`);
+  if (!selected) throw new Error(`${providerNames[kind]} profile not found in dotfiles: ${profile}`);
   const files: Record<string, string> = { "config.toml": stringify(selected) };
   for (const [name, config] of Object.entries(profiles)) files[name] = stringify(config);
   files["hooks.json"] = fs.readFileSync(path.join(codexDir, "hooks.json"), "utf8");
@@ -203,7 +234,7 @@ function desiredFiles(root: string, profile: string, provider: Table): Record<st
   return files;
 }
 
-function planChanges(home: string, desired: Record<string, string>, previous: Baseline | undefined): Change[] {
+function planChanges(home: string, desired: Record<string, string>, previous: Baseline | undefined, kind: Provider): Change[] {
   const changes: Change[] = [];
   for (const [name, source] of Object.entries(desired)) {
     checkTarget(home, name);
@@ -216,7 +247,7 @@ function planChanges(home: string, desired: Record<string, string>, previous: Ba
     if (name.endsWith(".toml") && before !== undefined) {
       const current = readToml(before, path.join(home, name));
       const merged = mergeLocal(readToml(old!, `previous ${name}`), current, readToml(source, name), name) as Table;
-      assertAzure(merged, name);
+      assertProvider(merged, name, kind);
       after = isDeepStrictEqual(current, merged) ? before : stringify(merged);
     } else if (before !== undefined) {
       after = mergeLocal(old, before, source, name) as string;
@@ -226,10 +257,10 @@ function planChanges(home: string, desired: Record<string, string>, previous: Ba
   return changes;
 }
 
-function applyChanges(home: string, changes: Change[]): void {
+function applyChanges(home: string, changes: Change[], kind: Provider): void {
   if (changes.length === 0) return;
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  const stage = fs.mkdtempSync(path.join(home, ".dotfiles-azure-stage-"));
+  const stage = fs.mkdtempSync(path.join(home, `.dotfiles-${kind}-stage-`));
   const applied: Change[] = [];
   let backup: string | undefined;
   try {
@@ -244,9 +275,10 @@ function applyChanges(home: string, changes: Change[]): void {
       }
     }
     if (changes.some(change => change.before !== undefined)) {
-      checkTarget(home, ".dotfiles-azure-backups/placeholder");
-      fs.mkdirSync(path.join(home, ".dotfiles-azure-backups"), { recursive: true, mode: 0o700 });
-      backup = fs.mkdtempSync(path.join(home, ".dotfiles-azure-backups/update-"));
+      const backups = `.dotfiles-${kind}-backups`;
+      checkTarget(home, `${backups}/placeholder`);
+      fs.mkdirSync(path.join(home, backups), { recursive: true, mode: 0o700 });
+      backup = fs.mkdtempSync(path.join(home, `${backups}/update-`));
       for (const change of changes) {
         if (change.before === undefined) continue;
         const file = path.join(backup, change.name);
@@ -287,43 +319,61 @@ function applyChanges(home: string, changes: Change[]): void {
 }
 
 export function main(args = process.argv.slice(2)): void {
+  let kind: Provider = "azure";
   let profile: string | undefined;
   let baseUrl: string | undefined;
   let apiVersion: string | undefined;
+  let azureOption = false;
   let dryRun = process.env.SETUP_DRY_RUN === "1";
   for (let index = 0; index < args.length; index++) {
     if (args[index] === "--help" || args[index] === "-h") {
-      console.log("Usage: ./setup.sh codex [--azure-base-url BASE_URL] [--azure-api-version VERSION|none] [--profile AZURE_PROFILE] [--dry-run]\n" +
-        "Generate ~/.codex-azure from shared dotfiles settings.\n" +
-        "First generation requires --azure-base-url. Later runs reuse the saved Azure provider.\n" +
-        "Omit --azure-api-version on first generation to leave api-version unset; 'none' removes a saved value.");
+      console.log("Usage: ./setup.sh codex [--provider azure|openai] [--base-url BASE_URL] [--api-version VERSION|none] [--profile PROFILE] [--dry-run]\n" +
+        "Generate ~/.codex-azure or ~/.codex-openai from shared dotfiles settings.\n" +
+        "The provider defaults to azure for compatibility. Azure requires a URL on first generation.\n" +
+        "OpenAI defaults to https://api.openai.com/v1 and uses OPENAI_API_KEY with API-only login.\n" +
+        "Later runs reuse the saved connection and profile for the selected provider.\n" +
+        "--api-version is Azure-only; omit it initially to leave api-version unset, or use 'none' to remove it.\n" +
+        "--azure-base-url and --azure-api-version remain available as Azure-only aliases.");
       return;
     }
     if (args[index] === "--dry-run") dryRun = true;
-    else if (["--profile", "--azure-base-url", "--azure-api-version"].includes(args[index])) {
+    else if (["--provider", "--profile", "--base-url", "--api-version", "--azure-base-url", "--azure-api-version"].includes(args[index])) {
       const option = args[index];
       const value = args[++index];
       if (!value || value.startsWith("--")) throw new Error(`${option} requires a value`);
-      if (option === "--profile") profile = value;
-      else if (option === "--azure-base-url") baseUrl = value;
+      if (option.startsWith("--azure-")) azureOption = true;
+      if (option === "--provider") {
+        if (value !== "azure" && value !== "openai") throw new Error("--provider must be azure or openai");
+        kind = value;
+      } else if (option === "--profile") profile = value;
+      else if (option === "--base-url" || option === "--azure-base-url") baseUrl = value;
       else apiVersion = value;
     } else throw new Error("Unknown codex setup argument; see --help");
   }
+  if (kind === "openai" && (azureOption || apiVersion !== undefined)) {
+    throw new Error("Azure connection options and --api-version cannot be used with --provider openai");
+  }
   const root = path.resolve(process.env.SETUP_DOTFILES_ROOT || path.join(__dirname, ".."));
-  const home = path.resolve(process.env.SETUP_HOME || os.homedir(), ".codex-azure");
-  const { text, baseline } = readBaseline(home);
-  profile ??= baseline?.defaultProfile ?? defaultProfile;
-  if (!/^azure_[A-Za-z0-9_-]+$/.test(profile)) throw new Error("Expected an Azure profile name (without .config.toml)");
-  const provider = resolveAzureProvider(baseline, baseUrl, apiVersion);
-  const desired = desiredFiles(root, profile, provider);
-  const changes = planChanges(home, desired, baseline);
-  const metadata: Baseline = { version: 2, defaultProfile: profile, azureProvider: provider, files: desired };
+  const home = path.resolve(process.env.SETUP_HOME || os.homedir(), `.codex-${kind}`);
+  const { text, baseline } = readBaseline(home, kind);
+  profile ??= baseline?.defaultProfile ?? `${kind}_gpt-6_1-sol_max`;
+  if (!new RegExp(`^${kind}_[A-Za-z0-9_-]+$`).test(profile)) {
+    throw new Error(`Expected an ${providerNames[kind]} profile name (without .config.toml)`);
+  }
+  const provider = kind === "azure" ? resolveAzureProvider(baseline, baseUrl, apiVersion) : resolveOpenAIProvider(baseline, baseUrl);
+  const desired = desiredFiles(root, profile, kind, provider);
+  const changes = planChanges(home, desired, baseline, kind);
+  const metadata: Baseline = {
+    version: 2, defaultProfile: profile,
+    ...(kind === "azure" ? { azureProvider: provider } : { openaiProvider: provider }),
+    files: desired,
+  };
   const after = JSON.stringify(metadata, null, 2) + "\n";
-  if (after !== text) changes.push({ name: markerName, before: text, after });
+  if (after !== text) changes.push({ name: markerName(kind), before: text, after });
   for (const change of changes) console.log(`${dryRun ? "Would write" : "Updating"} ${path.join(home, change.name)}`);
   if (dryRun) return;
-  applyChanges(home, changes);
-  console.log(`Azure home ${changes.length ? "generated" : "already up to date"}: ${home} (${profile})`);
+  applyChanges(home, changes, kind);
+  console.log(`${providerNames[kind]} home ${changes.length ? "generated" : "already up to date"}: ${home} (${profile})`);
 }
 
 if (require.main === module) {
