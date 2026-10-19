@@ -118,183 +118,194 @@ tmux の貼り付け時は, 対応端末にクリップボードの再取得を�
 
 ## Tools
 
-### Codex homes
+### Codex environments
 
-主に使う `~/.codex` は, ChatGPT サブスクリプション用として従来の symlink 運用を
-続けます. Azure / OpenAI API 用には, 共通設定から独立した home をそれぞれ生成します.
+**env (環境)** は, 保存先・認証・接続設定・履歴・メモリ・plugins をまとめた単位です.
+**profile** は, その env で使うモデルと effort の設定セットです.
+env 名は任意で, 同じ provider を使う env や同名の profile を複数持てます.
+
+| env | 保存先 |
+| --- | --- |
+| `default` | 既存の `~/.codex`. 通常の ChatGPT サブスクリプション環境 |
+| `azure` | 既存の `~/.codex-azure` |
+| `openai` | 既存の `~/.codex-openai` |
+| その他の名前 | `~/.codex-envs/<名前>` |
+
+独立した env は共有 Node runtime で生成します. Windows は `.\setup.ps1 codex`
+で同じ引数を使います. Node.js 18+ と setup のローカル依存が必要です.
 
 ```sh
 npm --prefix setup ci
-./setup.sh codex --provider openai --dry-run
-./setup.sh codex --provider openai
-./setup.sh codex --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
-./setup.sh codex --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1'
+./setup.sh codex --env azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
+./setup.sh codex --env azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1'
+./setup.sh codex --env openai
+./setup.sh codex --env account-b --provider chatgpt
+./setup.sh codex --env lab-a --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1' --api-key-env LAB_A_AZURE_KEY
 ```
 
-Windows では `.\setup.ps1 codex` に同じ引数を渡します.
-生成処理は共通の Node runtime で, Node.js 18+ と setup のローカル依存が必要です.
-生成は明示的に実行します. `setup links` / `setup all` の動作は従来どおりです.
-Azure の初回生成は `--base-url` が必須です. OpenAI は省略すると
-`https://api.openai.com/v1` を使い, Responses 互換の gateway を使う場合は
-`--base-url` で変更できます. dry-run は接続先を保存しないため, 実際の生成でも
-接続先の引数を指定します. URL は利用する API の base URL をそのまま渡します.
+新しい任意名の env には `--provider azure|openai|chatgpt` が必要です.
+次回から `./setup.sh codex --env lab-a` のように実行すると, 保存済みの接続設定と
+既定 profile を再利用します. 既存 env の provider は変更せず, 別 env を作ります.
+`default` は従来の `setup links` で配置する設定を使います.
+`setup links` / `setup all` は API 用 home の生成やログインを行いません.
+名前は英小文字で始まる 1〜64 文字の英小文字・数字・`_`・`-` で,
+Windows のデバイス名は予約名です.
 
-接続先と既定 profile は home ごとに保存します. 次回からは
-`./setup.sh codex --provider openai` / `./setup.sh codex --provider azure` で再生成できます.
-`--base-url` の再指定で, 選択した home の接続先を変更できます. Azure に限り,
-`--api-version 2025-04-01-preview` で API version を設定・更新し,
-`--api-version none` で保存済みの指定を解除します. 初回に省略すると `api-version` は
-設定しません. URL の変更だけでは保存済みの API version を変更しません.
-provider の既定値は互換性のため `azure` です. 従来の `./setup.sh codex` と
-`--azure-base-url` / `--azure-api-version` も引き続き利用できます.
-既存の旧形式の Azure home は, 前回生成時の接続先・API version を自動で引き継ぎます.
+Azure は初回に正確な base URL が必要です. `--api-key-env NAME` でキーを参照する
+環境変数名 (既定 `AZURE_OPENAI_API_KEY`) を選べます.
+`--api-version VERSION|none` で API version の設定・解除ができます.
+次回以降に省略した接続項目は保存済みの値を維持します.
+OpenAI の URL は既定で `https://api.openai.com/v1` で,
+`--base-url` で Responses 互換 gateway も指定できます.
+ChatGPT env はサブスクリプションでログインし, API 接続引数は受け付けません.
+setup はキーの値を読み書きしません. dry-run は検証と変更予定の表示だけを行い,
+接続設定や home を保存しないため, 実生成時にも接続引数を指定してください.
 
-| 場所 | 設定と状態 |
-| --- | --- |
-| `~/.codex` | 既存の ChatGPT ログイン, 設定の symlink, セッション, メモリ, プラグイン |
-| `~/.codex-azure` | 生成した通常の TOML ファイル, 共通ルール・hooks, 独立した Codex の状態 |
-| `~/.codex-openai` | 生成した通常の TOML ファイル, 共通ルール・hooks, API 専用ログイン, 独立した Codex の状態 |
-
-共通設定・MCP は `codex/config.toml`, Azure のモデル設定は `codex/azure_*.config.toml`,
-OpenAI API のモデル設定は `codex/openai_*.config.toml` を使います.
-選択した provider のモデル設定と保存済みの接続設定を合成して生成します.
-Azure には `[model_providers.azure]` を生成し, `AZURE_OPENAI_API_KEY` を参照します.
-OpenAI は組み込みの `openai` provider と `openai_base_url`,
-`forced_login_method = "api"` を使い, `[model_providers.openai]` は生成しません.
-[公式の詳細設定](https://learn.chatgpt.com/docs/config-file/config-advanced)と
-[認証手順](https://learn.chatgpt.com/docs/auth)に沿った方式です.
-共通の `config.toml` にどちらの provider 定義も不要です.
-
-初期デフォルトは `azure_gpt-6_1-sol_max` / `openai_gpt-6_1-sol_max` です.
-`--provider openai --profile openai_gpt-6-luna_max` (Azure では対応する名前) で
-既定 profile を変更でき, 次回以降もその選択を使います.
-どちらも credential store は自身の home 内のファイルを使います.
-ChatGPT の認証情報, セッション, メモリ, プラグインキャッシュ,
-プロジェクト・hook の信頼情報はコピーしません. User skills は既存の
-`~/.agents/skills` を通して利用します.
-
-共通設定・モデル設定・ルール・hooks を変更したら, 利用する home ごとに
-`--provider` を指定して再生成します. 各 home の実行時の状態や独立した設定変更は残します.
-同じ設定を生成元と生成先の両方で変更した場合は,
-置換前に停止します. 表示された項目を揃えてから再実行してください.
-置換前のファイルは各 home の `.dotfiles-azure-backups/` / `.dotfiles-openai-backups/` に保存します.
-`.dotfiles-azure.json` / `.dotfiles-openai.json` は接続設定・既定 profile・前回の生成元設定を記録しているため,
-生成ファイルと一緒に保持します. API キー自体は保存しません.
-管理外の既存ファイルや symlink は置換しません. 生成元の profile を削除しても,
-生成済みのファイルは削除しません.
+共通設定・MCP は `codex/config.toml`, モデル設定は
+`codex/profiles/*.config.toml` を使います. モデル設定の内容は
+`model` と `model_reasoning_effort` だけです.
+`codex/env-profiles.json` が生成する env の初期候補と既定 profile を定義します.
+provider・接続 URL・認証方式は各 env の `config.toml` に生成します.
+既定モデルと effort もここに反映するため, Codex の直接起動でも使えます.
+profile は公式の設定レイヤーで接続設定を継承するので,
+名前に `azure_` / `openai_` を付ける必要はありません.
+実際に使えるモデルは接続先とアカウントによります.
+[公式の profile 仕様](https://learn.chatgpt.com/docs/config-file/config-advanced#profiles)と
+[認証手順](https://learn.chatgpt.com/docs/auth)も参照してください.
 
 ```sh
-codex-pick                                  # ChatGPT / Azure / OpenAI API を同じ候補一覧から選択
-codex-pick -q azure                         # 初期検索を指定
-codex-pick -p azure_gpt-6_1-sol_max          # Azure home で直接起動
-codex-pick -p azure_gpt-6-luna_max -- --resume
-codex-pick -p openai_gpt-6_1-sol_max         # OpenAI API home で直接起動
-CODEX_HOME="$HOME/.codex-azure" codex        # Azure のデフォルトモデルで起動
-CODEX_HOME="$HOME/.codex-azure" claude       # Claude Code の Codex plugin 用
-CODEX_HOME="$HOME/.codex-openai" codex       # OpenAI API のデフォルトモデルで起動
-CODEX_HOME="$HOME/.codex-openai" claude      # Codex plugin で OpenAI API を利用
+codex-pick                                         # env とモデル設定を同じ一覧から選ぶ
+codex-pick -q azure                                # env 列も検索対象
+codex-pick --env azure                             # この env 内の profile を選ぶ
+codex-pick --env azure -p gpt-6_1-sol_max -- --resume
+codex-pick --env openai -p gpt-6_1-sol_max
+codex-pick --env account-b gpt-6-astra medium
+CODEX_HOME="$HOME/.codex-azure" codex                # env の既定設定で直接起動
+CODEX_HOME="$HOME/.codex-envs/account-b" codex login # 別サブスクリプションでログイン
 ```
 
-OpenAI API home を使い始めるときは, 既存の `OPENAI_API_KEY` で公式 CLI の
-API キーログインを一度実行します.
+`--env` は子プロセスに限って継承した `CODEX_HOME` より優先します.
+`--env` が無い場合, 明示した `CODEX_HOME` は候補をその home に限定します.
+モデル一覧の取得も選択した home で行います. ピッカーは env と profile の組を
+識別し, 同名 profile を引数で指定する場合は `--env` / `CODEX_HOME` が必要です.
+API profile の直接指定ではモデルカタログを読みません.
+生成済み env の metadata 解析には `jq`, 対話選択には追加で `fzf` を使います.
+
+OpenAI API 用 env の利用前には, 公式 CLI でその home に API キーを保存します.
 
 ```sh
 printenv OPENAI_API_KEY | CODEX_HOME="$HOME/.codex-openai" codex login --with-api-key
 ```
 
-セットアップ自体はキーを読み書きしません. この明示的なログインで OpenAI home 内だけに
-保存します. PowerShell では `$env:CODEX_HOME = "$HOME/.codex-openai"` を設定し,
-`$env:OPENAI_API_KEY | codex login --with-api-key` を実行します.
-サブスクリプションなどに戻る前に `CODEX_HOME` を元の値へ戻してください.
+PowerShell では対象 home を一時的に `$env:CODEX_HOME` に設定し,
+`$env:OPENAI_API_KEY | codex login --with-api-key` を実行してから,
+`CODEX_HOME` を元に戻します. 他 env の認証情報・セッション・plugin cache・
+project や hook の信頼情報はコピーしません. User skills は既存の
+`~/.agents/skills` を通して利用します.
 
-`codex-pick` は起動する子プロセスだけに `CODEX_HOME` を設定します.
-明示的に `CODEX_HOME` を指定した場合は, その home だけを使います.
-生成済み API home を明示した場合は, ChatGPT のモデルカタログを読まずに profile を選べます.
-既存の `~/.codex` 内の dotfiles 管理 Azure profile リンクは, ピッカーが新しい Azure home に
-解決するため, 従来の `-p` 指定を引き続き使えます. 利用する API home を先に生成してください.
-生成が完了していない場合はエラーになります. 対話選択には `fzf`, ChatGPT モデルの選択には
-加えて `jq` と `codex debug models` を使います.
+共通設定・モデル設定・rules・hooks を変更したら, 利用する各 env を再生成します.
+`--profile gpt-6-luna_max` で env の既定 profile を変更できます.
+独立したローカル設定と実行時の状態は保持し, 同じ項目の競合は置換前に検出します.
+置換前の管理ファイルはその home 内にバックアップします.
+`.dotfiles-env.json` は env 名・provider・接続設定・既定 profile・前回の生成元を
+記録するため, 生成ファイルと一緒に保持します. キーの値は保存しません.
+管理外の既存ファイルや symlink は置換せず, 生成元の削除だけで生成済みファイルを
+削除することもありません.
 
+旧 Azure / OpenAI home は次の setup 実行で metadata を移行します.
+保存先・認証・履歴を保持し, 旧 profile ファイルを残したまま新しい中立名の
+profile を生成します. ローカル変更は引き継ぐか, 競合として報告します.
+`codex-pick -p azure_gpt-6_1-sol_max` のような旧名も別名として使えます.
+明示した env と旧名の provider が異なる場合はエラーになります.
+従来の `--provider` だけの setup, `--azure-base-url`, `--azure-api-version` も使えます.
+旧 `codex/azure_*.config.toml` は互換性のため保持し,
+新しいモデル設定は `codex/profiles/` に追加します.
+
+Codex と Claude の env は独立です.
 [codex-plugin-cc v1.0.6](https://github.com/openai/codex-plugin-cc/blob/v1.0.6/plugins/codex/scripts/lib/app-server.mjs)
-は, 継承した home のデフォルト設定で `codex app-server` を起動します.
-同じリポジトリの既存 broker が以前の home を保持する場合があるため, 切替前に
-plugin を利用中の Claude Code セッションを終了し, 上記コマンドで起動し直します.
-通常の `claude` 起動でサブスクリプション側に戻れます.
-[Codex の公式設定ドキュメント](https://learn.chatgpt.com/docs/config-file/config-basic)も参照してください.
+は継承した `CODEX_HOME` の既定設定で `codex app-server` を起動します.
 
-### Claude Code profiles
+```sh
+CODEX_HOME="$HOME/.codex-azure" claude-pick --env account-b
+```
+
+同じリポジトリの既存 broker が以前の home を保持する場合があるため,
+Codex home の切替前に plugin を利用中の Claude Code セッションを終了してください.
+
+### Claude Code environments
 
 macOS/Linux は `./setup.sh links`, Windows は `.\setup.ps1 links` で,
 `~/.local/bin` に `claude-pick` / `claude-pick.ps1` を配置します.
 起動処理は Bash / PowerShell 5.1+ です. 対話選択には `fzf` が必要ですが,
-引数で指定すれば不要です. Windows は native `claude.exe` と symlink 作成権限が
-必要です. profile 作成時は PowerShell 7+ と Developer Mode, または適切な権限の
-端末を使います. Windows PowerShell 5.1 は Developer Mode があっても後者が
-必要です ([PowerShell の報告](https://github.com/PowerShell/PowerShell/issues/5000)).
+引数で指定すれば不要です. status line には Node.js を使います.
+Windows の env 作成には native `claude.exe` と symlink 作成権限が必要です.
+PowerShell 7+ と Developer Mode, または適切な権限の端末で作成します.
+Windows PowerShell 5.1 は Developer Mode があっても後者が必要です
+([PowerShell の報告](https://github.com/PowerShell/PowerShell/issues/5000)).
 通常の起動に権限の昇格は不要です.
-既存の status line には引き続き Node.js を使います.
 
 ```sh
-claude-pick                                 # profile, model, effort を選択
-claude-pick --create acme                    # 初期化のみ. ログイン・起動はしない
-claude-pick -p acme -- auth login            # profile ごとにログイン
-claude-pick -p acme                          # 保存済み設定で起動
-claude-pick -p acme opus high -- --resume
-claude-pick -p default                       # 既存の ~/.claude を使う
+claude-pick                                  # env, model, effort を選択
+claude-pick --create-env acme                 # 初期化のみ. ログイン・起動はしない
+claude-pick --env acme -- auth login --claudeai
+claude-pick --env acme                        # 保存済み設定で起動
+claude-pick --env acme opus high -- --resume
+claude-pick --env default                     # 既存の ~/.claude を使う
 ```
 
-PowerShell では `claude-pick.ps1` を使い, 区切りは `'--'` と引用して
-[PowerShell に取り除かれないようにします](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing#the-end-of-parameters-token).
+PowerShell では区切りを `'--'` と引用して
+[パーサーに取り除かれないようにします](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing#the-end-of-parameters-token).
 
 ```powershell
-claude-pick.ps1 --create acme
-claude-pick.ps1 -p acme '--' auth login
-claude-pick.ps1 -p acme opus high '--' --resume
+claude-pick.ps1 --create-env acme
+claude-pick.ps1 --env acme '--' auth login --claudeai
+claude-pick.ps1 --env acme opus high '--' --resume
 ```
 
-リンク配置前は `./tools/claude/claude-pick` / `.\tools\claude\claude-pick.ps1` から実行できます.
-更新後はシェルを開き直してください. `claude` は本来のコマンドになり,
-従来の Zsh wrapper が追加していた共通 MCP 設定は `claude-pick -p default`
-で使えます. 互換性のため `claude-raw` は残しています.
+旧 `-p` / `--profile` は `--env`, 旧 `--create` は `--create-env` の別名です.
+保存先は互換性のため `~/.claude-profiles/<名前>` のままです.
+名前は英小文字で始まる 1〜64 文字の英小文字・数字・`_`・`-` で,
+`default` と Windows のデバイス名は予約名です.
+存在しない名前はエラーにし, 選択のキャンセルでは作成・起動しません.
+既存 env は上書きしません. リンク配置前は `./tools/claude/claude-pick` /
+`.\tools\claude\claude-pick.ps1` から実行できます.
+従来の Zsh wrapper が追加していた共通 MCP 設定は `--env default` で使えます.
+公式の `claude` は直接実行でき, `claude-raw` も利用できます.
 
-保存先は `~/.claude-profiles/<名前>` です. 名前は英小文字で始まる 1〜64 文字の
-英小文字・数字・`_`・`-` で, `default` と Windows のデバイス名は予約名です.
-profile が無い場合は `default` と新規作成を選べます. 存在しない名前を引数で
-指定した場合はエラーになります. 選択中のキャンセルでは作成・起動せず,
-既存 profile の上書きもしません.
-
-profile だけの指定では model/effort 選択を省略します. どちらかを指定すると
-残りを選択し, `keep` なら Claude の設定を維持します. 位置引数の代わりに
-`-m MODEL` / `-e EFFORT` も使えます. effort の候補は `low`, `medium`, `high`,
-`xhigh`, `max` で, 対応範囲は Claude のモデル・バージョンによります.
+env だけの指定では model/effort 選択を省略します. どちらかを指定すると
+残りを選択し, `keep` なら保存済みの設定を使います.
+`-m MODEL` / `-e EFFORT` も利用できます. effort は `low`, `medium`, `high`,
+`xhigh`, `max` で, 対応範囲はモデル・バージョンによります.
 選んだ effort は子プロセスの `CLAUDE_CODE_EFFORT_LEVEL` にも反映します.
-`--` 以降は Claude にそのまま渡すため, Claude の `-p` / `--print` もここに書きます.
-`auth` などの管理コマンドでは model/effort を選択しません.
+`--` 以降は Claude に渡すため, Claude の `-p` / `--print` はここに書きます.
+`auth` などの管理コマンドでは model/effort を選びません.
+このランチャーに保存済みのモデル profile 機能はなく, model/effort を直接指定します.
 
-| profile 内の項目 | 扱い |
+| env 内の項目 | 扱い |
 | --- | --- |
 | `settings.json` | `claude/profile-settings.json` の初期コピー. 作成後は個別に編集 |
 | `rules/00-global.md`, `rules/10-claude.md` | `ai-rules/` の共通ソースへ symlink |
-| `statusline.cjs` | 共通 renderer へ symlink. 選択した profile 名を表示 |
-| `skills/` | 初期状態は空. `--create acme --skill NAME` で導入済み skill を個別にリンク |
-| `mcp.json` | 任意の profile 固有 MCP 設定. 明示した `--mcp-config` が優先 |
-| ログイン・履歴・メモリ・plugins | 選択した設定ディレクトリで Claude が個別管理 |
+| `statusline.cjs` | 共通 renderer へ symlink. 選択した env 名を表示 |
+| `skills/` | 初期状態は空. `--create-env acme --skill NAME` で導入済み skill をリンク |
+| `mcp.json` | 任意の env 固有 MCP 設定. 明示した `--mcp-config` が優先 |
+| ログイン・履歴・メモリ・plugins | 選択した保存先で Claude が個別管理 |
 
 既存 `~/.claude/settings.json`・認証情報・hooks・plugins はコピーしません.
-特に, 別のデータ保存先を持つ `claude-mem` は新規 profile では有効にしません.
-使う場合はその保存先も個別に設定してください. rules と status line は dotfiles
-の変更に追従し, 設定テンプレートの変更は次に作る profile にだけ反映します.
+独自の外部保存先を持つ `claude-mem` は新規 env では有効にせず,
+使う場合はその保存先も個別に設定します. rules と status line は dotfiles に追従し,
+設定テンプレートの変更は次に作る env にだけ反映します.
 設定の自動同期やアカウントの自動移行は行いません.
 
-名前付き profile では `tools/claude/auth-env.txt` にある認証・接続先の環境変数が
-残っていると起動を止め, 値を表示せず変数名を案内します. 呼び出し元のシェルで
-対象変数を解除してください. `default` は従来の環境変数を維持します.
-`CLAUDE_CONFIG_DIR` の変更は子プロセスにだけ適用します. これは Claude の
-ユーザー設定・状態の分離であり, OS のセキュリティ境界ではありません.
+名前付き env では `tools/claude/auth-env.txt` の認証・接続先の環境変数を検出すると
+値を表示せずに停止します. 呼び出し元で対象変数を解除してください.
+`default` は従来の環境変数を維持します.
+`CLAUDE_CONFIG_DIR` と表示用の `CLAUDE_PICK_ENV` は子プロセスだけに設定し,
+明示した `--env` を継承済みの config directory より優先します.
+`CLAUDE_PICK_PROFILE` も互換用の表示ラベルとして設定します.
+これはユーザー設定・状態の分離であり, OS のセキュリティ境界ではありません.
 プロジェクト設定・管理ポリシー・外部 plugin の保存先は別途適用されます.
-公式の[環境変数](https://code.claude.com/docs/en/env-vars),
-[認証の優先順位](https://code.claude.com/docs/en/authentication#authentication-precedence),
-[ユーザールール](https://code.claude.com/docs/en/memory#user-level-rules)も参照してください.
+公式の[環境変数](https://code.claude.com/docs/en/env-vars)と
+[認証の優先順位](https://code.claude.com/docs/en/authentication#authentication-precedence)も参照してください.
 
 ## AI Agent Rules
 

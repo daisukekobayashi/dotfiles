@@ -13,37 +13,38 @@ function Stop-Picker {
 
 function Show-Usage {
   @'
-Usage: claude-pick [-p PROFILE] [-m MODEL] [-e EFFORT] [MODEL [EFFORT]] [-- CLAUDE_ARGS...]
-       claude-pick --create NAME [--skill NAME ...]
+Usage: claude-pick [--env ENV] [-m MODEL] [-e EFFORT] [MODEL [EFFORT]] [-- CLAUDE_ARGS...]
+       claude-pick --create-env NAME [--skill NAME ...]
 
-Without arguments, choose a profile, model, and effort with fzf.
-An explicit profile alone uses its saved model/effort without a picker.
+Without arguments, choose an environment, model, and effort with fzf.
+An explicit environment alone uses its saved model/effort without a picker.
 With a model or effort specified, choose the missing one interactively.
 Use "keep" for model/effort to leave Claude's configuration in control.
 Effort choices: keep, low, medium, high, xhigh, max (support varies by model).
 
-"default" uses ~/.claude; named profiles use ~/.claude-profiles/NAME.
---create initializes a profile without logging in or launching Claude.
+"default" uses ~/.claude; named environments keep using ~/.claude-profiles/NAME.
+--create-env initializes an environment without logging in or launching Claude.
+Legacy -p/--profile and --create remain aliases for --env and --create-env.
 --skill links an installed dotfiles user skill during creation only.
 Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter.
-Quote the separator in PowerShell: claude-pick.ps1 -p acme '--' auth login
+Quote the separator in PowerShell: claude-pick.ps1 --env acme '--' auth login
 Arguments after '--' are forwarded unchanged, including Claude's -p/--print.
 Auth and maintenance subcommands skip model/effort selection.
 '@ | Write-Output
 }
 
-function Test-ProfileName {
+function Test-EnvName {
   param([string]$Name)
   return ($Name -cmatch '^[a-z][a-z0-9_-]{0,63}$' -and
     $Name -cnotmatch '^(default|con|prn|aux|nul|com[0-9]|lpt[0-9])$')
 }
 
-function Assert-ProfileName {
+function Assert-EnvName {
   param([string]$Name)
-  if (-not (Test-ProfileName $Name)) { Stop-Picker 2 "Invalid or reserved profile name: $Name" }
+  if (-not (Test-EnvName $Name)) { Stop-Picker 2 "Invalid or reserved environment name: $Name" }
 }
 
-function Test-ProfileReady {
+function Test-EnvReady {
   param([string]$Directory)
   $entry = Get-Item -LiteralPath $Directory -Force -ErrorAction SilentlyContinue
   if (-not $entry -or -not $entry.PSIsContainer -or
@@ -55,7 +56,7 @@ function Test-ProfileReady {
 }
 
 function Assert-Environment {
-  if ($SelectedProfile -ceq 'default') { return }
+  if ($SelectedEnv -ceq 'default') { return }
   $patterns = @(Get-Content -LiteralPath (Join-Path $DotfilesRoot 'tools/claude/auth-env.txt'))
   $conflicts = @(Get-ChildItem Env: | Where-Object {
     $entry = $_
@@ -66,14 +67,14 @@ function Assert-Environment {
     $matched
   } | ForEach-Object { $_.Name })
   if ($conflicts.Count) {
-    Stop-Picker 2 "Named profile blocked by inherited environment: $($conflicts -join ' '). Unset these in this shell, or use default. Values are not displayed."
+    Stop-Picker 2 "Named environment blocked by inherited credentials or routes: $($conflicts -join ' '). Unset these in this shell, or use default. Values are not displayed."
   }
 }
 
 function Select-Row {
   param([string]$Label, [string[]]$Rows)
   if ([Console]::IsInputRedirected -or [Console]::IsErrorRedirected) {
-    Stop-Picker 2 'Interactive selection needs a terminal. Specify --profile, --model and --effort (or keep).'
+    Stop-Picker 2 'Interactive selection needs a terminal. Specify --env, --model and --effort (or keep).'
   }
   $picker = Get-Command fzf -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $picker) { Stop-Picker 127 'Required command not found: fzf' }
@@ -87,23 +88,23 @@ function Select-Row {
   return $key
 }
 
-function Get-ProfileRows {
+function Get-EnvRows {
   "default`tStandard environment (~/.claude)"
-  if (Test-Path -LiteralPath $ProfilesRoot -PathType Container) {
-    Get-ChildItem -LiteralPath $ProfilesRoot -Directory | Sort-Object Name | ForEach-Object {
-      if ((Test-ProfileName $_.Name) -and (Test-ProfileReady $_.FullName)) {
-        "$($_.Name)`tNamed profile"
+  if (Test-Path -LiteralPath $EnvsRoot -PathType Container) {
+    Get-ChildItem -LiteralPath $EnvsRoot -Directory | Sort-Object Name | ForEach-Object {
+      if ((Test-EnvName $_.Name) -and (Test-EnvReady $_.FullName)) {
+        "$($_.Name)`tNamed environment"
       }
     }
   }
-  "+`tCreate a new profile"
+  "+`tCreate a new environment"
 }
 
-function New-Profile {
-  Assert-ProfileName $SelectedProfile
-  $destination = Join-Path $ProfilesRoot $SelectedProfile
+function New-Env {
+  Assert-EnvName $SelectedEnv
+  $destination = Join-Path $EnvsRoot $SelectedEnv
   if (Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue) {
-    Stop-Picker 2 "Profile already exists: $SelectedProfile"
+    Stop-Picker 2 "Environment already exists: $SelectedEnv"
   }
   foreach ($source in @('claude/profile-settings.json', 'claude/statusline.cjs', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
     if (-not (Test-Path -LiteralPath (Join-Path $DotfilesRoot $source) -PathType Leaf)) {
@@ -116,7 +117,7 @@ function New-Profile {
       Stop-Picker 2 "Installed skill not found: $skill"
     }
   }
-  New-Item -ItemType Directory -Path $ProfilesRoot -Force | Out-Null
+  New-Item -ItemType Directory -Path $EnvsRoot -Force | Out-Null
   # No -Force: a concurrent creation or existing directory must not be overwritten.
   New-Item -ItemType Directory -Path $destination | Out-Null
   $owned = New-Object 'System.Collections.Generic.List[string]'
@@ -138,7 +139,7 @@ function New-Profile {
       try {
         New-Item -ItemType SymbolicLink -Path $target -Value (Join-Path $DotfilesRoot $links[$relativePath]) | Out-Null
       } catch {
-        Stop-Picker 2 'Cannot create a shared-file symlink. On Windows, use PowerShell 7+ with Developer Mode, or create the profile from an appropriately privileged terminal (required for Windows PowerShell 5.1).'
+        Stop-Picker 2 'Cannot create a shared-file symlink. On Windows, use PowerShell 7+ with Developer Mode, or create the environment from an appropriately privileged terminal (required for Windows PowerShell 5.1).'
       }
       $owned.Add($target)
     }
@@ -146,7 +147,7 @@ function New-Profile {
     $owned.Add($marker)
     [IO.File]::WriteAllText($marker, "1`n")
     $complete = $true
-    [Console]::Error.WriteLine("Created profile: $SelectedProfile")
+    [Console]::Error.WriteLine("Created environment: $SelectedEnv")
   } finally {
     if (-not $complete) {
       # Delete only entries we created; never recurse through symlink targets.
@@ -182,8 +183,8 @@ try {
     $scriptFile = Get-Item -LiteralPath $target -Force
   }
   $DotfilesRoot = Split-Path -Parent (Split-Path -Parent $scriptFile.DirectoryName)
-  $ProfilesRoot = Join-Path $HOME '.claude-profiles'
-  $SelectedProfile = ''; $SelectedModel = ''; $SelectedEffort = ''; $CreateName = ''
+  $EnvsRoot = Join-Path $HOME '.claude-profiles'
+  $SelectedEnv = ''; $SelectedModel = ''; $SelectedEffort = ''; $CreateName = ''
   $Skills = New-Object 'System.Collections.Generic.List[string]'
   $Positionals = New-Object 'System.Collections.Generic.List[string]'
   $ForwardArgs = New-Object 'System.Collections.Generic.List[string]'
@@ -194,16 +195,26 @@ try {
       break
     }
     if ($item -cin @('-h', '--help')) { Show-Usage; exit 0 }
-    if ($item -cin @('-p', '--profile', '-m', '--model', '-e', '--effort', '--create', '--skill')) {
+    if ($item.StartsWith('--env=', [StringComparison]::Ordinal)) {
+      $value = $item.Substring(6)
+      if (-not $value) { Stop-Picker 2 '--env requires a value' }
+      if ($SelectedEnv -and $SelectedEnv -cne $value) { Stop-Picker 2 'Environment specified twice with different names' }
+      $SelectedEnv = $value
+      continue
+    }
+    if ($item -cin @('--env', '-p', '--profile', '-m', '--model', '-e', '--effort', '--create-env', '--create', '--skill')) {
       if ($i + 1 -ge $RawArguments.Count -or -not $RawArguments[$i + 1] -or ([string]$RawArguments[$i + 1]).StartsWith('-')) {
         Stop-Picker 2 "$item requires a value"
       }
       $i++; $value = [string]$RawArguments[$i]
       switch -CaseSensitive ($item) {
-        { $_ -cin @('-p', '--profile') } { $SelectedProfile = $value }
+        { $_ -cin @('--env', '-p', '--profile') } {
+          if ($SelectedEnv -and $SelectedEnv -cne $value) { Stop-Picker 2 'Environment specified twice with different names' }
+          $SelectedEnv = $value
+        }
         { $_ -cin @('-m', '--model') } { $SelectedModel = $value }
         { $_ -cin @('-e', '--effort') } { $SelectedEffort = $value }
-        '--create' { $CreateName = $value }
+        { $_ -cin @('--create-env', '--create') } { $CreateName = $value }
         '--skill' { $Skills.Add($value) }
       }
     } elseif ($item.StartsWith('-')) {
@@ -220,32 +231,32 @@ try {
     $SelectedEffort = $Positionals[1]
   }
   if ($CreateName) {
-    if ($SelectedProfile -or $SelectedModel -or $SelectedEffort -or $ForwardArgs.Count) { Stop-Picker 2 '--create cannot be combined with launch arguments' }
-    $SelectedProfile = $CreateName
-    New-Profile
+    if ($SelectedEnv -or $SelectedModel -or $SelectedEffort -or $ForwardArgs.Count) { Stop-Picker 2 '--create-env cannot be combined with launch arguments' }
+    $SelectedEnv = $CreateName
+    New-Env
     exit 0
   }
-  if ($Skills.Count) { Stop-Picker 2 '--skill requires --create' }
+  if ($Skills.Count) { Stop-Picker 2 '--skill requires --create-env' }
   $ClaudeCommand = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $ClaudeCommand) { Stop-Picker 127 'Required command not found: claude' }
   if ($ClaudeCommand.Source -match '\.(cmd|bat)$') { Stop-Picker 2 'Use the native Claude executable (claude.exe); cmd/bat shims cannot preserve arbitrary arguments.' }
-  $InteractiveProfile = $false; $Creating = $false
-  if (-not $SelectedProfile) {
-    $SelectedProfile = Select-Row 'Profile' @(Get-ProfileRows)
-    $InteractiveProfile = $true
-    if ($SelectedProfile -ceq '+') {
-      $SelectedProfile = Read-Host 'New profile name'
-      if (-not $SelectedProfile) { Stop-Picker 130 'Selection cancelled' }
-      Assert-ProfileName $SelectedProfile
+  $InteractiveEnv = $false; $Creating = $false
+  if (-not $SelectedEnv) {
+    $SelectedEnv = Select-Row 'Env' @(Get-EnvRows)
+    $InteractiveEnv = $true
+    if ($SelectedEnv -ceq '+') {
+      $SelectedEnv = Read-Host 'New environment name'
+      if (-not $SelectedEnv) { Stop-Picker 130 'Selection cancelled' }
+      Assert-EnvName $SelectedEnv
       $Creating = $true
     }
   }
-  if ($SelectedProfile -ceq 'default') { $ConfigDirectory = Join-Path $HOME '.claude' }
+  if ($SelectedEnv -ceq 'default') { $ConfigDirectory = Join-Path $HOME '.claude' }
   else {
-    Assert-ProfileName $SelectedProfile
-    $ConfigDirectory = Join-Path $ProfilesRoot $SelectedProfile
-    if (-not $Creating -and -not (Test-ProfileReady $ConfigDirectory)) {
-      Stop-Picker 2 "Profile missing or incomplete: $SelectedProfile. Create it with --create NAME."
+    Assert-EnvName $SelectedEnv
+    $ConfigDirectory = Join-Path $EnvsRoot $SelectedEnv
+    if (-not $Creating -and -not (Test-EnvReady $ConfigDirectory)) {
+      Stop-Picker 2 "Environment missing or incomplete: $SelectedEnv. Create it with --create-env NAME."
     }
   }
   Assert-Environment
@@ -260,7 +271,7 @@ try {
   if ($Maintenance) {
     if ($SelectedModel -or $SelectedEffort) { Stop-Picker 2 'Model/effort do not apply to this subcommand' }
     $SelectedModel = 'keep'; $SelectedEffort = 'keep'
-  } elseif (-not $InteractiveProfile -and -not $SelectedModel -and -not $SelectedEffort) {
+  } elseif (-not $InteractiveEnv -and -not $SelectedModel -and -not $SelectedEffort) {
     $SelectedModel = 'keep'; $SelectedEffort = 'keep'
   }
   if ($HasModel) {
@@ -275,14 +286,14 @@ try {
   if (-not $SelectedEffort) { $SelectedEffort = Select-Row 'Effort' @("keep`tKeep configured effort", "low`tLow", "medium`tMedium", "high`tHigh", "xhigh`tExtra high", "max`tMaximum") }
   if ($SelectedEffort -cnotin @('keep', 'low', 'medium', 'high', 'xhigh', 'max')) { Stop-Picker 2 "Invalid effort: $SelectedEffort" }
   if ($SelectedModel -match '^[-]|[\r\n]') { Stop-Picker 2 'Invalid model' }
-  if ($Creating) { New-Profile }
+  if ($Creating) { New-Env }
 
   $LaunchArgs = New-Object 'System.Collections.Generic.List[string]'
   if ($SelectedModel -cne 'keep') { $LaunchArgs.Add('--model'); $LaunchArgs.Add($SelectedModel) }
   if ($SelectedEffort -cne 'keep') { $LaunchArgs.Add('--effort'); $LaunchArgs.Add($SelectedEffort) }
   if (-not $HasMcp -and -not $Maintenance) {
     $mcpConfig = Join-Path $ConfigDirectory 'mcp.json'
-    if ($SelectedProfile -ceq 'default') {
+    if ($SelectedEnv -ceq 'default') {
       $mcpConfig = if ($env:CLAUDE_MCP_CONFIG) { $env:CLAUDE_MCP_CONFIG } else { Join-Path $DotfilesRoot 'claude/mcp/base.json' }
     }
     if (Test-Path -LiteralPath $mcpConfig -PathType Leaf) { $LaunchArgs.Add('--mcp-config'); $LaunchArgs.Add($mcpConfig) }
@@ -294,7 +305,8 @@ try {
   $start.WorkingDirectory = (Get-Location).ProviderPath
   $start.Arguments = (@($LaunchArgs | ForEach-Object { ConvertTo-NativeArgument $_ }) -join ' ')
   $start.EnvironmentVariables['CLAUDE_CONFIG_DIR'] = $ConfigDirectory
-  $start.EnvironmentVariables['CLAUDE_PICK_PROFILE'] = $SelectedProfile
+  $start.EnvironmentVariables['CLAUDE_PICK_ENV'] = $SelectedEnv
+  $start.EnvironmentVariables['CLAUDE_PICK_PROFILE'] = $SelectedEnv
   if ($SelectedEffort -cne 'keep') { $start.EnvironmentVariables['CLAUDE_CODE_EFFORT_LEVEL'] = $SelectedEffort }
   $process = [Diagnostics.Process]::Start($start)
   try {

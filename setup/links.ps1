@@ -114,6 +114,16 @@ try {
     }
   )
 
+  $modelProfiles = Join-Path $setupContext.DotfilesRoot "codex\profiles"
+  if (Test-Path -LiteralPath $modelProfiles -PathType Container) {
+    foreach ($profile in Get-ChildItem -LiteralPath $modelProfiles -Filter '*.config.toml' -File) {
+      $linkMap += @{
+        Link = Join-Path $setupContext.HomeDir (".codex\" + $profile.Name)
+        Target = $profile.FullName
+      }
+    }
+  }
+
   foreach ($entry in $linkMap) {
     New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target
   }

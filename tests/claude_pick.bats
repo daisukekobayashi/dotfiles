@@ -18,6 +18,7 @@ import json, os, sys
 with open(os.environ['PICK_LOG'], 'w') as out:
     json.dump({'args': sys.argv[1:], 'config': os.getenv('CLAUDE_CONFIG_DIR'),
                'profile': os.getenv('CLAUDE_PICK_PROFILE'),
+               'env': os.getenv('CLAUDE_PICK_ENV'),
                'effort': os.getenv('CLAUDE_CODE_EFFORT_LEVEL'),
                'api_key_present': bool(os.getenv('ANTHROPIC_API_KEY'))}, out)
 sys.exit(int(os.getenv('PICK_EXIT', '0')))
@@ -144,6 +145,37 @@ assert json.load(open(sys.argv[1]))['config'] == sys.argv[2]
 PY
 }
 
+@test "env selects the same isolated home and model settings as the legacy profile alias" {
+  run_picker --create-env acme
+  [ "$status" -eq 0 ]
+  run_picker --env acme opus high -- --resume '' 'two words'
+  [ "$status" -eq 0 ]
+  assert_log env '"acme"' profile '"acme"' effort '"high"' args '["--model","opus","--effort","high","--resume","","two words"]'
+  run_picker --env=acme -- auth status
+  [ "$status" -eq 0 ]
+  assert_log env '"acme"' args '["auth","status"]'
+  run_picker --env default -p acme
+  [ "$status" -eq 2 ]
+  run_picker --env ''
+  [ "$status" -eq 2 ]
+}
+
+@test "env credentials remain independent when creating and switching multiple subscription homes" {
+  run_picker --create-env account-a
+  [ "$status" -eq 0 ]
+  printf 'account-a-placeholder\n' > "$TEST_HOME/.claude-profiles/account-a/.credentials.json"
+  run_picker --create-env account-b
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_HOME/.claude-profiles/account-b/.credentials.json" ]
+  run_picker --env account-b -- auth login --claudeai
+  [ "$status" -eq 0 ]
+  assert_log env '"account-b"' args '["auth","login","--claudeai"]'
+  run_picker --env account-a
+  [ "$status" -eq 0 ]
+  assert_log env '"account-a"'
+  [ "$(cat "$TEST_HOME/.claude-profiles/account-a/.credentials.json")" = account-a-placeholder ]
+}
+
 @test "named profiles reject inherited credentials and routes without exposing values" {
   run_picker --create acme
   for name in ANTHROPIC_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_PROFILE CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_MCP_CONFIG; do
@@ -249,7 +281,7 @@ PY
 @test "profile settings execute the linked statusline and show the selected profile" {
   command -v node >/dev/null || skip "node not installed"
   run_picker --create acme
-  run env CLAUDE_CONFIG_DIR="$TEST_HOME/.claude-profiles/acme" CLAUDE_PICK_PROFILE=acme node - "$ROOT/claude/profile-settings.json" <<'JS'
+  run env CLAUDE_CONFIG_DIR="$TEST_HOME/.claude-profiles/acme" CLAUDE_PICK_ENV=acme CLAUDE_PICK_PROFILE=legacy node - "$ROOT/claude/profile-settings.json" <<'JS'
 const fs = require('node:fs');
 const { execSync } = require('node:child_process');
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));

@@ -160,7 +160,9 @@ if [[ "${choice}" == "__CANCEL__" ]]; then
 fi
 
 for row in ${rows[@]+"${rows[@]}"}; do
-  if [[ "${row%%$'\t'*}" == "${choice}" ]]; then
+  key="${row%%$'\t'*}"
+  legacy_choice="${choice#chatgpt_}"
+  if [[ "${key}" == "${choice}" || "${key#*/}" == "${legacy_choice}" ]]; then
     printf '%s\n' "${row}"
     exit 0
   fi
@@ -207,6 +209,7 @@ run_default_picker() {
   run env -u CODEX_HOME \
     PATH="${FAKE_BIN}:/usr/bin:/bin" \
     HOME="${PICKER_HOME}" \
+    CODEX_HOME="${INHERITED_CODEX_HOME:-}" \
     CODEX_CATALOG="$(catalog_json)" \
     CODEX_LOG="${CODEX_LOG}" \
     CODEX_DEBUG_LOG="${CODEX_DEBUG_LOG}" \
@@ -221,7 +224,7 @@ run_default_picker() {
   run env PATH="/usr/bin:/bin" "${ROOT}/tools/codex/codex-pick" --help
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"codex-pick [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]"* ]]
+  [[ "$output" == *"codex-pick [--env ENV] [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]"* ]]
 }
 
 @test "codex-pick resolves a unique model suffix and forwards Codex arguments" {
@@ -491,7 +494,7 @@ run_default_picker() {
   run_default_picker
 
   [ "$status" -eq 0 ]
-  [ "$(grep -c '^azure_gpt-6_1-sol_max' "${FZF_ROWS}")" -eq 1 ]
+  [ "$(grep -c '^azure/azure_gpt-6_1-sol_max' "${FZF_ROWS}")" -eq 1 ]
   grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
   [ -L "${PRIMARY_HOME}/azure_gpt-6_1-sol_max.config.toml" ]
 }
@@ -582,7 +585,7 @@ run_default_picker() {
   grep -Fx "home=${OPENAI_HOME}" "${CODEX_LOG}"
   grep -Fx 'argv=<--profile><openai_gpt-6_1-sol_max><><two words><--resume>' "${CODEX_LOG}"
   grep -F 'azure_gpt-6_1-sol_max' "${FZF_ROWS}"
-  grep -F 'chatgpt_' "${FZF_ROWS}"
+  grep -F 'default/gpt-' "${FZF_ROWS}"
   grep -F 'OpenAI API profile' "${FZF_ROWS}"
   grep -F '<--query=openai>' "${FZF_LOG}"
 }
@@ -659,4 +662,109 @@ run_default_picker() {
   run_default_picker
   [ "$status" -eq 130 ]
   [ "$(wc -l < "${CODEX_LOG}")" -eq 2 ]
+}
+
+write_env() {
+  local destination="$1" name="$2" provider="$3"
+  mkdir -p "$destination"
+  jq -n --arg name "$name" --arg provider "$provider" \
+    '{version:3,env:$name,provider:$provider,defaultProfile:"gpt-6_1-sol_max",files:{}}' > "$destination/.dotfiles-env.json"
+  printf 'model_provider = "%s"\n' "$provider" > "$destination/config.toml"
+  printf 'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n' > "$destination/gpt-6_1-sol_max.config.toml"
+}
+
+@test "env selects identically named profiles without mixing API homes or loading a catalog" {
+  setup_default_homes
+  setup_openai_home
+  write_env "$AZURE_HOME" azure azure
+  write_env "$OPENAI_HOME" openai openai
+  run_default_picker --env azure --profile gpt-6_1-sol_max -- '' 'two words'
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$AZURE_HOME" "$CODEX_LOG"
+  grep -Fx 'argv=<--profile><gpt-6_1-sol_max><><two words>' "$CODEX_LOG"
+  [ ! -f "$CODEX_DEBUG_LOG" ]
+  INHERITED_CODEX_HOME="$AZURE_HOME"
+  run_default_picker --env=openai --profile gpt-6_1-sol_max
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$OPENAI_HOME" "$CODEX_LOG"
+  [ ! -f "$CODEX_DEBUG_LOG" ]
+}
+
+@test "multiple environments can share a provider and profile and remain distinct picker rows" {
+  setup_default_homes
+  local first="$PICKER_HOME/.codex-envs/lab-a" second="$PICKER_HOME/.codex-envs/lab-b"
+  write_env "$first" lab-a azure
+  write_env "$second" lab-b azure
+  printf 'lab-b/gpt-6_1-sol_max\n' > "$FZF_CHOICES"
+  run_default_picker
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$second" "$CODEX_LOG"
+  grep -F $'lab-a/gpt-6_1-sol_max\tprofile' "$FZF_ROWS"
+  grep -F $'lab-b/gpt-6_1-sol_max\tprofile' "$FZF_ROWS"
+  grep -Fx 'argv=<--profile><gpt-6_1-sol_max>' "$CODEX_LOG"
+  run_default_picker --env lab-a -p gpt-6_1-sol_max
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$first" "$CODEX_LOG"
+}
+
+@test "legacy provider names normalize inside the selected env and cannot override its provider" {
+  setup_default_homes
+  setup_openai_home
+  write_env "$AZURE_HOME" azure azure
+  write_env "$OPENAI_HOME" openai openai
+  run_default_picker --env openai -p azure_gpt-6_1-sol_max
+  [ "$status" -eq 2 ]
+  [ ! -e "$CODEX_LOG" ]
+  run_default_picker -p azure_gpt-6_1-sol_max
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$AZURE_HOME" "$CODEX_LOG"
+  grep -Fx 'argv=<--profile><gpt-6_1-sol_max>' "$CODEX_LOG"
+}
+
+@test "unknown corrupt and symlinked environments never fall back to the subscription" {
+  setup_default_homes
+  touch "$PRIMARY_HOME/gpt-6_1-sol_max.config.toml"
+  local broken="$PICKER_HOME/.codex-envs/broken"
+  write_env "$broken" broken azure
+  printf '{"version":3,"env":"other","provider":"azure"}\n' > "$broken/.dotfiles-env.json"
+  ln -s "$AZURE_HOME" "$PICKER_HOME/.codex-envs/linked"
+  for name in absent broken linked '../outside'; do
+    run_default_picker --env "$name" -p gpt-6_1-sol_max
+    [ "$status" -eq 2 ]
+    [ ! -e "$CODEX_LOG" ]
+    [ ! -e "$CODEX_DEBUG_LOG" ]
+  done
+}
+
+@test "ChatGPT environment catalog lookup and execution both use the selected home" {
+  setup_default_homes
+  local subscription="$PICKER_HOME/.codex-envs/account-b"
+  write_env "$subscription" account-b chatgpt
+  run_default_picker --env account-b terra high
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$subscription" "$CODEX_DEBUG_LOG"
+  grep -Fx "home=$subscription" "$CODEX_LOG"
+  run grep -Fx "home=$PRIMARY_HOME" "$CODEX_DEBUG_LOG"
+  [ "$status" -eq 1 ]
+  printf 'account-b/gpt-5.6-terra_high\n' > "$FZF_CHOICES"
+  run_default_picker
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$subscription" "$CODEX_LOG"
+  grep -F 'default/gpt-5.6-terra_high' "$FZF_ROWS"
+  grep -F 'account-b/gpt-5.6-terra_high' "$FZF_ROWS"
+}
+
+@test "retained legacy files never replace a missing neutral profile after migration" {
+  setup_default_homes
+  write_env "$AZURE_HOME" azure azure
+  mv "$AZURE_HOME/gpt-6_1-sol_max.config.toml" "$AZURE_HOME/azure_gpt-6_1-sol_max.config.toml"
+  run_default_picker --env azure -p azure_gpt-6_1-sol_max
+  [ "$status" -eq 2 ]
+  [ ! -e "$CODEX_LOG" ]
+  printf 'model = "gpt-6-luna"\nmodel_reasoning_effort = "max"\n' > "$AZURE_HOME/gpt-6-luna_max.config.toml"
+  printf 'azure/gpt-6-luna_max\n' > "$FZF_CHOICES"
+  run_default_picker --env azure
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$FZF_ROWS")" -eq 1 ]
+  grep -Fx 'argv=<--profile><gpt-6-luna_max>' "$CODEX_LOG"
 }

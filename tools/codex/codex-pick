@@ -3,14 +3,18 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: codex-pick [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]
+Usage: codex-pick [--env ENV] [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]
 
 Choose a Codex launch configuration for one invocation.
 
 PROFILE names a PROFILE.config.toml file in the selected Codex home.
+ENV selects an independent home; profiles contain model/effort settings only.
+Use names such as gpt-6_1-sol_max without an azure_/openai_ prefix.
+Legacy provider-prefixed profile names remain supported.
 By default, ChatGPT configurations and the generated ~/.codex-azure and
-~/.codex-openai profiles share one picker. An explicit CODEX_HOME limits
-selection to that home.
+~/.codex-openai and ~/.codex-envs/NAME environments share one picker.
+--env overrides CODEX_HOME for the child process. Without --env, an explicit
+CODEX_HOME limits selection to that home.
 QUERY sets the initial fzf search query for an interactive picker.
 MODEL may be a full model slug or an unambiguous slug suffix.
 With no arguments, fzf selects either a ChatGPT model/effort combination or a
@@ -34,9 +38,14 @@ require_command() {
   fi
 }
 
+valid_env_name() {
+  [[ "$1" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 1
+  case "$1" in con|prn|aux|nul|com[0-9]|lpt[0-9]) return 1 ;; esac
+}
+
 profile_rows() {
   local codex_home="$1"
-  local file name target_home label
+  local file name target_home label env_name canonical
   local -a files=()
 
   shopt -s nullglob
@@ -49,11 +58,14 @@ profile_rows() {
     name="${file##*/}"
     name="${name%.config.toml}"
     if [[ "${name}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+      canonical="$(profile_for_home "${name}" "${codex_home}")"
+      [[ "${canonical}" == "${name}" ]] || continue
       target_home="${codex_home}"
       label="Codex profile"
       if [[ -n "${azure_home}" && "${codex_home}" == "${primary_home}" ]] && legacy_azure_profile "${file}"; then
         # Existing dotfiles links remain in the main home during migration.
-        if is_azure_home "${azure_home}" && [[ -f "${azure_home}/${name}.config.toml" ]]; then
+        canonical="$(profile_for_home "${name}" "${azure_home}")"
+        if is_azure_home "${azure_home}" && [[ -f "${azure_home}/${canonical}.config.toml" ]]; then
           continue
         fi
         target_home="${azure_home}"
@@ -63,17 +75,57 @@ profile_rows() {
       elif is_openai_home "${codex_home}"; then
         label="OpenAI API profile"
       fi
-      printf '%s\tprofile\t-\t-\t%s\t%s\t-\t%s\n' "${name}" "${label}" "${file}" "${target_home}"
+      env_name="$(env_name_for_home "${target_home}")"
+      printf '%s/%s\tprofile\t-\t-\t%s\t%s\t%s\t%s\n' "${env_name}" "${name}" "${env_name}" "${name}" "${label}" "${target_home}"
     fi
   done
 }
 
 is_azure_home() {
-  [[ -f "$1/.dotfiles-azure.json" && -f "$1/config.toml" ]]
+  [[ -f "$1/config.toml" ]] && { [[ "$(managed_provider "$1")" == azure ]] || [[ ! -e "$1/.dotfiles-env.json" && -f "$1/.dotfiles-azure.json" ]]; }
 }
 
 is_openai_home() {
-  [[ -f "$1/.dotfiles-openai.json" && -f "$1/config.toml" ]]
+  [[ -f "$1/config.toml" ]] && { [[ "$(managed_provider "$1")" == openai ]] || [[ ! -e "$1/.dotfiles-env.json" && -f "$1/.dotfiles-openai.json" ]]; }
+}
+
+env_name_for_home() {
+  case "$1" in
+    "${HOME}/.codex") printf 'default\n' ;;
+    "${HOME}/.codex-azure") printf 'azure\n' ;;
+    "${HOME}/.codex-openai") printf 'openai\n' ;;
+    "${HOME}/.codex-envs/"*) printf '%s\n' "${1##*/}" ;;
+    *) printf 'current\n' ;;
+  esac
+}
+
+managed_provider() {
+  [[ -f "$1/.dotfiles-env.json" && ! -L "$1" && ! -L "$1/.dotfiles-env.json" ]] || return 1
+  require_command jq
+  jq -er --arg name "$(env_name_for_home "$1")" '
+    select(.version == 3 and (.env | type == "string") and (.env | test("^[a-z][a-z0-9_-]{0,63}$")) and (.env == $name or $name == "current"))
+    | .provider | select(. == "azure" or . == "openai" or . == "chatgpt")
+  ' "$1/.dotfiles-env.json" 2>/dev/null
+}
+
+require_env_home() {
+  if [[ "$1" == "${HOME}/.codex-envs/"* && -L "${HOME}/.codex-envs" ]]; then die 2 "Environment directory must not be a symlink"; fi
+  [[ -d "$1" && ! -L "$1" && -f "$1/config.toml" ]] || die 2 "Environment is missing or incomplete: $1. Run ./setup.sh codex --env NAME first"
+  if [[ "$(env_name_for_home "$1")" != default ]] && ! is_api_home "$1" && [[ "$(managed_provider "$1")" != chatgpt ]]; then
+    die 2 "Environment is missing or incomplete: $1. Run ./setup.sh codex --env NAME first"
+  fi
+  if [[ "$(env_name_for_home "$1")" != default && -L "$1/config.toml" ]]; then die 2 "Environment config must not be a symlink: $1"; fi
+}
+
+profile_for_home() {
+  local name="$1" home="$2" kind
+  if [[ -f "${home}/.dotfiles-env.json" ]]; then
+    kind="$(managed_provider "${home}")" || die 2 "Invalid environment metadata: ${home}"
+    if [[ "${name}" == "${kind}_"* ]]; then
+      name="${name#"${kind}_"}"
+    fi
+  fi
+  printf '%s\n' "${name}"
 }
 
 is_api_home() {
@@ -110,25 +162,35 @@ resolve_profile() {
   if [[ -n "${azure_home}" ]]; then
     if legacy_azure_profile "${main_file}"; then
       require_azure_home "${azure_home}"
-      validate_profile "${profile}" "${azure_home}"
+      validate_profile "$(profile_for_home "${profile}" "${azure_home}")" "${azure_home}"
       printf '%s\n' "${azure_home}"
       return
     fi
   fi
 
-  for candidate_home in "${primary_home}" "${azure_home}" "${openai_home}"; do
+  if [[ ( -n "${env_query}" || ( -n "${CODEX_HOME:-}" && -f "${primary_home}/.dotfiles-env.json" ) ) && ( "${profile}" == azure_* || "${profile}" == openai_* ) ]]; then
+    local kind
+    kind="$(managed_provider "${primary_home}")" || {
+      if is_azure_home "${primary_home}"; then kind=azure; elif is_openai_home "${primary_home}"; then kind=openai; else kind=chatgpt; fi
+    }
+    [[ "${profile}" == "${kind}_"* ]] || die 2 "Legacy profile provider does not match the selected environment"
+  fi
+
+  for candidate_home in ${candidate_homes[@]+"${candidate_homes[@]}"}; do
     [[ -n "${candidate_home}" ]] || continue
-    if [[ "${candidate_home}" != "${primary_home}" ]] && ! is_api_home "${candidate_home}"; then
+    if [[ "${candidate_home}" != "${primary_home}" ]] && ! is_api_home "${candidate_home}" && [[ "$(managed_provider "${candidate_home}")" != chatgpt ]]; then
       continue
     fi
-    [[ -f "${candidate_home}/${profile}.config.toml" ]] || continue
+    local candidate_profile
+    candidate_profile="$(profile_for_home "${profile}" "${candidate_home}")"
+    [[ -f "${candidate_home}/${candidate_profile}.config.toml" ]] || continue
     if [[ -n "${selected_home}" ]]; then
-      die 2 "Ambiguous profile: ${profile}. Set CODEX_HOME to select its home"
+      die 2 "Ambiguous profile: ${profile}. Use --env NAME or CODEX_HOME to select its environment"
     fi
     selected_home="${candidate_home}"
   done
   if [[ -z "${selected_home}" ]]; then
-    validate_profile "${profile}" "${primary_home}"
+    validate_profile "$(profile_for_home "${profile}" "${primary_home}")" "${primary_home}"
   fi
   printf '%s\n' "${selected_home}"
 }
@@ -141,13 +203,16 @@ launch_codex() {
   elif [[ -n "${openai_home}" && "${target_home}" == "${openai_home}" ]]; then
     require_openai_home "${target_home}"
   fi
-  exec env CODEX_HOME="${target_home}" codex "$@"
+  if [[ -e "${target_home}/.dotfiles-env.json" ]]; then require_env_home "${target_home}"; fi
+  exec env CODEX_HOME="${target_home}" CODEX_PICK_ENV="$(env_name_for_home "${target_home}")" codex "$@"
 }
 
 chatgpt_rows() {
   local catalog="$1"
+  local codex_home="$2" env_name
+  env_name="$(env_name_for_home "${codex_home}")"
 
-  jq -r '
+  jq -r --arg env "${env_name}" --arg home "${codex_home}" '
     .models[]
     | select(
         .visibility == "list"
@@ -160,13 +225,14 @@ chatgpt_rows() {
       ) as $model
     | $model.supported_reasoning_levels[]
     | [
-        ("chatgpt_" + $model.slug + "_" + .effort),
+        ($env + "/" + $model.slug + "_" + .effort),
         "chatgpt",
         $model.slug,
         .effort,
+        $env,
         $model.display_name,
         .description,
-        (if .effort == $model.default_reasoning_level then "default effort" else "" end)
+        $home
       ]
     | @tsv
   ' <<< "${catalog}"
@@ -197,8 +263,16 @@ configuration_rows() {
     profile_rows "${openai_home}"
   fi
   if [[ -n "${catalog}" ]]; then
-    chatgpt_rows "${catalog}"
+    chatgpt_rows "${catalog}" "${codex_home}"
   fi
+  local home extra_catalog
+  for home in ${extra_homes[@]+"${extra_homes[@]}"}; do
+    profile_rows "${home}"
+    if [[ "$(managed_provider "${home}")" == chatgpt ]]; then
+      extra_catalog="$(load_catalog "${home}")"
+      chatgpt_rows "${extra_catalog}" "${home}"
+    fi
+  done
 }
 
 pick_configuration() {
@@ -213,7 +287,7 @@ pick_configuration() {
 
   selected="$(
     printf '%s\n' "${rows}" |
-      fzf --delimiter=$'\t' --with-nth=1,5,6,7 --prompt='Config> ' \
+      fzf --delimiter=$'\t' --with-nth=5,6,7 --prompt='Env / Profile> ' \
         --query="${initial_query}"
   )" || return $?
 
@@ -222,8 +296,9 @@ pick_configuration() {
 
 load_catalog() {
   local catalog
+  local home="${1:-${primary_home}}"
 
-  if catalog="$(codex debug models 2>/dev/null)" &&
+  if catalog="$(env CODEX_HOME="${home}" codex debug models 2>/dev/null)" &&
     jq -e '
       (.models | type == "array")
       and ([.models[] | select(.visibility == "list")] | length > 0)
@@ -232,7 +307,7 @@ load_catalog() {
     return 0
   fi
 
-  if catalog="$(codex debug models --bundled 2>/dev/null)" &&
+  if catalog="$(env CODEX_HOME="${home}" codex debug models --bundled 2>/dev/null)" &&
     jq -e '
       (.models | type == "array")
       and ([.models[] | select(.visibility == "list")] | length > 0)
@@ -343,6 +418,7 @@ pick_effort() {
 }
 
 profile_query=""
+env_query=""
 profile_requested=0
 initial_query=""
 model_query=""
@@ -363,6 +439,19 @@ while [[ $# -gt 0 ]]; do
       profile_query="$2"
       profile_requested=1
       shift 2
+      ;;
+    --env)
+      [[ $# -ge 2 && -n "$2" && "$2" != -* ]] || die 2 "--env requires an environment name"
+      [[ -z "${env_query}" || "${env_query}" == "$2" ]] || die 2 "Environment specified twice with different names"
+      env_query="$2"
+      shift 2
+      ;;
+    --env=*)
+      env_value="${1#--env=}"
+      [[ -n "${env_value}" ]] || die 2 "--env requires an environment name"
+      [[ -z "${env_query}" || "${env_query}" == "${env_value}" ]] || die 2 "Environment specified twice with different names"
+      env_query="${env_value}"
+      shift
       ;;
     -q | --query)
       if [[ $# -lt 2 ]]; then
@@ -405,17 +494,39 @@ codex_home="${CODEX_HOME:-${HOME}/.codex}"
 primary_home="${codex_home}"
 azure_home=""
 openai_home=""
-if [[ -z "${CODEX_HOME:-}" ]]; then
+extra_homes=()
+if [[ -n "${env_query}" ]]; then
+  valid_env_name "${env_query}" || die 2 "Invalid or reserved environment name"
+  case "${env_query}" in
+    default) codex_home="${HOME}/.codex" ;;
+    azure|openai) codex_home="${HOME}/.codex-${env_query}" ;;
+    *) codex_home="${HOME}/.codex-envs/${env_query}" ;;
+  esac
+  require_env_home "${codex_home}"
+  primary_home="${codex_home}"
+elif [[ -z "${CODEX_HOME:-}" ]]; then
   azure_home="${HOME}/.codex-azure"
   openai_home="${HOME}/.codex-openai"
+  for env_home in "${HOME}/.codex-envs/"*; do
+    [[ ! -L "${HOME}/.codex-envs" ]] || break
+    [[ -d "${env_home}" && ! -L "${env_home}" && -f "${env_home}/config.toml" && ! -L "${env_home}/config.toml" ]] || continue
+    env_name="${env_home##*/}"
+    valid_env_name "${env_name}" || continue
+    [[ "${env_name}" != default && "${env_name}" != azure && "${env_name}" != openai ]] || continue
+    if managed_provider "${env_home}" >/dev/null; then extra_homes+=("${env_home}"); fi
+  done
 fi
+candidate_homes=("${primary_home}")
+[[ -z "${azure_home}" ]] || candidate_homes+=("${azure_home}")
+[[ -z "${openai_home}" ]] || candidate_homes+=("${openai_home}")
+candidate_homes+=(${extra_homes[@]+"${extra_homes[@]}"})
 
 require_command codex
 
 profile=""
 if [[ "${profile_requested}" -eq 1 ]]; then
   codex_home="$(resolve_profile "${profile_query}")"
-  profile="${profile_query}"
+  profile="$(profile_for_home "${profile_query}" "${codex_home}")"
 fi
 
 if [[ -n "${profile}" && -z "${model_query}" ]]; then
@@ -425,15 +536,17 @@ fi
 catalog=""
 if [[ -n "${model_query}" ]] || ! is_api_home "${primary_home}"; then
   require_command jq
-  catalog="$(load_catalog)"
+  catalog="$(load_catalog "${codex_home}")"
 fi
 
 if [[ -z "${model_query}" ]]; then
   require_command fzf
   configuration="$(pick_configuration "${catalog}" "${codex_home}" "${initial_query}")" || exit $?
   IFS=$'\t' read -r configuration_name configuration_kind model effort _ _ _ target_home <<< "${configuration}"
+  codex_home="${target_home}"
 
   if [[ "${configuration_kind}" == "profile" ]]; then
+    configuration_name="${configuration_name#*/}"
     if [[ -n "${azure_home}" && "${target_home}" == "${azure_home}" ]]; then
       require_azure_home "${target_home}"
     fi

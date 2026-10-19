@@ -6,9 +6,23 @@ const os = require("node:os");
 const path = require("node:path");
 const node_util_1 = require("node:util");
 const smol_toml_1 = require("smol-toml");
-const providerNames = { azure: "Azure", openai: "OpenAI" };
-function markerName(provider) {
-    return `.dotfiles-${provider}.json`;
+const providerNames = { azure: "Azure", openai: "OpenAI", chatgpt: "ChatGPT" };
+function markerName() {
+    return ".dotfiles-env.json";
+}
+function validEnv(name) {
+    return /^[a-z][a-z0-9_-]{0,63}$/.test(name) && !/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(name);
+}
+function envHome(home, env) {
+    if (env === "default")
+        return path.join(home, ".codex");
+    if (env === "azure" || env === "openai")
+        return path.join(home, `.codex-${env}`);
+    const root = path.join(home, ".codex-envs");
+    if (fs.existsSync(root) && (fs.lstatSync(root).isSymbolicLink() || !fs.lstatSync(root).isDirectory())) {
+        throw new Error("Refusing a symlink or unexpected Codex environment directory");
+    }
+    return path.join(root, env);
 }
 function table(value) {
     return value !== null && typeof value === "object" &&
@@ -68,7 +82,7 @@ function validateBaseUrl(value, label = "Azure") {
         throw new Error(message);
     }
 }
-function resolveAzureProvider(baseline, baseUrl, apiVersion) {
+function resolveAzureProvider(baseline, baseUrl, apiVersion, apiKeyEnv) {
     let saved = baseline?.azureProvider;
     if (baseline?.version === 1) {
         const previous = readToml(baseline.files["config.toml"] ?? "", "previous config.toml");
@@ -80,9 +94,11 @@ function resolveAzureProvider(baseline, baseUrl, apiVersion) {
     const provider = overlay({ name: "Azure", env_key: "AZURE_OPENAI_API_KEY", wire_api: "responses", requires_openai_auth: false }, saved ?? {});
     if (baseUrl !== undefined)
         provider.base_url = baseUrl;
+    if (apiKeyEnv !== undefined)
+        provider.env_key = apiKeyEnv;
     validateBaseUrl(provider.base_url);
-    if (provider.env_key !== "AZURE_OPENAI_API_KEY" || provider.wire_api !== "responses" || provider.requires_openai_auth !== false) {
-        throw new Error("The saved Azure provider must use AZURE_OPENAI_API_KEY and Responses without OpenAI login");
+    if (typeof provider.env_key !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(provider.env_key) || provider.wire_api !== "responses" || provider.requires_openai_auth !== false) {
+        throw new Error("The saved Azure provider must use a credential environment variable and Responses without OpenAI login");
     }
     if (provider.query_params !== undefined && !table(provider.query_params))
         throw new Error("Invalid saved Azure query parameters");
@@ -108,6 +124,12 @@ function resolveOpenAIProvider(baseline, baseUrl) {
     return provider;
 }
 function apiConfig(config, kind, provider) {
+    if (kind === "chatgpt") {
+        const result = { ...config, model_provider: "openai", forced_login_method: "chatgpt", cli_auth_credentials_store: "file" };
+        delete result.model_providers;
+        delete result.openai_base_url;
+        return result;
+    }
     if (kind === "openai") {
         const result = {
             ...config,
@@ -126,16 +148,20 @@ function apiConfig(config, kind, provider) {
         model_providers: { azure: provider },
     };
 }
-function mergeLocal(previous, current, desired, key) {
+function mergeLocal(previous, current, desired, key, pruneInheritedTables = false) {
     if ((0, node_util_1.isDeepStrictEqual)(current, previous))
         return desired;
     if ((0, node_util_1.isDeepStrictEqual)(previous, desired) || (0, node_util_1.isDeepStrictEqual)(current, desired))
         return current;
+    // A legacy full profile can contain local runtime entries alongside inherited
+    // preferences. Remove the unchanged preferences while retaining those entries.
+    if (pruneInheritedTables && table(previous) && table(current) && desired === undefined)
+        desired = {};
     if (table(current) && table(desired) && (previous === undefined || table(previous))) {
         const old = previous ?? {};
         const merged = Object.create(Object.getPrototypeOf(current));
         for (const name of new Set([...Object.keys(old), ...Object.keys(current), ...Object.keys(desired)])) {
-            const value = mergeLocal(old[name], current[name], desired[name], `${key}.${name}`);
+            const value = mergeLocal(old[name], current[name], desired[name], `${key}.${name}`, pruneInheritedTables);
             if (value !== undefined)
                 merged[name] = value;
         }
@@ -143,7 +169,13 @@ function mergeLocal(previous, current, desired, key) {
     }
     throw new Error(`Conflicting local and dotfiles changes: ${key}`);
 }
-function assertProvider(config, name, kind) {
+function assertProvider(config, name, kind, envKey = "AZURE_OPENAI_API_KEY") {
+    if (kind === "chatgpt") {
+        if (config.model_provider !== "openai" || config.cli_auth_credentials_store !== "file" || config.forced_login_method !== "chatgpt") {
+            throw new Error(`ChatGPT provider or credential isolation was changed locally: ${name}`);
+        }
+        return;
+    }
     if (kind === "openai") {
         if (config.model_provider !== "openai" || config.cli_auth_credentials_store !== "file" ||
             config.forced_login_method !== "api" || (table(config.model_providers) && config.model_providers.openai !== undefined)) {
@@ -155,7 +187,7 @@ function assertProvider(config, name, kind) {
     const providers = config.model_providers;
     if (config.model_provider !== "azure" || config.cli_auth_credentials_store !== "file" ||
         !table(providers) || !table(providers.azure) || providers.azure.requires_openai_auth !== false ||
-        providers.azure.env_key !== "AZURE_OPENAI_API_KEY") {
+        providers.azure.env_key !== envKey) {
         throw new Error(`Azure provider or credential isolation was changed locally: ${name}`);
     }
 }
@@ -192,42 +224,67 @@ function checkTarget(home, name) {
         }
     }
 }
-function readBaseline(home, kind) {
-    const marker = markerName(kind);
-    checkTarget(home, marker);
-    const text = readOptional(path.join(home, marker));
-    if (text === undefined)
-        return { text, baseline: undefined };
+function readBaseline(home, env) {
+    let selected = { text: undefined, baseline: undefined };
+    for (const marker of [markerName(), ".dotfiles-azure.json", ".dotfiles-openai.json"]) {
+        checkTarget(home, marker);
+        const text = readOptional(path.join(home, marker));
+        if (text === undefined)
+            continue;
+        try {
+            const value = JSON.parse(text);
+            const kind = marker === markerName() ? value.provider : marker === ".dotfiles-azure.json" ? "azure" : "openai";
+            if (!Object.hasOwn(providerNames, kind) || ![1, 2, 3].includes(value.version) ||
+                (marker === markerName() ? value.version !== 3 || value.env !== env : value.version === 3 || (kind === "openai" && value.version !== 2)) ||
+                (value.version >= 2 && kind !== "chatgpt" && !table(value[kind === "azure" ? "azureProvider" : "openaiProvider"])) ||
+                typeof value.defaultProfile !== "string" || !table(value.files) ||
+                !Object.values(value.files).every(item => typeof item === "string"))
+                throw new Error();
+            if (selected.kind && selected.kind !== kind)
+                throw new Error();
+            if (!selected.baseline)
+                selected = { text: marker === markerName() ? text : undefined, baseline: value, kind };
+        }
+        catch {
+            throw new Error(`Invalid or conflicting Codex environment metadata: ${path.join(home, marker)}`);
+        }
+    }
+    return selected;
+}
+function profileCatalog(root, kind) {
+    let catalog;
     try {
-        const value = JSON.parse(text);
-        if (![1, 2].includes(value.version) || (kind === "openai" && value.version !== 2) ||
-            (value.version === 2 && !table(value[kind === "azure" ? "azureProvider" : "openaiProvider"])) ||
-            typeof value.defaultProfile !== "string" || !table(value.files) ||
-            !Object.values(value.files).every(item => typeof item === "string"))
-            throw new Error();
-        return { text, baseline: value };
+        catalog = JSON.parse(fs.readFileSync(path.join(root, "codex/env-profiles.json"), "utf8"));
     }
     catch {
-        throw new Error(`Invalid ${providerNames[kind]} generation metadata: ${path.join(home, marker)}`);
+        throw new Error("Invalid Codex env-profiles.json");
     }
+    const entry = table(catalog) && table(catalog[kind]) ? catalog[kind] : undefined;
+    if (!entry || typeof entry.defaultProfile !== "string" || !Array.isArray(entry.profiles) ||
+        !entry.profiles.includes(entry.defaultProfile) ||
+        !entry.profiles.every(name => typeof name === "string" && /^[A-Za-z0-9_-]+$/.test(name))) {
+        throw new Error(`Invalid ${providerNames[kind]} profile catalog`);
+    }
+    return { defaultProfile: entry.defaultProfile, profiles: entry.profiles };
 }
 function desiredFiles(root, profile, kind, provider) {
     const codexDir = path.join(root, "codex");
     const base = sharedConfig(readToml(fs.readFileSync(path.join(codexDir, "config.toml"), "utf8"), "codex/config.toml"));
+    const catalog = profileCatalog(root, kind);
     const profiles = {};
-    for (const name of fs.readdirSync(codexDir).sort()) {
-        if (!new RegExp(`^${kind}_[A-Za-z0-9_-]+\\.config\\.toml$`).test(name))
-            continue;
-        const config = sharedConfig(readToml(fs.readFileSync(path.join(codexDir, name), "utf8"), `codex/${name}`));
-        if (config.model_provider !== kind || typeof config.model !== "string") {
-            throw new Error(`Expected an ${providerNames[kind]} model profile: codex/${name}`);
+    for (const slug of catalog.profiles) {
+        const name = `${slug}.config.toml`;
+        const config = readToml(fs.readFileSync(path.join(codexDir, "profiles", name), "utf8"), `codex/profiles/${name}`);
+        if (typeof config.model !== "string" || typeof config.model_reasoning_effort !== "string" ||
+            Object.keys(config).some(key => !["model", "model_reasoning_effort"].includes(key))) {
+            throw new Error(`Expected only model and effort in codex/profiles/${name}`);
         }
-        profiles[name] = apiConfig(overlay(base, config), kind, provider);
+        profiles[name] = config;
     }
     const selected = profiles[`${profile}.config.toml`];
     if (!selected)
         throw new Error(`${providerNames[kind]} profile not found in dotfiles: ${profile}`);
-    const files = { "config.toml": (0, smol_toml_1.stringify)(selected) };
+    const files = { "config.toml": (0, smol_toml_1.stringify)(apiConfig(overlay(base, selected), kind, provider)) };
     for (const [name, config] of Object.entries(profiles))
         files[name] = (0, smol_toml_1.stringify)(config);
     files["hooks.json"] = fs.readFileSync(path.join(codexDir, "hooks.json"), "utf8");
@@ -248,22 +305,41 @@ function planChanges(home, desired, previous, kind) {
     for (const [name, source] of Object.entries(desired)) {
         checkTarget(home, name);
         const before = readOptional(path.join(home, name));
-        const old = previous?.files[name];
-        if (before !== undefined && old === undefined) {
+        const legacyName = `${kind}_${name}`;
+        const legacy = name !== "config.toml" && name.endsWith(".config.toml") && previous && previous.version < 3 && previous.files[legacyName] !== undefined;
+        const old = previous?.files[legacy ? legacyName : name];
+        let sourceFile;
+        let currentText = before;
+        if (legacy && before === undefined) {
+            checkTarget(home, legacyName);
+            currentText = readOptional(path.join(home, legacyName));
+            if (currentText !== undefined) {
+                assertProvider(readToml(currentText, legacyName), legacyName, kind);
+                sourceFile = { name: legacyName, before: currentText };
+            }
+        }
+        if (before !== undefined && (old === undefined || legacy)) {
             throw new Error(`Refusing to overwrite an unmanaged file: ${path.join(home, name)}`);
         }
         let after = source;
-        if (name.endsWith(".toml") && before !== undefined) {
-            const current = readToml(before, path.join(home, name));
-            const merged = mergeLocal(readToml(old, `previous ${name}`), current, readToml(source, name), name);
-            assertProvider(merged, name, kind);
-            after = (0, node_util_1.isDeepStrictEqual)(current, merged) ? before : (0, smol_toml_1.stringify)(merged);
+        if (name.endsWith(".toml") && currentText !== undefined) {
+            const current = readToml(currentText, path.join(home, sourceFile?.name ?? name));
+            const merged = mergeLocal(readToml(old, `previous ${name}`), current, readToml(source, name), name, sourceFile !== undefined);
+            if (name === "config.toml") {
+                const expected = readToml(source, name);
+                const providers = expected.model_providers;
+                assertProvider(merged, name, kind, providers?.azure?.env_key);
+            }
+            else if (["model_provider", "model_providers", "forced_login_method", "forced_chatgpt_workspace_id", "cli_auth_credentials_store", "openai_base_url", "chatgpt_base_url", "log_dir", "sqlite_home"].some(key => merged[key] !== undefined)) {
+                throw new Error(`Provider or credential isolation cannot be overridden by a model profile: ${name}`);
+            }
+            after = (0, node_util_1.isDeepStrictEqual)(current, merged) ? currentText : (0, smol_toml_1.stringify)(merged);
         }
         else if (before !== undefined) {
             after = mergeLocal(old, before, source, name);
         }
         if (after !== before)
-            changes.push({ name, before, after });
+            changes.push({ name, before, after, ...(sourceFile ? { source: sourceFile } : {}) });
     }
     return changes;
 }
@@ -273,6 +349,7 @@ function applyChanges(home, changes, kind) {
     fs.mkdirSync(home, { recursive: true, mode: 0o700 });
     const stage = fs.mkdtempSync(path.join(home, `.dotfiles-${kind}-stage-`));
     const applied = [];
+    const sources = changes.flatMap(item => item.source ? [item.source] : []);
     let backup;
     try {
         for (let index = 0; index < changes.length; index++) {
@@ -283,6 +360,11 @@ function applyChanges(home, changes, kind) {
             checkTarget(home, change.name);
             if (readOptional(path.join(home, change.name)) !== change.before) {
                 throw new Error(`Target changed during generation: ${path.join(home, change.name)}`);
+            }
+            if (change.source) {
+                checkTarget(home, change.source.name);
+                if (readOptional(path.join(home, change.source.name)) !== change.source.before)
+                    throw new Error(`Migration source changed during generation: ${change.source.name}`);
             }
         }
         if (changes.some(change => change.before !== undefined)) {
@@ -301,6 +383,11 @@ function applyChanges(home, changes, kind) {
         for (let index = 0; index < changes.length; index++) {
             const change = changes[index];
             const file = path.join(home, change.name);
+            for (const source of sources) {
+                checkTarget(home, source.name);
+                if (readOptional(path.join(home, source.name)) !== source.before)
+                    throw new Error(`Migration source changed during generation: ${source.name}`);
+            }
             fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
             checkTarget(home, change.name);
             if (readOptional(file) !== change.before)
@@ -336,26 +423,32 @@ function applyChanges(home, changes, kind) {
         console.log(`Previous managed files backed up in ${backup}`);
 }
 function main(args = process.argv.slice(2)) {
-    let kind = "azure";
+    let requestedProvider;
+    let env;
     let profile;
     let baseUrl;
     let apiVersion;
+    let apiKeyEnv;
     let azureOption = false;
     let dryRun = process.env.SETUP_DRY_RUN === "1";
     for (let index = 0; index < args.length; index++) {
         if (args[index] === "--help" || args[index] === "-h") {
-            console.log("Usage: ./setup.sh codex [--provider azure|openai] [--base-url BASE_URL] [--api-version VERSION|none] [--profile PROFILE] [--dry-run]\n" +
-                "Generate ~/.codex-azure or ~/.codex-openai from shared dotfiles settings.\n" +
-                "The provider defaults to azure for compatibility. Azure requires a URL on first generation.\n" +
+            console.log("Usage: ./setup.sh codex [--env ENV] [--provider azure|openai|chatgpt] [--base-url BASE_URL] [--api-version VERSION|none] [--api-key-env NAME] [--profile PROFILE] [--dry-run]\n" +
+                "Generate an independent Codex environment from shared settings and model/effort profiles.\n" +
+                "azure/openai retain ~/.codex-azure and ~/.codex-openai; other names use ~/.codex-envs/ENV.\n" +
+                "Without --env, the environment defaults to the provider (azure for compatibility).\n" +
+                "A new arbitrary environment requires --provider; later runs reuse its provider, connection and default profile.\n" +
+                "Azure requires a URL on first generation. ChatGPT creates a fresh subscription environment without logging in.\n" +
                 "OpenAI defaults to https://api.openai.com/v1 and uses OPENAI_API_KEY with API-only login.\n" +
                 "Later runs reuse the saved connection and profile for the selected provider.\n" +
                 "--api-version is Azure-only; omit it initially to leave api-version unset, or use 'none' to remove it.\n" +
+                "--api-key-env selects an Azure key variable (default AZURE_OPENAI_API_KEY); keys themselves are never read or saved.\n" +
                 "--azure-base-url and --azure-api-version remain available as Azure-only aliases.");
             return;
         }
         if (args[index] === "--dry-run")
             dryRun = true;
-        else if (["--provider", "--profile", "--base-url", "--api-version", "--azure-base-url", "--azure-api-version"].includes(args[index])) {
+        else if (["--env", "--provider", "--profile", "--base-url", "--api-version", "--api-key-env", "--azure-base-url", "--azure-api-version"].includes(args[index])) {
             const option = args[index];
             const value = args[++index];
             if (!value || value.startsWith("--"))
@@ -363,12 +456,19 @@ function main(args = process.argv.slice(2)) {
             if (option.startsWith("--azure-"))
                 azureOption = true;
             if (option === "--provider") {
-                if (value !== "azure" && value !== "openai")
-                    throw new Error("--provider must be azure or openai");
-                kind = value;
+                if (value !== "azure" && value !== "openai" && value !== "chatgpt")
+                    throw new Error("--provider must be azure, openai or chatgpt");
+                requestedProvider = value;
+            }
+            else if (option === "--env") {
+                if (env && env !== value)
+                    throw new Error("Environment specified twice with different names");
+                env = value;
             }
             else if (option === "--profile")
                 profile = value;
+            else if (option === "--api-key-env")
+                apiKeyEnv = value;
             else if (option === "--base-url" || option === "--azure-base-url")
                 baseUrl = value;
             else
@@ -377,33 +477,53 @@ function main(args = process.argv.slice(2)) {
         else
             throw new Error("Unknown codex setup argument; see --help");
     }
-    if (kind === "openai" && (azureOption || apiVersion !== undefined)) {
+    env ??= requestedProvider ?? "azure";
+    if (!validEnv(env))
+        throw new Error("Invalid or reserved Codex environment name");
+    if (env === "default")
+        throw new Error("default uses the existing ~/.codex setup; choose a named environment to generate an independent home");
+    const root = path.resolve(process.env.SETUP_DOTFILES_ROOT || path.join(__dirname, ".."));
+    const home = envHome(path.resolve(process.env.SETUP_HOME || os.homedir()), env);
+    const { text, baseline, kind: savedProvider } = readBaseline(home, env);
+    if (requestedProvider && savedProvider && requestedProvider !== savedProvider) {
+        throw new Error("An existing environment's provider cannot be changed; create a separate environment");
+    }
+    const kind = requestedProvider ?? savedProvider ?? (env === "azure" || env === "openai" ? env : undefined);
+    if (!kind)
+        throw new Error("A new named environment requires --provider azure|openai|chatgpt");
+    if (kind === "openai" && (azureOption || apiVersion !== undefined || apiKeyEnv !== undefined)) {
         throw new Error("Azure connection options and --api-version cannot be used with --provider openai");
     }
-    const root = path.resolve(process.env.SETUP_DOTFILES_ROOT || path.join(__dirname, ".."));
-    const home = path.resolve(process.env.SETUP_HOME || os.homedir(), `.codex-${kind}`);
-    const { text, baseline } = readBaseline(home, kind);
-    profile ??= baseline?.defaultProfile ?? `${kind}_gpt-6_1-sol_max`;
-    if (!new RegExp(`^${kind}_[A-Za-z0-9_-]+$`).test(profile)) {
-        throw new Error(`Expected an ${providerNames[kind]} profile name (without .config.toml)`);
+    if (kind === "chatgpt" && (baseUrl !== undefined || apiVersion !== undefined || apiKeyEnv !== undefined || azureOption)) {
+        throw new Error("ChatGPT subscription environments do not accept API connection options");
     }
-    const provider = kind === "azure" ? resolveAzureProvider(baseline, baseUrl, apiVersion) : resolveOpenAIProvider(baseline, baseUrl);
+    profile ??= baseline?.defaultProfile ?? profileCatalog(root, kind).defaultProfile;
+    const legacyPrefix = /^(azure|openai)_/.exec(profile);
+    if (legacyPrefix) {
+        if (legacyPrefix[1] !== kind)
+            throw new Error("Legacy profile provider does not match the selected environment");
+        profile = profile.slice(legacyPrefix[0].length);
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(profile)) {
+        throw new Error("Expected a model profile name without .config.toml");
+    }
+    const provider = kind === "azure" ? resolveAzureProvider(baseline, baseUrl, apiVersion, apiKeyEnv) : kind === "openai" ? resolveOpenAIProvider(baseline, baseUrl) : {};
     const desired = desiredFiles(root, profile, kind, provider);
     const changes = planChanges(home, desired, baseline, kind);
     const metadata = {
-        version: 2, defaultProfile: profile,
-        ...(kind === "azure" ? { azureProvider: provider } : { openaiProvider: provider }),
+        version: 3, env, provider: kind, defaultProfile: profile,
+        ...(kind === "azure" ? { azureProvider: provider } : kind === "openai" ? { openaiProvider: provider } : {}),
         files: desired,
     };
     const after = JSON.stringify(metadata, null, 2) + "\n";
     if (after !== text)
-        changes.push({ name: markerName(kind), before: text, after });
+        changes.push({ name: markerName(), before: text, after });
     for (const change of changes)
         console.log(`${dryRun ? "Would write" : "Updating"} ${path.join(home, change.name)}`);
     if (dryRun)
         return;
     applyChanges(home, changes, kind);
-    console.log(`${providerNames[kind]} home ${changes.length ? "generated" : "already up to date"}: ${home} (${profile})`);
+    console.log(`Codex environment ${env} (${providerNames[kind]}) ${changes.length ? "generated" : "already up to date"}: ${home} (${profile})`);
 }
 if (require.main === module) {
     try {

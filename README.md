@@ -139,159 +139,174 @@ Vim build with `+clipboard`; the external fallback bridges ordinary operations.
 `./setup.sh links` installs dotfiles-managed helper commands into `~/.local/bin`.
 
 - `share-dir`: start a Dockerized FileBrowser Quantum instance for a chosen directory.
-- `claude-pick`: choose a Claude Code profile, model, and effort.
-- `codex-pick`: choose a ChatGPT model, Azure profile or OpenAI API profile in one picker (Bash).
+- `claude-pick`: choose a Claude Code environment, model, and effort.
+- `codex-pick`: choose a Codex environment and model/effort profile in one picker (Bash).
 
-### Codex homes
+### Codex environments
 
-The primary `~/.codex` remains the usual ChatGPT subscription environment. Its
-configuration and model profiles keep their existing dotfiles symlinks.
-Generate independent API homes from the shared settings:
+An **environment** (`env`) owns a Codex home: its connection, authentication,
+settings, history, memories and plugins. A **profile** selects a model and effort
+within that environment. Environment names are arbitrary; multiple environments
+can use the same provider and identically named profiles.
+
+| Environment | Home |
+| --- | --- |
+| `default` | Existing `~/.codex`, with the usual ChatGPT subscription login |
+| `azure` | Existing `~/.codex-azure` |
+| `openai` | Existing `~/.codex-openai` |
+| Other names | `~/.codex-envs/<name>` |
+
+Generate independent environments with the shared Node runtime. Windows uses
+`.\setup.ps1 codex` with the same arguments. Node.js 18+ and the local setup
+dependencies are required:
 
 ```sh
 npm --prefix setup ci
-./setup.sh codex --provider openai --dry-run
-./setup.sh codex --provider openai
-./setup.sh codex --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
-./setup.sh codex --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1'
+./setup.sh codex --env azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
+./setup.sh codex --env azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1'
+./setup.sh codex --env openai
+./setup.sh codex --env account-b --provider chatgpt
+./setup.sh codex --env lab-a --provider azure --base-url 'https://RESOURCE.openai.azure.com/openai/v1' --api-key-env LAB_A_AZURE_KEY
 ```
 
-Windows uses `.\setup.ps1 codex` with the same arguments and Node runtime.
-Generation requires Node.js 18+ and the local setup dependencies.
-It is an explicit step; `setup links` and `setup all` keep their existing behavior.
-Azure requires `--base-url` on first generation. OpenAI defaults to
-`https://api.openai.com/v1`; use `--base-url` for a Responses-compatible gateway.
-Dry-run does not save the connection, so repeat any connection arguments for the
-actual generation. Supply the API's exact base URL.
+A new arbitrary name requires `--provider azure|openai|chatgpt`. Later runs, such
+as `./setup.sh codex --env lab-a`, reuse that environment's saved connection and
+default profile. An existing environment's provider cannot be changed; create a
+separate environment for a different provider. The `default` environment keeps
+using the existing `setup links` workflow rather than being regenerated here.
+Generation is explicit; `setup links` and `setup all` do not create API homes or
+log in. Names start with a lowercase letter and contain up to 64 lowercase
+letters, digits, `_`, or `-`; Windows device names are reserved.
 
-The connection and default profile are saved separately in each API home. Refresh
-with `./setup.sh codex --provider openai` or `./setup.sh codex --provider azure`.
-Pass `--base-url` again to update that home's connection. For Azure only, use
-`--api-version 2025-04-01-preview` to set or update the API version, or
-`--api-version none` to remove a saved value. Omitting it initially leaves
-`api-version` unset; changing the URL alone retains a saved version.
-The provider defaults to `azure`, so the existing `./setup.sh codex` command
-and its `--azure-base-url` / `--azure-api-version` aliases continue to work.
-Existing Azure homes using the old metadata format automatically retain the
-provider URL and API version from their previous generation.
+Azure requires its exact base URL on first generation. `--api-key-env NAME`
+selects the credential variable (default `AZURE_OPENAI_API_KEY`), and
+`--api-version VERSION|none` sets or removes the optional API version. Omitting
+these flags later keeps the saved values. OpenAI defaults to
+`https://api.openai.com/v1`; `--base-url` can select a Responses-compatible
+gateway. ChatGPT environments use subscription login and do not accept API
+connection options. Setup never reads or stores the values of credential variables.
+Dry-run validates and reports changes without saving the connection or creating
+the home; repeat connection arguments for the actual generation.
 
-| Location | Settings and state |
-| --- | --- |
-| `~/.codex` | Existing ChatGPT login, settings symlinks, sessions, memory and plugins |
-| `~/.codex-azure` | Generated ordinary TOML files, shared rules/hooks, and independent Codex state |
-| `~/.codex-openai` | Generated ordinary TOML files, shared rules/hooks, API-only login and independent Codex state |
-
-`codex/config.toml` supplies common preferences and MCP settings. Existing
-`codex/azure_*.config.toml` files supply Azure model settings, while
-`codex/openai_*.config.toml` files supply OpenAI API model settings. Generation
-combines the selected provider's profiles with its saved connection. Azure gets
-`[model_providers.azure]` and reads `AZURE_OPENAI_API_KEY`. OpenAI uses the built-in
-`openai` provider, `openai_base_url`, and `forced_login_method = "api"`; it does not
-create a `[model_providers.openai]` table. See the official
-[advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced)
+The common preferences and MCP configuration come from `codex/config.toml`.
+`codex/profiles/*.config.toml` contain only `model` and
+`model_reasoning_effort`; `codex/env-profiles.json` declares the initial profile
+sets and defaults for generated environments. Provider, URL and authentication
+settings live in each environment's generated `config.toml`. Its default model
+and effort also work when launching Codex directly. Model profile files inherit
+that connection through Codex's official configuration layering; their names no
+longer need `azure_` or `openai_` prefixes. Available models still depend on the
+selected service and account. See the official
+[configuration](https://learn.chatgpt.com/docs/config-file/config-advanced#profiles)
 and [authentication](https://learn.chatgpt.com/docs/auth) documentation.
-Neither provider needs a definition in the shared `config.toml`.
-
-The initial defaults are `azure_gpt-6_1-sol_max` and `openai_gpt-6_1-sol_max`.
-Use `--provider openai --profile openai_gpt-6-luna_max` (or the Azure equivalents)
-to change the selected home's default. Later runs remember that choice.
-Both API homes use a file credential store within their own home. No ChatGPT credentials, sessions,
-memory, plugin cache, project trust or hook trust are copied. User skills remain
-available through the existing `~/.agents/skills` setup.
-
-After editing shared settings, model sources, rules or hooks, regenerate each
-API home you use with its `--provider` argument. Home-local runtime state and independent setting changes
-survive regeneration. Conflicting edits to the same setting stop generation before
-replacement; reconcile the reported setting and rerun. Replaced files are backed
-up under `.dotfiles-azure-backups/` or `.dotfiles-openai-backups/` inside the
-selected home. The adjacent `.dotfiles-azure.json` or `.dotfiles-openai.json`
-records the connection, default profile and previous source
-settings for synchronization; keep it with the generated files. It does not store
-the API key itself. Unmanaged files and symlinks are never replaced,
-and removing a source profile does not delete its existing generated file.
 
 ```sh
-codex-pick                                  # One picker for ChatGPT, Azure and OpenAI API
-codex-pick -q azure                         # Start the picker with a search query
-codex-pick -p azure_gpt-6_1-sol_max          # Azure home, no model picker
-codex-pick -p azure_gpt-6-luna_max -- --resume
-codex-pick -p openai_gpt-6_1-sol_max         # OpenAI API home, no model picker
-CODEX_HOME="$HOME/.codex-azure" codex        # Azure default model directly
-CODEX_HOME="$HOME/.codex-azure" claude       # Codex plugin in Claude Code
-CODEX_HOME="$HOME/.codex-openai" codex       # OpenAI API default model directly
-CODEX_HOME="$HOME/.codex-openai" claude      # Codex plugin using OpenAI API
+codex-pick                                         # Env and configuration in one picker
+codex-pick -q azure                                # Search includes the env column
+codex-pick --env azure                             # Choose a profile within this env
+codex-pick --env azure -p gpt-6_1-sol_max -- --resume
+codex-pick --env openai -p gpt-6_1-sol_max
+codex-pick --env account-b gpt-6-astra medium
+CODEX_HOME="$HOME/.codex-azure" codex                # Use this env's defaults directly
+CODEX_HOME="$HOME/.codex-envs/account-b" codex login # Log in to this subscription env
 ```
 
-Before using the OpenAI API home, sign in there once with your existing
-`OPENAI_API_KEY`, following the official CLI login flow:
+`--env` overrides an inherited `CODEX_HOME` only for the child process. Without
+`--env`, an explicit `CODEX_HOME` restricts the picker to that home. Catalog
+queries use the selected home too. Picker rows identify both env and profile;
+a profile name shared across homes requires `--env` or `CODEX_HOME` when passed
+directly. Explicit API profiles skip model-catalog queries. `jq` is required to
+read generated environment metadata; interactive selection additionally needs
+`fzf`.
+
+Before using an OpenAI API environment, save its API login through the official
+CLI, separately from the subscription environment:
 
 ```sh
 printenv OPENAI_API_KEY | CODEX_HOME="$HOME/.codex-openai" codex login --with-api-key
 ```
 
-Setup does not read or save the key. This explicit login stores it only in the
-OpenAI home. In PowerShell, use
-`$env:CODEX_HOME = "$HOME/.codex-openai"` and
-`$env:OPENAI_API_KEY | codex login --with-api-key`, then restore the previous
-`CODEX_HOME` value before using the subscription or another home.
+In PowerShell, temporarily select `$env:CODEX_HOME` for the desired home and pipe
+`$env:OPENAI_API_KEY` into `codex login --with-api-key`, then restore the previous
+`CODEX_HOME` value. Credentials, sessions, plugin caches, project trust and hook
+trust are not copied from other homes. User skills remain available through
+`~/.agents/skills`.
 
-`codex-pick` sets `CODEX_HOME` only for the launched process. An explicit
-`CODEX_HOME` restricts selection to that home; an explicit generated API home
-offers its profiles without loading the ChatGPT model catalog. Old dotfiles Azure
-profile links in the primary home resolve to the generated home, so existing
-`-p` commands continue to work. Generate each API home first; an incomplete home
-causes an error. Interactive selection requires `fzf`; ChatGPT model selection
-also uses `jq` and `codex debug models`.
+After editing shared settings, profile sources, rules or hooks, regenerate each
+named environment you use. `--profile gpt-6-luna_max` changes that environment's
+saved default. Independent local edits and runtime state survive refresh;
+conflicting edits stop before replacement. Previous managed files are backed
+up inside the selected home. `.dotfiles-env.json` records the env name, provider,
+connection, default profile and source baselines; keep it with the generated
+files. It contains no credential values. Unmanaged files and symlinks are never
+replaced, and removing a source profile does not delete its generated file.
 
-For [codex-plugin-cc v1.0.6](https://github.com/openai/codex-plugin-cc/blob/v1.0.6/plugins/codex/scripts/lib/app-server.mjs),
-the inherited home selects the default configuration for `codex app-server`.
+Existing Azure/OpenAI homes and their older metadata migrate on the next setup
+run. Their directory, credentials and history stay in place; old full profile
+files are retained, while neutral profile files are generated with local edits
+preserved or conflicts reported. Provider-prefixed names remain launcher aliases,
+for example `codex-pick -p azure_gpt-6_1-sol_max`; within an explicit env, a
+legacy prefix must agree with its provider. The old `--provider`-only setup,
+`--azure-base-url` and `--azure-api-version` forms also remain supported.
+Legacy source files under `codex/azure_*.config.toml` are retained for compatibility;
+new model changes belong under `codex/profiles/`.
+
+Codex and Claude environments are selected independently. For
+[codex-plugin-cc v1.0.6](https://github.com/openai/codex-plugin-cc/blob/v1.0.6/plugins/codex/scripts/lib/app-server.mjs),
+the inherited `CODEX_HOME` selects the default configuration for `codex app-server`:
+
+```sh
+CODEX_HOME="$HOME/.codex-azure" claude-pick --env account-b
+```
+
 Close Claude Code sessions using the plugin in that repository before switching
-homes: an existing broker can keep using its original home. Start Claude normally
-to return to the subscription environment. See the official
-[Codex configuration documentation](https://learn.chatgpt.com/docs/config-file/config-basic).
+Codex homes: an existing broker can retain its original home.
 
-### Claude Code profiles
+### Claude Code environments
 
 Run `./setup.sh links` on macOS/Linux, or `.\setup.ps1 links` on Windows.
 This installs `claude-pick` or `claude-pick.ps1` into `~/.local/bin`.
 The launchers use Bash and PowerShell 5.1+, respectively. Interactive selection
 requires `fzf`; explicit arguments do not. Windows requires native `claude.exe`
 and permission to create symbolic links. Use PowerShell 7+ with Developer Mode,
-or an appropriately privileged terminal for profile creation. Windows PowerShell
+or an appropriately privileged terminal for environment creation. Windows PowerShell
 5.1 needs the latter even with Developer Mode; see the
 [PowerShell issue](https://github.com/PowerShell/PowerShell/issues/5000).
 Normal launches do not require elevation. The existing status line still requires Node.js.
 
 ```sh
-claude-pick                                 # Choose profile, model, effort
-claude-pick --create acme                    # Initialize only; no login or launch
-claude-pick -p acme -- auth login            # Log in separately for this profile
-claude-pick -p acme                          # Launch with its configured defaults
-claude-pick -p acme opus high -- --resume
-claude-pick -p default                       # Use the existing ~/.claude
+claude-pick                                  # Choose env, model, effort
+claude-pick --create-env acme                 # Initialize only; no login or launch
+claude-pick --env acme -- auth login --claudeai # Log in separately for this env
+claude-pick --env acme                       # Launch with its configured defaults
+claude-pick --env acme opus high -- --resume
+claude-pick --env default                    # Use the existing ~/.claude
 ```
 
 In PowerShell, use `claude-pick.ps1` and quote the separator as `'--'` so
 [PowerShell preserves it](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing#the-end-of-parameters-token):
 
 ```powershell
-claude-pick.ps1 --create acme
-claude-pick.ps1 -p acme '--' auth login
-claude-pick.ps1 -p acme opus high '--' --resume
+claude-pick.ps1 --create-env acme
+claude-pick.ps1 --env acme '--' auth login
+claude-pick.ps1 --env acme opus high '--' --resume
 ```
 
 Before installing links, run `./tools/claude/claude-pick` or `.\tools\claude\claude-pick.ps1`.
 Open a new shell after updating: `claude` is now the original command, while
-`claude-pick -p default` supplies the common MCP config previously added by the
+`claude-pick --env default` supplies the common MCP config previously added by the
 Zsh wrapper. `claude-raw` remains available for compatibility.
 
-Profiles live in `~/.claude-profiles/<name>`. Names start with a lowercase letter
+Named environments keep their existing `~/.claude-profiles/<name>` storage.
+Names start with a lowercase letter
 and contain up to 64 lowercase letters, digits, `_`, or `-`; `default` and Windows
-device names are reserved. With no profiles, the picker offers `default` and
-creation. An unknown explicit name is an error. Cancelling selection never
-creates a profile or launches Claude, and creation never overwrites a profile.
+device names are reserved. With no environments, the picker offers `default` and
+creation. Legacy `-p`/`--profile` remain aliases for `--env`, and `--create` remains
+an alias for `--create-env`. An unknown explicit name is an error. Cancelling
+selection never creates an environment or launches Claude, and creation never
+overwrites an environment.
 
-An explicit profile alone skips model/effort selection. Supplying one of model
+An explicit environment alone skips model/effort selection. Supplying one of model
 or effort prompts for the other; use `keep` to retain Claude's configuration.
 Use `-m MODEL` and `-e EFFORT` or the positional form shown above. Effort options
 are `low`, `medium`, `high`, `xhigh`, and `max`; support depends on Claude's model
@@ -299,26 +314,29 @@ and version. A selected effort also overrides inherited `CLAUDE_CODE_EFFORT_LEVE
 for that child process. Arguments after `--` go to Claude unchanged, including
 its `-p`/`--print`. Auth and maintenance subcommands skip these selections.
 
-| Profile entry | Behavior |
+| Environment entry | Behavior |
 | --- | --- |
 | `settings.json` | Initial copy of `claude/profile-settings.json`; later edits are independent |
 | `rules/00-global.md`, `rules/10-claude.md` | Symlinks to the shared sources under `ai-rules/` |
-| `statusline.cjs` | Symlink to the shared renderer; shows the selected profile name |
-| `skills/` | Empty initially; `--create acme --skill NAME` links selected installed dotfiles skills |
-| `mcp.json` | Optional per-profile MCP config; explicit `--mcp-config` takes precedence |
+| `statusline.cjs` | Symlink to the shared renderer; shows the selected environment name |
+| `skills/` | Empty initially; `--create-env acme --skill NAME` links selected installed dotfiles skills |
+| `mcp.json` | Optional per-environment MCP config; explicit `--mcp-config` takes precedence |
 | Login, history, memory, plugins | Managed separately by Claude under the selected config directory |
 
 Existing `~/.claude/settings.json`, credentials, hooks, and plugins are not copied.
 In particular, the new template does not enable `claude-mem`, whose external data
 directory needs separate configuration if you choose to use it. Rules and status
 line updates follow dotfiles symlinks; settings-template changes affect only new
-profiles. There is no automatic settings synchronization or account migration.
+environments. There is no automatic settings synchronization or account migration.
 
-Named profiles refuse inherited auth/provider environment variables listed in
+Named environments refuse inherited auth/provider environment variables listed in
 `tools/claude/auth-env.txt`, reporting names only. Clear those variables in the
 calling shell before launching; `default` retains the existing environment.
-`CLAUDE_CONFIG_DIR` is set only for the child process. This separates Claude's
-user configuration and state, but is not an OS security boundary: project
+`CLAUDE_CONFIG_DIR` and the display label `CLAUDE_PICK_ENV` are set only for the
+child process; `CLAUDE_PICK_PROFILE` remains a compatibility label. An explicit
+`--env` overrides an inherited config directory. There is currently no separate
+named model-profile feature in this launcher; select model/effort directly.
+This separates Claude's user configuration and state, but is not an OS security boundary: project
 settings, managed policies, and external plugin stores still need consideration.
 See Claude's [environment variables](https://code.claude.com/docs/en/env-vars),
 [authentication precedence](https://code.claude.com/docs/en/authentication#authentication-precedence),

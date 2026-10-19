@@ -1,0 +1,20 @@
+{
+  "azure": {
+    "defaultProfile": "gpt-6_1-sol_max",
+    "profiles": [
+      "gpt-5_6-sol_xhigh",
+      "gpt-5_6-luna_max",
+      "gpt-6-astra_medium",
+      "gpt-6-luna_max",
+      "gpt-6_1-sol_max"
+    ]
+  },
+  "openai": {
+    "defaultProfile": "gpt-6_1-sol_max",
+    "profiles": ["gpt-6-luna_max", "gpt-6_1-sol_max"]
+  },
+  "chatgpt": {
+    "defaultProfile": "gpt-6_1-sol_max",
+    "profiles": ["gpt-6-astra_medium", "gpt-6-luna_max", "gpt-6_1-sol_max"]
+  }
+}

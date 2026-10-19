@@ -85,7 +85,7 @@ public class FakeClaude {
   public static int Main(string[] args) {
     using (var writer = new StreamWriter(Environment.GetEnvironmentVariable("PICK_LOG"))) {
       foreach (var value in new[] { Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR"),
-              Environment.GetEnvironmentVariable("CLAUDE_PICK_PROFILE"),
+              Environment.GetEnvironmentVariable("CLAUDE_PICK_ENV"),
               Environment.GetEnvironmentVariable("CLAUDE_CODE_EFFORT_LEVEL"), Directory.GetCurrentDirectory() })
         writer.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? "")));
       foreach (var value in args) writer.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(value)));
@@ -103,6 +103,8 @@ public class FakeClaude {
   Invoke-Case 'help and unknown-profile behavior' {
     Assert-True ((Invoke-Picker @('--help')).Code -eq 0) 'help failed'
     Assert-True ((Invoke-Picker @('-p', 'absent')).Code -eq 2) 'missing profile did not fail'
+    Assert-True ((Invoke-Picker @('--env', 'absent')).Code -eq 2) 'missing environment did not fail'
+    Assert-True ((Invoke-Picker @('--env', 'default', '-p', 'other')).Code -eq 2) 'conflicting environment aliases did not fail'
     Assert-True (-not (Test-Path -LiteralPath $TestLog)) 'Claude was launched'
   }
   Invoke-Case 'default launch preserves native argv, exit code, cwd and caller environment' {

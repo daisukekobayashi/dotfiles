@@ -28,7 +28,7 @@ try:
             if not chunk:
                 break
             output.extend(chunk)
-            if not sent_name and b"New profile name:" in output:
+            if not sent_name and (b"New environment name:" in output or b"New profile name:" in output):
                 os.write(terminal, (os.environ.get("PICK_TEST_NAME", "") + "\n").encode())
                 sent_name = True
     else:

@@ -45,6 +45,11 @@ setup_links() {
   link_file "${dotfiles_root}/codex/azure_gpt-6-astra_medium.config.toml" "${setup_home}/.codex/azure_gpt-6-astra_medium.config.toml" "${dry_run}"
   link_file "${dotfiles_root}/codex/azure_gpt-6-luna_max.config.toml" "${setup_home}/.codex/azure_gpt-6-luna_max.config.toml" "${dry_run}"
   link_file "${dotfiles_root}/codex/azure_gpt-6_1-sol_max.config.toml" "${setup_home}/.codex/azure_gpt-6_1-sol_max.config.toml" "${dry_run}"
+  local model_profile
+  for model_profile in "${dotfiles_root}/codex/profiles/"*.config.toml; do
+    [ -f "${model_profile}" ] || continue
+    link_file "${model_profile}" "${setup_home}/.codex/$(basename "${model_profile}")" "${dry_run}"
+  done
   link_file "${dotfiles_root}/codex/rules/user.rules" "${setup_home}/.codex/rules/user.rules" "${dry_run}"
 
   make_directory "${setup_home}/.gemini" "${dry_run}"

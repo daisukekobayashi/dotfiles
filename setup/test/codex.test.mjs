@@ -8,8 +8,8 @@ import { parse, stringify } from "smol-toml";
 
 const repo = path.resolve(import.meta.dirname, "../..");
 const runtime = path.join(repo, "setup/codex.js");
-const profile = "azure_gpt-6_1-sol_max";
-const openaiProfile = "openai_gpt-6_1-sol_max";
+const profile = "gpt-6_1-sol_max";
+const openaiProfile = profile;
 const baseUrl = "https://example.openai.azure.com/openai";
 const apiVersion = "2025-04-01-preview";
 
@@ -51,17 +51,11 @@ trust_level = "trusted"
 [hooks.state."main-source"]
 trusted_hash = "main-only-hash"
 `);
-  write(path.join(dotfiles, `codex/${profile}.config.toml`), `model = "gpt-6.1-sol"
-model_provider = "azure"
-model_reasoning_effort = "max"
-[projects."/profile-main-only"]
-trust_level = "trusted"
-[hooks.state."profile-main-source"]
-trusted_hash = "profile-main-only-hash"
-`);
-  write(path.join(dotfiles, "codex/azure_gpt-6-luna_max.config.toml"), 'model = "gpt-6-luna"\nmodel_provider = "azure"\nmodel_reasoning_effort = "max"\n');
-  write(path.join(dotfiles, `codex/${openaiProfile}.config.toml`), 'model = "gpt-6.1-sol"\nmodel_provider = "openai"\nmodel_reasoning_effort = "max"\n');
-  write(path.join(dotfiles, "codex/openai_gpt-6-luna_max.config.toml"), 'model = "gpt-6-luna"\nmodel_provider = "openai"\nmodel_reasoning_effort = "max"\n');
+  write(path.join(dotfiles, `codex/profiles/${profile}.config.toml`), 'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\n');
+  write(path.join(dotfiles, "codex/profiles/gpt-6-luna_max.config.toml"), 'model = "gpt-6-luna"\nmodel_reasoning_effort = "max"\n');
+  write(path.join(dotfiles, "codex/env-profiles.json"), JSON.stringify(Object.fromEntries(["azure", "openai", "chatgpt"].map(kind => [kind, {
+    defaultProfile: profile, profiles: [profile, "gpt-6-luna_max"],
+  }]))));
   write(path.join(dotfiles, "codex/hooks.json"), '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"example cleanup"}]}]}}\n');
   write(path.join(dotfiles, "codex/rules/user.rules"), 'prefix_rule(pattern=["git", "status"], decision="allow")\n');
   write(path.join(dotfiles, "ai-rules/base/global.md"), "# Shared rules\n\nKeep changes focused.\n");
@@ -88,8 +82,8 @@ function success(result) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
 }
 
-function managedSnapshot(home, kind = "azure") {
-  const markerName = `.dotfiles-${kind}.json`;
+function managedSnapshot(home) {
+  const markerName = ".dotfiles-env.json";
   const marker = fs.readFileSync(path.join(home, markerName), "utf8");
   return Object.fromEntries([markerName, ...Object.keys(JSON.parse(marker).files)]
     .map(name => [name, fs.readFileSync(path.join(home, name), "utf8")]));
@@ -99,8 +93,9 @@ test("generates Azure defaults, all profiles and shared assets without altering 
   const f = fixture(t);
   const original = fs.readFileSync(f.source, "utf8");
   success(f.initialize());
-  for (const name of ["config.toml", `${profile}.config.toml`, "azure_gpt-6-luna_max.config.toml"]) {
-    const config = f.config(name);
+  for (const name of ["config.toml", `${profile}.config.toml`, "gpt-6-luna_max.config.toml"]) {
+    const config = { ...f.config(), ...f.config(name) };
+    if (name !== "config.toml") assert.deepEqual(Object.keys(f.config(name)).sort(), ["model", "model_reasoning_effort"]);
     assert.equal(config.model_provider, "azure");
     assert.equal(config.cli_auth_credentials_store, "file");
     assert.equal(config.model_providers.azure.env_key, "AZURE_OPENAI_API_KEY");
@@ -119,7 +114,7 @@ test("generates Azure defaults, all profiles and shared assets without altering 
     assert.equal(fs.lstatSync(path.join(f.azure, name)).isSymbolicLink(), false);
   }
   assert.equal(f.config().model, "gpt-6.1-sol");
-  assert.equal(f.config("azure_gpt-6-luna_max.config.toml").model, "gpt-6-luna");
+  assert.equal(f.config("gpt-6-luna_max.config.toml").model, "gpt-6-luna");
   for (const name of ["hooks.json", "rules/user.rules"]) {
     assert.equal(fs.readFileSync(path.join(f.azure, name), "utf8"), fs.readFileSync(path.join(f.dotfiles, "codex", name), "utf8"));
   }
@@ -193,16 +188,17 @@ test("runtime additions in a generated model profile survive synchronization", t
   fs.writeFileSync(path.join(f.azure, name), stringify(config));
   f.updateSource(value => { value.model_reasoning_summary = "detailed"; });
   success(f.run());
-  assert.equal(f.config(name).model_reasoning_summary, "detailed");
+  assert.equal(f.config().model_reasoning_summary, "detailed");
+  assert.equal(f.config(name).model_reasoning_summary, undefined);
   assert.equal(f.config(name).hooks.state.local.trusted_hash, "local");
 });
 
 test("conflicting shared and local edits stop before any managed file changes", t => {
   const f = fixture(t);
   success(f.initialize());
-  const config = f.config(`${profile}.config.toml`);
+  const config = f.config();
   config.sandbox_mode = "danger-full-access";
-  fs.writeFileSync(path.join(f.azure, `${profile}.config.toml`), stringify(config));
+  fs.writeFileSync(path.join(f.azure, "config.toml"), stringify(config));
   const before = managedSnapshot(f.azure);
   f.updateSource(value => { value.sandbox_mode = "read-only"; });
   const result = f.run();
@@ -228,7 +224,7 @@ test("provider or credential-store changes cannot silently reroute the generated
 
 test("a chosen Azure default persists on later generation without flags", t => {
   const f = fixture(t);
-  success(f.initialize(["--profile", "azure_gpt-6-luna_max"]));
+  success(f.initialize(["--profile", "gpt-6-luna_max"]));
   assert.equal(f.config().model, "gpt-6-luna");
   success(f.run());
   assert.equal(f.config().model, "gpt-6-luna");
@@ -257,7 +253,7 @@ test("symlinked homes, managed files and rule directories are rejected", t => {
     const result = f.initialize();
     assert.equal(result.status, 1);
     assert.match(result.stderr, /symlink/);
-    assert.equal(fs.existsSync(path.join(f.azure, ".dotfiles-azure.json")), false);
+    assert.equal(fs.existsSync(path.join(f.azure, ".dotfiles-env.json")), false);
   }
 });
 
@@ -293,7 +289,7 @@ test("failed replacement rolls back artifacts and the saved connection, then per
   assert.match(result.stderr, /injected replacement failure/);
   assert.deepEqual(managedSnapshot(f.azure), before);
   assert.equal(fs.readdirSync(f.azure).some(name => name.startsWith(".dotfiles-azure-stage-")), false);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(f.azure, ".dotfiles-azure.json"), "utf8")).azureProvider.base_url, baseUrl);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.azure, ".dotfiles-env.json"), "utf8")).azureProvider.base_url, baseUrl);
   success(f.run(["--azure-base-url", "https://replacement.example/openai"]));
   assert.equal(f.config().sandbox_mode, "read-only");
   assert.equal(f.config().model_providers.azure.base_url, "https://replacement.example/openai");
@@ -329,9 +325,9 @@ test("first generation requires a URL even when shared config still defines Azur
 test("saved URL and API version survive a new process and shared settings updates", t => {
   const f = fixture(t);
   success(f.initialize());
-  const markerFile = path.join(f.azure, ".dotfiles-azure.json");
+  const markerFile = path.join(f.azure, ".dotfiles-env.json");
   const metadata = JSON.parse(fs.readFileSync(markerFile, "utf8"));
-  assert.equal(metadata.version, 2);
+  assert.equal(metadata.version, 3);
   assert.equal(metadata.azureProvider.base_url, baseUrl);
   assert.equal(metadata.azureProvider.query_params["api-version"], apiVersion);
   assert.equal(metadata.azureProvider.env_key, "AZURE_OPENAI_API_KEY");
@@ -349,9 +345,9 @@ test("URL and API version updates reach every profile and persist without flags"
   const newVersion = "2025-03-01-preview";
   success(f.run(["--azure-base-url", newUrl, "--azure-api-version", newVersion]));
   success(f.run());
-  const files = Object.keys(JSON.parse(fs.readFileSync(path.join(f.azure, ".dotfiles-azure.json"), "utf8")).files);
+  const files = Object.keys(JSON.parse(fs.readFileSync(path.join(f.azure, ".dotfiles-env.json"), "utf8")).files);
   for (const name of files.filter(name => name.endsWith(".toml"))) {
-    const provider = f.config(name).model_providers.azure;
+    const provider = { ...f.config(), ...f.config(name) }.model_providers.azure;
     assert.equal(provider.base_url, newUrl);
     assert.equal(provider.query_params["api-version"], newVersion);
   }
@@ -361,40 +357,100 @@ test("URL and API version updates reach every profile and persist without flags"
   assert.equal(f.config().model_providers.azure.base_url, newUrl);
 });
 
-test("version 1 metadata migrates its provider while retaining local runtime state", t => {
-  const f = fixture(t);
-  success(f.initialize());
-  const markerFile = path.join(f.azure, ".dotfiles-azure.json");
-  const metadata = JSON.parse(fs.readFileSync(markerFile, "utf8"));
-  // Simulate the old format, including an additional provider setting.
-  metadata.version = 1;
-  delete metadata.azureProvider;
-  for (const name of Object.keys(metadata.files).filter(name => name.endsWith(".toml"))) {
-    const value = f.config(name);
-    value.model_providers.azure.request_max_retries = 4;
-    const text = stringify(value);
-    metadata.files[name] = text;
-    fs.writeFileSync(path.join(f.azure, name), text);
+test("legacy metadata and full profiles migrate without losing local state", t => {
+  for (const version of [1, 2]) {
+    const f = fixture(t);
+    success(f.initialize());
+    const markerFile = path.join(f.azure, ".dotfiles-env.json");
+    const current = JSON.parse(fs.readFileSync(markerFile, "utf8"));
+    const base = f.config();
+    base.model_providers.azure.request_max_retries = 4;
+    const metadata = { version, defaultProfile: `azure_${profile}`, files: {} };
+    if (version === 2) metadata.azureProvider = base.model_providers.azure;
+    for (const [name, text] of Object.entries(current.files)) {
+      if (name.endsWith(".config.toml")) {
+        const oldName = `azure_${name}`;
+        const contents = stringify({ ...base, ...f.config(name) });
+        metadata.files[oldName] = contents;
+        f.write(path.join(f.azure, oldName), contents);
+        fs.unlinkSync(path.join(f.azure, name));
+      } else {
+        metadata.files[name] = name === "config.toml" ? stringify(base) : text;
+        f.write(path.join(f.azure, name), metadata.files[name]);
+      }
+    }
+    fs.unlinkSync(markerFile);
+    const legacyMarker = path.join(f.azure, ".dotfiles-azure.json");
+    f.write(legacyMarker, JSON.stringify(metadata));
+    const local = parse(metadata.files["config.toml"]);
+    local.projects = { "/azure-only": { trust_level: "trusted" } };
+    f.write(path.join(f.azure, "config.toml"), "# Local comment\n" + stringify(local));
+    const oldProfileName = `azure_${profile}.config.toml`;
+    const oldProfile = parse(metadata.files[oldProfileName]);
+    oldProfile.hooks = { state: { local: { trusted_hash: "preserve-local" } } };
+    oldProfile.tui.screen_reader_detection_done = true;
+    oldProfile.tui.model_availability_nux = { "gpt-6.1-sol": 4 };
+    let originalProfile = stringify(oldProfile);
+    f.write(path.join(f.azure, oldProfileName), originalProfile);
+    f.write(path.join(f.azure, "auth.json"), "local-auth-placeholder");
+    f.write(path.join(f.azure, "sessions/local.jsonl"), "local-session");
+    success(f.run(["--dry-run"]));
+    assert.equal(fs.existsSync(markerFile), false);
+    assert.equal(fs.readFileSync(path.join(f.azure, oldProfileName), "utf8"), originalProfile);
+    if (version === 2) {
+      const failure = spawnSync(process.execPath, ["-e", `
+        const fs = require('node:fs');
+        const rename = fs.renameSync;
+        let count = 0;
+        fs.renameSync = (from, to) => {
+          if (from.endsWith('.new') && ++count === 2) throw new Error('injected migration failure');
+          return rename(from, to);
+        };
+        require(${JSON.stringify(runtime)}).main([]);
+      `], { env: f.env, encoding: "utf8" });
+      assert.equal(failure.status, 1);
+      assert.match(failure.stderr, /injected migration failure/);
+      assert.equal(fs.existsSync(markerFile), false);
+      assert.equal(fs.existsSync(path.join(f.azure, `${profile}.config.toml`)), false);
+      assert.equal(fs.readFileSync(path.join(f.azure, oldProfileName), "utf8"), originalProfile);
+      const racingSave = spawnSync(process.execPath, ["-e", `
+        const fs = require('node:fs');
+        const write = fs.writeFileSync;
+        let changed = false;
+        fs.writeFileSync = (file, ...args) => {
+          const result = write(file, ...args);
+          if (!changed && String(file).endsWith('.new')) {
+            changed = true;
+            fs.appendFileSync(${JSON.stringify(path.join(f.azure, oldProfileName))}, '\\n# Concurrent runtime save\\n');
+          }
+          return result;
+        };
+        require(${JSON.stringify(runtime)}).main([]);
+      `], { env: f.env, encoding: "utf8" });
+      assert.equal(racingSave.status, 1);
+      assert.match(racingSave.stderr, /Migration source changed/);
+      assert.equal(fs.existsSync(markerFile), false);
+      assert.equal(fs.existsSync(path.join(f.azure, `${profile}.config.toml`)), false);
+      originalProfile += "\n# Concurrent runtime save\n";
+      assert.equal(fs.readFileSync(path.join(f.azure, oldProfileName), "utf8"), originalProfile);
+    }
+    success(f.run());
+    const migrated = JSON.parse(fs.readFileSync(markerFile, "utf8"));
+    assert.equal(migrated.version, 3);
+    assert.equal(migrated.env, "azure");
+    assert.equal(migrated.defaultProfile, profile);
+    assert.equal(migrated.azureProvider.base_url, baseUrl);
+    assert.equal(migrated.azureProvider.request_max_retries, 4);
+    assert.equal(f.config().projects["/azure-only"].trust_level, "trusted");
+    assert.equal(f.config(`${profile}.config.toml`).hooks.state.local.trusted_hash, "preserve-local");
+    assert.equal(f.config(`${profile}.config.toml`).tui.screen_reader_detection_done, true);
+    assert.equal(f.config(`${profile}.config.toml`).tui.model_availability_nux["gpt-6.1-sol"], 4);
+    assert.equal(f.config(`${profile}.config.toml`).model_provider, undefined);
+    assert.equal(fs.readFileSync(path.join(f.azure, oldProfileName), "utf8"), originalProfile);
+    assert.equal(fs.readFileSync(path.join(f.azure, "auth.json"), "utf8"), "local-auth-placeholder");
+    assert.equal(fs.readFileSync(path.join(f.azure, "sessions/local.jsonl"), "utf8"), "local-session");
+    success(f.run());
   }
-  fs.writeFileSync(markerFile, JSON.stringify(metadata, null, 2) + "\n");
-  const local = f.config();
-  local.projects = { "/azure-only": { trust_level: "trusted" } };
-  fs.writeFileSync(path.join(f.azure, "config.toml"), "# Local comment\n" + stringify(local));
-  const before = managedSnapshot(f.azure);
-  const preview = f.run(["--dry-run"]);
-  success(preview);
-  assert.deepEqual(managedSnapshot(f.azure), before);
-  success(f.run());
-  const migrated = JSON.parse(fs.readFileSync(markerFile, "utf8"));
-  assert.equal(migrated.version, 2);
-  assert.equal(migrated.azureProvider.base_url, baseUrl);
-  assert.equal(migrated.azureProvider.query_params["api-version"], apiVersion);
-  assert.equal(migrated.azureProvider.request_max_retries, 4);
-  assert.equal(f.config().projects["/azure-only"].trust_level, "trusted");
-  for (const [name, contents] of Object.entries(before)) {
-    if (name !== ".dotfiles-azure.json") assert.equal(fs.readFileSync(path.join(f.azure, name), "utf8"), contents);
-  }
-  success(f.run());
 });
 
 test("a conflicting local endpoint stops before overwriting the saved connection or profiles", t => {
@@ -448,8 +504,9 @@ test("OpenAI generates API-only built-in profiles and leaves the subscription an
   });
   const mainBefore = fs.readFileSync(f.source, "utf8");
   success(f.initializeOpenAI([], { OPENAI_API_KEY: "openai-test-placeholder" }));
-  for (const name of ["config.toml", `${openaiProfile}.config.toml`, "openai_gpt-6-luna_max.config.toml"]) {
-    const value = f.openaiConfig(name);
+  for (const name of ["config.toml", `${openaiProfile}.config.toml`, "gpt-6-luna_max.config.toml"]) {
+    const value = { ...f.openaiConfig(), ...f.openaiConfig(name) };
+    if (name !== "config.toml") assert.deepEqual(Object.keys(f.openaiConfig(name)).sort(), ["model", "model_reasoning_effort"]);
     assert.equal(value.model_provider, "openai");
     assert.equal(value.forced_login_method, "api");
     assert.equal(value.cli_auth_credentials_store, "file");
@@ -462,11 +519,11 @@ test("OpenAI generates API-only built-in profiles and leaves the subscription an
     assert.equal(fs.lstatSync(path.join(f.openai, name)).isSymbolicLink(), false);
   }
   assert.equal(f.openaiConfig().model, "gpt-6.1-sol");
-  assert.equal(f.openaiConfig("openai_gpt-6-luna_max.config.toml").model, "gpt-6-luna");
+  assert.equal(f.openaiConfig("gpt-6-luna_max.config.toml").model, "gpt-6-luna");
   for (const name of ["hooks.json", "rules/user.rules", "AGENTS.md"]) {
     assert.equal(fs.readFileSync(path.join(f.openai, name), "utf8"), fs.readFileSync(path.join(f.azure, name), "utf8"));
   }
-  for (const name of ["auth.json", "sessions", "plugins", "memories", "skills", `${profile}.config.toml`]) assert.equal(fs.existsSync(path.join(f.openai, name)), false);
+  for (const name of ["auth.json", "sessions", "plugins", "memories", "skills", "azure_gpt-6_1-sol_max.config.toml"]) assert.equal(fs.existsSync(path.join(f.openai, name)), false);
   assert.deepEqual(managedSnapshot(f.azure), azureBefore);
   assert.equal(fs.readFileSync(f.source, "utf8"), mainBefore);
   assert.equal(fs.readFileSync(path.join(f.home, ".codex/auth.json"), "utf8"), '{"auth_mode":"chatgpt"}\n');
@@ -475,7 +532,7 @@ test("OpenAI generates API-only built-in profiles and leaves the subscription an
 
 test("OpenAI remembers its URL and chosen profile across processes and shared updates", t => {
   const f = fixture(t);
-  success(f.initializeOpenAI(["--base-url", "https://gateway.example/v1", "--profile", "openai_gpt-6-luna_max"]));
+  success(f.initializeOpenAI(["--base-url", "https://gateway.example/v1", "--profile", "gpt-6-luna_max"]));
   const local = f.openaiConfig();
   local.projects = { "/openai-only": { trust_level: "trusted" } };
   local.model_reasoning_effort = "high";
@@ -494,15 +551,15 @@ test("OpenAI remembers its URL and chosen profile across processes and shared up
   assert.equal(fs.readFileSync(path.join(f.openai, "sessions/local.jsonl"), "utf8"), "openai-session\n");
   success(f.initializeOpenAI(["--base-url", "https://replacement.example/v1"]));
   success(f.initializeOpenAI());
-  for (const name of ["config.toml", `${openaiProfile}.config.toml`, "openai_gpt-6-luna_max.config.toml"]) {
-    assert.equal(f.openaiConfig(name).openai_base_url, "https://replacement.example/v1");
+  for (const name of ["config.toml", `${openaiProfile}.config.toml`, "gpt-6-luna_max.config.toml"]) {
+    assert.equal({ ...f.openaiConfig(), ...f.openaiConfig(name) }.openai_base_url, "https://replacement.example/v1");
   }
   const before = managedSnapshot(f.openai, "openai");
   success(f.initializeOpenAI());
   assert.deepEqual(managedSnapshot(f.openai, "openai"), before);
-  const marker = JSON.parse(fs.readFileSync(path.join(f.openai, ".dotfiles-openai.json"), "utf8"));
+  const marker = JSON.parse(fs.readFileSync(path.join(f.openai, ".dotfiles-env.json"), "utf8"));
   assert.equal(marker.openaiProvider.base_url, "https://replacement.example/v1");
-  assert.equal(marker.defaultProfile, "openai_gpt-6-luna_max");
+  assert.equal(marker.defaultProfile, "gpt-6-luna_max");
 });
 
 test("OpenAI refuses local changes that weaken API-only credential isolation", t => {
@@ -545,7 +602,7 @@ test("OpenAI preserves unmanaged files and refuses symlinked homes and managed t
     const result = f.initializeOpenAI();
     assert.equal(result.status, 1);
     assert.match(result.stderr, /unmanaged file|symlink/);
-    assert.equal(fs.existsSync(path.join(f.openai, ".dotfiles-openai.json")), false);
+    assert.equal(fs.existsSync(path.join(f.openai, ".dotfiles-env.json")), false);
     if (target === "unmanaged") assert.equal(fs.readFileSync(path.join(f.openai, "hooks.json"), "utf8"), "user-owned\n");
   }
 });
@@ -582,7 +639,7 @@ test("OpenAI endpoint conflicts and a failed replacement preserve all generated 
 
 test("provider-specific arguments and unsafe OpenAI URLs fail without writing files or echoing values", t => {
   const f = fixture(t);
-  for (const args of [["--provider", "unknown"], ["--provider"], ["--base-url"], ["--api-version"], ["--provider", "openai", "--api-version", "none"], ["--azure-base-url", baseUrl, "--provider", "openai"], ["--provider", "openai", "--profile", profile]]) {
+  for (const args of [["--provider", "unknown"], ["--provider"], ["--base-url"], ["--api-version"], ["--provider", "openai", "--api-version", "none"], ["--azure-base-url", baseUrl, "--provider", "openai"], ["--provider", "openai", "--profile", `azure_${profile}`]]) {
     const result = f.run(args);
     assert.equal(result.status, 1);
     assert.equal(fs.existsSync(f.openai), false);
@@ -605,4 +662,147 @@ test("Azure accepts the generic connection arguments and retains compatibility w
   success(f.run(["--azure-api-version", "none"]));
   assert.equal(f.config().model_providers.azure.query_params, undefined);
   assert.equal(fs.existsSync(f.openai), false);
+});
+
+test("arbitrary environments retain separate endpoints keys defaults and state for the same provider", t => {
+  const f = fixture(t);
+  const first = path.join(f.home, ".codex-envs/lab-a");
+  const second = path.join(f.home, ".codex-envs/lab-b");
+  success(f.run(["--env", "lab-a", "--provider", "azure", "--base-url", baseUrl, "--api-key-env", "LAB_A_AZURE_KEY"]));
+  success(f.run(["--env", "lab-b", "--provider", "azure", "--base-url", "https://second.example/openai/v1", "--api-key-env", "LAB_B_AZURE_KEY", "--profile", "gpt-6-luna_max"]));
+  f.write(path.join(first, "auth.json"), "lab-a-auth-placeholder");
+  f.write(path.join(first, "sessions/local.jsonl"), "lab-a-session");
+  const config = home => parse(fs.readFileSync(path.join(home, "config.toml"), "utf8"));
+  const before = managedSnapshot(second);
+  f.updateSource(value => { value.sandbox_mode = "read-only"; });
+  success(f.run(["--env", "lab-a"]));
+  assert.equal(config(first).model_providers.azure.base_url, baseUrl);
+  assert.equal(config(first).model_providers.azure.env_key, "LAB_A_AZURE_KEY");
+  assert.equal(config(first).model, "gpt-6.1-sol");
+  assert.equal(config(first).sandbox_mode, "read-only");
+  assert.deepEqual(managedSnapshot(second), before);
+  success(f.run(["--env", "lab-b"]));
+  assert.equal(config(second).model_providers.azure.base_url, "https://second.example/openai/v1");
+  assert.equal(config(second).model_providers.azure.env_key, "LAB_B_AZURE_KEY");
+  assert.equal(config(second).model, "gpt-6-luna");
+  assert.equal(fs.readFileSync(path.join(first, "auth.json"), "utf8"), "lab-a-auth-placeholder");
+  assert.equal(fs.readFileSync(path.join(first, "sessions/local.jsonl"), "utf8"), "lab-a-session");
+  assert.equal(fs.existsSync(path.join(second, "auth.json")), false);
+  const rejected = f.run(["--env", "lab-a", "--provider", "openai"]);
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /provider cannot be changed/);
+});
+
+test("fresh subscription environments isolate login and strip main-home state and API routing", t => {
+  const f = fixture(t);
+  f.updateSource(value => {
+    value.model_provider = "azure";
+    value.model_providers = { azure: { base_url: baseUrl } };
+    value.openai_base_url = "https://api.example/v1";
+  });
+  const before = fs.readFileSync(f.source, "utf8");
+  success(f.run(["--env", "account-b", "--provider", "chatgpt"]));
+  const home = path.join(f.home, ".codex-envs/account-b");
+  const config = parse(fs.readFileSync(path.join(home, "config.toml"), "utf8"));
+  assert.equal(config.model_provider, "openai");
+  assert.equal(config.forced_login_method, "chatgpt");
+  assert.equal(config.cli_auth_credentials_store, "file");
+  for (const key of ["model_providers", "openai_base_url", "forced_chatgpt_workspace_id", "projects", "hooks", "log_dir", "sqlite_home"]) assert.equal(config[key], undefined);
+  assert.equal(config.tui.model_availability_nux, undefined);
+  for (const name of ["auth.json", "sessions", "plugins", "memories"]) assert.equal(fs.existsSync(path.join(home, name)), false);
+  assert.equal(fs.readFileSync(f.source, "utf8"), before);
+  f.write(path.join(home, "auth.json"), "account-b-placeholder");
+  success(f.run(["--env", "account-b"]));
+  assert.equal(fs.readFileSync(path.join(home, "auth.json"), "utf8"), "account-b-placeholder");
+});
+
+test("env validation dry-run and model-profile restrictions stop before modifying user homes", t => {
+  const f = fixture(t);
+  const home = path.join(f.home, ".codex-envs/preview");
+  success(f.run(["--env", "preview", "--provider", "openai", "--dry-run"]));
+  assert.equal(fs.existsSync(home), false);
+  for (const args of [["--env", "../outside", "--provider", "openai"], ["--env", "default", "--provider", "chatgpt"], ["--env", "new-name"], ["--env", "preview", "--provider", "chatgpt", "--base-url", baseUrl], ["--env", "preview", "--provider", "azure", "--base-url", baseUrl, "--api-key-env", "not-a-variable=do-not-echo"]]) {
+    const result = f.run(args);
+    assert.equal(result.status, 1);
+    assert.doesNotMatch(result.stderr, /do-not-echo/);
+    assert.equal(fs.existsSync(home), false);
+  }
+  f.write(path.join(f.dotfiles, `codex/profiles/${profile}.config.toml`), 'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "max"\nmodel_provider = "azure"\n');
+  const invalidProfile = f.initializeOpenAI();
+  assert.equal(invalidProfile.status, 1);
+  assert.match(invalidProfile.stderr, /only model and effort/);
+  assert.equal(fs.existsSync(f.openai), false);
+});
+
+test("a model profile cannot override the environment's provider or credential storage", t => {
+  const f = fixture(t);
+  success(f.initialize());
+  const name = `${profile}.config.toml`;
+  const config = f.config(name);
+  config.model_provider = "openai";
+  f.write(path.join(f.azure, name), stringify(config));
+  const before = managedSnapshot(f.azure);
+  const result = f.run();
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /isolation cannot be overridden/);
+  assert.deepEqual(managedSnapshot(f.azure), before);
+});
+
+test("a symlinked environment root cannot redirect generation outside the chosen user home", t => {
+  const f = fixture(t);
+  const target = path.join(f.root, "outside");
+  fs.mkdirSync(target);
+  fs.symlinkSync(target, path.join(f.home, ".codex-envs"));
+  const result = f.run(["--env", "account-b", "--provider", "chatgpt"]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /symlink/);
+  assert.deepEqual(fs.readdirSync(target), []);
+});
+
+test("generated environments launch neutral profiles through the real picker interface", { skip: process.platform === "win32" }, t => {
+  const f = fixture(t);
+  success(f.initialize());
+  success(f.initializeOpenAI());
+  const bin = path.join(f.root, "bin");
+  const log = path.join(f.root, "launch.txt");
+  const executable = path.join(bin, "codex");
+  f.write(executable, '#!/bin/sh\nprintf "%s\\n" "$CODEX_HOME" > "$LAUNCH_LOG"\nprintf "<%s>" "$@" >> "$LAUNCH_LOG"\n');
+  fs.chmodSync(executable, 0o700);
+  for (const [envName, home] of [["azure", f.azure], ["openai", f.openai]]) {
+    const launched = spawnSync("bash", [path.join(repo, "tools/codex/codex-pick"), "--env", envName, "--profile", profile, "--", "--resume", "two words", ""], {
+      env: { ...f.env, HOME: f.home, CODEX_HOME: path.join(f.home, ".codex"), PATH: `${bin}${path.delimiter}${process.env.PATH}`, LAUNCH_LOG: log },
+      encoding: "utf8",
+    });
+    success(launched);
+    assert.equal(fs.readFileSync(log, "utf8"), `${home}\n<--profile><${profile}><--resume><two words><>`);
+  }
+});
+
+test("legacy OpenAI API metadata migrates to model-only profiles with the same saved login and route", t => {
+  const f = fixture(t);
+  success(f.initializeOpenAI(["--base-url", "https://saved.example/v1"]));
+  const marker = path.join(f.openai, ".dotfiles-env.json");
+  const metadata = JSON.parse(fs.readFileSync(marker, "utf8"));
+  const base = f.openaiConfig();
+  const files = {};
+  for (const [name, text] of Object.entries(metadata.files)) {
+    if (name.endsWith(".config.toml")) {
+      const oldName = `openai_${name}`;
+      files[oldName] = stringify({ ...base, ...f.openaiConfig(name) });
+      f.write(path.join(f.openai, oldName), files[oldName]);
+      fs.unlinkSync(path.join(f.openai, name));
+    } else files[name] = text;
+  }
+  const legacy = { version: 2, defaultProfile: `openai_${profile}`, openaiProvider: metadata.openaiProvider, files };
+  f.write(path.join(f.openai, ".dotfiles-openai.json"), JSON.stringify(legacy));
+  fs.unlinkSync(marker);
+  f.write(path.join(f.openai, "auth.json"), "existing-api-login-placeholder");
+  success(f.initializeOpenAI());
+  assert.deepEqual(Object.keys(f.openaiConfig(`${profile}.config.toml`)).sort(), ["model", "model_reasoning_effort"]);
+  assert.equal(f.openaiConfig().openai_base_url, "https://saved.example/v1");
+  assert.equal(f.openaiConfig().forced_login_method, "api");
+  assert.equal(fs.readFileSync(path.join(f.openai, "auth.json"), "utf8"), "existing-api-login-placeholder");
+  assert.equal(fs.readFileSync(path.join(f.openai, `openai_${profile}.config.toml`), "utf8"), files[`openai_${profile}.config.toml`]);
+  assert.equal(JSON.parse(fs.readFileSync(marker, "utf8")).defaultProfile, profile);
+  success(f.initializeOpenAI());
 });
