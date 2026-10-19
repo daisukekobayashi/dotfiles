@@ -166,8 +166,9 @@ Include:
 
 - `find-skills`
 - `frontend-design`, `webapp-testing`, and `web-design-guidelines` for UI creation, testing, and review
+- `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
-- repository onboarding, `review-change`, `adversarial-review`, and runtime isolation local skills
+- `repo-execution-context`, `review-change`, `adversarial-review`, and runtime isolation local skills
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
@@ -373,7 +374,8 @@ Browser automation and debugging skills:
 - `agent-browser`
 - `browser-use`
 - `chrome-devtools`
-- `playwright-cli`
+
+`playwright-cli` is included in `base`. Use `base,browser` to combine it with these tools.
 
 ### `data`
 
@@ -390,9 +392,7 @@ Research-specific skills:
 
 ### `docs`
 
-Documentation lookup and library documentation skills:
-
-- `context7-cli`
+Reserved profile with no skills of its own. The profile name remains available for existing selections and includes; `context7-cli` is included in `base`.
 
 ## CLI Behavior
 

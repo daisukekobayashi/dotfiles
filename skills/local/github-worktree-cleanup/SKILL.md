@@ -27,6 +27,6 @@ description: Use when the user says the work is already merged or otherwise comp
 - Treat cleanup as destructive and require explicit confirmation.
 - Never delete an unmerged branch.
 - Never remove a remote branch unless the user explicitly asks.
-- This skill removes only the local branch, the local worktree, and the worktree's confirmed Compose stacks.
+- This skill cleans up only the local branch, the local worktree, and confirmed runtime resources covered by `../worktree-runtime-cleanup/SKILL.md`.
 - Never assume the current branch is disposable just because the prompt says "merged."
 - If git refuses removal because the worktree is busy or dirty, stop and report the exact blocker.

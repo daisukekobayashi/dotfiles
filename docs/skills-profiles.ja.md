@@ -166,8 +166,9 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 
 - `find-skills`
 - UI 作成・テスト・レビュー用の `frontend-design`、`webapp-testing`、`web-design-guidelines`
+- ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
-- repository onboarding、`review-change`、`adversarial-review`、runtime isolation の local skill
+- `repo-execution-context`、`review-change`、`adversarial-review`、runtime isolation の local skill
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
@@ -367,7 +368,8 @@ Browser automation/debugging 系:
 - `agent-browser`
 - `browser-use`
 - `chrome-devtools`
-- `playwright-cli`
+
+`playwright-cli` は `base` に含めます。これらのツールと併用する場合は `base,browser` を指定します。
 
 ### `data`
 
@@ -384,9 +386,7 @@ Research 固有の skill:
 
 ### `docs`
 
-Documentation lookup や library docs 参照系:
-
-- `context7-cli`
+現在は固有の skill を持たない予約 profile です。既存の指定や includes との互換性のため、profile 名は維持します。`context7-cli` は `base` に含めます。
 
 ## CLI Behavior
 

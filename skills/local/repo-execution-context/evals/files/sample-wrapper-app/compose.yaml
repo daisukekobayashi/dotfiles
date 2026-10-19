@@ -1,0 +1,8 @@
+services:
+  checks:
+    image: python:3.12-slim
+    profiles: [test]
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: python3 -m unittest discover

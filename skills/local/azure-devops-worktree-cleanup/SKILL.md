@@ -7,9 +7,9 @@ description: Use when the user says Azure DevOps work is already merged or compl
 
 ## Scope
 
-Clean up only local branch, local worktree, and the worktree's confirmed Compose
-stacks after Azure DevOps work is complete. This skill does not remove remote
-branches.
+Clean up only the local branch, local worktree, and confirmed runtime resources
+covered by `../worktree-runtime-cleanup/SKILL.md` after Azure DevOps work is
+complete. This skill does not remove remote branches.
 
 Read `../azure-devops-common/references/context.md` before checking PR status.
 

@@ -37,11 +37,12 @@ const baseLocalSkills = [
   "adversarial-review",
   "design-preflight",
   "design-preflight-with-docs",
-  "execution-context-first-repo-onboarding",
+  "repo-execution-context",
   "find-unknowns",
   "learning-partner",
   "local-runtime-port-isolation",
   "review-change",
+  "worktree-runtime-cleanup",
   "writing-partner",
 ];
 const beadsLocalSkills = [

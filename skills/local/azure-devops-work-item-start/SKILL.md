@@ -65,7 +65,7 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
    `git worktree add -b <branch> <path> <base>`. Verify the resulting path and branch;
    a detached workspace needs a dedicated Work Item branch before implementation.
 6. Read instructions in the selected worktree and use documented setup commands.
-   Use `execution-context-first-repo-onboarding` when commands are unclear. Do not
+   Use `repo-execution-context` when commands are unclear. Do not
    infer install commands solely from manifest filenames. Restore dependencies
    only as repository rules permit, without modifying manifests or lockfiles.
 7. Run the smallest relevant documented baseline check before editing. Report

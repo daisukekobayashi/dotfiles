@@ -1,10 +1,5 @@
 {
-  "description": "Documentation lookup and library documentation skills.",
-  "external": [
-    {
-      "source": "upstash/context7",
-      "skills": ["context7-cli"]
-    }
-  ],
+  "description": "Reserved documentation profile; library documentation lookup is included in base.",
+  "external": [],
   "local": []
 }

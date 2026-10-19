@@ -1,0 +1,166 @@
+{
+  "skill_name": "repo-execution-context",
+  "evals": [
+    {
+      "id": 1,
+      "fixture": "files/sample-compose-app",
+      "prompt": "In the supplied repository, choose the intended command to run JavaScript tests only, even if npm is installed on the host. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "From the repository root, select docker compose --profile test run --rm test sh -lc \"./scripts/setup.sh && npm test\" as documented in README.md. Keep the setup and npm test inside the test service.",
+      "assertions": [
+        "Uses the README command for the JavaScript test subset and its setup step",
+        "Keeps npm test in the documented test container rather than on the host",
+        "Reports the working directory and README source without claiming tests ran"
+      ],
+      "files": [
+        "evals/files/sample-compose-app/Makefile",
+        "evals/files/sample-compose-app/README.md",
+        "evals/files/sample-compose-app/compose.yaml",
+        "evals/files/sample-compose-app/package.json",
+        "evals/files/sample-compose-app/pyproject.toml",
+        "evals/files/sample-compose-app/scripts/bootstrap-dev.sh",
+        "evals/files/sample-compose-app/scripts/bootstrap-test.sh",
+        "evals/files/sample-compose-app/scripts/setup.sh"
+      ]
+    },
+    {
+      "id": 2,
+      "fixture": "files/sample-compose-app",
+      "prompt": "In the supplied repository, choose the intended command to run Python tests only, even if Python is installed on the host. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "From the repository root, select docker compose --profile test run --rm test sh -lc \"./scripts/setup.sh && pytest\" from README.md. Keep setup and pytest in the test container.",
+      "assertions": [
+        "Selects the documented Python test subset rather than the full mixed-language suite",
+        "Keeps setup and pytest inside the test service",
+        "Distinguishes command selection from execution"
+      ],
+      "files": [
+        "evals/files/sample-compose-app/Makefile",
+        "evals/files/sample-compose-app/README.md",
+        "evals/files/sample-compose-app/compose.yaml",
+        "evals/files/sample-compose-app/package.json",
+        "evals/files/sample-compose-app/pyproject.toml",
+        "evals/files/sample-compose-app/scripts/bootstrap-dev.sh",
+        "evals/files/sample-compose-app/scripts/bootstrap-test.sh",
+        "evals/files/sample-compose-app/scripts/setup.sh"
+      ]
+    },
+    {
+      "id": 3,
+      "fixture": "files/sample-compose-app",
+      "prompt": "In the supplied repository, choose the intended entry point for the full local development stack. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "Select docker compose up --build from the repository root, as documented in README.md. This starts the web app, worker, database, and Redis; service startup remains pending.",
+      "assertions": [
+        "Chooses the documented Compose stack instead of host npm run dev alone",
+        "Recognizes that development requires supporting services",
+        "Reports the command without starting containers or claiming readiness"
+      ],
+      "files": [
+        "evals/files/sample-compose-app/Makefile",
+        "evals/files/sample-compose-app/README.md",
+        "evals/files/sample-compose-app/compose.yaml",
+        "evals/files/sample-compose-app/package.json",
+        "evals/files/sample-compose-app/pyproject.toml",
+        "evals/files/sample-compose-app/scripts/bootstrap-dev.sh",
+        "evals/files/sample-compose-app/scripts/bootstrap-test.sh",
+        "evals/files/sample-compose-app/scripts/setup.sh"
+      ]
+    },
+    {
+      "id": 4,
+      "fixture": "files/sample-host-app",
+      "prompt": "In the supplied repository, choose the intended test command. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "Select python3 -m unittest discover on the host from the repository root, following README.md.",
+      "assertions": [
+        "Accepts the documented host execution path",
+        "Does not invent a container workflow or package installation",
+        "Reports README.md as the command source"
+      ],
+      "files": [
+        "evals/files/sample-host-app/README.md"
+      ]
+    },
+    {
+      "id": 5,
+      "fixture": "files/sample-db-compose-app",
+      "prompt": "In the supplied repository, choose the intended test command. The database is already running. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "Select python3 -m unittest discover on the host from the repository root. Compose manages the database only; no application test service is defined.",
+      "assertions": [
+        "Keeps application tests on the documented host path despite compose.yaml being present",
+        "Distinguishes the database container from the application test process",
+        "Does not invent a Compose test service or restart the available database"
+      ],
+      "files": [
+        "evals/files/sample-db-compose-app/README.md",
+        "evals/files/sample-db-compose-app/compose.yaml"
+      ]
+    },
+    {
+      "id": 6,
+      "fixture": "files/sample-wrapper-app",
+      "prompt": "In the supplied repository, choose the supported test entry point and determine whether it runs on the host or in a container. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "Keep make test as the entry point from the repository root. Trace the Makefile to docker compose --profile test run --rm checks, consistent with compose.yaml and CI. Explain that the README statement about host execution is stale.",
+      "assertions": [
+        "Preserves make test as the supported wrapper",
+        "Inspects the actual Makefile recipe and recognizes container execution",
+        "Explains the README discrepancy using the current wrapper, Compose file, and CI",
+        "Does not substitute host Python tests or execute either path"
+      ],
+      "files": [
+        "evals/files/sample-wrapper-app/.github/workflows/test.yml",
+        "evals/files/sample-wrapper-app/Makefile",
+        "evals/files/sample-wrapper-app/README.md",
+        "evals/files/sample-wrapper-app/compose.yaml"
+      ]
+    },
+    {
+      "id": 7,
+      "fixture": "files/sample-monorepo",
+      "prompt": "In the supplied repository, choose the intended command for the API service tests only. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "Use services/api as the working directory and make test as the entry point, following services/api/README.md and its Makefile. Execution is on the host.",
+      "assertions": [
+        "Follows the root README pointer to the API-specific documentation",
+        "Selects the API package working directory and its make test target",
+        "Does not broaden the task into tests for other services"
+      ],
+      "files": [
+        "evals/files/sample-monorepo/README.md",
+        "evals/files/sample-monorepo/services/api/Makefile",
+        "evals/files/sample-monorepo/services/api/README.md"
+      ]
+    },
+    {
+      "id": 8,
+      "fixture": "files/sample-host-app",
+      "prompt": "Earlier in this same task, we established from README.md that tests run from this repository root on the host with python3 -m unittest discover. The checkout, relevant files, environment, and task scope have not changed. Restate that execution path without rediscovering repository instructions. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "Reuse the established root working directory, python3 -m unittest discover command, host environment, and README.md source. No new repository inspection is needed.",
+      "assertions": [
+        "Reuses the established execution path instead of rereading repository files",
+        "Keeps the same working directory, command, and environment",
+        "Does not claim a new test run occurred"
+      ],
+      "files": [
+        "evals/files/sample-host-app/README.md"
+      ]
+    },
+    {
+      "id": 9,
+      "fixture": "files/sample-compose-app",
+      "prompt": "In the supplied repository, identify the intended full test command. Docker is unavailable on this machine, and installing tools is outside this task. Identify the working directory, entry-point command, execution environment, and evidence. Do not execute project commands, install tools, or start services.",
+      "expected_output": "Report the documented make test-docker wrapper or docker compose --profile test run --rm test command from the repository root. The intended environment is Docker Compose and execution is blocked by unavailable Docker.",
+      "assertions": [
+        "Retains the documented container execution boundary despite unavailable Docker",
+        "Reports the missing runtime and pending execution",
+        "Does not fall back to host npm test or pytest, install tools, or claim success"
+      ],
+      "files": [
+        "evals/files/sample-compose-app/Makefile",
+        "evals/files/sample-compose-app/README.md",
+        "evals/files/sample-compose-app/compose.yaml",
+        "evals/files/sample-compose-app/package.json",
+        "evals/files/sample-compose-app/pyproject.toml",
+        "evals/files/sample-compose-app/scripts/bootstrap-dev.sh",
+        "evals/files/sample-compose-app/scripts/bootstrap-test.sh",
+        "evals/files/sample-compose-app/scripts/setup.sh"
+      ]
+    }
+  ]
+}
