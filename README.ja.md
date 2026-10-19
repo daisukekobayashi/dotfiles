@@ -118,6 +118,79 @@ tmux の貼り付け時は, 対応端末にクリップボードの再取得を�
 
 ## Tools
 
+### Codex homes
+
+主に使う `~/.codex` は, ChatGPT サブスクリプション用として従来の symlink 運用を
+続けます. Azure 用には, 同じ dotfiles の設定から独立した home を生成します.
+
+```sh
+npm --prefix setup ci
+./setup.sh codex --azure-base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
+./setup.sh codex --azure-base-url 'https://RESOURCE.openai.azure.com/openai/v1'
+```
+
+Windows では `.\setup.ps1 codex` に同じ引数を渡します.
+生成処理は共通の Node runtime で, Node.js 18+ と setup のローカル依存が必要です.
+生成は明示的に実行します. `setup links` / `setup all` の動作は従来どおりです.
+初回は `--azure-base-url` が必須です. 確認用の dry-run は接続先も保存しないため,
+実際の生成にも URL を指定します. URL は利用する API の `base_url` をそのまま渡します.
+
+接続先と API version は Azure home 内に保存し, 次回からは `./setup.sh codex` だけで
+再生成できます. `--azure-base-url` の再指定で接続先を変更できます.
+`--azure-api-version 2025-04-01-preview` で API version を設定・更新し,
+`--azure-api-version none` で保存済みの指定を解除します. 初回に API version を省略すると,
+`api-version` は設定しません. URL の変更だけでは保存済みの API version を変更しません.
+既存の旧形式の Azure home は, 前回生成時の接続先・API version を自動で引き継ぎます.
+
+| 場所 | 設定と状態 |
+| --- | --- |
+| `~/.codex` | 既存の ChatGPT ログイン, 設定の symlink, セッション, メモリ, プラグイン |
+| `~/.codex-azure` | 生成した通常の TOML ファイル, 共通ルール・hooks, 独立した Codex の状態 |
+
+共通設定・MCP は `codex/config.toml`, Azure のモデル設定は既存の
+`codex/azure_*.config.toml` を使います. 保存した接続設定と合成し, Azure 側の
+デフォルト設定と各 profile に `[model_providers.azure]` を生成します.
+共通の `config.toml` に Azure provider 定義は不要です.
+初期デフォルトは `azure_gpt-6_1-sol_max` です.
+`./setup.sh codex --profile azure_gpt-6-luna_max` で変更でき, 次回以降もその選択を使います.
+Azure は既存の環境変数 `AZURE_OPENAI_API_KEY` を参照し, credential store はその home
+内のファイルを使います. ChatGPT の認証情報, セッション, メモリ, プラグインキャッシュ,
+プロジェクト・hook の信頼情報はコピーしません. User skills は既存の
+`~/.agents/skills` を通して利用します.
+
+共通設定・Azure モデル設定・ルール・hooks を変更したら, `./setup.sh codex` で反映します.
+Azure 側で増えた実行時の状態や独立した設定変更は残します. 同じ設定を両側で変更した場合は,
+置換前に停止します. 表示された項目を揃えてから再実行してください.
+置換前のファイルは `~/.codex-azure/.dotfiles-azure-backups/` に保存します.
+`.dotfiles-azure.json` は接続設定・既定 profile・前回の生成元設定を記録しているため,
+生成ファイルと一緒に保持します. API キー自体は保存しません.
+管理外の既存ファイルや symlink は置換しません. 生成元の profile を削除しても,
+生成済みのファイルは削除しません.
+
+```sh
+codex-pick                                  # ChatGPT / Azure を同じ候補一覧から選択
+codex-pick -q azure                         # 初期検索を指定
+codex-pick -p azure_gpt-6_1-sol_max          # Azure home で直接起動
+codex-pick -p azure_gpt-6-luna_max -- --resume
+CODEX_HOME="$HOME/.codex-azure" codex        # Azure のデフォルトモデルで起動
+CODEX_HOME="$HOME/.codex-azure" claude       # Claude Code の Codex plugin 用
+```
+
+`codex-pick` は起動する子プロセスだけに `CODEX_HOME` を設定します.
+明示的に `CODEX_HOME` を指定した場合は, その home だけを使います.
+生成済み Azure home を明示した場合は, ChatGPT のモデルカタログを読まずに profile を選べます.
+既存の `~/.codex` 内の dotfiles 管理 Azure profile リンクは, ピッカーが新しい Azure home に
+解決するため, 従来の `-p` 指定を引き続き使えます. 先に Azure home を生成してください.
+生成が完了していない場合はエラーになります. 対話選択には `fzf`, ChatGPT モデルの選択には
+加えて `jq` と `codex debug models` を使います.
+
+[codex-plugin-cc v1.0.6](https://github.com/openai/codex-plugin-cc/blob/v1.0.6/plugins/codex/scripts/lib/app-server.mjs)
+は, 継承した home のデフォルト設定で `codex app-server` を起動します.
+同じリポジトリの既存 broker が以前の home を保持する場合があるため, 切替前に
+plugin を利用中の Claude Code セッションを終了し, 上記コマンドで起動し直します.
+通常の `claude` 起動でサブスクリプション側に戻れます.
+[Codex の公式設定ドキュメント](https://learn.chatgpt.com/docs/config-file/config-basic)も参照してください.
+
 ### Claude Code profiles
 
 macOS/Linux は `./setup.sh links`, Windows は `.\setup.ps1 links` で,

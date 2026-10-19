@@ -11,6 +11,8 @@ source "${SCRIPT_DIR}/versions.sh"
 source "${SCRIPT_DIR}/links.sh"
 # shellcheck source=setup/skills.sh
 source "${SCRIPT_DIR}/skills.sh"
+# shellcheck source=setup/codex.sh
+source "${SCRIPT_DIR}/codex.sh"
 # shellcheck source=setup/packages.sh
 source "${SCRIPT_DIR}/packages.sh"
 # shellcheck source=setup/post.sh
@@ -24,6 +26,7 @@ Subcommands:
   all         Run all setup steps (default): links -> packages -> post
   links       Run symbolic link and local config setup only
   skills      Restore skills and wire agent skill directories
+  codex       Generate the separate Azure Codex home
   packages    Run required package/tool install and post-setup steps
   post        Run post-setup steps only
   help        Show this help
@@ -32,6 +35,13 @@ packages args:
   --only <csv>   Run only selected package steps (e.g. tmux,luarocks)
   --skip <csv>   Skip selected package steps
   --dry-run      Print commands without executing side effects
+
+codex args:
+  --azure-base-url <url>     Azure base_url (required on first generation)
+  --azure-api-version <value>
+                             Set api-version; use none to remove a saved value
+  --profile <name>           Set the Azure home's default model profile
+  --dry-run                  Preview generation without changing files
 
 skills args:
   --scope user|project       Install user or project skills (default: user)
@@ -165,7 +175,7 @@ main() {
   fi
 
   if [[ "${subcommand}" == --* ]]; then
-    log_error "Flags are not supported. Use subcommands: all, links, skills, packages, post, help."
+    log_error "Flags are not supported. Use subcommands: all, links, skills, codex, packages, post, help."
     usage
     return 1
   fi
@@ -207,6 +217,9 @@ main() {
         log_info "Running skills setup..."
       fi
       setup_skills "$@"
+      ;;
+    codex)
+      setup_codex "$@"
       ;;
     packages)
       parse_packages_args "$@" || {

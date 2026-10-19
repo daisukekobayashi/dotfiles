@@ -11,5 +11,5 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "files": ["src/skills.ts"]
+  "files": ["src/skills.ts", "src/codex.ts"]
 }

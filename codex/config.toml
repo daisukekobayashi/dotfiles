@@ -16,13 +16,6 @@ rmcp_client = true
 goals = true
 memories = true
 
-[model_providers.azure]
-name = "Azure"
-base_url = "https://<YOUR_RESOURCE_NAME>.openai.azure.com/openai"
-env_key = "AZURE_OPENAI_API_KEY"
-query_params = { api-version = "2025-04-01-preview" }
-wire_api = "responses"
-
 [mcp_servers.serena]
 command = "serena"
 args = [

@@ -13,6 +13,7 @@ setup() {
   CODEX_DEBUG_LOG="${TEST_ROOT}/codex-debug.log"
   FZF_CHOICES="${TEST_ROOT}/fzf-choices"
   FZF_LOG="${TEST_ROOT}/fzf.log"
+  FZF_ROWS="${TEST_ROOT}/fzf-rows.log"
   CODEX_HOME="${TEST_ROOT}/codex-home"
 
   mkdir -p "${FAKE_BIN}" "${CODEX_HOME}"
@@ -106,6 +107,7 @@ if [[ "${1:-}" == "debug" && "${2:-}" == "models" ]]; then
     printf '<%s>' "${original_args[@]}"
     printf '\n'
   } >> "${CODEX_DEBUG_LOG}"
+  printf 'home=%s\n' "${CODEX_HOME:-}" >> "${CODEX_DEBUG_LOG}"
 
   if [[ "${3:-}" == "--bundled" ]]; then
     printf '%s\n' "${CODEX_BUNDLED_CATALOG:-${CODEX_CATALOG}}"
@@ -125,6 +127,8 @@ fi
   printf '<%s>' "${original_args[@]}"
   printf '\n'
 } > "${CODEX_LOG}"
+printf 'home=%s\n' "${CODEX_HOME:-}" >> "${CODEX_LOG}"
+exit "${CODEX_EXIT_STATUS:-0}"
 BASH
   chmod +x "${FAKE_BIN}/codex"
 }
@@ -144,6 +148,9 @@ rows=()
 while IFS= read -r row; do
   rows+=("${row}")
 done
+if [[ -n "${FZF_ROWS:-}" ]]; then
+  printf '%s\n' ${rows[@]+"${rows[@]}"} >> "${FZF_ROWS}"
+fi
 IFS= read -r choice < "${FZF_CHOICES}"
 tail -n +2 "${FZF_CHOICES}" > "${FZF_CHOICES}.next"
 mv "${FZF_CHOICES}.next" "${FZF_CHOICES}"
@@ -173,7 +180,32 @@ run_picker() {
     CODEX_DEBUG_LOG="${CODEX_DEBUG_LOG}" \
     FZF_CHOICES="${FZF_CHOICES}" \
     FZF_LOG="${FZF_LOG}" \
+    FZF_ROWS="${FZF_ROWS}" \
     CODEX_HOME="${CODEX_HOME}" \
+    "${ROOT}/tools/codex/codex-pick" "$@"
+}
+
+setup_default_homes() {
+  PICKER_HOME="${TEST_ROOT}/user home"
+  PRIMARY_HOME="${PICKER_HOME}/.codex"
+  AZURE_HOME="${PICKER_HOME}/.codex-azure"
+  mkdir -p "${PRIMARY_HOME}" "${AZURE_HOME}"
+  printf '{}\n' > "${AZURE_HOME}/.dotfiles-azure.json"
+  printf 'model_provider = "azure"\n' > "${AZURE_HOME}/config.toml"
+  touch "${AZURE_HOME}/azure_gpt-6_1-sol_max.config.toml"
+}
+
+run_default_picker() {
+  run env -u CODEX_HOME \
+    PATH="${FAKE_BIN}:/usr/bin:/bin" \
+    HOME="${PICKER_HOME}" \
+    CODEX_CATALOG="$(catalog_json)" \
+    CODEX_LOG="${CODEX_LOG}" \
+    CODEX_DEBUG_LOG="${CODEX_DEBUG_LOG}" \
+    FZF_CHOICES="${FZF_CHOICES}" \
+    FZF_LOG="${FZF_LOG}" \
+    FZF_ROWS="${FZF_ROWS}" \
+    CODEX_EXIT_STATUS="${CODEX_EXIT_STATUS:-0}" \
     "${ROOT}/tools/codex/codex-pick" "$@"
 }
 
@@ -403,4 +435,130 @@ run_picker() {
 
   [ "$status" -eq 127 ]
   [[ "$output" == *"Required command not found: codex"* ]]
+}
+
+@test "codex-pick combines homes and launches ChatGPT from the main home" {
+  setup_default_homes
+  printf '%s\n' chatgpt_gpt-5.6-terra_high > "${FZF_CHOICES}"
+
+  run_default_picker -q chatgpt
+
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${PRIMARY_HOME}" "${CODEX_LOG}"
+  grep -F 'azure_gpt-6_1-sol_max' "${FZF_ROWS}"
+  grep -F '<--query=chatgpt>' "${FZF_LOG}"
+}
+
+@test "codex-pick launches a generated Azure profile with the same picker and forwarded arguments" {
+  setup_default_homes
+  printf '%s\n' azure_gpt-6_1-sol_max > "${FZF_CHOICES}"
+
+  run_default_picker -q azure -- "" "two words"
+
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
+  grep -Fx 'argv=<--profile><azure_gpt-6_1-sol_max><><two words>' "${CODEX_LOG}"
+  grep -F '<--query=azure>' "${FZF_LOG}"
+}
+
+@test "codex-pick resolves an explicit Azure profile without the catalog or fzf" {
+  setup_default_homes
+
+  run_default_picker -p azure_gpt-6_1-sol_max -- --resume
+
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
+  grep -Fx 'argv=<--profile><azure_gpt-6_1-sol_max><--resume>' "${CODEX_LOG}"
+  [ ! -f "${CODEX_DEBUG_LOG}" ]
+  [ ! -f "${FZF_LOG}" ]
+}
+
+@test "codex-pick migrates existing dotfiles Azure links without duplicate rows" {
+  setup_default_homes
+  mkdir -p "${TEST_ROOT}/dotfiles/codex"
+  touch "${TEST_ROOT}/dotfiles/codex/azure_gpt-6_1-sol_max.config.toml"
+  ln -s "${TEST_ROOT}/dotfiles/codex/azure_gpt-6_1-sol_max.config.toml" "${PRIMARY_HOME}/azure_gpt-6_1-sol_max.config.toml"
+  printf '%s\n' azure_gpt-6_1-sol_max > "${FZF_CHOICES}"
+
+  run_default_picker
+
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^azure_gpt-6_1-sol_max' "${FZF_ROWS}")" -eq 1 ]
+  grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
+  [ -L "${PRIMARY_HOME}/azure_gpt-6_1-sol_max.config.toml" ]
+}
+
+@test "codex-pick refuses an uninitialized Azure home for a legacy link" {
+  setup_default_homes
+  mkdir -p "${TEST_ROOT}/dotfiles/codex"
+  touch "${TEST_ROOT}/dotfiles/codex/azure_gpt-6_1-sol_max.config.toml"
+  ln -s "${TEST_ROOT}/dotfiles/codex/azure_gpt-6_1-sol_max.config.toml" "${PRIMARY_HOME}/azure_gpt-6_1-sol_max.config.toml"
+  # A config alone is not a completed generation.
+  mv "${AZURE_HOME}/.dotfiles-azure.json" "${AZURE_HOME}/incomplete-marker.json"
+
+  run_default_picker -p azure_gpt-6_1-sol_max
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Run ./setup.sh codex first"* ]]
+  [ ! -f "${CODEX_LOG}" ]
+  printf '%s\n' azure_gpt-6_1-sol_max > "${FZF_CHOICES}"
+  run_default_picker
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Run ./setup.sh codex first"* ]]
+  [ ! -f "${CODEX_LOG}" ]
+}
+
+@test "codex-pick requires an explicit home for unrelated duplicate profiles" {
+  setup_default_homes
+  touch "${PRIMARY_HOME}/azure_gpt-6_1-sol_max.config.toml"
+
+  run_default_picker -p azure_gpt-6_1-sol_max
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Ambiguous profile"* ]]
+  [ ! -f "${CODEX_LOG}" ]
+
+  CODEX_HOME="${PRIMARY_HOME}"
+  run_picker -p azure_gpt-6_1-sol_max
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${PRIMARY_HOME}" "${CODEX_LOG}"
+}
+
+@test "codex-pick with an explicit generated Azure home offers only its profiles" {
+  setup_default_homes
+  CODEX_HOME="${AZURE_HOME}"
+  printf '%s\n' azure_gpt-6_1-sol_max > "${FZF_CHOICES}"
+
+  run_picker
+
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
+  [ ! -f "${CODEX_DEBUG_LOG}" ]
+  ! grep -F 'chatgpt_' "${FZF_ROWS}"
+}
+
+@test "codex-pick keeps working for ChatGPT when no Azure home exists" {
+  PICKER_HOME="${TEST_ROOT}/user home without azure"
+  PRIMARY_HOME="${PICKER_HOME}/.codex"
+  mkdir -p "${PRIMARY_HOME}"
+  printf '%s\n' chatgpt_gpt-6-astra_high > "${FZF_CHOICES}"
+
+  run_default_picker
+
+  [ "$status" -eq 0 ]
+  grep -Fx "home=${PRIMARY_HOME}" "${CODEX_LOG}"
+  [ ! -e "${PICKER_HOME}/.codex-azure" ]
+}
+
+@test "codex-pick preserves cancellation and child exit status when selecting homes" {
+  setup_default_homes
+  printf '%s\n' __CANCEL__ > "${FZF_CHOICES}"
+  run_default_picker
+  [ "$status" -eq 130 ]
+  [ ! -f "${CODEX_LOG}" ]
+
+  CODEX_EXIT_STATUS=42
+  run_default_picker -p azure_gpt-6_1-sol_max
+  [ "$status" -eq 42 ]
+  grep -Fx "home=${AZURE_HOME}" "${CODEX_LOG}"
 }

@@ -140,6 +140,83 @@ Vim build with `+clipboard`; the external fallback bridges ordinary operations.
 
 - `share-dir`: start a Dockerized FileBrowser Quantum instance for a chosen directory.
 - `claude-pick`: choose a Claude Code profile, model, and effort.
+- `codex-pick`: choose a ChatGPT model or an Azure profile in one picker (Bash).
+
+### Codex homes
+
+The primary `~/.codex` remains the usual ChatGPT subscription environment. Its
+configuration and model profiles keep their existing dotfiles symlinks.
+Generate an independent Azure home from the same sources:
+
+```sh
+npm --prefix setup ci
+./setup.sh codex --azure-base-url 'https://RESOURCE.openai.azure.com/openai/v1' --dry-run
+./setup.sh codex --azure-base-url 'https://RESOURCE.openai.azure.com/openai/v1'
+```
+
+Windows uses `.\setup.ps1 codex` with the same arguments and Node runtime.
+Generation requires Node.js 18+ and the local setup dependencies.
+It is an explicit step; `setup links` and `setup all` keep their existing behavior.
+First generation requires `--azure-base-url`. Dry-run does not save the connection,
+so pass the URL again for the actual generation. Supply the API's exact `base_url`.
+
+The connection and API version are saved within the Azure home. Later runs need
+only `./setup.sh codex`. Pass `--azure-base-url` again to update the connection.
+Use `--azure-api-version 2025-04-01-preview` to set or update the API version, or
+`--azure-api-version none` to remove a saved value. Omitting the version on first
+generation leaves `api-version` unset. Changing the URL alone retains the saved
+API version. Existing Azure homes using the old metadata format automatically
+retain the provider URL and API version from their previous generation.
+
+| Location | Settings and state |
+| --- | --- |
+| `~/.codex` | Existing ChatGPT login, settings symlinks, sessions, memory and plugins |
+| `~/.codex-azure` | Generated ordinary TOML files, shared rules/hooks, and independent Codex state |
+
+`codex/config.toml` supplies common preferences and MCP settings. Existing
+`codex/azure_*.config.toml` files supply Azure model settings. Generation combines
+them with the saved connection and writes `[model_providers.azure]` into the Azure
+default configuration and each named profile. The shared `config.toml` needs no
+Azure provider definition. The initial default is `azure_gpt-6_1-sol_max`; change it with
+`./setup.sh codex --profile azure_gpt-6-luna_max`. Later runs remember that choice.
+The Azure provider reads the existing `AZURE_OPENAI_API_KEY` environment variable
+and uses a file credential store within its home. No ChatGPT credentials, sessions,
+memory, plugin cache, project trust or hook trust are copied. User skills remain
+available through the existing `~/.agents/skills` setup.
+
+After editing shared settings, Azure model sources, rules or hooks, run
+`./setup.sh codex` again. Azure-local runtime state and independent setting changes
+survive regeneration. Conflicting edits to the same setting stop generation before
+replacement; reconcile the reported setting and rerun. Replaced files are backed
+up under `~/.codex-azure/.dotfiles-azure-backups/`. The adjacent
+`.dotfiles-azure.json` records the connection, default profile and previous source
+settings for synchronization; keep it with the generated files. It does not store
+the API key itself. Unmanaged files and symlinks are never replaced,
+and removing a source profile does not delete its existing generated file.
+
+```sh
+codex-pick                                  # One picker for ChatGPT and Azure
+codex-pick -q azure                         # Start the picker with a search query
+codex-pick -p azure_gpt-6_1-sol_max          # Azure home, no model picker
+codex-pick -p azure_gpt-6-luna_max -- --resume
+CODEX_HOME="$HOME/.codex-azure" codex        # Azure default model directly
+CODEX_HOME="$HOME/.codex-azure" claude       # Codex plugin in Claude Code
+```
+
+`codex-pick` sets `CODEX_HOME` only for the launched process. An explicit
+`CODEX_HOME` restricts selection to that home; an explicit generated Azure home
+offers its profiles without loading the ChatGPT model catalog. Old dotfiles Azure
+profile links in the primary home resolve to the generated home, so existing
+`-p` commands continue to work. Generate the Azure home first; an incomplete home
+causes an error. Interactive selection requires `fzf`; ChatGPT model selection
+also uses `jq` and `codex debug models`.
+
+For [codex-plugin-cc v1.0.6](https://github.com/openai/codex-plugin-cc/blob/v1.0.6/plugins/codex/scripts/lib/app-server.mjs),
+the inherited home selects the default configuration for `codex app-server`.
+Close Claude Code sessions using the plugin in that repository before switching
+homes: an existing broker can keep using its original home. Start Claude normally
+to return to the subscription environment. See the official
+[Codex configuration documentation](https://learn.chatgpt.com/docs/config-file/config-basic).
 
 ### Claude Code profiles
 

@@ -7,7 +7,9 @@ Usage: codex-pick [-q QUERY] [-p PROFILE] [MODEL [EFFORT]] [-- CODEX_ARGS...]
 
 Choose a Codex launch configuration for one invocation.
 
-PROFILE names a $CODEX_HOME/PROFILE.config.toml file.
+PROFILE names a PROFILE.config.toml file in the selected Codex home.
+By default, ChatGPT configurations and the generated ~/.codex-azure profiles
+share one picker. An explicit CODEX_HOME limits selection to that home.
 QUERY sets the initial fzf search query for an interactive picker.
 MODEL may be a full model slug or an unambiguous slug suffix.
 With no arguments, fzf selects either a ChatGPT model/effort combination or a
@@ -33,7 +35,7 @@ require_command() {
 
 profile_rows() {
   local codex_home="$1"
-  local file name
+  local file name target_home label
   local -a files=()
 
   shopt -s nullglob
@@ -46,9 +48,74 @@ profile_rows() {
     name="${file##*/}"
     name="${name%.config.toml}"
     if [[ "${name}" =~ ^[A-Za-z0-9_-]+$ ]]; then
-      printf '%s\tprofile\t-\t-\tCodex profile\t%s\n' "${name}" "${file}"
+      target_home="${codex_home}"
+      label="Codex profile"
+      if [[ -n "${azure_home}" && "${codex_home}" == "${primary_home}" ]] && legacy_azure_profile "${file}"; then
+        # Existing dotfiles links remain in the main home during migration.
+        if is_azure_home "${azure_home}" && [[ -f "${azure_home}/${name}.config.toml" ]]; then
+          continue
+        fi
+        target_home="${azure_home}"
+        label="Azure profile"
+      elif is_azure_home "${codex_home}"; then
+        label="Azure profile"
+      fi
+      printf '%s\tprofile\t-\t-\t%s\t%s\t-\t%s\n' "${name}" "${label}" "${file}" "${target_home}"
     fi
   done
+}
+
+is_azure_home() {
+  [[ -f "$1/.dotfiles-azure.json" && -f "$1/config.toml" ]]
+}
+
+legacy_azure_profile() {
+  local file="$1"
+  [[ -L "${file}" ]] || return 1
+  [[ "$(readlink "${file}")" == */codex/azure_*.config.toml ]]
+}
+
+require_azure_home() {
+  if ! is_azure_home "$1"; then
+    die 2 "Azure home is not ready: $1. Run ./setup.sh codex first"
+  fi
+}
+
+resolve_profile() {
+  local profile="$1"
+  local main_file="${primary_home}/${profile}.config.toml"
+
+  if [[ ! "${profile}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    die 2 "Invalid profile name: ${profile}. Use letters, numbers, hyphens, or underscores"
+  fi
+
+  if [[ -n "${azure_home}" ]]; then
+    if legacy_azure_profile "${main_file}"; then
+      require_azure_home "${azure_home}"
+      validate_profile "${profile}" "${azure_home}"
+      printf '%s\n' "${azure_home}"
+      return
+    fi
+    if is_azure_home "${azure_home}" && [[ -f "${azure_home}/${profile}.config.toml" ]]; then
+      if [[ -f "${main_file}" ]]; then
+        die 2 "Ambiguous profile: ${profile}. Set CODEX_HOME to select its home"
+      fi
+      printf '%s\n' "${azure_home}"
+      return
+    fi
+  fi
+
+  validate_profile "${profile}" "${primary_home}"
+  printf '%s\n' "${primary_home}"
+}
+
+launch_codex() {
+  local target_home="$1"
+  shift
+  if [[ -n "${azure_home}" && "${target_home}" == "${azure_home}" ]]; then
+    require_azure_home "${target_home}"
+  fi
+  exec env CODEX_HOME="${target_home}" codex "$@"
 }
 
 chatgpt_rows() {
@@ -92,6 +159,19 @@ validate_profile() {
   fi
 }
 
+configuration_rows() {
+  local catalog="$1"
+  local codex_home="$2"
+
+  profile_rows "${codex_home}"
+  if [[ -n "${azure_home}" ]] && is_azure_home "${azure_home}"; then
+    profile_rows "${azure_home}"
+  fi
+  if [[ -n "${catalog}" ]]; then
+    chatgpt_rows "${catalog}"
+  fi
+}
+
 pick_configuration() {
   local catalog="$1"
   local codex_home="$2"
@@ -99,10 +179,8 @@ pick_configuration() {
   local rows
   local selected
 
-  rows="$(
-    profile_rows "${codex_home}"
-    chatgpt_rows "${catalog}"
-  )"
+  rows="$(configuration_rows "${catalog}" "${codex_home}")"
+  [[ -n "${rows}" ]] || die 2 "No configurations found in ${codex_home}"
 
   selected="$(
     printf '%s\n' "${rows}" |
@@ -295,29 +373,41 @@ fi
 model_query="${positionals[0]:-}"
 effort_query="${positionals[1]:-}"
 codex_home="${CODEX_HOME:-${HOME}/.codex}"
+primary_home="${codex_home}"
+azure_home=""
+if [[ -z "${CODEX_HOME:-}" ]]; then
+  azure_home="${HOME}/.codex-azure"
+fi
 
 require_command codex
 
 profile=""
 if [[ "${profile_requested}" -eq 1 ]]; then
-  validate_profile "${profile_query}" "${codex_home}"
+  codex_home="$(resolve_profile "${profile_query}")"
   profile="${profile_query}"
 fi
 
 if [[ -n "${profile}" && -z "${model_query}" ]]; then
-  exec codex --profile "${profile}" ${codex_args[@]+"${codex_args[@]}"}
+  launch_codex "${codex_home}" --profile "${profile}" ${codex_args[@]+"${codex_args[@]}"}
 fi
 
-require_command jq
-catalog="$(load_catalog)"
+catalog=""
+if [[ -n "${model_query}" ]] || ! is_azure_home "${primary_home}"; then
+  require_command jq
+  catalog="$(load_catalog)"
+fi
 
 if [[ -z "${model_query}" ]]; then
   require_command fzf
   configuration="$(pick_configuration "${catalog}" "${codex_home}" "${initial_query}")" || exit $?
-  IFS=$'\t' read -r configuration_name configuration_kind model effort _ <<< "${configuration}"
+  IFS=$'\t' read -r configuration_name configuration_kind model effort _ _ _ target_home <<< "${configuration}"
 
   if [[ "${configuration_kind}" == "profile" ]]; then
-    exec codex --profile "${configuration_name}" ${codex_args[@]+"${codex_args[@]}"}
+    if [[ -n "${azure_home}" && "${target_home}" == "${azure_home}" ]]; then
+      require_azure_home "${target_home}"
+    fi
+    validate_profile "${configuration_name}" "${target_home}"
+    launch_codex "${target_home}" --profile "${configuration_name}" ${codex_args[@]+"${codex_args[@]}"}
   fi
 else
   model="$(resolve_model "${model_query}" "${catalog}")"
@@ -336,7 +426,7 @@ if [[ -n "${profile}" ]]; then
   profile_args=(--profile "${profile}")
 fi
 
-exec codex \
+launch_codex "${codex_home}" \
   ${profile_args[@]+"${profile_args[@]}"} \
   -m "${model}" \
   -c "model_reasoning_effort='${effort}'" \

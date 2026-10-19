@@ -20,6 +20,7 @@ Subcommands:
   all         Run Windows setup for the current privilege level
   links       Create Windows symbolic links only
   skills      Restore skills and wire agent skill directories
+  codex       Generate the separate Azure Codex home
   packages    Install or verify Scoop and psmux PPM
   help        Show this help
 
@@ -27,6 +28,8 @@ Behavior:
   all (non-admin): runs packages, then links
   all (admin): skips packages and runs links only
   skills: runs the shared Node skills setup runtime
+  codex: accepts --azure-base-url <url>, --azure-api-version <value>,
+         --profile <name> and --dry-run (requires Node.js)
 "@
 }
 
@@ -37,6 +40,7 @@ try {
 
   $linksScript = Join-Path $setupContext.DotfilesRoot "setup/links.ps1"
   $skillsScript = Join-Path $setupContext.DotfilesRoot "setup/skills.ps1"
+  $codexScript = Join-Path $setupContext.DotfilesRoot "setup/codex.ps1"
   $packagesScript = Join-Path $setupContext.DotfilesRoot "setup/packages.ps1"
 
   switch ($Subcommand.ToLowerInvariant()) {
@@ -81,6 +85,16 @@ try {
     }
     "skills" {
       Invoke-SetupPowerShellScript -ScriptPath $skillsScript -ArgumentList (
+        @(
+          "-HomeDir",
+          $setupContext.HomeDir,
+          "-DotfilesRoot",
+          $setupContext.DotfilesRoot
+        ) + $SubcommandArgs
+      )
+    }
+    "codex" {
+      Invoke-SetupPowerShellScript -ScriptPath $codexScript -ArgumentList (
         @(
           "-HomeDir",
           $setupContext.HomeDir,
