@@ -6,6 +6,7 @@ approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 plan_mode_reasoning_effort = "max"
 approvals_reviewer = "guardian_subagent"
+service_tier = "fast"
 
 [sandbox_workspace_write]
 network_access = true
