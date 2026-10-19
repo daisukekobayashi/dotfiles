@@ -72,7 +72,7 @@ PY
   [ ! -e "$PICK_LOG" ]
 }
 
-@test "new profiles own settings and link rules and statusline directly to dotfiles" {
+@test "new environments generate shared settings and link all installed dotfiles skills" {
   create_env acme
   [ "$status" -eq 0 ]
   local profile_dir="$TEST_HOME/.claude-profiles/acme"
@@ -81,14 +81,20 @@ PY
   [ "$(readlink "$profile_dir/rules/00-global.md")" = "$ROOT/ai-rules/base/global.md" ]
   [ "$(readlink "$profile_dir/rules/10-claude.md")" = "$ROOT/ai-rules/agents/claude.md" ]
   [ ! -e "$profile_dir/.credentials.json" ]
-  python3 - "$profile_dir" <<'PY'
+  python3 - "$profile_dir" "$ROOT" <<'PY'
 import json, pathlib, stat, sys
 p = pathlib.Path(sys.argv[1])
 d = json.loads((p / 'settings.json').read_text())
-assert not ({'hooks', 'enabledPlugins', 'extraKnownMarketplaces', 'env'} & d.keys())
+root = pathlib.Path(sys.argv[2])
+assert d == json.loads((root / 'claude/settings.json').read_text())
 assert stat.S_IMODE(p.stat().st_mode) == 0o700
 assert stat.S_IMODE((p / 'settings.json').stat().st_mode) == 0o600
-assert not list((p / 'skills').iterdir())
+shared = root / '.agents/user/skills'
+assert not (p / 'skills').is_symlink()
+if shared.is_dir():
+    for skill in shared.iterdir():
+        if (skill / 'SKILL.md').is_file() and skill.name.lower() not in {'synced', 'anthropic-skills'}:
+            assert (p / 'skills' / skill.name).resolve() == skill.resolve()
 PY
 }
 
@@ -103,13 +109,13 @@ PY
   [ ! -d "$TEST_HOME/.claude-profiles" ]
   create_env acme
   [ "$status" -eq 0 ]
-  printf 'user-owned\n' > "$TEST_HOME/.claude-profiles/acme/settings.json"
+  printf '{"model":"user-owned"}\n' > "$TEST_HOME/.claude-profiles/acme/settings.json"
   create_env acme
   [ "$status" -eq 0 ]
-  [ "$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")" = user-owned ]
+  [ "$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")" = '{"model":"user-owned"}' ]
 }
 
-@test "creation can link an explicitly selected installed skill without copying its contents" {
+@test "legacy skill argument validates an installed skill and links its shared definition" {
   [ -f "$ROOT/.agents/user/skills/architect/SKILL.md" ] || skip "architect skill not installed"
   create_env acme --skill architect
   [ "$status" -eq 0 ]
@@ -130,7 +136,10 @@ PY
   run picker_env PICK_EXIT=7 "$PICKER" -p acme opus high -- --resume '' 'two words' 'a"b' "tail\\"
   [ "$status" -eq 7 ]
   assert_log profile '"acme"' effort '"high"' args '["--model","opus","--effort","high","--resume","","two words","a\"b","tail\\"]'
-  cmp "$ROOT/claude/profile-settings.json" "$TEST_HOME/.claude-profiles/acme/settings.json"
+  python3 - "$ROOT/claude/settings.json" "$TEST_HOME/.claude-profiles/acme/settings.json" <<'PY'
+import json, sys
+assert json.load(open(sys.argv[1])) == json.load(open(sys.argv[2]))
+PY
 }
 
 @test "profile-only launch keeps defaults and ignores inherited config directory" {
@@ -289,7 +298,7 @@ PY
 @test "profile settings execute the linked statusline and show the selected profile" {
   command -v node >/dev/null || skip "node not installed"
   create_env acme
-  run env CLAUDE_CONFIG_DIR="$TEST_HOME/.claude-profiles/acme" CLAUDE_PICK_ENV=acme CLAUDE_PICK_PROFILE=legacy node - "$ROOT/claude/profile-settings.json" <<'JS'
+  run env CLAUDE_CONFIG_DIR="$TEST_HOME/.claude-profiles/acme" CLAUDE_PICK_ENV=acme CLAUDE_PICK_PROFILE=legacy node - "$ROOT/claude/settings.json" <<'JS'
 const fs = require('node:fs');
 const { execSync } = require('node:child_process');
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));

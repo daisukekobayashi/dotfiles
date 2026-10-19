@@ -53,7 +53,8 @@ codex args:
 
 claude args:
   --env <name>               Create or refresh a named environment
-  --skill <name>             Link an installed user skill (repeatable)
+  --skill <name>             Check a required installed skill (legacy, repeatable)
+                             All installed dotfiles user skills are shared
   --dry-run                  Preview setup without changing files
 
 skills args:

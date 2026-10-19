@@ -32,8 +32,9 @@ Behavior:
   codex: accepts --env <name>, --provider azure|openai|chatgpt, --base-url <url>, --api-version <value>,
          --profile <name> and --dry-run (requires Node.js).
          The provider defaults to azure. Legacy --azure-* aliases remain available.
-  claude: accepts --env <name>, repeatable --skill <name> and --dry-run (requires Node.js).
-          Existing local settings and account state are preserved.
+  claude: accepts --env <name> and --dry-run (requires Node.js).
+          Shares all installed user skills and regenerates common settings, preserving local edits.
+          Legacy --skill <name> checks availability without limiting shared skills.
 "@
 }
 

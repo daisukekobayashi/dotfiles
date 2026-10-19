@@ -310,12 +310,13 @@ Legacy `--create-env`/`--create` delegate to setup with a migration message and
 still reject existing environments. An unknown explicit name is an error;
 cancelling selection never launches Claude.
 
-Rerun `./setup.sh claude --env acme` to restore missing shared links, or add
-`--skill NAME` to link an installed dotfiles user skill. Existing picker-created
-homes work directly with setup; their storage and readiness marker are retained.
-Refresh preserves local settings, credentials, history, MCP configuration and
-existing skills. Conflicting files or symlinks stop setup before writing;
-unmanaged or incomplete homes are not adopted. `default` keeps using `setup links`.
+Rerun `./setup.sh claude --env acme` after changing common settings or restoring
+skills with `setup skills`. Setup regenerates settings and adds links to all
+installed dotfiles user skills, without selecting skills separately for each env.
+Existing picker-created homes keep their storage, login and readiness marker.
+Local settings changes, history, MCP configuration and local skills are preserved.
+Conflicting edits or shared-link targets stop setup before writing; unmanaged or
+incomplete homes are not adopted. `default` keeps using `setup links`.
 
 An explicit environment alone skips model/effort selection. Supplying one of model
 or effort prompts for the other; use `keep` to retain Claude's configuration.
@@ -327,18 +328,37 @@ its `-p`/`--print`. Auth and maintenance subcommands skip these selections.
 
 | Environment entry | Behavior |
 | --- | --- |
-| `settings.json` | Initial copy of `claude/profile-settings.json`; later edits are independent |
+| `settings.json` | Generated from `claude/settings.json`; refresh merges shared updates with local edits |
 | `rules/00-global.md`, `rules/10-claude.md` | Symlinks to the shared sources under `ai-rules/` |
 | `statusline.cjs` | Symlink to the shared renderer; shows the selected environment name |
-| `skills/` | Empty initially; `setup.sh claude --env acme --skill NAME` adds selected installed dotfiles skills |
+| `skills/` | A real env directory with individual symlinks to all installed `.agents/user/skills` definitions |
 | `mcp.json` | Optional per-environment MCP config; explicit `--mcp-config` takes precedence |
 | Login, history, memory, plugins | Managed separately by Claude under the selected config directory |
 
-Existing `~/.claude/settings.json`, credentials, hooks, and plugins are not copied.
-In particular, the new template does not enable `claude-mem`, whose external data
-directory needs separate configuration if you choose to use it. Rules and status
-line updates follow dotfiles symlinks; settings-template changes affect only new
-environments. There is no automatic settings synchronization or account migration.
+The source is dotfiles' `claude/settings.json`, including its preferences, hooks,
+plugin enablement and marketplace definitions. Each env gets a regular settings
+file, so editing one env does not change dotfiles or another env. Setup records
+the shared source baseline in `.dotfiles-env.json`: changes to different JSON keys
+are merged, while edits to the same value or array conflict. Previous settings
+and baselines are backed up under `.dotfiles-claude-backups/` before replacement.
+Keep the baseline with the env. Refresh checks for concurrent saves and restores
+earlier files if a write fails; if a target changes during rollback, it preserves
+that change and reports the recovery files.
+
+Legacy homes without a baseline are upgraded on refresh using the former
+`claude/profile-settings.json` template, retained only for migration. Existing
+local choices are preserved while new common settings are added. Credentials,
+history, memories and plugin caches are never copied from the default home.
+Plugins with an external store, such as `claude-mem`, still need their own storage
+configuration when used across accounts; changing `CLAUDE_CONFIG_DIR` does not
+relocate those stores.
+
+Shared skill definitions follow source edits through symlinks. Rerun setup to add
+newly installed skills; existing links and local skills are not deleted when a
+shared source disappears. The env's `skills/synced/` and other account-owned data
+stay in its own directory. If dotfiles skills have not been installed yet, the
+env starts without them; restore them with `setup skills`, then rerun env setup.
+Legacy `--skill NAME` remains an availability check and does not limit sharing.
 
 Named environments refuse inherited auth/provider environment variables listed in
 `tools/claude/auth-env.txt`, reporting names only. Clear those variables in the

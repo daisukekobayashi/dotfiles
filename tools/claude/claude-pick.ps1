@@ -14,7 +14,7 @@ function Stop-Picker {
 function Show-Usage {
   @'
 Usage: claude-pick [--env ENV] [-m MODEL] [-e EFFORT] [MODEL [EFFORT]] [-- CLAUDE_ARGS...]
-Create or refresh environments with: .\setup.ps1 claude --env NAME [--skill NAME ...]
+Create or refresh environments with: .\setup.ps1 claude --env NAME
 
 Without arguments, choose an environment, model, and effort with fzf.
 An explicit environment alone uses its saved model/effort without a picker.

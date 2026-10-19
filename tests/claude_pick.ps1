@@ -79,11 +79,14 @@ function Read-Launch {
 
 try {
   foreach ($directory in @($FixtureRoot, $TestUserDir, $TestBin)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
-  foreach ($relative in @('setup.ps1', 'setup/claude.ps1', 'setup/claude.js', 'lib/common.ps1', 'tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
+  foreach ($relative in @('setup.ps1', 'setup/claude.ps1', 'setup/claude.js', 'lib/common.ps1', 'tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
     $target = Join-Path $FixtureRoot $relative
     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $RepoRoot $relative) -Destination $target
   }
+  $sharedSkill = Join-Path $FixtureRoot '.agents/user/skills/shared-test'
+  New-Item -ItemType Directory -Path $sharedSkill -Force | Out-Null
+  [IO.File]::WriteAllText((Join-Path $sharedSkill 'SKILL.md'), '# Shared test skill')
   # Observe actual native argv, environment, working directory, and exit status.
   $code = @'
 using System;
@@ -149,7 +152,11 @@ public class FakeClaude {
     }
     Assert-True (Test-Path -LiteralPath (Join-Path $profileDir '.claude-pick')) 'profile not ready'
     $settings = Get-Content -LiteralPath (Join-Path $profileDir 'settings.json') -Raw
-    Assert-True ($settings -notmatch 'enabledPlugins|serena-hooks') 'inherited stateful plugins'
+    $common = Get-Content -LiteralPath (Join-Path $FixtureRoot 'claude/settings.json') -Raw | ConvertFrom-Json
+    $generated = $settings | ConvertFrom-Json
+    Assert-True ($generated.model -ceq $common.model) 'shared default model missing'
+    Assert-True (Test-Path -LiteralPath (Join-Path $profileDir '.dotfiles-env.json')) 'generation baseline missing'
+    Assert-True (Test-Path -LiteralPath (Join-Path $profileDir 'skills/shared-test/SKILL.md')) 'common skill missing'
     Assert-True ((Invoke-Picker @('--create', 'acme')).Code -eq 2) 'legacy creation accepted an existing environment'
     $settingsPath = Join-Path $profileDir 'settings.json'
     $savedSettings = '{"model":"opus","effortLevel":"high"}'

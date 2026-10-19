@@ -278,11 +278,13 @@ picker には既存 env の選択だけを表示し, 名前付き env が無け�
 従来の Zsh wrapper が追加していた共通 MCP 設定は `--env default` で使えます.
 公式の `claude` は直接実行でき, `claude-raw` も利用できます.
 
-`./setup.sh claude --env acme` の再実行で不足する共通リンクを補い,
-`--skill NAME` の追加で導入済みの dotfiles user skill をリンクします.
-従来の picker で作成した env も, 保存先と完了マーカーを保ったまま利用できます.
-個別設定・認証情報・履歴・MCP 設定・既存 skill は保持します.
-既存ファイルやリンクと競合する場合は書き込み前に停止し,
+共通設定の変更や `setup skills` での skill 復元後に,
+`./setup.sh claude --env acme` を再実行します.
+設定を再生成し, 導入済みの全 dotfiles user skill へのリンクを配置します.
+env ごとの skill 選択は不要です. 従来の picker で作成した env も,
+保存先・ログイン状態・完了マーカーを保持して更新できます.
+個別設定・履歴・MCP 設定・ローカル skill は保持します.
+設定の競合や共通リンク先との競合では書き込み前に停止し,
 未管理・作成途中のディレクトリは引き継ぎません.
 `default` の配置には従来どおり `setup links` を使います.
 
@@ -297,18 +299,35 @@ env だけの指定では model/effort 選択を省略します. どちらかを
 
 | env 内の項目 | 扱い |
 | --- | --- |
-| `settings.json` | `claude/profile-settings.json` の初期コピー. 作成後は個別に編集 |
+| `settings.json` | `claude/settings.json` から生成. 再実行で共通設定の更新と個別変更をマージ |
 | `rules/00-global.md`, `rules/10-claude.md` | `ai-rules/` の共通ソースへ symlink |
 | `statusline.cjs` | 共通 renderer へ symlink. 選択した env 名を表示 |
-| `skills/` | 初期状態は空. `setup.sh claude --env acme --skill NAME` で導入済み skill を追加 |
+| `skills/` | env 固有の実ディレクトリ. 導入済みの全 `.agents/user/skills` 定義へ個別に symlink |
 | `mcp.json` | 任意の env 固有 MCP 設定. 明示した `--mcp-config` が優先 |
 | ログイン・履歴・メモリ・plugins | 選択した保存先で Claude が個別管理 |
 
-既存 `~/.claude/settings.json`・認証情報・hooks・plugins はコピーしません.
-独自の外部保存先を持つ `claude-mem` は新規 env では有効にせず,
-使う場合はその保存先も個別に設定します. rules と status line は dotfiles に追従し,
-設定テンプレートの変更は次に作る env にだけ反映します.
-設定の自動同期やアカウントの自動移行は行いません.
+正本は dotfiles の `claude/settings.json` です. 共通の使い勝手の設定に加え,
+hooks・plugin の有効化・marketplace 定義も生成内容に含みます.
+各 env は通常ファイルを持ち, 個別に編集しても正本や別 env には影響しません.
+`.dotfiles-env.json` に前回の共通設定を記録し, 別の JSON キーへの変更はマージします.
+同じ値や配列を両方で変更すると競合として停止します.
+置換前の設定と記録は `.dotfiles-claude-backups/` に保存します.
+記録ファイルは env と一緒に保持してください. 更新中の別プロセスによる保存を確認し,
+書き込みに失敗すると元のファイルを復元します. 復元中にも変更された場合は
+その変更を保持して, 復旧用ファイルの場所を表示します.
+
+記録のない旧 env は, 移行用に保持した旧 `claude/profile-settings.json` を基準に,
+既存の個別変更を優先しながら共通設定を追加します.
+既存 default の認証情報・履歴・メモリ・plugin cache はコピーしません.
+`claude-mem` など独自の外部保存先を持つ plugin は, アカウントを分けて使う場合,
+保存先も個別に設定する必要があります. `CLAUDE_CONFIG_DIR` だけでは移動しません.
+
+共通 skill 定義の編集は symlink を通じて反映されます.
+新しく導入した skill の追加には setup を再実行します.
+共有元が消えても既存リンクやローカル skill は自動削除しません.
+`skills/synced/` などアカウントから同期されるデータは env 内に残します.
+未導入の状態では共有 skill は空です. `setup skills` で復元後に env setup を再実行します.
+旧 `--skill NAME` は導入済みかの確認として受け付け, 共有する skill の絞り込みは行いません.
 
 名前付き env では `tools/claude/auth-env.txt` の認証・接続先の環境変数を検出すると
 値を表示せずに停止します. 呼び出し元で対象変数を解除してください.
