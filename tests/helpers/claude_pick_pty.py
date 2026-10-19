@@ -13,7 +13,6 @@ if pid == 0:
     os.execvp(sys.argv[1], sys.argv[1:])
 
 output = bytearray()
-sent_name = False
 deadline = time.monotonic() + 10
 try:
     while time.monotonic() < deadline:
@@ -28,9 +27,6 @@ try:
             if not chunk:
                 break
             output.extend(chunk)
-            if not sent_name and (b"New environment name:" in output or b"New profile name:" in output):
-                os.write(terminal, (os.environ.get("PICK_TEST_NAME", "") + "\n").encode())
-                sent_name = True
     else:
         os.kill(pid, signal.SIGKILL)
         raise TimeoutError("claude-pick did not finish within 10 seconds")

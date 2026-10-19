@@ -11,6 +11,7 @@ setup() {
   FAKE_BIN="${TEST_ROOT}/bin"
   PICK_LOG="${TEST_ROOT}/launch.json"
   FZF_CHOICES="${TEST_ROOT}/choices"
+  NODE_BIN="$(dirname "$(command -v node)")"
   mkdir -p "$FAKE_BIN"
   cat > "$FAKE_BIN/claude" <<'PY'
 #!/usr/bin/env python3
@@ -41,11 +42,12 @@ PY
 teardown() { teardown_test_env; }
 
 picker_env() {
-  env -i HOME="$TEST_HOME" PATH="$FAKE_BIN:/usr/bin:/bin" TERM=xterm-256color \
+  env -i HOME="$TEST_HOME" PATH="$FAKE_BIN:$NODE_BIN:/usr/bin:/bin" TERM=xterm-256color \
     PICK_LOG="$PICK_LOG" FZF_CHOICES="$FZF_CHOICES" "$@"
 }
 
 run_picker() { run picker_env "$PICKER" "$@"; }
+create_env() { run picker_env SETUP_HOME="$TEST_HOME" SETUP_DOTFILES_ROOT="$ROOT" "$ROOT/setup.sh" claude --env "$@"; }
 run_tty_picker() { run picker_env python3 "$ROOT/tests/helpers/claude_pick_pty.py" "$PICKER"; }
 
 assert_log() {
@@ -57,18 +59,21 @@ for key, expected in zip(sys.argv[2::2], sys.argv[3::2]):
 PY
 }
 
-@test "claude-pick help and profile creation need neither Claude nor fzf" {
+@test "help needs no runtime and legacy creation delegates to setup without Claude or fzf" {
   run env -i HOME="$TEST_HOME" PATH=/usr/bin:/bin "$PICKER" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"Usage: claude-pick"* ]]
-  run env -i HOME="$TEST_HOME" PATH=/usr/bin:/bin "$PICKER" --create acme
+  run env -i HOME="$TEST_HOME" PATH="$NODE_BIN:/usr/bin:/bin" "$PICKER" --create acme
   [ "$status" -eq 0 ]
+  [[ "$output" == *"Delegating to setup"* ]]
   [ "$(cat "$TEST_HOME/.claude-profiles/acme/.claude-pick")" = 1 ]
+  run_picker --create-env acme
+  [ "$status" -eq 2 ]
   [ ! -e "$PICK_LOG" ]
 }
 
 @test "new profiles own settings and link rules and statusline directly to dotfiles" {
-  run_picker --create acme
+  create_env acme
   [ "$status" -eq 0 ]
   local profile_dir="$TEST_HOME/.claude-profiles/acme"
   [ ! -L "$profile_dir/settings.json" ]
@@ -87,46 +92,40 @@ assert not list((p / 'skills').iterdir())
 PY
 }
 
-@test "creation rejects existing profiles invalid portable names and missing skills without writes" {
+@test "setup rejects invalid portable names and missing skills and preserves existing settings" {
   for name in ../outside Acme 'two words' default con nul com1 lpt9; do
-    run_picker --create "$name"
+    create_env "$name"
     [ "$status" -eq 2 ]
     [ ! -d "$TEST_HOME/.claude-profiles" ]
   done
-  run_picker --create acme --skill missing-skill-for-test
+  create_env acme --skill missing-skill-for-test
   [ "$status" -eq 2 ]
   [ ! -d "$TEST_HOME/.claude-profiles" ]
-  run_picker --create acme
+  create_env acme
   [ "$status" -eq 0 ]
   printf 'user-owned\n' > "$TEST_HOME/.claude-profiles/acme/settings.json"
-  run_picker --create acme
-  [ "$status" -eq 2 ]
+  create_env acme
+  [ "$status" -eq 0 ]
   [ "$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")" = user-owned ]
 }
 
 @test "creation can link an explicitly selected installed skill without copying its contents" {
   [ -f "$ROOT/.agents/user/skills/architect/SKILL.md" ] || skip "architect skill not installed"
-  run_picker --create acme --skill architect
+  create_env acme --skill architect
   [ "$status" -eq 0 ]
   [ "$(readlink "$TEST_HOME/.claude-profiles/acme/skills/architect")" = "$ROOT/.agents/user/skills/architect" ]
 }
 
-@test "failed creation removes only this invocation's incomplete profile" {
-  cat > "$FAKE_BIN/ln" <<'SH'
-#!/usr/bin/env bash
-exit 1
-SH
-  chmod +x "$FAKE_BIN/ln"
-  mkdir -p "$TEST_HOME/.claude-profiles/existing"
-  printf 'keep\n' > "$TEST_HOME/.claude-profiles/existing/data"
-  run_picker --create acme
-  [ "$status" -ne 0 ]
-  [ ! -e "$TEST_HOME/.claude-profiles/acme" ]
-  [ "$(cat "$TEST_HOME/.claude-profiles/existing/data")" = keep ]
+@test "setup dry-run validates the environment without creating or launching it" {
+  create_env acme --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Would create environment: acme"* ]]
+  [ ! -e "$TEST_HOME/.claude-profiles" ]
+  [ ! -e "$PICK_LOG" ]
 }
 
 @test "explicit named profile preserves arguments exit code and profile settings" {
-  run_picker --create acme
+  create_env acme
   [ "$status" -eq 0 ]
   run picker_env PICK_EXIT=7 "$PICKER" -p acme opus high -- --resume '' 'two words' 'a"b' "tail\\"
   [ "$status" -eq 7 ]
@@ -135,7 +134,7 @@ SH
 }
 
 @test "profile-only launch keeps defaults and ignores inherited config directory" {
-  run_picker --create acme
+  create_env acme
   run picker_env CLAUDE_CONFIG_DIR=/not-the-profile CLAUDE_CODE_EFFORT_LEVEL=low "$PICKER" -p acme
   [ "$status" -eq 0 ]
   assert_log args '[]' effort '"low"'
@@ -146,7 +145,7 @@ PY
 }
 
 @test "env selects the same isolated home and model settings as the legacy profile alias" {
-  run_picker --create-env acme
+  create_env acme
   [ "$status" -eq 0 ]
   run_picker --env acme opus high -- --resume '' 'two words'
   [ "$status" -eq 0 ]
@@ -161,10 +160,10 @@ PY
 }
 
 @test "env credentials remain independent when creating and switching multiple subscription homes" {
-  run_picker --create-env account-a
+  create_env account-a
   [ "$status" -eq 0 ]
   printf 'account-a-placeholder\n' > "$TEST_HOME/.claude-profiles/account-a/.credentials.json"
-  run_picker --create-env account-b
+  create_env account-b
   [ "$status" -eq 0 ]
   [ ! -e "$TEST_HOME/.claude-profiles/account-b/.credentials.json" ]
   run_picker --env account-b -- auth login --claudeai
@@ -177,7 +176,7 @@ PY
 }
 
 @test "named profiles reject inherited credentials and routes without exposing values" {
-  run_picker --create acme
+  create_env acme
   for name in ANTHROPIC_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_PROFILE CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_MCP_CONFIG; do
     run picker_env "$name=test-private-value" "$PICKER" -p acme
     [ "$status" -eq 2 ]
@@ -200,7 +199,7 @@ PY
 }
 
 @test "profile MCP is optional and an explicit MCP flag takes precedence" {
-  run_picker --create acme
+  create_env acme
   printf '{"mcpServers":{}}\n' > "$TEST_HOME/.claude-profiles/acme/mcp.json"
   run_picker -p acme
   [ "$status" -eq 0 ]
@@ -224,7 +223,7 @@ PY
 }
 
 @test "auth commands and forwarded print/model flags bypass unnecessary pickers" {
-  run_picker --create acme
+  create_env acme
   run_picker -p acme -- auth login
   [ "$status" -eq 0 ]
   assert_log args '["auth","login"]'
@@ -255,19 +254,28 @@ PY
   printf 'cancel\n' > "$FZF_CHOICES"
   run_tty_picker
   [ "$status" -eq 130 ]
-  printf '+\nkeep\ncancel\n' > "$FZF_CHOICES"
-  run picker_env PICK_TEST_NAME=acme python3 "$ROOT/tests/helpers/claude_pick_pty.py" "$PICKER"
+  printf 'default\nkeep\ncancel\n' > "$FZF_CHOICES"
+  run_tty_picker
   [ "$status" -eq 130 ]
   [ ! -e "$TEST_HOME/.claude-profiles" ]
   [ ! -e "$PICK_LOG" ]
 }
 
-@test "interactive creation finishes selection before creating and launching" {
-  printf '+\nkeep\nkeep\n' > "$FZF_CHOICES"
-  run picker_env PICK_TEST_NAME=acme python3 "$ROOT/tests/helpers/claude_pick_pty.py" "$PICKER"
+@test "interactive selection launches an environment prepared by setup" {
+  create_env acme
   [ "$status" -eq 0 ]
-  [ -f "$TEST_HOME/.claude-profiles/acme/.claude-pick" ]
-  assert_log profile '"acme"' args '[]'
+  printf 'acme\nkeep\nkeep\n' > "$FZF_CHOICES"
+  run_tty_picker
+  [ "$status" -eq 0 ]
+  assert_log env '"acme"' args '[]'
+}
+
+@test "interactive selection cannot create environments" {
+  printf '+\n' > "$FZF_CHOICES"
+  run_tty_picker
+  [ "$status" -eq 2 ]
+  [ ! -e "$TEST_HOME/.claude-profiles" ]
+  [ ! -e "$PICK_LOG" ]
 }
 
 @test "installed launcher resolves shared resources through its symlink" {
@@ -280,7 +288,7 @@ PY
 
 @test "profile settings execute the linked statusline and show the selected profile" {
   command -v node >/dev/null || skip "node not installed"
-  run_picker --create acme
+  create_env acme
   run env CLAUDE_CONFIG_DIR="$TEST_HOME/.claude-profiles/acme" CLAUDE_PICK_ENV=acme CLAUDE_PICK_PROFILE=legacy node - "$ROOT/claude/profile-settings.json" <<'JS'
 const fs = require('node:fs');
 const { execSync } = require('node:child_process');

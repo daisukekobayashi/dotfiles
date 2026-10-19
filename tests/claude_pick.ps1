@@ -25,10 +25,10 @@ function Invoke-Case {
 }
 
 function Invoke-Picker {
-  param([string[]]$Arguments, [hashtable]$Environment = @{})
+  param([string[]]$Arguments, [hashtable]$Environment = @{}, [string]$ScriptRelative = 'tools/claude/claude-pick.ps1')
   # Exercise PowerShell's parser too, including the documented quoted '--'.
   $quotedArgs = @($Arguments | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ' '
-  $scriptPath = (Join-Path $FixtureRoot 'tools/claude/claude-pick.ps1').Replace("'", "''")
+  $scriptPath = (Join-Path $FixtureRoot $ScriptRelative).Replace("'", "''")
   $testUserLiteral = $TestUserDir.Replace("'", "''")
   $caller = @"
 if (`$HOME -ne '$testUserLiteral') { throw 'Isolated test home was not honored; refusing to launch.' }
@@ -48,6 +48,9 @@ exit `$LASTEXITCODE
   $start.EnvironmentVariables['HOME'] = $TestUserDir
   $start.EnvironmentVariables['PATH'] = "$TestBin;$env:PATH"
   $start.EnvironmentVariables['PICK_LOG'] = $TestLog
+  $start.EnvironmentVariables['SETUP_HOME'] = $TestUserDir
+  $start.EnvironmentVariables['SETUP_DOTFILES_ROOT'] = $FixtureRoot
+  $start.EnvironmentVariables['SETUP_DRY_RUN'] = '0'
   foreach ($key in @($start.EnvironmentVariables.Keys)) {
     foreach ($pattern in (Get-Content (Join-Path $RepoRoot 'tools/claude/auth-env.txt'))) {
       if ($key -like $pattern) { $start.EnvironmentVariables.Remove($key); break }
@@ -63,6 +66,11 @@ exit `$LASTEXITCODE
   return $result
 }
 
+function Invoke-EnvSetup {
+  param([string[]]$Arguments)
+  return Invoke-Picker -ScriptRelative 'setup.ps1' -Arguments (@('claude') + $Arguments)
+}
+
 function Read-Launch {
   return @(Get-Content -LiteralPath $TestLog | ForEach-Object {
     [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_))
@@ -71,7 +79,7 @@ function Read-Launch {
 
 try {
   foreach ($directory in @($FixtureRoot, $TestUserDir, $TestBin)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
-  foreach ($relative in @('tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
+  foreach ($relative in @('setup.ps1', 'setup/claude.ps1', 'setup/claude.js', 'lib/common.ps1', 'tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
     $target = Join-Path $FixtureRoot $relative
     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $RepoRoot $relative) -Destination $target
@@ -116,6 +124,14 @@ public class FakeClaude {
     Assert-True (($values | ConvertTo-Json -Compress) -ceq ($expected | ConvertTo-Json -Compress)) 'native arguments or environment differ'
     Assert-True ($env:CLAUDE_CONFIG_DIR -ceq $previous) 'caller environment changed'
   }
+  Invoke-Case 'setup help and dry-run do not initialize or launch Claude' {
+    if (Test-Path -LiteralPath $TestLog) { Remove-Item -LiteralPath $TestLog }
+    Assert-True ((Invoke-EnvSetup @('--help')).Code -eq 0) 'setup help failed'
+    $result = Invoke-EnvSetup @('--env', 'preview', '--dry-run')
+    Assert-True ($result.Code -eq 0) $result.Output
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $TestUserDir '.claude-profiles'))) 'dry-run created a home'
+    Assert-True (-not (Test-Path -LiteralPath $TestLog)) 'setup launched Claude'
+  }
   Invoke-Case 'portable name and noninteractive validation' {
     foreach ($name in @('../bad', 'Acme', 'con', 'default')) {
       Assert-True ((Invoke-Picker @('--create', $name)).Code -eq 2) "accepted $name"
@@ -123,7 +139,7 @@ public class FakeClaude {
     Assert-True ((Invoke-Picker @()).Code -eq 2) 'missing selection did not fail'
   }
   Invoke-Case 'creation succeeds with symlink privileges or rolls back cleanly' {
-    $result = Invoke-Picker @('--create', 'acme')
+    $result = Invoke-EnvSetup @('--env', 'acme')
     $profileDir = Join-Path $TestUserDir '.claude-profiles/acme'
     if ($result.Code -ne 0) {
       Assert-True ($result.Output -match 'Cannot create a shared-file symlink') $result.Output
@@ -134,7 +150,15 @@ public class FakeClaude {
     Assert-True (Test-Path -LiteralPath (Join-Path $profileDir '.claude-pick')) 'profile not ready'
     $settings = Get-Content -LiteralPath (Join-Path $profileDir 'settings.json') -Raw
     Assert-True ($settings -notmatch 'enabledPlugins|serena-hooks') 'inherited stateful plugins'
-    Assert-True ((Invoke-Picker @('--create', 'acme')).Code -eq 2) 'existing profile overwritten'
+    Assert-True ((Invoke-Picker @('--create', 'acme')).Code -eq 2) 'legacy creation accepted an existing environment'
+    $settingsPath = Join-Path $profileDir 'settings.json'
+    $savedSettings = '{"model":"opus","effortLevel":"high"}'
+    [IO.File]::WriteAllText($settingsPath, $savedSettings)
+    $refresh = Invoke-EnvSetup @('--env', 'acme')
+    Assert-True ($refresh.Code -eq 0) $refresh.Output
+    Assert-True ((Get-Content -LiteralPath $settingsPath -Raw) -ceq $savedSettings) 'refresh changed local settings'
+    $legacy = Invoke-Picker @('--create-env', 'legacy')
+    Assert-True ($legacy.Code -eq 0 -and $legacy.Output -match 'Delegating to setup') 'legacy creation did not delegate to setup'
     $result = Invoke-Picker @('-p', 'acme') @{ ANTHROPIC_API_KEY = 'test-private-value' }
     Assert-True ($result.Code -eq 2 -and $result.Output -match 'ANTHROPIC_API_KEY' -and $result.Output -notmatch 'test-private-value') 'credential guard failed'
     $result = Invoke-Picker @('-p', 'acme', '--', 'auth', 'login')

@@ -20,7 +20,8 @@ Subcommands:
   all         Run Windows setup for the current privilege level
   links       Create Windows symbolic links only
   skills      Restore skills and wire agent skill directories
-  codex       Generate a separate Azure or OpenAI API Codex home
+  codex       Generate a separate Codex environment
+  claude      Create or refresh a separate Claude Code environment
   packages    Install or verify Scoop and psmux PPM
   help        Show this help
 
@@ -28,9 +29,11 @@ Behavior:
   all (non-admin): runs packages, then links
   all (admin): skips packages and runs links only
   skills: runs the shared Node skills setup runtime
-  codex: accepts --provider azure|openai, --base-url <url>, --api-version <value>,
+  codex: accepts --env <name>, --provider azure|openai|chatgpt, --base-url <url>, --api-version <value>,
          --profile <name> and --dry-run (requires Node.js).
          The provider defaults to azure. Legacy --azure-* aliases remain available.
+  claude: accepts --env <name>, repeatable --skill <name> and --dry-run (requires Node.js).
+          Existing local settings and account state are preserved.
 "@
 }
 
@@ -42,6 +45,7 @@ try {
   $linksScript = Join-Path $setupContext.DotfilesRoot "setup/links.ps1"
   $skillsScript = Join-Path $setupContext.DotfilesRoot "setup/skills.ps1"
   $codexScript = Join-Path $setupContext.DotfilesRoot "setup/codex.ps1"
+  $claudeScript = Join-Path $setupContext.DotfilesRoot "setup/claude.ps1"
   $packagesScript = Join-Path $setupContext.DotfilesRoot "setup/packages.ps1"
 
   switch ($Subcommand.ToLowerInvariant()) {
@@ -96,6 +100,16 @@ try {
     }
     "codex" {
       Invoke-SetupPowerShellScript -ScriptPath $codexScript -ArgumentList (
+        @(
+          "-HomeDir",
+          $setupContext.HomeDir,
+          "-DotfilesRoot",
+          $setupContext.DotfilesRoot
+        ) + $SubcommandArgs
+      )
+    }
+    "claude" {
+      Invoke-SetupPowerShellScript -ScriptPath $claudeScript -ArgumentList (
         @(
           "-HomeDir",
           $setupContext.HomeDir,

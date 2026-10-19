@@ -267,27 +267,31 @@ Codex homes: an existing broker can retain its original home.
 Run `./setup.sh links` on macOS/Linux, or `.\setup.ps1 links` on Windows.
 This installs `claude-pick` or `claude-pick.ps1` into `~/.local/bin`.
 The launchers use Bash and PowerShell 5.1+, respectively. Interactive selection
-requires `fzf`; explicit arguments do not. Windows requires native `claude.exe`
-and permission to create symbolic links. Use PowerShell 7+ with Developer Mode,
-or an appropriately privileged terminal for environment creation. Windows PowerShell
-5.1 needs the latter even with Developer Mode; see the
-[PowerShell issue](https://github.com/PowerShell/PowerShell/issues/5000).
-Normal launches do not require elevation. The existing status line still requires Node.js.
+requires `fzf`; explicit arguments do not. Environment setup uses the shared
+Node.js 18+ runtime on both platforms and does not require Claude to be installed.
+Windows setup needs permission to create symbolic links: enable Developer Mode
+or use an appropriately privileged terminal. Launching requires native
+`claude.exe` on Windows and does not require elevation. The status line also uses Node.js.
+
+As with Codex, setup creates or refreshes environments; the picker selects and
+launches them. Named environments are created explicitly, independently of
+`setup links` and `setup all`:
 
 ```sh
-claude-pick                                  # Choose env, model, effort
-claude-pick --create-env acme                 # Initialize only; no login or launch
+./setup.sh claude --env acme --dry-run        # Preview without writing files
+./setup.sh claude --env acme                  # Initialize only; no login or launch
 claude-pick --env acme -- auth login --claudeai # Log in separately for this env
 claude-pick --env acme                       # Launch with its configured defaults
 claude-pick --env acme opus high -- --resume
 claude-pick --env default                    # Use the existing ~/.claude
+claude-pick                                  # Choose an existing env, model, effort
 ```
 
 In PowerShell, use `claude-pick.ps1` and quote the separator as `'--'` so
 [PowerShell preserves it](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing#the-end-of-parameters-token):
 
 ```powershell
-claude-pick.ps1 --create-env acme
+.\setup.ps1 claude --env acme
 claude-pick.ps1 --env acme '--' auth login
 claude-pick.ps1 --env acme opus high '--' --resume
 ```
@@ -300,11 +304,18 @@ Zsh wrapper. `claude-raw` remains available for compatibility.
 Named environments keep their existing `~/.claude-profiles/<name>` storage.
 Names start with a lowercase letter
 and contain up to 64 lowercase letters, digits, `_`, or `-`; `default` and Windows
-device names are reserved. With no environments, the picker offers `default` and
-creation. Legacy `-p`/`--profile` remain aliases for `--env`, and `--create` remains
-an alias for `--create-env`. An unknown explicit name is an error. Cancelling
-selection never creates an environment or launches Claude, and creation never
-overwrites an environment.
+device names are reserved. The picker lists existing environments and always
+includes `default`. Legacy `-p`/`--profile` remain aliases for `--env`.
+Legacy `--create-env`/`--create` delegate to setup with a migration message and
+still reject existing environments. An unknown explicit name is an error;
+cancelling selection never launches Claude.
+
+Rerun `./setup.sh claude --env acme` to restore missing shared links, or add
+`--skill NAME` to link an installed dotfiles user skill. Existing picker-created
+homes work directly with setup; their storage and readiness marker are retained.
+Refresh preserves local settings, credentials, history, MCP configuration and
+existing skills. Conflicting files or symlinks stop setup before writing;
+unmanaged or incomplete homes are not adopted. `default` keeps using `setup links`.
 
 An explicit environment alone skips model/effort selection. Supplying one of model
 or effort prompts for the other; use `keep` to retain Claude's configuration.
@@ -319,7 +330,7 @@ its `-p`/`--print`. Auth and maintenance subcommands skip these selections.
 | `settings.json` | Initial copy of `claude/profile-settings.json`; later edits are independent |
 | `rules/00-global.md`, `rules/10-claude.md` | Symlinks to the shared sources under `ai-rules/` |
 | `statusline.cjs` | Symlink to the shared renderer; shows the selected environment name |
-| `skills/` | Empty initially; `--create-env acme --skill NAME` links selected installed dotfiles skills |
+| `skills/` | Empty initially; `setup.sh claude --env acme --skill NAME` adds selected installed dotfiles skills |
 | `mcp.json` | Optional per-environment MCP config; explicit `--mcp-config` takes precedence |
 | Login, history, memory, plugins | Managed separately by Claude under the selected config directory |
 
@@ -395,17 +406,19 @@ npm --prefix setup test
 bats tests
 ```
 
-Focused Claude picker checks use temporary homes and fake Claude executables;
+Focused Claude setup and picker checks use temporary homes and fake Claude executables;
 they do not log in or call the API:
 
 ```bash
+node --test setup/test/claude.test.mjs
 bats tests/claude_pick.bats tests/claude_wrapper.bats
 shellcheck tools/claude/claude-pick tests/claude_pick.bats tests/claude_wrapper.bats
 ```
 
 On native Windows, run `.\tests\claude_pick.ps1` in PowerShell 5.1 or later.
 It compiles a small native fixture with the built-in Windows PowerShell compiler
-to check argument forwarding and process behavior. Successful profile creation
+to check setup, argument forwarding and process behavior. Node.js is required.
+Successful environment creation
 is skipped when symlink privileges are unavailable; failure rollback is checked.
 
 Neovim DAP full E2E checks are opt-in because they start real debug adapters and Docker services.

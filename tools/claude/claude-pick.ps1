@@ -14,7 +14,7 @@ function Stop-Picker {
 function Show-Usage {
   @'
 Usage: claude-pick [--env ENV] [-m MODEL] [-e EFFORT] [MODEL [EFFORT]] [-- CLAUDE_ARGS...]
-       claude-pick --create-env NAME [--skill NAME ...]
+Create or refresh environments with: .\setup.ps1 claude --env NAME [--skill NAME ...]
 
 Without arguments, choose an environment, model, and effort with fzf.
 An explicit environment alone uses its saved model/effort without a picker.
@@ -23,9 +23,8 @@ Use "keep" for model/effort to leave Claude's configuration in control.
 Effort choices: keep, low, medium, high, xhigh, max (support varies by model).
 
 "default" uses ~/.claude; named environments keep using ~/.claude-profiles/NAME.
---create-env initializes an environment without logging in or launching Claude.
-Legacy -p/--profile and --create remain aliases for --env and --create-env.
---skill links an installed dotfiles user skill during creation only.
+Legacy -p/--profile remain aliases for --env.
+Legacy --create-env/--create [--skill NAME ...] delegate to setup (creation only).
 Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter.
 Quote the separator in PowerShell: claude-pick.ps1 --env acme '--' auth login
 Arguments after '--' are forwarded unchanged, including Claude's -p/--print.
@@ -94,72 +93,6 @@ function Get-EnvRows {
     Get-ChildItem -LiteralPath $EnvsRoot -Directory | Sort-Object Name | ForEach-Object {
       if ((Test-EnvName $_.Name) -and (Test-EnvReady $_.FullName)) {
         "$($_.Name)`tNamed environment"
-      }
-    }
-  }
-  "+`tCreate a new environment"
-}
-
-function New-Env {
-  Assert-EnvName $SelectedEnv
-  $destination = Join-Path $EnvsRoot $SelectedEnv
-  if (Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue) {
-    Stop-Picker 2 "Environment already exists: $SelectedEnv"
-  }
-  foreach ($source in @('claude/profile-settings.json', 'claude/statusline.cjs', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
-    if (-not (Test-Path -LiteralPath (Join-Path $DotfilesRoot $source) -PathType Leaf)) {
-      Stop-Picker 2 "Missing shared file: $source"
-    }
-  }
-  foreach ($skill in $Skills) {
-    if ($skill -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_-]*$') { Stop-Picker 2 "Invalid skill name: $skill" }
-    if (-not (Test-Path -LiteralPath (Join-Path $DotfilesRoot ".agents/user/skills/$skill/SKILL.md") -PathType Leaf)) {
-      Stop-Picker 2 "Installed skill not found: $skill"
-    }
-  }
-  New-Item -ItemType Directory -Path $EnvsRoot -Force | Out-Null
-  # No -Force: a concurrent creation or existing directory must not be overwritten.
-  New-Item -ItemType Directory -Path $destination | Out-Null
-  $owned = New-Object 'System.Collections.Generic.List[string]'
-  $complete = $false
-  try {
-    New-Item -ItemType Directory -Path (Join-Path $destination 'rules') | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $destination 'skills') | Out-Null
-    $target = Join-Path $destination 'settings.json'
-    $owned.Add($target)
-    Copy-Item -LiteralPath (Join-Path $DotfilesRoot 'claude/profile-settings.json') -Destination $target
-    $links = @{
-      'statusline.cjs' = 'claude/statusline.cjs'
-      'rules/00-global.md' = 'ai-rules/base/global.md'
-      'rules/10-claude.md' = 'ai-rules/agents/claude.md'
-    }
-    foreach ($skill in $Skills) { $links["skills/$skill"] = ".agents/user/skills/$skill" }
-    foreach ($relativePath in $links.Keys) {
-      $target = Join-Path $destination $relativePath
-      try {
-        New-Item -ItemType SymbolicLink -Path $target -Value (Join-Path $DotfilesRoot $links[$relativePath]) | Out-Null
-      } catch {
-        Stop-Picker 2 'Cannot create a shared-file symlink. On Windows, use PowerShell 7+ with Developer Mode, or create the environment from an appropriately privileged terminal (required for Windows PowerShell 5.1).'
-      }
-      $owned.Add($target)
-    }
-    $marker = Join-Path $destination '.claude-pick'
-    $owned.Add($marker)
-    [IO.File]::WriteAllText($marker, "1`n")
-    $complete = $true
-    [Console]::Error.WriteLine("Created environment: $SelectedEnv")
-  } finally {
-    if (-not $complete) {
-      # Delete only entries we created; never recurse through symlink targets.
-      foreach ($file in $owned) {
-        $entry = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
-        if ($entry) { $entry.Delete() }
-      }
-      foreach ($directory in @('rules', 'skills', '')) {
-        $target = if ($directory) { Join-Path $destination $directory } else { $destination }
-        if ((Test-Path -LiteralPath $target) -and -not @(Get-ChildItem -LiteralPath $target -Force).Count) {
-          [IO.Directory]::Delete($target)
-        }
       }
     }
   }
@@ -232,31 +165,35 @@ try {
   }
   if ($CreateName) {
     if ($SelectedEnv -or $SelectedModel -or $SelectedEffort -or $ForwardArgs.Count) { Stop-Picker 2 '--create-env cannot be combined with launch arguments' }
-    $SelectedEnv = $CreateName
-    New-Env
-    exit 0
+    Assert-EnvName $CreateName
+    if (Get-Item -LiteralPath (Join-Path $EnvsRoot $CreateName) -Force -ErrorAction SilentlyContinue) {
+      Stop-Picker 2 "Environment already exists: $CreateName"
+    }
+    [Console]::Error.WriteLine('claude-pick: Use setup.ps1 claude --env NAME for environment creation. Delegating to setup.')
+    $SetupArgs = @('--env', $CreateName)
+    foreach ($skill in $Skills) { $SetupArgs += @('--skill', $skill) }
+    $previousDryRun = $env:SETUP_DRY_RUN
+    try {
+      $env:SETUP_DRY_RUN = '0'
+      & (Join-Path $DotfilesRoot 'setup/claude.ps1') -HomeDir $HOME -DotfilesRoot $DotfilesRoot @SetupArgs
+      exit $LASTEXITCODE
+    } finally { $env:SETUP_DRY_RUN = $previousDryRun }
   }
-  if ($Skills.Count) { Stop-Picker 2 '--skill requires --create-env' }
+  if ($Skills.Count) { Stop-Picker 2 'Link skills with setup.ps1 claude --env NAME --skill NAME' }
   $ClaudeCommand = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $ClaudeCommand) { Stop-Picker 127 'Required command not found: claude' }
   if ($ClaudeCommand.Source -match '\.(cmd|bat)$') { Stop-Picker 2 'Use the native Claude executable (claude.exe); cmd/bat shims cannot preserve arbitrary arguments.' }
-  $InteractiveEnv = $false; $Creating = $false
+  $InteractiveEnv = $false
   if (-not $SelectedEnv) {
     $SelectedEnv = Select-Row 'Env' @(Get-EnvRows)
     $InteractiveEnv = $true
-    if ($SelectedEnv -ceq '+') {
-      $SelectedEnv = Read-Host 'New environment name'
-      if (-not $SelectedEnv) { Stop-Picker 130 'Selection cancelled' }
-      Assert-EnvName $SelectedEnv
-      $Creating = $true
-    }
   }
   if ($SelectedEnv -ceq 'default') { $ConfigDirectory = Join-Path $HOME '.claude' }
   else {
     Assert-EnvName $SelectedEnv
     $ConfigDirectory = Join-Path $EnvsRoot $SelectedEnv
-    if (-not $Creating -and -not (Test-EnvReady $ConfigDirectory)) {
-      Stop-Picker 2 "Environment missing or incomplete: $SelectedEnv. Create it with --create-env NAME."
+    if (-not (Test-EnvReady $ConfigDirectory)) {
+      Stop-Picker 2 "Environment missing or incomplete: $SelectedEnv. Create it with setup.ps1 claude --env NAME."
     }
   }
   Assert-Environment
@@ -286,7 +223,6 @@ try {
   if (-not $SelectedEffort) { $SelectedEffort = Select-Row 'Effort' @("keep`tKeep configured effort", "low`tLow", "medium`tMedium", "high`tHigh", "xhigh`tExtra high", "max`tMaximum") }
   if ($SelectedEffort -cnotin @('keep', 'low', 'medium', 'high', 'xhigh', 'max')) { Stop-Picker 2 "Invalid effort: $SelectedEffort" }
   if ($SelectedModel -match '^[-]|[\r\n]') { Stop-Picker 2 'Invalid model' }
-  if ($Creating) { New-Env }
 
   $LaunchArgs = New-Object 'System.Collections.Generic.List[string]'
   if ($SelectedModel -cne 'keep') { $LaunchArgs.Add('--model'); $LaunchArgs.Add($SelectedModel) }

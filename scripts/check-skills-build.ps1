@@ -16,5 +16,5 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-& git diff --exit-code -- setup/skills.js setup/codex.js
+& git diff --exit-code -- setup/skills.js setup/codex.js setup/claude.js
 exit $LASTEXITCODE

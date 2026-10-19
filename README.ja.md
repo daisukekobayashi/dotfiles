@@ -238,39 +238,53 @@ macOS/Linux は `./setup.sh links`, Windows は `.\setup.ps1 links` で,
 `~/.local/bin` に `claude-pick` / `claude-pick.ps1` を配置します.
 起動処理は Bash / PowerShell 5.1+ です. 対話選択には `fzf` が必要ですが,
 引数で指定すれば不要です. status line には Node.js を使います.
-Windows の env 作成には native `claude.exe` と symlink 作成権限が必要です.
-PowerShell 7+ と Developer Mode, または適切な権限の端末で作成します.
-Windows PowerShell 5.1 は Developer Mode があっても後者が必要です
-([PowerShell の報告](https://github.com/PowerShell/PowerShell/issues/5000)).
-通常の起動に権限の昇格は不要です.
+env 作成は両 OS とも共有 Node.js 18+ runtime を使い, Claude のインストールは不要です.
+Windows では symlink 作成権限が必要です. Developer Mode を有効にするか,
+適切な権限の端末で setup を実行します.
+Windows での起動には native `claude.exe` が必要ですが, 権限の昇格は不要です.
+
+Codex と同じく, env の作成・共通リンクの更新は setup, 選択・起動は picker が担います.
+名前付き env は明示的に作成し, `setup links` / `setup all` では作成しません.
 
 ```sh
-claude-pick                                  # env, model, effort を選択
-claude-pick --create-env acme                 # 初期化のみ. ログイン・起動はしない
+./setup.sh claude --env acme --dry-run        # ファイル変更なしで確認
+./setup.sh claude --env acme                  # 初期化のみ. ログイン・起動はしない
 claude-pick --env acme -- auth login --claudeai
 claude-pick --env acme                        # 保存済み設定で起動
 claude-pick --env acme opus high -- --resume
 claude-pick --env default                     # 既存の ~/.claude を使う
+claude-pick                                  # 既存 env, model, effort を選択
 ```
 
 PowerShell では区切りを `'--'` と引用して
 [パーサーに取り除かれないようにします](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing#the-end-of-parameters-token).
 
 ```powershell
-claude-pick.ps1 --create-env acme
+.\setup.ps1 claude --env acme
 claude-pick.ps1 --env acme '--' auth login --claudeai
 claude-pick.ps1 --env acme opus high '--' --resume
 ```
 
-旧 `-p` / `--profile` は `--env`, 旧 `--create` は `--create-env` の別名です.
+旧 `-p` / `--profile` は `--env` の別名です.
+旧 `--create-env` / `--create` は移行メッセージを出して setup に委譲し,
+従来どおり既存 env の作成は拒否します.
 保存先は互換性のため `~/.claude-profiles/<名前>` のままです.
 名前は英小文字で始まる 1〜64 文字の英小文字・数字・`_`・`-` で,
 `default` と Windows のデバイス名は予約名です.
-存在しない名前はエラーにし, 選択のキャンセルでは作成・起動しません.
-既存 env は上書きしません. リンク配置前は `./tools/claude/claude-pick` /
+picker には既存 env の選択だけを表示し, 名前付き env が無ければ `default` を表示します.
+存在しない名前はエラーにし, 選択のキャンセルでは起動しません.
+リンク配置前は `./tools/claude/claude-pick` /
 `.\tools\claude\claude-pick.ps1` から実行できます.
 従来の Zsh wrapper が追加していた共通 MCP 設定は `--env default` で使えます.
 公式の `claude` は直接実行でき, `claude-raw` も利用できます.
+
+`./setup.sh claude --env acme` の再実行で不足する共通リンクを補い,
+`--skill NAME` の追加で導入済みの dotfiles user skill をリンクします.
+従来の picker で作成した env も, 保存先と完了マーカーを保ったまま利用できます.
+個別設定・認証情報・履歴・MCP 設定・既存 skill は保持します.
+既存ファイルやリンクと競合する場合は書き込み前に停止し,
+未管理・作成途中のディレクトリは引き継ぎません.
+`default` の配置には従来どおり `setup links` を使います.
 
 env だけの指定では model/effort 選択を省略します. どちらかを指定すると
 残りを選択し, `keep` なら保存済みの設定を使います.
@@ -286,7 +300,7 @@ env だけの指定では model/effort 選択を省略します. どちらかを
 | `settings.json` | `claude/profile-settings.json` の初期コピー. 作成後は個別に編集 |
 | `rules/00-global.md`, `rules/10-claude.md` | `ai-rules/` の共通ソースへ symlink |
 | `statusline.cjs` | 共通 renderer へ symlink. 選択した env 名を表示 |
-| `skills/` | 初期状態は空. `--create-env acme --skill NAME` で導入済み skill をリンク |
+| `skills/` | 初期状態は空. `setup.sh claude --env acme --skill NAME` で導入済み skill を追加 |
 | `mcp.json` | 任意の env 固有 MCP 設定. 明示した `--mcp-config` が優先 |
 | ログイン・履歴・メモリ・plugins | 選択した保存先で Claude が個別管理 |
 
@@ -352,17 +366,18 @@ npm --prefix setup test
 bats tests
 ```
 
-Claude picker の確認は一時 HOME と偽の Claude コマンドを使い,
+Claude setup / picker の確認は一時 HOME と偽の Claude コマンドを使い,
 ログイン・API 呼び出しは行いません.
 
 ```bash
+node --test setup/test/claude.test.mjs
 bats tests/claude_pick.bats tests/claude_wrapper.bats
 shellcheck tools/claude/claude-pick tests/claude_pick.bats tests/claude_wrapper.bats
 ```
 
 native Windows では PowerShell 5.1 以降で `.\tests\claude_pick.ps1` を実行します.
-Windows PowerShell 組み込みのコンパイラで確認用の小さな実行ファイルを作り,
-引数やプロセスの動作を確認します. symlink 権限が無い場合, 作成成功の確認は
+Node.js と Windows PowerShell 組み込みのコンパイラで確認用の実行環境を用意し,
+setup・引数・プロセスの動作を確認します. symlink 権限が無い場合, 作成成功の確認は
 skip し, 作成失敗時に途中のファイルが残らないことを確認します.
 
 Manual bootstrap E2E は opt-in です. 新しい Docker container で実行し,

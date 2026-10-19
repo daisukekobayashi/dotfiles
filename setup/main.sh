@@ -13,6 +13,8 @@ source "${SCRIPT_DIR}/links.sh"
 source "${SCRIPT_DIR}/skills.sh"
 # shellcheck source=setup/codex.sh
 source "${SCRIPT_DIR}/codex.sh"
+# shellcheck source=setup/claude.sh
+source "${SCRIPT_DIR}/claude.sh"
 # shellcheck source=setup/packages.sh
 source "${SCRIPT_DIR}/packages.sh"
 # shellcheck source=setup/post.sh
@@ -26,7 +28,8 @@ Subcommands:
   all         Run all setup steps (default): links -> packages -> post
   links       Run symbolic link and local config setup only
   skills      Restore skills and wire agent skill directories
-  codex       Generate a separate Azure or OpenAI API Codex home
+  codex       Generate a separate Codex environment
+  claude      Create or refresh a separate Claude Code environment
   packages    Run required package/tool install and post-setup steps
   post        Run post-setup steps only
   help        Show this help
@@ -37,7 +40,9 @@ packages args:
   --dry-run      Print commands without executing side effects
 
 codex args:
-  --provider azure|openai    Select the API home (default: azure)
+  --env <name>               Select an independent Codex home
+  --provider azure|openai|chatgpt
+                             Required for a new arbitrary environment name
   --base-url <url>           API base_url (required initially for Azure)
   --api-version <value>      Azure api-version; use none to remove a saved value
   --azure-base-url <url>     Azure-only alias for --base-url
@@ -45,6 +50,11 @@ codex args:
                              Azure-only alias for --api-version
   --profile <name>           Set the selected home's default model profile
   --dry-run                  Preview generation without changing files
+
+claude args:
+  --env <name>               Create or refresh a named environment
+  --skill <name>             Link an installed user skill (repeatable)
+  --dry-run                  Preview setup without changing files
 
 skills args:
   --scope user|project       Install user or project skills (default: user)
@@ -178,7 +188,7 @@ main() {
   fi
 
   if [[ "${subcommand}" == --* ]]; then
-    log_error "Flags are not supported. Use subcommands: all, links, skills, codex, packages, post, help."
+    log_error "Flags are not supported. Use subcommands: all, links, skills, codex, claude, packages, post, help."
     usage
     return 1
   fi
@@ -223,6 +233,9 @@ main() {
       ;;
     codex)
       setup_codex "$@"
+      ;;
+    claude)
+      setup_claude "$@"
       ;;
     packages)
       parse_packages_args "$@" || {
