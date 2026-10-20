@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const fs = require("node:fs");
+const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const node_util_1 = require("node:util");
@@ -41,6 +42,83 @@ function readSettings(text, label) {
     catch {
         throw new Error(`Missing or invalid JSON object: ${label}`);
     }
+}
+function memoryPorts(home, root) {
+    const ports = new Set();
+    const read = (file) => {
+        try {
+            return readSettings(fs.readFileSync(file, "utf8"), file);
+        }
+        catch (error) {
+            if (error.code === "ENOENT")
+                return {};
+            throw error;
+        }
+    };
+    const collect = (settings) => {
+        const port = parseInt(String(settings.CLAUDE_MEM_WORKER_PORT), 10);
+        if (port > 0 && port <= 65535)
+            ports.add(port);
+    };
+    const collectData = (file) => {
+        const settings = read(file);
+        collect(table(settings.env) ? settings.env : settings);
+    };
+    collectData(path.join(home, ".claude-mem/settings.json"));
+    const homes = [path.join(home, ".claude")];
+    if (entry(root)) {
+        for (const item of fs.readdirSync(root, { withFileTypes: true })) {
+            if (item.isDirectory())
+                homes.push(path.join(root, item.name));
+        }
+    }
+    for (const directory of homes) {
+        const settings = read(path.join(directory, "settings.json"));
+        const env = table(settings.env) ? settings.env : {};
+        collect(env);
+        collectData(path.join(directory, "claude-mem/settings.json"));
+        if (typeof env.CLAUDE_MEM_DATA_DIR === "string") {
+            const data = env.CLAUDE_MEM_DATA_DIR.replace(/^~(?=$|[\\/])/, home);
+            collectData(path.join(data, "settings.json"));
+        }
+    }
+    return ports;
+}
+async function reserveMemoryPort(home, root) {
+    let used = memoryPorts(home, root);
+    // Leave the per-user default range (37700-37799) available to the default home.
+    for (let port = 37800; port <= 65535; port++) {
+        if (used.has(port))
+            continue;
+        const server = await new Promise((resolve, reject) => {
+            const listener = net.createServer(socket => socket.destroy());
+            listener.once("error", (error) => {
+                if (error.code === "EADDRINUSE")
+                    resolve(undefined);
+                else
+                    reject(error);
+            });
+            listener.listen({ host: "127.0.0.1", port, exclusive: true }, () => resolve(listener));
+        });
+        if (!server)
+            continue;
+        try {
+            // Another setup may have saved its allocation after our first scan.
+            used = memoryPorts(home, root);
+            if (!used.has(port)) {
+                // Hold the port until this process has saved (or rolled back) its files.
+                server.unref();
+                process.once("exit", () => server.close());
+                return port;
+            }
+        }
+        catch (error) {
+            server.close();
+            throw error;
+        }
+        await new Promise(resolve => server.close(() => resolve()));
+    }
+    throw new Error("No unused loopback port is available for claude-mem");
 }
 function mergeSettings(previous, current, desired, key = "settings.json", legacy = false) {
     if ((0, node_util_1.isDeepStrictEqual)(current, previous))
@@ -90,8 +168,15 @@ function applyChanges(root, destination, existing, links, changes, guards) {
     let keepStage = false;
     const mkdir = (file) => {
         if (!entry(file)) {
-            fs.mkdirSync(file, { mode: 0o700 });
-            createdDirectories.push(file);
+            try {
+                fs.mkdirSync(file, { mode: 0o700 });
+                createdDirectories.push(file);
+            }
+            catch (error) {
+                if (error.code !== "EEXIST")
+                    throw error;
+                directory(file, "environment directory");
+            }
         }
         else
             directory(file, "environment directory");
@@ -99,7 +184,7 @@ function applyChanges(root, destination, existing, links, changes, guards) {
     const checkFiles = () => {
         directory(root, "Claude environment directory");
         directory(destination, "Claude environment home");
-        for (const name of ["rules", "skills"])
+        for (const name of ["rules", "skills", ...(!existing ? ["claude-mem"] : [])])
             directory(path.join(destination, name), `${name} directory`);
         for (const guard of guards) {
             const expected = applied.find(change => change.name === guard.name)?.after ?? guard.before;
@@ -120,6 +205,8 @@ function applyChanges(root, destination, existing, links, changes, guards) {
             directory(destination, "Claude environment home");
         mkdir(path.join(destination, "rules"));
         mkdir(path.join(destination, "skills"));
+        if (!existing)
+            mkdir(path.join(destination, "claude-mem"));
         stage = fs.mkdtempSync(path.join(destination, ".dotfiles-claude-stage-"));
         for (let i = 0; i < changes.length; i++) {
             fs.writeFileSync(path.join(stage, `${i}.new`), changes[i].after, { flag: "wx", mode: 0o600 });
@@ -203,7 +290,7 @@ function applyChanges(root, destination, existing, links, changes, guards) {
     if (backup)
         console.log(`Previous settings backed up in ${backup}`);
 }
-function main() {
+async function main() {
     let env = "";
     let dryRun = process.env.SETUP_DRY_RUN === "1";
     const skills = new Set();
@@ -217,6 +304,7 @@ Create or refresh a named Claude Code environment without login or launch.
 Generate settings from claude/settings.json; preserve independent local edits.
 Conflicting edits stop before writes. Previous settings are backed up on refresh.
 All installed dotfiles user skills, shared rules and statusline use symlinks.
+New environments get a private claude-mem data directory and unused worker port.
 Legacy --skill NAME validates that a skill is installed; it does not filter sharing.
 The default environment keeps using setup links.
 Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter.`);
@@ -273,6 +361,18 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
     directory(path.join(destination, ".dotfiles-claude-backups"), "backup directory");
     const source = readSettings(readOptional(path.join(dotfiles, "claude/settings.json"), "claude/settings.json"), "claude/settings.json");
     let settings = source;
+    let memory;
+    if (!existing) {
+        const sharedEnv = source.env === undefined ? {} : source.env;
+        if (!table(sharedEnv))
+            throw new Error("Expected an env object in claude/settings.json");
+        memory = {
+            CLAUDE_MEM_DATA_DIR: path.join(destination, "claude-mem"),
+            CLAUDE_MEM_WORKER_PORT: String(await reserveMemoryPort(home, root)),
+            CLAUDE_MEM_WORKER_HOST: "127.0.0.1",
+        };
+        settings = { ...source, env: { ...sharedEnv, ...memory } };
+    }
     if (settingsBefore !== undefined) {
         const current = readSettings(settingsBefore, "settings.json");
         let previous;
@@ -296,11 +396,15 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
         { name: "settings.json", before: settingsBefore },
         { name: ".dotfiles-env.json", before: baselineBefore },
         { name: ".claude-pick", before: markerBefore },
+        ...(!existing ? [{ name: "claude-mem/settings.json", before: undefined }] : []),
     ];
     const changes = [
         { ...guards[0], after: settingsAfter },
         { ...guards[1], after: baselineAfter },
-        ...(!existing ? [{ ...guards[2], after: "1\n" }] : []),
+        ...(!existing ? [
+            { ...guards[3], after: JSON.stringify(memory, null, 2) + "\n" },
+            { ...guards[2], after: "1\n" },
+        ] : []),
     ].filter(change => change.before !== change.after);
     const candidates = [
         { name: "statusline.cjs", source: path.join(dotfiles, "claude/statusline.cjs") },
@@ -325,6 +429,8 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
     }
     if (dryRun) {
         console.log(`Would ${existing ? "refresh" : "create"} environment: ${env}`);
+        if (memory)
+            console.log(`  claude-mem: ${memory.CLAUDE_MEM_DATA_DIR} (127.0.0.1:${memory.CLAUDE_MEM_WORKER_PORT})`);
         for (const change of changes)
             console.log(`  ${change.before === undefined ? "Create" : "Update"} ${change.name}`);
         for (const link of links)
@@ -334,11 +440,10 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
     if (changes.length || links.length)
         applyChanges(root, destination, existing, links, changes, guards);
     console.log(`${existing ? (changes.length || links.length ? "Refreshed" : "Unchanged") : "Created"} environment: ${env}`);
+    if (memory)
+        console.log(`claude-mem: ${memory.CLAUDE_MEM_DATA_DIR} (127.0.0.1:${memory.CLAUDE_MEM_WORKER_PORT})`);
 }
-try {
-    main();
-}
-catch (error) {
+void main().catch((error) => {
     console.error(`Claude setup: ${error.message}`);
     process.exitCode = 2;
-}
+});

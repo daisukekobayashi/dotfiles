@@ -333,6 +333,7 @@ its `-p`/`--print`. Auth and maintenance subcommands skip these selections.
 | `statusline.cjs` | Symlink to the shared renderer; shows the selected environment name |
 | `skills/` | A real env directory with individual symlinks to all installed `.agents/user/skills` definitions |
 | `mcp.json` | Optional per-environment MCP config; explicit `--mcp-config` takes precedence |
+| `claude-mem/` | New envs get private memory storage and a separate loopback worker port |
 | Login, history, memory, plugins | Managed separately by Claude under the selected config directory |
 
 The source is dotfiles' `claude/settings.json`, including its preferences, hooks,
@@ -349,9 +350,16 @@ Legacy homes without a baseline are upgraded on refresh using the former
 `claude/profile-settings.json` template, retained only for migration. Existing
 local choices are preserved while new common settings are added. Credentials,
 history, memories and plugin caches are never copied from the default home.
-Plugins with an external store, such as `claude-mem`, still need their own storage
-configuration when used across accounts; changing `CLAUDE_CONFIG_DIR` does not
-relocate those stores.
+For new envs, setup sets `CLAUDE_MEM_DATA_DIR` to the env's `claude-mem/` directory,
+`CLAUDE_MEM_WORKER_HOST` to `127.0.0.1`, and `CLAUDE_MEM_WORKER_PORT` to an unused
+port starting at 37800. It checks existing environment and memory settings as well
+as active listeners, and holds the selected port until creation finishes so
+concurrent setup commands cannot assign it twice. The same three values are
+written to `claude-mem/settings.json`; databases and search indexes start fresh
+when the plugin first uses them. Dry-run prints the proposed directory and port.
+Refresh preserves existing memory settings and does not migrate older envs or
+the default home. Other plugins with external stores still need their own
+storage configuration; `CLAUDE_CONFIG_DIR` alone does not relocate those stores.
 
 Shared skill definitions follow source edits through symlinks. Rerun setup to add
 newly installed skills; existing links and local skills are not deleted when a

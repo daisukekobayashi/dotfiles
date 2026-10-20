@@ -304,6 +304,7 @@ env だけの指定では model/effort 選択を省略します. どちらかを
 | `statusline.cjs` | 共通 renderer へ symlink. 選択した env 名を表示 |
 | `skills/` | env 固有の実ディレクトリ. 導入済みの全 `.agents/user/skills` 定義へ個別に symlink |
 | `mcp.json` | 任意の env 固有 MCP 設定. 明示した `--mcp-config` が優先 |
+| `claude-mem/` | 新規 env 専用の記憶保存先. worker の loopback ポートも個別に割り当て |
 | ログイン・履歴・メモリ・plugins | 選択した保存先で Claude が個別管理 |
 
 正本は dotfiles の `claude/settings.json` です. 共通の使い勝手の設定に加え,
@@ -319,8 +320,14 @@ hooks・plugin の有効化・marketplace 定義も生成内容に含みます.
 記録のない旧 env は, 移行用に保持した旧 `claude/profile-settings.json` を基準に,
 既存の個別変更を優先しながら共通設定を追加します.
 既存 default の認証情報・履歴・メモリ・plugin cache はコピーしません.
-`claude-mem` など独自の外部保存先を持つ plugin は, アカウントを分けて使う場合,
-保存先も個別に設定する必要があります. `CLAUDE_CONFIG_DIR` だけでは移動しません.
+新規 env では `CLAUDE_MEM_DATA_DIR` に env 内の `claude-mem/` を設定し,
+`CLAUDE_MEM_WORKER_HOST` は `127.0.0.1`, `CLAUDE_MEM_WORKER_PORT` は
+37800 以降から未使用のポートを自動割当します. 既存 env・記憶設定と使用中のポートを確認し,
+作成完了まで選択したポートを確保するため, 同時作成でも重複しません.
+同じ 3 項目を `claude-mem/settings.json` にも保存し, DB と検索インデックスは
+plugin の初回利用時に新しく作成します. dry-run では保存先と予定ポートを表示します.
+再実行では既存の記憶設定を保持し, 旧 env や default の保存先は自動移行しません.
+他の独自保存先を持つ plugin は個別に設定が必要です. `CLAUDE_CONFIG_DIR` だけでは移動しません.
 
 共通 skill 定義の編集は symlink を通じて反映されます.
 新しく導入した skill の追加には setup を再実行します.

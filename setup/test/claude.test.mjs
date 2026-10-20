@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import * as net from "node:net";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
 const repo = path.resolve(import.meta.dirname, "../..");
@@ -34,7 +35,7 @@ function fixture(t) {
     fs.writeFileSync(preload, source);
     return { NODE_OPTIONS: `--require ${JSON.stringify(preload)}` };
   };
-  return { root, dotfiles, home, envs, destination, write, run, initialize, inject };
+  return { root, dotfiles, home, envs, destination, env, write, run, initialize, inject };
 }
 
 function success(result) { assert.equal(result.status, 0, result.stderr || result.stdout); }
@@ -56,7 +57,14 @@ test("creates independent settings from the shared source and links every instal
   fs.unlinkSync(path.join(f.dotfiles, "claude/profile-settings.json"));
   success(f.initialize(["--skill", "one", "--skill", "one"]));
   assert.equal(fs.readFileSync(path.join(f.destination, ".claude-pick"), "utf8"), "1\n");
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8")), JSON.parse(fs.readFileSync(path.join(f.dotfiles, "claude/settings.json"), "utf8")));
+  const settings = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
+  const shared = JSON.parse(fs.readFileSync(path.join(f.dotfiles, "claude/settings.json"), "utf8"));
+  assert.deepEqual(settings, { ...shared, env: {
+    ...shared.env,
+    CLAUDE_MEM_DATA_DIR: path.join(f.destination, "claude-mem"),
+    CLAUDE_MEM_WORKER_PORT: settings.env?.CLAUDE_MEM_WORKER_PORT,
+    CLAUDE_MEM_WORKER_HOST: "127.0.0.1",
+  } });
   assert.equal(fs.lstatSync(path.join(f.destination, "skills")).isSymbolicLink(), false);
   assert.equal(JSON.parse(fs.readFileSync(path.join(f.destination, ".dotfiles-env.json"), "utf8")).env, "acme");
   for (const [name, source] of Object.entries({
@@ -73,6 +81,114 @@ test("creates independent settings from the shared source and links every instal
   assert.equal(fs.existsSync(path.join(f.destination, ".credentials.json")), false);
   assert.equal(fs.existsSync(path.join(f.destination, "mcp.json")), false);
   assert.equal(fs.readFileSync(path.join(f.home, ".claude/settings.json"), "utf8"), '{"enabledPlugins":{"private":true}}\n');
+});
+
+test("new environments isolate memory and reserve different ports without copying default data", t => {
+  const f = fixture(t);
+  const defaultMemory = path.join(f.home, ".claude-mem");
+  f.write(path.join(defaultMemory, "settings.json"), '{"CLAUDE_MEM_WORKER_PORT":"37800"}\n');
+  f.write(path.join(defaultMemory, "claude-mem.db"), "existing memory placeholder\n");
+  updateSource(f, value => { value.env = { KEEP: "shared", CLAUDE_MEM_DATA_DIR: defaultMemory, CLAUDE_MEM_WORKER_PORT: "37800" }; });
+  const ports = new Set();
+  for (const name of ["acme", "second"]) {
+    success(f.run(["--env", name]));
+    const destination = path.join(f.envs, name);
+    const settings = JSON.parse(fs.readFileSync(path.join(destination, "settings.json"), "utf8"));
+    assert.equal(settings.env.CLAUDE_MEM_DATA_DIR, path.join(destination, "claude-mem"));
+    assert.equal(settings.env.CLAUDE_MEM_WORKER_HOST, "127.0.0.1");
+    assert.equal(settings.env.KEEP, "shared");
+    const port = Number(settings.env.CLAUDE_MEM_WORKER_PORT);
+    assert.ok(Number.isInteger(port) && port > 37800 && port <= 65535);
+    assert.equal(ports.has(port), false);
+    ports.add(port);
+    const data = path.join(destination, "claude-mem");
+    assert.deepEqual(fs.readdirSync(data), ["settings.json"]);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(data, "settings.json"), "utf8")), {
+      CLAUDE_MEM_DATA_DIR: data,
+      CLAUDE_MEM_WORKER_PORT: String(port),
+      CLAUDE_MEM_WORKER_HOST: "127.0.0.1",
+    });
+    if (process.platform !== "win32") {
+      assert.equal(fs.statSync(data).mode & 0o777, 0o700);
+      assert.equal(fs.statSync(path.join(data, "settings.json")).mode & 0o777, 0o600);
+    }
+  }
+  assert.equal(fs.readFileSync(path.join(defaultMemory, "claude-mem.db"), "utf8"), "existing memory placeholder\n");
+  assert.equal(fs.readFileSync(path.join(defaultMemory, "settings.json"), "utf8"), '{"CLAUDE_MEM_WORKER_PORT":"37800"}\n');
+  const before = snapshot(f);
+  updateSource(f, value => { value.theme = "dark"; });
+  success(f.initialize());
+  const refreshed = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
+  assert.deepEqual(refreshed.env, JSON.parse(before["settings.json"]).env);
+  assert.equal(refreshed.theme, "dark");
+});
+
+test("new environments skip ports held by active listeners", async t => {
+  const f = fixture(t);
+  const server = net.createServer();
+  const listening = await new Promise((resolve, reject) => {
+    server.once("error", error => error.code === "EADDRINUSE" ? resolve(false) : reject(error));
+    server.listen({ host: "127.0.0.1", port: 37800 }, () => resolve(true));
+  });
+  if (listening) t.after(() => new Promise(resolve => server.close(resolve)));
+  success(f.initialize());
+  const settings = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
+  assert.notEqual(settings.env.CLAUDE_MEM_WORKER_PORT, "37800");
+});
+
+test("concurrent environment creation allocates distinct memory ports", async t => {
+  const f = fixture(t);
+  const names = ["first", "second", "third", "fourth"];
+  const results = await Promise.all(names.map(name => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [runtime, "--env", name], { env: f.env });
+    t.after(() => { if (child.exitCode === null) child.kill(); });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", chunk => { stdout += chunk; });
+    child.stderr.on("data", chunk => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", status => resolve({ status, stdout, stderr }));
+  })));
+  for (const result of results) success(result);
+  const ports = names.map(name => JSON.parse(fs.readFileSync(path.join(f.envs, name, "settings.json"), "utf8")).env.CLAUDE_MEM_WORKER_PORT);
+  assert.equal(new Set(ports).size, names.length);
+});
+
+test("a port recorded by another setup during allocation is not reused", t => {
+  const f = fixture(t);
+  const peer = path.join(f.envs, "peer/settings.json");
+  const injected = f.inject(`const fs = require('node:fs');
+const path = require('node:path');
+const net = require('node:net');
+const original = net.Server.prototype.listen;
+let recorded = false;
+net.Server.prototype.listen = function(options, callback) {
+  return original.call(this, options, () => {
+    if (!recorded) {
+      recorded = true;
+      fs.mkdirSync(path.dirname(${JSON.stringify(peer)}), { recursive: true });
+      fs.writeFileSync(${JSON.stringify(peer)}, JSON.stringify({ env: { CLAUDE_MEM_WORKER_PORT: String(options.port) } }));
+    }
+    callback();
+  });
+};`);
+  success(f.initialize([], injected));
+  const selected = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8")).env.CLAUDE_MEM_WORKER_PORT;
+  const claimed = JSON.parse(fs.readFileSync(peer, "utf8")).env.CLAUDE_MEM_WORKER_PORT;
+  assert.notEqual(selected, claimed);
+});
+
+test("a memory settings write failure rolls back the fresh environment", t => {
+  const f = fixture(t);
+  const target = path.join(f.destination, "claude-mem/settings.json");
+  const injected = f.inject(`const fs = require('node:fs');
+const original = fs.renameSync;
+fs.renameSync = (source, destination) => {
+  if (destination === ${JSON.stringify(target)}) throw new Error('Injected memory settings failure');
+  return original(source, destination);
+};`);
+  assert.equal(f.initialize([], injected).status, 2);
+  assert.equal(fs.existsSync(f.envs), false);
+  success(f.initialize());
 });
 
 test("dry-run and invalid input create no directories", t => {

@@ -86,7 +86,16 @@ import json, pathlib, stat, sys
 p = pathlib.Path(sys.argv[1])
 d = json.loads((p / 'settings.json').read_text())
 root = pathlib.Path(sys.argv[2])
-assert d == json.loads((root / 'claude/settings.json').read_text())
+shared_settings = json.loads((root / 'claude/settings.json').read_text())
+memory = {
+    'CLAUDE_MEM_DATA_DIR': str(p / 'claude-mem'),
+    'CLAUDE_MEM_WORKER_PORT': d['env']['CLAUDE_MEM_WORKER_PORT'],
+    'CLAUDE_MEM_WORKER_HOST': '127.0.0.1',
+}
+assert int(memory['CLAUDE_MEM_WORKER_PORT']) >= 37800
+assert d == {**shared_settings, 'env': {**shared_settings.get('env', {}), **memory}}
+assert json.loads((p / 'claude-mem/settings.json').read_text()) == memory
+assert not (p / 'claude-mem/claude-mem.db').exists()
 assert stat.S_IMODE(p.stat().st_mode) == 0o700
 assert stat.S_IMODE((p / 'settings.json').stat().st_mode) == 0o600
 shared = root / '.agents/user/skills'
@@ -133,13 +142,12 @@ PY
 @test "explicit named profile preserves arguments exit code and profile settings" {
   create_env acme
   [ "$status" -eq 0 ]
+  local settings_before
+  settings_before="$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")"
   run picker_env PICK_EXIT=7 "$PICKER" -p acme opus high -- --resume '' 'two words' 'a"b' "tail\\"
   [ "$status" -eq 7 ]
   assert_log profile '"acme"' effort '"high"' args '["--model","opus","--effort","high","--resume","","two words","a\"b","tail\\"]'
-  python3 - "$ROOT/claude/settings.json" "$TEST_HOME/.claude-profiles/acme/settings.json" <<'PY'
-import json, sys
-assert json.load(open(sys.argv[1])) == json.load(open(sys.argv[2]))
-PY
+  [ "$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")" = "$settings_before" ]
 }
 
 @test "profile-only launch keeps defaults and ignores inherited config directory" {
