@@ -44,6 +44,24 @@ Main subcommands.
 - `./setup.sh packages`
 - `./setup.sh post`
 
+On Windows, `.\setup.ps1 links` and `.\setup.ps1 skills` automatically copy files
+and directories when symbolic link creation requires unavailable privileges.
+No elevation prompt is shown. To copy from the start, use:
+
+```powershell
+.\setup.ps1 links -Copy
+.\setup.ps1 skills -Copy
+```
+
+`-Copy` also applies to the links step of `.\setup.ps1 all`; skills supports it
+for user scope. Copies do not follow source edits: rerun the corresponding setup
+command after updating dotfiles or local skills. A copy is completed in a temporary
+path before replacing the installed setting. Other errors still stop setup.
+The Vim entry file and `claude-pick.ps1` use small loader files so they can find
+their related files in the checkout; these two continue to load the source there.
+Run `.\tests\setup_link_copy.ps1` in PowerShell 5.1+ with Node.js installed for
+offline regression tests of both entry points and privilege/copy failures.
+
 Package step filters.
 
 - `./setup.sh packages --only tmux,luarocks`
@@ -269,9 +287,11 @@ This installs `claude-pick` or `claude-pick.ps1` into `~/.local/bin`.
 The launchers use Bash and PowerShell 5.1+, respectively. Interactive selection
 requires `fzf`; explicit arguments do not. Environment setup uses the shared
 Node.js 18+ runtime on both platforms and does not require Claude to be installed.
-Windows setup needs permission to create symbolic links: enable Developer Mode
-or use an appropriately privileged terminal. Launching requires native
-`claude.exe` on Windows and does not require elevation. The status line also uses Node.js.
+Named Claude environment setup (`setup claude`) needs permission to create
+symbolic links: enable Developer Mode or use an appropriately privileged terminal.
+The copy fallback above applies to `setup links` and user-scope `setup skills`.
+Launching requires native `claude.exe` on Windows and does not require elevation.
+The status line also uses Node.js.
 
 As with Codex, setup creates or refreshes environments; the picker selects and
 launches them. Named environments are created explicitly, independently of

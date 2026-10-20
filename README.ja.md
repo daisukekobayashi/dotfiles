@@ -44,6 +44,24 @@ cd ~/.dotfiles
 - `./setup.sh packages`
 - `./setup.sh post`
 
+Windows の `.\setup.ps1 links` と `.\setup.ps1 skills` は, symlink 作成に必要な
+権限がない場合にファイル・ディレクトリのコピーへ自動で切り替えます.
+管理者権限への昇格は要求しません. 最初からコピーする場合は次を使います.
+
+```powershell
+.\setup.ps1 links -Copy
+.\setup.ps1 skills -Copy
+```
+
+`-Copy` は `.\setup.ps1 all` の links 処理でも使えます. skills では user scope が対象です.
+コピーは元ファイルの変更に追従しないため, dotfiles や local skill を更新した後は
+対応する setup を再実行してください. 一時パスへのコピーが完了してから配置先を置き換えます.
+権限不足以外のエラーでは処理を中断します.
+Vim の設定入口と `claude-pick.ps1` は, 関連ファイルを見つけられるように小さな loader を
+配置し, リポジトリ内の元ファイルを引き続き読み込みます.
+PowerShell 5.1+ と Node.js がある環境では, `.\tests\setup_link_copy.ps1` で
+両 entry point と権限不足・コピー失敗の回帰テストをオフライン実行できます.
+
 `packages` サブコマンドの追加オプション.
 
 - `./setup.sh packages --only tmux,luarocks`
@@ -239,8 +257,9 @@ macOS/Linux は `./setup.sh links`, Windows は `.\setup.ps1 links` で,
 起動処理は Bash / PowerShell 5.1+ です. 対話選択には `fzf` が必要ですが,
 引数で指定すれば不要です. status line には Node.js を使います.
 env 作成は両 OS とも共有 Node.js 18+ runtime を使い, Claude のインストールは不要です.
-Windows では symlink 作成権限が必要です. Developer Mode を有効にするか,
-適切な権限の端末で setup を実行します.
+名前付き Claude env の作成 (`setup claude`) では symlink 作成権限が必要です.
+Developer Mode を有効にするか, 適切な権限の端末で setup を実行します.
+上記のコピーへの切り替えは `setup links` と user scope の `setup skills` が対象です.
 Windows での起動には native `claude.exe` が必要ですが, 権限の昇格は不要です.
 
 Codex と同じく, env の作成・共通リンクの更新は setup, 選択・起動は picker が担います.

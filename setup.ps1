@@ -2,6 +2,7 @@
 param(
   [Parameter(Position = 0)]
   [string]$Subcommand = "all",
+  [switch]$Copy,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$SubcommandArgs = @()
 )
@@ -14,11 +15,11 @@ $DEFAULT_DOTFILES_ROOT = $PSScriptRoot
 
 function Show-Usage {
   @"
-Usage: .\setup.ps1 <subcommand>
+Usage: .\setup.ps1 <subcommand> [-Copy]
 
 Subcommands:
   all         Run Windows setup for the current privilege level
-  links       Create Windows symbolic links only
+  links       Install Windows configuration links (copy if privileges are unavailable)
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment
   claude      Create or refresh a separate Claude Code environment
@@ -28,6 +29,8 @@ Subcommands:
 Behavior:
   all (non-admin): runs packages, then links
   all (admin): skips packages and runs links only
+  links/skills: automatically copy when symbolic link privileges are unavailable; no elevation prompt
+  -Copy: always copy for links, all, or user-scope skills; rerun setup to refresh copies
   skills: runs the shared Node skills setup runtime
   codex: accepts --env <name>, --provider azure|openai|chatgpt, --base-url <url>, --api-version <value>,
          --profile <name> and --dry-run (requires Node.js).
@@ -49,6 +52,14 @@ try {
   $claudeScript = Join-Path $setupContext.DotfilesRoot "setup/claude.ps1"
   $packagesScript = Join-Path $setupContext.DotfilesRoot "setup/packages.ps1"
 
+  $copyArguments = @()
+  if ($Copy) {
+    if ($Subcommand.ToLowerInvariant() -notin @("all", "links", "skills")) {
+      throw "-Copy is supported only for all, links, or skills."
+    }
+    $copyArguments = @("-Copy")
+  }
+
   switch ($Subcommand.ToLowerInvariant()) {
     "all" {
       if ($SubcommandArgs.Count -gt 0) {
@@ -58,22 +69,22 @@ try {
 
       if (Test-IsAdministrator) {
         Write-Output "Running elevated. Skipping packages and running links only."
-        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList @(
+        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList (@(
           "-HomeDir",
           $setupContext.HomeDir,
           "-DotfilesRoot",
           $setupContext.DotfilesRoot
-        )
+        ) + $copyArguments)
       } else {
         Write-Output "Running packages in the current non-elevated session..."
         Invoke-SetupPowerShellScript -ScriptPath $packagesScript
         Write-Output "Running links in the current session..."
-        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList @(
+        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList (@(
           "-HomeDir",
           $setupContext.HomeDir,
           "-DotfilesRoot",
           $setupContext.DotfilesRoot
-        )
+        ) + $copyArguments)
       }
     }
     "links" {
@@ -82,12 +93,12 @@ try {
         throw "Unknown arguments for subcommand '$Subcommand': $($SubcommandArgs -join ' ')"
       }
 
-      Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList @(
+      Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList (@(
         "-HomeDir",
         $setupContext.HomeDir,
         "-DotfilesRoot",
         $setupContext.DotfilesRoot
-      )
+      ) + $copyArguments)
     }
     "skills" {
       Invoke-SetupPowerShellScript -ScriptPath $skillsScript -ArgumentList (
@@ -96,7 +107,7 @@ try {
           $setupContext.HomeDir,
           "-DotfilesRoot",
           $setupContext.DotfilesRoot
-        ) + $SubcommandArgs
+        ) + $copyArguments + $SubcommandArgs
       )
     }
     "codex" {

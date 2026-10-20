@@ -2,7 +2,7 @@
 param(
   [string]$HomeDir = "",
   [string]$DotfilesRoot = "",
-  [switch]$ElevatedRelaunch
+  [switch]$Copy
 )
 
 Set-StrictMode -Version Latest
@@ -14,10 +14,6 @@ $DEFAULT_DOTFILES_ROOT = Split-Path -Parent $PSScriptRoot
 try {
   Assert-MinimumPowerShellVersion
   $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT -HomeDirOverride $HomeDir -DotfilesRootOverride $DotfilesRoot
-
-  if (-not (Test-IsAdministrator)) {
-    Write-Warning "Running without administrator privileges. Symbolic link creation may fail if Developer Mode is disabled."
-  }
 
   $linkMap = @(
     @{
@@ -39,6 +35,7 @@ try {
     @{
       Link = Join-Path $setupContext.HomeDir "_vimrc"
       Target = Join-Path $setupContext.DotfilesRoot "vim\vimrc"
+      CopyLoader = "Vim"
     },
     @{
       Link = Join-Path $setupContext.HomeDir "_gvimrc"
@@ -63,6 +60,7 @@ try {
     @{
       Link = Join-Path $setupContext.HomeDir ".local\bin\claude-pick.ps1"
       Target = Join-Path $setupContext.DotfilesRoot "tools\claude\claude-pick.ps1"
+      CopyLoader = "PowerShell"
     },
     @{
       Link = Join-Path $setupContext.HomeDir ".codex\config.toml"
@@ -125,7 +123,8 @@ try {
   }
 
   foreach ($entry in $linkMap) {
-    New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target
+    $copyLoader = if ($entry.ContainsKey("CopyLoader")) { $entry.CopyLoader } else { "" }
+    New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target -Copy:$Copy -CopyLoader $copyLoader
   }
 
   $ipyProfileDir = Join-Path $setupContext.HomeDir ".ipython\profile_default"
@@ -135,13 +134,13 @@ try {
 
   Ensure-Directory -Path $ipyProfileDir
   Ensure-Directory -Path $ipyStartupDir
-  New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_config.py")
-  New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_kernel_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_kernel_config.py")
+  New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_config.py") -Copy:$Copy
+  New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_kernel_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_kernel_config.py") -Copy:$Copy
 
 	  Get-ChildItem -LiteralPath $dotIpyStartupDir -Filter "*.py" | ForEach-Object {
 	    New-DotfilesSymbolicLink `
 	      -LinkPath (Join-Path $ipyStartupDir $_.Name) `
-	      -TargetPath $_.FullName
+	      -TargetPath $_.FullName -Copy:$Copy
 	  }
 
   if (Test-CommandAvailable -Name "git") {
@@ -154,20 +153,6 @@ try {
     }
   }
 } catch {
-  if ((-not (Test-IsAdministrator)) -and (-not $ElevatedRelaunch) -and (Test-IsAdminRequiredError -ErrorRecord $_)) {
-    $response = Read-Host "Administrator privileges are required to create symbolic links. Relaunch elevated? [y/N]"
-    if ($response -match '^(?i:y|yes)$') {
-      Invoke-ElevatedPowerShellScript -ScriptPath $PSCommandPath -ArgumentList @(
-        "-HomeDir",
-        $setupContext.HomeDir,
-        "-DotfilesRoot",
-        $setupContext.DotfilesRoot,
-        "-ElevatedRelaunch"
-      )
-      exit 0
-    }
-  }
-
   Write-Error $_.Exception.Message
   exit 1
 }

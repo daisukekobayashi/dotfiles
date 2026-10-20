@@ -4,7 +4,7 @@ param(
   [string]$DotfilesRoot = "",
   [string]$WireAgents = "",
   [switch]$WireUserSkillLinksOnly,
-  [switch]$ElevatedRelaunch,
+  [switch]$Copy,
   [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
   [string[]]$SkillsArgs = @()
 )
@@ -160,63 +160,25 @@ function Invoke-UserSkillSymlinks {
     [object]$SetupContext,
     [Parameter(Mandatory = $true)]
     [string[]]$Agents,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Copy
   )
 
   if ($DryRun) {
-    Write-Output "DRY-RUN link user local skills from .agents\user\skills-profile.json"
+    $action = if ($Copy) { "copy" } else { "link (copy if symbolic link privileges are unavailable)" }
+    Write-Output "DRY-RUN $action user local skills from .agents\user\skills-profile.json"
   } else {
     foreach ($entry in (Get-UserLocalSkillLinks -SetupContext $SetupContext)) {
-      New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target
+      New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target -Copy:$Copy
     }
   }
 
   foreach ($entry in (Get-UserAgentSkillLinks -SetupContext $SetupContext -Agents $Agents)) {
     if ($DryRun) {
-      Write-Output "DRY-RUN ln -s $($entry.Target) $($entry.Link)"
+      Write-Output "DRY-RUN $action $($entry.Target) $($entry.Link)"
       continue
     }
-    New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target
-  }
-}
-
-function Copy-UserLocalSkillDirs {
-  param (
-    [Parameter(Mandatory = $true)]
-    [object]$SetupContext
-  )
-
-  foreach ($entry in (Get-UserLocalSkillLinks -SetupContext $SetupContext)) {
-    $parentPath = Split-Path -Parent $entry.Link
-    Ensure-Directory -Path $parentPath
-    if (Test-Path -LiteralPath $entry.Link) {
-      Remove-Item -LiteralPath $entry.Link -Force -Recurse
-      Write-Output "Removed existing path: $($entry.Link)"
-    }
-    Copy-Item -LiteralPath $entry.Target -Destination $entry.Link -Recurse -Force
-    Write-Warning "Copied local skill directory because symbolic link creation was not elevated: $($entry.Link)"
-  }
-}
-
-function Copy-UserSkillDirs {
-  param (
-    [Parameter(Mandatory = $true)]
-    [object]$SetupContext,
-    [Parameter(Mandatory = $true)]
-    [string[]]$Agents
-  )
-
-  Copy-UserLocalSkillDirs -SetupContext $SetupContext
-
-  foreach ($entry in (Get-UserAgentSkillLinks -SetupContext $SetupContext -Agents $Agents)) {
-    $parentPath = Split-Path -Parent $entry.Link
-    Ensure-Directory -Path $parentPath
-    if (Test-Path -LiteralPath $entry.Link) {
-      Remove-Item -LiteralPath $entry.Link -Force -Recurse
-      Write-Output "Removed existing path: $($entry.Link)"
-    }
-    Copy-Item -LiteralPath $entry.Target -Destination $entry.Link -Recurse -Force
-    Write-Warning "Copied skills directory because symbolic link creation was not elevated: $($entry.Link)"
+    New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target -Copy:$Copy
   }
 }
 
@@ -227,8 +189,12 @@ try {
   $shouldWireUserSkills = (Test-IsUserScopeSkillsInvocation -SkillsArguments $SkillsArgs) -or $WireUserSkillLinksOnly
   $selectedAgents = Get-SelectedSkillsAgents -SkillsArguments $SkillsArgs -WireAgentsCsv $WireAgents
 
+  if ($Copy -and -not $shouldWireUserSkills) {
+    throw "-Copy is supported only for user-scope skills setup."
+  }
+
   if ($WireUserSkillLinksOnly) {
-    Invoke-UserSkillSymlinks -SetupContext $setupContext -Agents $selectedAgents
+    Invoke-UserSkillSymlinks -SetupContext $setupContext -Agents $selectedAgents -Copy:$Copy -DryRun:($Env:SETUP_DRY_RUN -eq "1")
     exit 0
   }
 
@@ -270,36 +236,9 @@ try {
   }
 
   if ($shouldWireUserSkills) {
-    Invoke-UserSkillSymlinks -SetupContext $setupContext -Agents $selectedAgents -DryRun:($Env:SETUP_DRY_RUN -eq "1")
+    Invoke-UserSkillSymlinks -SetupContext $setupContext -Agents $selectedAgents -DryRun:($Env:SETUP_DRY_RUN -eq "1") -Copy:$Copy
   }
 } catch {
-  if (
-    $shouldWireUserSkills -and
-    $null -ne $setupContext -and
-    (-not (Test-IsAdministrator)) -and
-    (-not $ElevatedRelaunch) -and
-    (Test-IsAdminRequiredError -ErrorRecord $_)
-  ) {
-    $response = Read-Host "Administrator privileges are required to create skill symbolic links. Relaunch elevated? [y/N]"
-    if ($response -match '^(?i:y|yes)$') {
-      Invoke-ElevatedPowerShellScript -ScriptPath $PSCommandPath -ArgumentList @(
-        "-HomeDir",
-        $setupContext.HomeDir,
-        "-DotfilesRoot",
-        $setupContext.DotfilesRoot,
-        "-WireAgents",
-        ($selectedAgents -join ","),
-        "-WireUserSkillLinksOnly",
-        "-ElevatedRelaunch"
-      )
-      exit 0
-    }
-
-    Write-Warning "Falling back to copying user skill directories. Re-run setup.ps1 skills after local skill changes."
-    Copy-UserSkillDirs -SetupContext $setupContext -Agents $selectedAgents
-    exit 0
-  }
-
   Write-Error $_.Exception.Message
   exit 1
 }
