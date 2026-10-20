@@ -14,7 +14,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const dotfiles = path.join(root, "dot files");
   const home = path.join(root, "user home");
-  const envs = path.join(home, ".claude-profiles");
+  const envs = path.join(home, ".claude-envs");
   const destination = path.join(envs, "acme");
   const write = (file, text) => {
     fs.mkdirSync(path.dirname(file), { recursive: true });

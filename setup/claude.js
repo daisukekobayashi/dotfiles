@@ -341,7 +341,7 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
     }
     const home = path.resolve(process.env.SETUP_HOME || os.homedir());
     const dotfiles = path.resolve(process.env.SETUP_DOTFILES_ROOT || path.join(__dirname, ".."));
-    const root = path.join(home, ".claude-profiles");
+    const root = path.join(home, ".claude-envs");
     const destination = path.join(root, env);
     directory(root, "Claude environment directory");
     directory(destination, "Claude environment home");

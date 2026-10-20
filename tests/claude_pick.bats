@@ -66,7 +66,7 @@ PY
   run env -i HOME="$TEST_HOME" PATH="$NODE_BIN:/usr/bin:/bin" "$PICKER" --create acme
   [ "$status" -eq 0 ]
   [[ "$output" == *"Delegating to setup"* ]]
-  [ "$(cat "$TEST_HOME/.claude-profiles/acme/.claude-pick")" = 1 ]
+  [ "$(cat "$TEST_HOME/.claude-envs/acme/.claude-pick")" = 1 ]
   run_picker --create-env acme
   [ "$status" -eq 2 ]
   [ ! -e "$PICK_LOG" ]
@@ -75,7 +75,7 @@ PY
 @test "new environments generate shared settings and link all installed dotfiles skills" {
   create_env acme
   [ "$status" -eq 0 ]
-  local profile_dir="$TEST_HOME/.claude-profiles/acme"
+  local profile_dir="$TEST_HOME/.claude-envs/acme"
   [ ! -L "$profile_dir/settings.json" ]
   [ "$(readlink "$profile_dir/statusline.cjs")" = "$ROOT/claude/statusline.cjs" ]
   [ "$(readlink "$profile_dir/rules/00-global.md")" = "$ROOT/ai-rules/base/global.md" ]
@@ -111,31 +111,31 @@ PY
   for name in ../outside Acme 'two words' default con nul com1 lpt9; do
     create_env "$name"
     [ "$status" -eq 2 ]
-    [ ! -d "$TEST_HOME/.claude-profiles" ]
+    [ ! -d "$TEST_HOME/.claude-envs" ]
   done
   create_env acme --skill missing-skill-for-test
   [ "$status" -eq 2 ]
-  [ ! -d "$TEST_HOME/.claude-profiles" ]
+  [ ! -d "$TEST_HOME/.claude-envs" ]
   create_env acme
   [ "$status" -eq 0 ]
-  printf '{"model":"user-owned"}\n' > "$TEST_HOME/.claude-profiles/acme/settings.json"
+  printf '{"model":"user-owned"}\n' > "$TEST_HOME/.claude-envs/acme/settings.json"
   create_env acme
   [ "$status" -eq 0 ]
-  [ "$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")" = '{"model":"user-owned"}' ]
+  [ "$(cat "$TEST_HOME/.claude-envs/acme/settings.json")" = '{"model":"user-owned"}' ]
 }
 
 @test "legacy skill argument validates an installed skill and links its shared definition" {
   [ -f "$ROOT/.agents/user/skills/architect/SKILL.md" ] || skip "architect skill not installed"
   create_env acme --skill architect
   [ "$status" -eq 0 ]
-  [ "$(readlink "$TEST_HOME/.claude-profiles/acme/skills/architect")" = "$ROOT/.agents/user/skills/architect" ]
+  [ "$(readlink "$TEST_HOME/.claude-envs/acme/skills/architect")" = "$ROOT/.agents/user/skills/architect" ]
 }
 
 @test "setup dry-run validates the environment without creating or launching it" {
   create_env acme --dry-run
   [ "$status" -eq 0 ]
   [[ "$output" == *"Would create environment: acme"* ]]
-  [ ! -e "$TEST_HOME/.claude-profiles" ]
+  [ ! -e "$TEST_HOME/.claude-envs" ]
   [ ! -e "$PICK_LOG" ]
 }
 
@@ -143,11 +143,11 @@ PY
   create_env acme
   [ "$status" -eq 0 ]
   local settings_before
-  settings_before="$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")"
+  settings_before="$(cat "$TEST_HOME/.claude-envs/acme/settings.json")"
   run picker_env PICK_EXIT=7 "$PICKER" -p acme opus high -- --resume '' 'two words' 'a"b' "tail\\"
   [ "$status" -eq 7 ]
   assert_log profile '"acme"' effort '"high"' args '["--model","opus","--effort","high","--resume","","two words","a\"b","tail\\"]'
-  [ "$(cat "$TEST_HOME/.claude-profiles/acme/settings.json")" = "$settings_before" ]
+  [ "$(cat "$TEST_HOME/.claude-envs/acme/settings.json")" = "$settings_before" ]
 }
 
 @test "profile-only launch keeps defaults and ignores inherited config directory" {
@@ -155,7 +155,7 @@ PY
   run picker_env CLAUDE_CONFIG_DIR=/not-the-profile CLAUDE_CODE_EFFORT_LEVEL=low "$PICKER" -p acme
   [ "$status" -eq 0 ]
   assert_log args '[]' effort '"low"'
-  python3 - "$PICK_LOG" "$TEST_HOME/.claude-profiles/acme" <<'PY'
+  python3 - "$PICK_LOG" "$TEST_HOME/.claude-envs/acme" <<'PY'
 import json, sys
 assert json.load(open(sys.argv[1]))['config'] == sys.argv[2]
 PY
@@ -179,17 +179,17 @@ PY
 @test "env credentials remain independent when creating and switching multiple subscription homes" {
   create_env account-a
   [ "$status" -eq 0 ]
-  printf 'account-a-placeholder\n' > "$TEST_HOME/.claude-profiles/account-a/.credentials.json"
+  printf 'account-a-placeholder\n' > "$TEST_HOME/.claude-envs/account-a/.credentials.json"
   create_env account-b
   [ "$status" -eq 0 ]
-  [ ! -e "$TEST_HOME/.claude-profiles/account-b/.credentials.json" ]
+  [ ! -e "$TEST_HOME/.claude-envs/account-b/.credentials.json" ]
   run_picker --env account-b -- auth login --claudeai
   [ "$status" -eq 0 ]
   assert_log env '"account-b"' args '["auth","login","--claudeai"]'
   run_picker --env account-a
   [ "$status" -eq 0 ]
   assert_log env '"account-a"'
-  [ "$(cat "$TEST_HOME/.claude-profiles/account-a/.credentials.json")" = account-a-placeholder ]
+  [ "$(cat "$TEST_HOME/.claude-envs/account-a/.credentials.json")" = account-a-placeholder ]
 }
 
 @test "named profiles reject inherited credentials and routes without exposing values" {
@@ -217,10 +217,10 @@ PY
 
 @test "profile MCP is optional and an explicit MCP flag takes precedence" {
   create_env acme
-  printf '{"mcpServers":{}}\n' > "$TEST_HOME/.claude-profiles/acme/mcp.json"
+  printf '{"mcpServers":{}}\n' > "$TEST_HOME/.claude-envs/acme/mcp.json"
   run_picker -p acme
   [ "$status" -eq 0 ]
-  python3 - "$PICK_LOG" "$TEST_HOME/.claude-profiles/acme/mcp.json" <<'PY'
+  python3 - "$PICK_LOG" "$TEST_HOME/.claude-envs/acme/mcp.json" <<'PY'
 import json, sys
 assert json.load(open(sys.argv[1]))['args'] == ['--mcp-config', sys.argv[2]]
 PY
@@ -230,8 +230,8 @@ PY
 }
 
 @test "unknown incomplete and symlinked profiles never fall back to default" {
-  mkdir -p "$TEST_HOME/.claude-profiles/incomplete" "$TEST_HOME/elsewhere"
-  ln -s "$TEST_HOME/elsewhere" "$TEST_HOME/.claude-profiles/linked"
+  mkdir -p "$TEST_HOME/.claude-envs/incomplete" "$TEST_HOME/elsewhere"
+  ln -s "$TEST_HOME/elsewhere" "$TEST_HOME/.claude-envs/linked"
   for name in absent incomplete linked; do
     run_picker -p "$name"
     [ "$status" -eq 2 ]
@@ -264,7 +264,7 @@ PY
   run_tty_picker
   [ "$status" -eq 0 ]
   assert_log profile '"default"' effort '"high"'
-  [ ! -e "$TEST_HOME/.claude-profiles" ]
+  [ ! -e "$TEST_HOME/.claude-envs" ]
 }
 
 @test "interactive cancellation before launch creates no profile" {
@@ -274,7 +274,7 @@ PY
   printf 'default\nkeep\ncancel\n' > "$FZF_CHOICES"
   run_tty_picker
   [ "$status" -eq 130 ]
-  [ ! -e "$TEST_HOME/.claude-profiles" ]
+  [ ! -e "$TEST_HOME/.claude-envs" ]
   [ ! -e "$PICK_LOG" ]
 }
 
@@ -291,7 +291,7 @@ PY
   printf '+\n' > "$FZF_CHOICES"
   run_tty_picker
   [ "$status" -eq 2 ]
-  [ ! -e "$TEST_HOME/.claude-profiles" ]
+  [ ! -e "$TEST_HOME/.claude-envs" ]
   [ ! -e "$PICK_LOG" ]
 }
 
@@ -300,13 +300,13 @@ PY
   ln -s "$PICKER" "$TEST_HOME/.local/bin/claude-pick"
   run picker_env "$TEST_HOME/.local/bin/claude-pick" --create acme
   [ "$status" -eq 0 ]
-  [ "$(readlink "$TEST_HOME/.claude-profiles/acme/statusline.cjs")" = "$ROOT/claude/statusline.cjs" ]
+  [ "$(readlink "$TEST_HOME/.claude-envs/acme/statusline.cjs")" = "$ROOT/claude/statusline.cjs" ]
 }
 
 @test "profile settings execute the linked statusline and show the selected profile" {
   command -v node >/dev/null || skip "node not installed"
   create_env acme
-  run env CLAUDE_CONFIG_DIR="$TEST_HOME/.claude-profiles/acme" CLAUDE_PICK_ENV=acme CLAUDE_PICK_PROFILE=legacy node - "$ROOT/claude/settings.json" <<'JS'
+  run env CLAUDE_CONFIG_DIR="$TEST_HOME/.claude-envs/acme" CLAUDE_PICK_ENV=acme CLAUDE_PICK_PROFILE=legacy node - "$ROOT/claude/settings.json" <<'JS'
 const fs = require('node:fs');
 const { execSync } = require('node:child_process');
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));

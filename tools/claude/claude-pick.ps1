@@ -22,7 +22,7 @@ With a model or effort specified, choose the missing one interactively.
 Use "keep" for model/effort to leave Claude's configuration in control.
 Effort choices: keep, low, medium, high, xhigh, max (support varies by model).
 
-"default" uses ~/.claude; named environments keep using ~/.claude-profiles/NAME.
+"default" uses ~/.claude; named environments use ~/.claude-envs/NAME.
 Legacy -p/--profile remain aliases for --env.
 Legacy --create-env/--create [--skill NAME ...] delegate to setup (creation only).
 Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter.
@@ -116,7 +116,7 @@ try {
     $scriptFile = Get-Item -LiteralPath $target -Force
   }
   $DotfilesRoot = Split-Path -Parent (Split-Path -Parent $scriptFile.DirectoryName)
-  $EnvsRoot = Join-Path $HOME '.claude-profiles'
+  $EnvsRoot = Join-Path $HOME '.claude-envs'
   $SelectedEnv = ''; $SelectedModel = ''; $SelectedEffort = ''; $CreateName = ''
   $Skills = New-Object 'System.Collections.Generic.List[string]'
   $Positionals = New-Object 'System.Collections.Generic.List[string]'

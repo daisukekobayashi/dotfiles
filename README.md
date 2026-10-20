@@ -301,7 +301,7 @@ Open a new shell after updating: `claude` is now the original command, while
 `claude-pick --env default` supplies the common MCP config previously added by the
 Zsh wrapper. `claude-raw` remains available for compatibility.
 
-Named environments keep their existing `~/.claude-profiles/<name>` storage.
+Named environments are stored in `~/.claude-envs/<name>`.
 Names start with a lowercase letter
 and contain up to 64 lowercase letters, digits, `_`, or `-`; `default` and Windows
 device names are reserved. The picker lists existing environments and always
@@ -313,7 +313,6 @@ cancelling selection never launches Claude.
 Rerun `./setup.sh claude --env acme` after changing common settings or restoring
 skills with `setup skills`. Setup regenerates settings and adds links to all
 installed dotfiles user skills, without selecting skills separately for each env.
-Existing picker-created homes keep their storage, login and readiness marker.
 Local settings changes, history, MCP configuration and local skills are preserved.
 Conflicting edits or shared-link targets stop setup before writing; unmanaged or
 incomplete homes are not adopted. `default` keeps using `setup links`.

@@ -268,7 +268,7 @@ claude-pick.ps1 --env acme opus high '--' --resume
 旧 `-p` / `--profile` は `--env` の別名です.
 旧 `--create-env` / `--create` は移行メッセージを出して setup に委譲し,
 従来どおり既存 env の作成は拒否します.
-保存先は互換性のため `~/.claude-profiles/<名前>` のままです.
+名前付き env の保存先は `~/.claude-envs/<名前>` です.
 名前は英小文字で始まる 1〜64 文字の英小文字・数字・`_`・`-` で,
 `default` と Windows のデバイス名は予約名です.
 picker には既存 env の選択だけを表示し, 名前付き env が無ければ `default` を表示します.
@@ -281,8 +281,7 @@ picker には既存 env の選択だけを表示し, 名前付き env が無け�
 共通設定の変更や `setup skills` での skill 復元後に,
 `./setup.sh claude --env acme` を再実行します.
 設定を再生成し, 導入済みの全 dotfiles user skill へのリンクを配置します.
-env ごとの skill 選択は不要です. 従来の picker で作成した env も,
-保存先・ログイン状態・完了マーカーを保持して更新できます.
+env ごとの skill 選択は不要です.
 個別設定・履歴・MCP 設定・ローカル skill は保持します.
 設定の競合や共通リンク先との競合では書き込み前に停止し,
 未管理・作成途中のディレクトリは引き継ぎません.

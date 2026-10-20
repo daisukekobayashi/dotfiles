@@ -132,7 +132,7 @@ public class FakeClaude {
     Assert-True ((Invoke-EnvSetup @('--help')).Code -eq 0) 'setup help failed'
     $result = Invoke-EnvSetup @('--env', 'preview', '--dry-run')
     Assert-True ($result.Code -eq 0) $result.Output
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $TestUserDir '.claude-profiles'))) 'dry-run created a home'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $TestUserDir '.claude-envs'))) 'dry-run created a home'
     Assert-True (-not (Test-Path -LiteralPath $TestLog)) 'setup launched Claude'
   }
   Invoke-Case 'portable name and noninteractive validation' {
@@ -143,7 +143,7 @@ public class FakeClaude {
   }
   Invoke-Case 'creation succeeds with symlink privileges or rolls back cleanly' {
     $result = Invoke-EnvSetup @('--env', 'acme')
-    $profileDir = Join-Path $TestUserDir '.claude-profiles/acme'
+    $profileDir = Join-Path $TestUserDir '.claude-envs/acme'
     if ($result.Code -ne 0) {
       Assert-True ($result.Output -match 'Cannot create a shared-file symlink') $result.Output
       Assert-True (-not (Test-Path -LiteralPath $profileDir)) 'partial profile survived failure'

@@ -13,7 +13,7 @@ With a model or effort specified, choose the missing one interactively.
 Use "keep" for model/effort to leave Claude's configuration in control.
 Effort choices: keep, low, medium, high, xhigh, max (support varies by model).
 
-"default" uses ~/.claude; named environments keep using ~/.claude-profiles/NAME.
+"default" uses ~/.claude; named environments use ~/.claude-envs/NAME.
 Legacy -p/--profile remain aliases for --env.
 Legacy --create-env/--create [--skill NAME ...] delegate to setup (creation only).
 Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter.
@@ -33,7 +33,7 @@ while [[ -L "$script_path" ]]; do
   [[ "$script_path" = /* ]] || script_path="$script_dir/$script_path"
 done
 dotfiles_root="$(cd "$(dirname "$script_path")/../.." && pwd -P)"
-envs_root="${HOME}/.claude-profiles"
+envs_root="${HOME}/.claude-envs"
 
 valid_name() {
   [[ "$1" =~ ^[a-z][a-z0-9_-]{0,63}$ ]] || return 1
