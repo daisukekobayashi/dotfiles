@@ -1,6 +1,6 @@
 ---
 name: azure-devops-pr-publish
-description: Use only when the user explicitly invokes `$azure-devops-pr-publish` or names `azure-devops-pr-publish` for publishing local Azure DevOps branch or worktree changes as a pull request.
+description: Use only when the user explicitly requests azure-devops-pr-publish, or its publication phase through azure-devops-work-item-delivery, for specified local Azure DevOps branches or worktrees. Publish as a PR without requesting AI review.
 ---
 
 # Azure DevOps PR Publish
@@ -16,9 +16,13 @@ Read `../azure-devops-common/references/context.md` before resolving targets.
 
 ## Approval Model
 
-Because this skill only runs when explicitly invoked or named, treat that
-request as approval for ordinary non-destructive commits and normal pushes for
-the requested target branches.
+An explicit publication request can arrive directly or through
+`azure-devops-work-item-delivery`. A delegated caller must forward the actual
+user request, exact target, and existing authorizations; a skill reference or
+automatic selection is insufficient. Subject to governing approval instructions,
+treat that request as approval for ordinary non-destructive commits and normal
+pushes for the requested target branches. Prepare the verified publication target
+before asking for any missing approval.
 
 Still stop and ask before:
 
@@ -48,13 +52,16 @@ Still stop and ask before:
      happened after the latest changes.
    - Otherwise determine and run the repository's required verification command.
    - Stop if verification fails.
+   - Before pushing, inspect any matching active PR for enabled auto-complete.
+     If enabled, hold publication for an explicit decision: a push could merge
+     the PR before separate merge approval. Do not silently disable it.
 6. Commit when needed.
    - Use the `git-commit` skill.
    - Stage only files belonging to the requested work.
 7. Push normally to the Azure DevOps remote for the current branch.
 8. Use `azure-devops-pr-create` to create or resolve the PR.
-   - Pass along known Work Item IDs, completion scope, and the user's
-     state-transition intent.
+   - Pass along the actual publication request, exact target, existing approvals,
+     known Work Item IDs, completion scope, and the user's state-transition intent.
 9. Verify with `az repos pr show` and report branch, commit, push target, PR URL,
    and verification result.
 

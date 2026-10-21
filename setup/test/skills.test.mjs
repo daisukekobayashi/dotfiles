@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lstat, mkdtemp, mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdtemp, mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -29,6 +29,7 @@ const azureDevOpsLocalSkills = [
   "azure-devops-work-item-review",
   "azure-devops-work-item-triage",
   "azure-devops-work-item-start",
+  "azure-devops-work-item-delivery",
   "azure-devops-pr-create",
   "azure-devops-pr-publish",
   "azure-devops-pr-review",
@@ -36,6 +37,7 @@ const azureDevOpsLocalSkills = [
 ];
 const baseLocalSkills = [
   "adversarial-review",
+  "delivery-common",
   "design-preflight",
   "design-preflight-with-docs",
   "repo-execution-context",
@@ -397,6 +399,46 @@ test("repository profiles keep provider workflow skills separated", async () => 
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test("delivery references resolve in copied profiles without the other provider", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "delivery-profile-test."));
+  try {
+    const base = await readRepoProfile("base");
+    for (const [provider, delivery] of [
+      ["github", "github-issue-delivery"],
+      ["azure-devops", "azure-devops-work-item-delivery"],
+    ]) {
+      const profile = await readRepoProfile(provider);
+      const skillsDir = path.join(root, provider, "skills");
+      await mkdir(skillsDir, { recursive: true });
+      for (const name of new Set([...base.local, ...profile.local])) {
+        await cp(path.join(repoRoot, "skills", "local", name), path.join(skillsDir, name), {
+          recursive: true,
+        });
+      }
+
+      const pending = [path.join(skillsDir, delivery, "SKILL.md")];
+      const visited = new Set();
+      while (pending.length > 0) {
+        const file = pending.pop();
+        if (visited.has(file)) continue;
+        visited.add(file);
+        const content = await readText(file);
+        for (const [, target] of content.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+          if (/^[a-z][a-z\d+.-]*:/i.test(target)) continue;
+          const relative = target.split("#")[0];
+          if (!relative) continue;
+          const resolved = path.resolve(path.dirname(file), relative);
+          assert.equal(resolved.startsWith(skillsDir + path.sep), true, `${file}: ${target}`);
+          assert.equal(existsSync(resolved), true, `${file}: missing copied reference ${target}`);
+          if (resolved.endsWith(".md")) pending.push(resolved);
+        }
+      }
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("design preflight delegates to the installed grilling primitive", async () => {

@@ -1,5 +1,7 @@
 # Local Review
 
+Use the caller's GitHub issue or Azure DevOps Work Item as the task context.
+
 Select reviewers from the actual host and available capabilities. Read the
 installed command or skill instructions; do not infer the host from a directory
 name or invoke a slash command as shell text.
@@ -16,16 +18,16 @@ the implementation owner's informal inspection for a completed review.
 
 ## Pin the implementation
 
-Record the issue URL/acceptance criteria, applicable standards, worktree, branch,
-base SHA, merge-base, head SHA, and dirty/untracked state. Use the issue workspace's
-recorded base; do not ask for a fixed point already established by issue start.
-Review the entire issue diff, not only the last fix commit.
+Record the task URL/acceptance criteria, applicable standards, worktree, branch,
+base SHA, merge-base, head SHA, and dirty/untracked state. Use the task workspace's
+recorded base; do not ask for a fixed point already established by workspace
+preparation. Review the entire task diff, not only the last fix commit.
 
 `code-review` reviews `git diff <fixed-point>...HEAD`. To include a new implementation
 and new files, prepare a normal scoped checkpoint commit after verification and
 before running these reviews. Obtain any required commit approval first, reuse
 existing authorization when it covers the commit, and use `git-commit` for the
-operation. Stage only the issue's intended files; leave unrelated changes and
+operation. Stage only the task's intended files; leave unrelated changes and
 temporary progress records untouched. Do not amend or create an empty commit.
 If approval is pending, the checkpoint and reviews remain pending; an empty
 `HEAD` diff cannot establish that uncommitted work passed `code-review`.
@@ -33,10 +35,10 @@ If approval is pending, the checkpoint and reviews remain pending; an empty
 Use the same approach for the plugin branch reviews so both hosts review a fixed
 snapshot. After every worthwhile fix, verify and make the next authorized scoped
 commit before repeating the pair. A commit permits local review; publication
-still belongs to the PR cycle and its approval rules.
+still belongs to the caller's publication phase and its approval rules.
 
 If unrelated dirty files must remain, identify them explicitly and use branch
-scope for both passes. If any intended issue changes remain outside the committed
+scope for both passes. If any intended task changes remain outside the committed
 snapshot, report incomplete coverage and do not advance. Keep the snapshot stable
 until both results arrive; invalidate results if another writer changes it.
 
@@ -62,14 +64,14 @@ unsupported focus text to `/codex:review`.
 
 ## Codex or skill fallback
 
-Use `code-review` with the pinned base as its fixed point and the issue plus
+Use `code-review` with the pinned base as its fixed point and the task plus
 accepted design/docs as its spec source. Require its Standards and Spec outputs;
-an available issue must not be reported as "no spec available". Pass the exact
+an available task must not be reported as "no spec available". Pass the exact
 worktree and branch to its reviewers and preserve its independent reviewer
 requirements. Report unavailable delegation instead of claiming independence.
 
 Use `adversarial-review` with the same target, `--base <base-sha> --scope branch`,
-and issue context. Require its verdict, concrete findings, coverage, and residual
+and task context. Require its verdict, concrete findings, coverage, and residual
 risk. Keep both skill executions read-only; only the parent implementation phase
 applies accepted fixes. Do not run both the plugin and fallback routes merely
 because both are installed.

@@ -1,6 +1,6 @@
 ---
 name: azure-devops-pr-create
-description: Use only when the user explicitly invokes `$azure-devops-pr-create` or names `azure-devops-pr-create` for creating or resolving an Azure DevOps pull request from the current branch.
+description: Use only when the user explicitly requests azure-devops-pr-create, or azure-devops-pr-publish delegates PR creation for an explicitly user-requested publication workflow. Create or resolve an Azure DevOps PR without committing, pushing, or requesting review.
 ---
 
 # Azure DevOps PR Create
@@ -12,6 +12,10 @@ current branch. This skill does not commit, push, request reviewers, vote,
 complete, merge, or edit implementation files.
 
 Read `../azure-devops-common/references/context.md` before resolving the target.
+
+A delegated caller must forward the user's actual publication request, exact
+target, and existing authorizations. A reference to this skill alone does not
+authorize PR creation or updates.
 
 ## Workflow
 
@@ -34,8 +38,12 @@ Read `../azure-devops-common/references/context.md` before resolving the target.
      when preparing the body and selecting Work Item links.
 4. Avoid duplicate PRs.
    - Use `az repos pr list` to check for an active PR from the current source
-     branch to the selected target branch.
-   - If one exists, return it and do not create another.
+     branch to the selected target branch in the resolved repository.
+   - If one exists, verify it with `az repos pr show`, check its Work Item links,
+     and add only missing links authorized by this publication request. Preserve
+     existing content and unrelated links; return the PR without creating another.
+   - If multiple PRs match, stop and report the ambiguity.
+   - After an uncertain create result, search again before retrying creation.
 5. Create the PR.
    - Use the repository default branch unless the user specifies another target.
    - Use `az repos pr create`, applying the Work Item links selected in step 3.

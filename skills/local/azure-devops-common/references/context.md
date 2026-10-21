@@ -5,10 +5,14 @@ Use this reference before any Azure DevOps workflow action.
 ## CLI Baseline
 
 - Use Azure CLI with the `azure-devops` extension.
-- Check authentication and extension availability before Azure DevOps commands:
-  - `az account show`
+- Check extension availability and configured context before Azure DevOps commands:
   - `az extension show --name azure-devops`
   - `az devops configure --list`
+- Verify access with a minimal read-only request to the resolved Azure DevOps
+  target using existing authentication. Microsoft Entra login and PAT-based
+  authentication are supported; `az account show` alone is not an Azure DevOps
+  authentication gate. Do not print tokens, credential stores, or environment
+  variable values. See [official authentication guidance](https://learn.microsoft.com/en-us/azure/devops/cli/log-in-via-pat?view=azure-devops).
 - If the Azure DevOps extension, authentication, organization, or project is
   unavailable, stop and report the blocker.
 - Do not install extensions, sign in, or change defaults unless the user
@@ -67,6 +71,10 @@ Resolution rules:
   implemented by the PR; do not rely only on body text when a structured link is
   available. Use `az repos pr create --work-items` if the CLI supports it;
   otherwise add the link after PR creation with `az repos pr work-item add`.
+- Structured links are separate from state transitions. Enable
+  `--transition-work-items` only with explicit intent covering the linked set;
+  it attempts the next logical state and does not prove Work Item completion.
+  Verify the actual state under the project's process after merging.
 - Use state-transition keywords in the PR description, such as `Fixes #123`,
   `Closes #123`, or `Resolves #123`, only when the user explicitly wants the
   Work Item to transition on PR completion or merge and the PR fully completes

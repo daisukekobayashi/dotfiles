@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Use only when explicitly invoked with `$adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` workflow for named issues.
+description: Use only when explicitly invoked with `$adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items.
 ---
 
 # Adversarial Review
@@ -79,8 +79,9 @@ material finding was supported, not that safety was proven.
 ## Guardrails
 
 - Run only when explicitly invoked, directly or through the user's explicit
-  request for the full `github-issue-delivery` workflow for named issues. A caller
-  must forward that request and exact target; a skill reference alone is insufficient.
+  request for the full `github-issue-delivery` or
+  `azure-devops-work-item-delivery` workflow for named issues or Work Items. A
+  caller must forward that request and exact target; a skill reference alone is insufficient.
 - Do not edit, stage, commit, push, switch branches, create worktrees, comment,
   submit reviews, resolve threads, or mutate remote state.
 - Do not turn findings into an implementation plan or begin fixing them.

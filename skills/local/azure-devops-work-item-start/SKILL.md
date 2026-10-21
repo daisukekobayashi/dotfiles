@@ -14,6 +14,11 @@ parallelize.
 
 Read `../azure-devops-common/references/context.md` before fetching Work Items.
 
+When `azure-devops-work-item-delivery` supplies an implementation brief, prepare
+the workspace and baseline first, then follow its preflight/review/publication
+order rather than starting implementation immediately. Pass the user's request,
+exact target, and existing approvals to the worker; a brief alone grants none.
+
 ## Workflow
 
 1. Resolve the current Azure DevOps organization, project, repository, and parse
@@ -37,6 +42,11 @@ Read `../azure-devops-common/references/context.md` before fetching Work Items.
      or policy decision.
    - Follow **Worktree Preparation** for each safe Work Item, keeping one branch
      and worktree per item with separate worker ownership.
+   - Dispatch one worker per item/worktree within host capacity. Give it the
+     Work Item/spec, assigned branch/path, base and baseline, repository rules,
+     implementation brief, and expected verification/blocker report. Keep every
+     worker inside its assigned scope. The delivery caller coordinates these
+     workers rather than launching a second set.
 7. Report each Work Item summary, branch, worktree path, base commit, baseline
    command/result, worker assignment when applicable, and next implementation step.
 

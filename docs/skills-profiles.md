@@ -184,6 +184,7 @@ Include:
 - `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
 - `repo-execution-context`, `review-change`, `adversarial-review`, and runtime isolation local skills
+- `delivery-common` for the shared committed-snapshot local review procedure
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
@@ -342,6 +343,7 @@ Azure DevOps workflow skills:
 - `azure-devops-work-item-review`
 - `azure-devops-work-item-triage`
 - `azure-devops-work-item-start`
+- `azure-devops-work-item-delivery`
 - `azure-devops-pr-create`
 - `azure-devops-pr-publish`
 - `azure-devops-pr-review`
@@ -352,6 +354,21 @@ implementation. `azure-devops-pr-create` creates or reuses a PR, while
 `azure-devops-pr-publish` handles verification, commit, and push before delegating
 PR creation. `azure-devops-worktree-cleanup` removes completed work's local
 branches and worktrees.
+
+`azure-devops-work-item-delivery` coordinates the full Work Item workflow for
+Azure Boards and Azure Repos Git on Azure DevOps Services: isolated worktree,
+`design-preflight-with-docs`, implementation, both local reviews, PR publication,
+confirmed merge, and confirmed local cleanup. Invoke it with Work Item IDs, for
+example `/azure-devops-work-item-delivery 123 456` in Claude Code or
+`$azure-devops-work-item-delivery 123 456` in Codex. Use `base,azure-devops` for its
+prerequisites. GitHub and Azure delivery share the `delivery-common` local review
+procedure and the same host-specific reviewers. An explicit full delivery request
+selects delegated preflight, adversarial review, and publication, subject to the
+governing approval rules; merge and cleanup require separate target-specific
+confirmation. Work Item state transitions need explicit intent and actual state
+verification. Resume records stay in temporary agent-work storage. PR publication
+uses `azure-devops-pr-publish`; no hosted AI review request/follow-up cycle is run.
+Required policies, CI, and human approvals still gate merging.
 
 Work Item link and state-transition rules are maintained in the
 [common context](../skills/local/azure-devops-common/references/context.md#work-item-links-and-state-transitions).
@@ -369,6 +386,7 @@ GitHub to Azure DevOps workflow mapping:
 | `github-issue-review` | `azure-devops-work-item-review` |
 | `github-issue-triage` | `azure-devops-work-item-triage` |
 | `github-issue-start` | `azure-devops-work-item-start` |
+| `github-issue-delivery` | `azure-devops-work-item-delivery` |
 | `github-pr-create` | `azure-devops-pr-create` |
 | `github-pr-publish` | `azure-devops-pr-publish` |
 | `github-pr-review` | `azure-devops-pr-review` |

@@ -184,6 +184,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - `repo-execution-context`、`review-change`、`adversarial-review`、runtime isolation の local skill
+- commit 済み snapshot のローカルレビュー手順を共有する `delivery-common`
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
@@ -337,6 +338,7 @@ Azure DevOps workflow skill:
 - `azure-devops-work-item-review`
 - `azure-devops-work-item-triage`
 - `azure-devops-work-item-start`
+- `azure-devops-work-item-delivery`
 - `azure-devops-pr-create`
 - `azure-devops-pr-publish`
 - `azure-devops-pr-review`
@@ -346,6 +348,20 @@ Azure DevOps workflow skill:
 `azure-devops-pr-create` は PR の作成・再利用を担当し、
 `azure-devops-pr-publish` は検証・commit・push の後に PR 作成を委譲します。
 `azure-devops-worktree-cleanup` は完了した作業のローカル branch と worktree を削除します。
+
+`azure-devops-work-item-delivery` は Azure DevOps Services の Azure Boards と
+Azure Repos Git を対象に、独立 worktree、`design-preflight-with-docs`、実装、
+2種類のローカルレビュー、PR 公開、承認後のマージ、承認後のローカル cleanup
+までをまとめます。Claude Code では `/azure-devops-work-item-delivery 123 456`、
+Codex では `$azure-devops-work-item-delivery 123 456` のように Work Item ID を
+指定します。前提スキルは `base,azure-devops` で揃えます。
+GitHub 版と Azure 版は `delivery-common` のローカルレビュー手順とホスト別の
+reviewer を共有します。一括フローの明示依頼は preflight、adversarial review、
+PR 公開への委譲を含み、既存の承認条件に従います。マージと cleanup はそれぞれ
+対象を示して確認します。Work Item の状態遷移には明示的な意図が必要で、
+マージ後の実状態も確認します。再開記録は一時的な agent-work 領域に残します。
+公開には `azure-devops-pr-publish` を使い、公開後の AI レビュー依頼・対応
+サイクルは実行しません。必須 policy、CI、人間の承認はマージ前に確認します。
 
 Work Item のリンクと状態遷移のルールは
 [共通文書](../skills/local/azure-devops-common/references/context.md#work-item-links-and-state-transitions)
@@ -363,6 +379,7 @@ GitHub と Azure DevOps の workflow 対応:
 | `github-issue-review` | `azure-devops-work-item-review` |
 | `github-issue-triage` | `azure-devops-work-item-triage` |
 | `github-issue-start` | `azure-devops-work-item-start` |
+| `github-issue-delivery` | `azure-devops-work-item-delivery` |
 | `github-pr-create` | `azure-devops-pr-create` |
 | `github-pr-publish` | `azure-devops-pr-publish` |
 | `github-pr-review` | `azure-devops-pr-review` |

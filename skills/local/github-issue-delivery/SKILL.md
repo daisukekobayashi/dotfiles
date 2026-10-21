@@ -84,7 +84,7 @@ evidence ready for review, or an explicit blocker.
 
 ### 2. Run both local reviews, assess, and repeat
 
-Follow [Local Review](references/local-review.md) to select the host's reviewers
+Follow [Local Review](../delivery-common/references/local-review.md) to select the host's reviewers
 and give both the same base, issue, and implementation snapshot. Reviewers remain
 read-only. Wait for both completed results before the implementation owner edits.
 
