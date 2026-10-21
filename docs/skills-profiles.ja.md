@@ -127,14 +127,19 @@ worktree とブランチを削除します。
 `/github-issue-delivery 12 36`、Codex では `$github-issue-delivery 12 36` のように
 呼び出します。前提スキルを揃えるには `base,github` を使います。
 Claude Code は導入済みの `/codex:review` と `/codex:adversarial-review`、
-Codex は `code-review` と `adversarial-review` スキルを使います。
-ユーザーが一括フローを明示依頼した場合は preflight、adversarial review、
+Codex は `codex-review` と `codex-adversarial-review` スキルを使います。
+ユーザーが一括フローを明示依頼した場合は preflight、local review、
 PR サイクルへの委譲も含みます。自動検出だけではこれらを実行しません。
 有用な指摘の修正後は上限内で再レビューし、再開用の進捗は追跡対象の文書に
 混ぜません。マージと cleanup はそれぞれ対象を示して確認します。
 ローカルのブランチレビュー前に行う checkpoint commit にも既存の承認条件を
 適用します。単独の PR レビューサイクルは従来どおり1回のレビューを担当し、
 繰り返しと最終的な完了確認は delivery スキルが担当します。
+
+ローカルの `codex-review` と `codex-adversarial-review` は、OpenAI plugin の
+レビュー動作をホストのツール向けに移植したものです。各定義に出典と比較済み
+コミットを記録します。Matt Pocock 版の `code-review` は規約・仕様の2軸で
+確認したい場面向けに残し、delivery の標準レビューには使いません。
 
 外部 skill 用の pool/catalog ファイルは追加しません。Profile が curated external skill group の正本になります。
 
@@ -183,7 +188,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - UI 作成・テスト・レビュー用の `frontend-design`、`webapp-testing`、`web-design-guidelines`
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
-- `repo-execution-context`、`review-change`、`adversarial-review`、runtime isolation の local skill
+- `repo-execution-context`、`codex-review`、`codex-adversarial-review`、runtime isolation の local skill
 - commit 済み snapshot のローカルレビュー手順を共有する `delivery-common`
 - `git-commit`
 
@@ -237,7 +242,7 @@ Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出しま
 
 `architect` は利用可能な `codebase-design` の設計語彙を参照し、明示依頼された
 事前確認は `design-preflight` に任せます。`interrogate` は利用可能な
-`review-change`・`adversarial-review` の観点を参照しますが、明示起動限定の
+`codex-review`・`codex-adversarial-review` の観点を参照しますが、明示起動限定の
 workflow 自体は呼び出しません。`pstack` 単独でも使える最小限の代替基準を持ちます。
 読み取り専用の調査・レビュー、実験による検証、修正の責務を分けます。
 commit・push・依存関係・外部書き込み・破壊的操作の承認は、ユーザーの指示に従います。

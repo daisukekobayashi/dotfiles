@@ -36,7 +36,8 @@ const azureDevOpsLocalSkills = [
   "azure-devops-worktree-cleanup",
 ];
 const baseLocalSkills = [
-  "adversarial-review",
+  "codex-adversarial-review",
+  "codex-review",
   "delivery-common",
   "design-preflight",
   "design-preflight-with-docs",
@@ -44,7 +45,6 @@ const baseLocalSkills = [
   "find-unknowns",
   "learning-partner",
   "local-runtime-port-isolation",
-  "review-change",
   "worktree-runtime-cleanup",
   "writing-partner",
 ];
@@ -461,34 +461,36 @@ test("design preflight delegates to the installed grilling primitive", async () 
   assert.doesNotMatch(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grill-me`\./);
 });
 
-test("review skills are explicit-only and share target selection", async () => {
-  const adversarialRoot = path.join(repoRoot, "skills", "local", "adversarial-review");
-  const reviewChangeRoot = path.join(repoRoot, "skills", "local", "review-change");
+test("Codex review skills are explicit-only and share target selection", async () => {
+  const adversarialRoot = path.join(repoRoot, "skills", "local", "codex-adversarial-review");
+  const codexReviewRoot = path.join(repoRoot, "skills", "local", "codex-review");
   const adversarial = await readText(path.join(adversarialRoot, "SKILL.md"));
-  const reviewChange = await readText(path.join(reviewChangeRoot, "SKILL.md"));
+  const codexReview = await readText(path.join(codexReviewRoot, "SKILL.md"));
   const adversarialMetadata = await readText(path.join(adversarialRoot, "agents", "openai.yaml"));
-  const reviewChangeMetadata = await readText(
-    path.join(reviewChangeRoot, "agents", "openai.yaml"),
+  const codexReviewMetadata = await readText(
+    path.join(codexReviewRoot, "agents", "openai.yaml"),
   );
   const targetSection = (skill) => skill.match(/## Resolve and Collect\n[\s\S]*?(?=\n## )/)?.[0];
 
-  assert.match(adversarial, /Use only when explicitly invoked with `\$adversarial-review`/);
-  assert.match(reviewChange, /Use only when explicitly invoked with `\$review-change`/);
+  assert.match(adversarial, /Use only when explicitly invoked with `\$codex-adversarial-review`/);
+  assert.match(codexReview, /Use only when explicitly invoked with `\$codex-review`/);
   assert.match(adversarialMetadata, /allow_implicit_invocation:\s*false/);
-  assert.match(reviewChangeMetadata, /allow_implicit_invocation:\s*false/);
+  assert.match(codexReviewMetadata, /allow_implicit_invocation:\s*false/);
   assert.ok(targetSection(adversarial));
-  assert.equal(targetSection(reviewChange), targetSection(adversarial));
-  assert.match(targetSection(reviewChange), /git worktree list --porcelain/);
-  assert.match(targetSection(reviewChange), /merge-base/);
-  assert.match(targetSection(reviewChange), /git diff --cached/);
-  assert.match(targetSection(reviewChange), /Issue Context/);
-  assert.match(reviewChange, /correctness/i);
-  assert.match(reviewChange, /regression/i);
+  assert.equal(targetSection(codexReview), targetSection(adversarial));
+  assert.match(targetSection(codexReview), /git worktree list --porcelain/);
+  assert.match(targetSection(codexReview), /merge-base/);
+  assert.match(targetSection(codexReview), /git diff --cached/);
+  assert.match(targetSection(codexReview), /Issue Context/);
+  assert.match(codexReview, /correctness/i);
+  assert.match(codexReview, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
   assert.match(adversarial, /review-only/i);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "code-review")), false);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "local-code-review")), false);
-  assert.doesNotMatch(`${reviewChange}\n${adversarial}`, /\$code-review|local-code-review/);
+  assert.equal(existsSync(path.join(repoRoot, "skills", "local", "adversarial-review", "SKILL.md")), false);
+  assert.equal(existsSync(path.join(repoRoot, "skills", "local", "review-change", "SKILL.md")), false);
+  assert.doesNotMatch(`${codexReview}\n${adversarial}`, /\$code-review|local-code-review/);
 });
 
 test("profile validate accepts selected profiles", async () => {

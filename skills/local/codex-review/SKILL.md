@@ -1,9 +1,9 @@
 ---
-name: review-change
-description: Use only when explicitly invoked with `$review-change` to review a repository change, branch, worktree, commit, pull request, or issue before shipping.
+name: codex-review
+description: Use only when explicitly invoked with `$codex-review` to review a repository change, branch, worktree, commit, pull request, or issue for material defects before shipping, or as the normal local review phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items.
 ---
 
-# Review Change
+# Codex Review
 
 Find material defects. This is a read-only, review-only workflow.
 
@@ -78,8 +78,21 @@ was proven correct.
 
 ## Guardrails
 
-- Run only when explicitly invoked.
+- Run only when explicitly invoked, directly or through the user's explicit
+  request for the full `github-issue-delivery` or
+  `azure-devops-work-item-delivery` workflow for named issues or Work Items. A
+  caller must forward that request and exact target; a skill reference alone is insufficient.
 - Do not edit, stage, commit, push, switch branches, create worktrees, comment,
   submit reviews, resolve threads, or mutate remote state.
 - Do not turn findings into an implementation plan or begin fixing them.
 - Surface unavailable, skipped, or stale evidence as residual risk.
+
+## Source
+
+Local adaptation of OpenAI's [Codex review command](https://github.com/openai/codex-plugin-cc/blob/db52e28f4d9ded852ab3942cea316258ae4ef346/plugins/codex/commands/review.md).
+Last compared on 2026-10-21 with upstream commit
+[`db52e28`](https://github.com/openai/codex-plugin-cc/commit/db52e28f4d9ded852ab3942cea316258ae4ef346).
+This skill runs through the host's tools; the plugin command delegates to the
+native Codex reviewer. Local behavior adds issue/worktree targeting and explicit
+evidence, verdict, and coverage reporting. It is separate from Matt Pocock's
+`code-review` Standards/Spec workflow.

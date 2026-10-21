@@ -24,7 +24,7 @@ Azure Repos target for them.
 
 Read component skills before their phases. Forward the user's actual full
 workflow request, exact Work Item/branch/worktree, and existing authorizations.
-An explicit full delivery request selects the delegated preflight, adversarial,
+An explicit full delivery request selects the delegated preflight, local review,
 and publication phases. Automatic discovery or a reference to this skill selects
 none of them and grants no mutation approval. Honor the publisher's approval
 model and governing instructions for scoped checkpoint commits, normal pushes,

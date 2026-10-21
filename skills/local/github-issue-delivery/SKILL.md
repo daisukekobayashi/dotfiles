@@ -19,7 +19,7 @@ Codex:       $github-issue-delivery 12 36 56 60
 Use the current repository and explicitly requested issues. Read the component
 skills before their phases and pass the user's full workflow request, exact
 target, and existing authorizations to each. An explicit user request for this
-full workflow selects its delegated preflight, adversarial, and PR-cycle phases;
+full workflow selects its delegated preflight, local review, and PR-cycle phases;
 their instructions recognize this caller. Automatic discovery or a reference to
 this file does not select those phases or grant mutation approval. If authorization
 is missing, prepare the concrete result and request only the approval needed for

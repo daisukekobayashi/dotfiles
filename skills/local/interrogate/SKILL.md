@@ -28,7 +28,7 @@ Do not claim old findings cover a later revision.
 
 ## Prepare one review brief
 
-Read the review criteria in available `review-change` and `adversarial-review`
+Read the review criteria in available `codex-review` and `codex-adversarial-review`
 skills as references. Reuse their supported defect and failure-path criteria
 without invoking those explicit-only workflows or duplicating their operation
 steps. If unavailable, use this minimal lens: correctness and regressions,

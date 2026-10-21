@@ -9,8 +9,8 @@ name or invoke a slash command as shell text.
 | Host | First pass | Second pass |
 |---|---|---|
 | Claude Code with the Codex plugin | `/codex:review` | `/codex:adversarial-review` |
-| Codex | `code-review` skill | `adversarial-review` skill |
-| Claude Code without the plugin | `code-review` skill, when available | `adversarial-review` skill, when available |
+| Codex | `codex-review` skill | `codex-adversarial-review` skill |
+| Claude Code without the plugin | `codex-review` skill, when available | `codex-adversarial-review` skill, when available |
 
 Report the selected route. If either required reviewer is unavailable or cannot
 be invoked under its policy, report the missing prerequisite; do not substitute
@@ -24,14 +24,15 @@ recorded base; do not ask for a fixed point already established by workspace
 preparation. For a full review, cover the entire task diff, not only the last fix
 commit. Use a full pair unless the caller selects focused follow-up below.
 
-`code-review` reviews `git diff <fixed-point>...HEAD`. To include a new implementation
-and new files, prepare a normal scoped checkpoint commit after verification and
-before running these reviews. Obtain any required commit approval first, reuse
+For delivery, use `--base <base-sha> --scope branch` with both local skills to
+review the committed implementation. Include new code and files in a normal
+scoped checkpoint commit after verification and before these reviews.
+Obtain any required commit approval first, reuse
 existing authorization when it covers the commit, and use `git-commit` for the
 operation. Stage only the task's intended files; leave unrelated changes and
 temporary progress records untouched. Do not amend or create an empty commit.
 If approval is pending, the checkpoint and reviews remain pending; an empty
-`HEAD` diff cannot establish that uncommitted work passed `code-review`.
+`HEAD` diff cannot establish that uncommitted work passed local review.
 
 Use the same approach for the plugin branch reviews so both hosts review a fixed
 snapshot. After every worthwhile fix, verify and make the next authorized scoped
@@ -86,14 +87,14 @@ unsupported focus text to `/codex:review`.
 
 ## Codex or skill fallback
 
-Use `code-review` with the pinned base as its fixed point and the task plus
-accepted design/docs as its spec source. Require its Standards and Spec outputs;
-an available task must not be reported as "no spec available". Pass the exact
-worktree and branch to its reviewers and preserve its independent reviewer
-requirements. Report unavailable delegation instead of claiming independence.
+For a full pair, delegate `codex-review` and `codex-adversarial-review` to separate
+reviewers independent of the implementation owner. Give both the same exact worktree,
+branch, committed head, `--base <base-sha> --scope branch`, task criteria, and
+accepted design/docs. Require the normal review's findings, test gaps, verdict,
+and coverage, and the adversarial review's verdict, concrete failure paths,
+coverage, and residual risk. Report unavailable delegation instead of claiming
+independence.
 
-Use `adversarial-review` with the same target, `--base <base-sha> --scope branch`,
-and task context. Require its verdict, concrete findings, coverage, and residual
-risk. Keep both skill executions read-only; only the parent implementation phase
-applies accepted fixes. Do not run both the plugin and fallback routes merely
-because both are installed.
+Keep both skill executions read-only; only the parent implementation phase applies
+accepted fixes. Wait for required results before editing. Do not run both
+the plugin and fallback routes merely because both are installed.

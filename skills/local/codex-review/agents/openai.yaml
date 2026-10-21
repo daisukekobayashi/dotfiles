@@ -1,7 +1,7 @@
 interface:
-  display_name: "Review Change"
+  display_name: "Codex Review"
   short_description: "Review repository changes for material defects"
-  default_prompt: "Use $review-change to review this repository change before shipping."
+  default_prompt: "Use $codex-review to review this repository change before shipping."
 
 policy:
   allow_implicit_invocation: false

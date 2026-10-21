@@ -1,9 +1,9 @@
 ---
-name: adversarial-review
-description: Use only when explicitly invoked with `$adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items.
+name: codex-adversarial-review
+description: Use only when explicitly invoked with `$codex-adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items.
 ---
 
-# Adversarial Review
+# Codex Adversarial Review
 
 Challenge the implementation and design without inventing failures. This is a
 read-only, review-only workflow.
@@ -86,3 +86,13 @@ material finding was supported, not that safety was proven.
   submit reviews, resolve threads, or mutate remote state.
 - Do not turn findings into an implementation plan or begin fixing them.
 - Surface unavailable, skipped, or stale evidence as residual risk.
+
+## Source
+
+Local adaptation of OpenAI's [adversarial review command](https://github.com/openai/codex-plugin-cc/blob/db52e28f4d9ded852ab3942cea316258ae4ef346/plugins/codex/commands/adversarial-review.md)
+and [review prompt](https://github.com/openai/codex-plugin-cc/blob/db52e28f4d9ded852ab3942cea316258ae4ef346/plugins/codex/prompts/adversarial-review.md).
+Last compared on 2026-10-21 with upstream commit
+[`db52e28`](https://github.com/openai/codex-plugin-cc/commit/db52e28f4d9ded852ab3942cea316258ae4ef346).
+This skill runs through the host's tools. Local behavior preserves issue/worktree
+targeting, evidence-based findings, and coverage reporting in the user's language
+instead of the plugin runtime's structured JSON output.
