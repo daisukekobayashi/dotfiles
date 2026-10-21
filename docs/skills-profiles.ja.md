@@ -121,6 +121,21 @@ worktree とブランチを削除します。
 再レビュー依頼は自動では行いません。複合スキルは順序と引き継ぎを担当し、
 個別の処理手順は基本スキルに集約します。
 
+`github-issue-delivery` は、独立 worktree、`design-preflight-with-docs`、実装、
+2種類のローカルレビュー、PR の Codex レビュー対応、承認後のマージ、承認後の
+ローカル cleanup までをまとめます。Claude Code では
+`/github-issue-delivery 12 36`、Codex では `$github-issue-delivery 12 36` のように
+呼び出します。前提スキルを揃えるには `base,github` を使います。
+Claude Code は導入済みの `/codex:review` と `/codex:adversarial-review`、
+Codex は `code-review` と `adversarial-review` スキルを使います。
+ユーザーが一括フローを明示依頼した場合は preflight、adversarial review、
+PR サイクルへの委譲も含みます。自動検出だけではこれらを実行しません。
+有用な指摘の修正後は上限内で再レビューし、再開用の進捗は追跡対象の文書に
+混ぜません。マージと cleanup はそれぞれ対象を示して確認します。
+ローカルのブランチレビュー前に行う checkpoint commit にも既存の承認条件を
+適用します。単独の PR レビューサイクルは従来どおり1回のレビューを担当し、
+繰り返しと最終的な完了確認は delivery スキルが担当します。
+
 外部 skill 用の pool/catalog ファイルは追加しません。Profile が curated external skill group の正本になります。
 
 Root の `skills-lock.json` は、この移行後は global な全 skill catalog としては扱いません。dotfiles リポジトリ自身で project-scoped skill が必要な場合は、他の project と同じように root の `skills-lock.json` を生成します。

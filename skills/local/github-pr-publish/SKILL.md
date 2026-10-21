@@ -1,6 +1,6 @@
 ---
 name: github-pr-publish
-description: Use only when the user explicitly invokes `$github-pr-publish` or names `github-pr-publish` for publishing local GitHub branch or worktree changes as a pull request without requesting AI review.
+description: Use only when the user explicitly requests `github-pr-publish`, or its publication phase through `github-pr-codex-review-cycle`, `github-pr-publish-and-ai-review-request`, or `github-issue-delivery`, for specified local branches or worktrees. Publish as a PR without requesting AI review in this phase.
 ---
 
 # GitHub PR Publish
@@ -24,9 +24,13 @@ This skill is not for:
 
 ## Approval Model
 
-Because this skill only runs when the user explicitly invokes or names it,
-treat that request as approval for ordinary non-destructive commits and normal
-pushes for the requested target branches.
+An explicit publication request can arrive directly or through the named
+composing workflows. Require a delegated caller to forward the actual user
+request, exact target, and existing authorizations; a skill reference or automatic
+selection is insufficient. Subject to governing approval instructions, treat
+the explicit publication request as approval for ordinary non-destructive commits
+and normal pushes for the requested target branches. Ask for any missing approval
+after preparing the verified publication target.
 
 Still stop and ask before any action outside that narrow scope, including:
 

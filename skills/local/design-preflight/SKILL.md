@@ -1,11 +1,15 @@
 ---
 name: design-preflight
-description: Use only when explicitly invoked with $design-preflight before design or implementation work to control grilling for hard-to-change decisions, durable architecture, compatibility assumptions, and one-way-door risks.
+description: Use only when explicitly requested with $design-preflight, through design-preflight-with-docs, or through the full github-issue-delivery workflow before implementation, to examine hard-to-change design decisions, durable architecture, compatibility assumptions, and one-way-door risks.
 ---
 
 # Design Preflight
 
 Run a controlled `grilling` pass before design or implementation. Keep the interface small and the default lightweight.
+
+A user's explicit request for `design-preflight-with-docs` or the full
+`github-issue-delivery` workflow delegates this preflight. A caller must forward
+the request and issue context; a reference to this skill alone is insufficient.
 
 ## Required Sub-Skill
 

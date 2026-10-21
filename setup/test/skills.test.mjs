@@ -13,6 +13,7 @@ const githubLocalSkills = [
   "github-issue-review",
   "github-issue-triage",
   "github-issue-start",
+  "github-issue-delivery",
   "github-worktree-cleanup",
   "github-pr-create",
   "github-pr-ai-review-followup",

@@ -1,12 +1,16 @@
 ---
 name: github-pr-review-request
-description: Use only when the user explicitly invokes `$github-pr-review-request` or names `github-pr-review-request` to request Codex, Copilot, or both AI reviews on an existing GitHub pull request.
+description: Use only when the user explicitly requests `github-pr-review-request`, or when `github-pr-codex-review-cycle` or `github-pr-publish-and-ai-review-request` delegates review requests for an explicitly user-requested workflow. Request Codex, Copilot, or both on an existing PR.
 ---
 
 # GitHub PR Review Request
 
 Request AI review on an existing PR. This skill does not publish PRs, apply
 feedback, wait for review completion, or request human reviewers.
+
+For delegated calls, require the actual enclosing user request, exact PR, and
+authorization for the selected review request. A reference to this skill or
+automatic selection is insufficient; obtain any missing approval before posting.
 
 ## Inputs
 

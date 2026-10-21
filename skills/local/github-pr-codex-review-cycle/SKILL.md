@@ -1,6 +1,6 @@
 ---
 name: github-pr-codex-review-cycle
-description: Use only when the user explicitly invokes `$github-pr-codex-review-cycle` or names `github-pr-codex-review-cycle`.
+description: Use only when the user explicitly invokes `$github-pr-codex-review-cycle`, names `github-pr-codex-review-cycle`, or requests the full `github-issue-delivery` workflow for named issues.
 ---
 
 # GitHub PR Codex Review Cycle
@@ -33,8 +33,13 @@ This skill is not for:
 
 ## Approval Model
 
-Because this skill only runs when explicitly invoked, treat the invocation as
-approval for the normal, non-destructive cycle on the requested feature branch:
+An explicit invocation of this cycle, or an explicit request for the full
+`github-issue-delivery` workflow for named issues, selects this cycle on the
+requested feature branches. A delivery caller must forward the actual user
+request, exact target, and existing authorizations; a skill reference or automatic
+discovery is insufficient. Honor stricter applicable approval instructions and
+request any missing approval before mutation. Within those rules, treat the
+explicit request as approval for the normal, non-destructive cycle:
 
 - verification required by `github-pr-publish`
 - ordinary commit of the requested implementation work
@@ -62,6 +67,12 @@ Still stop and ask before:
 1. Resolve the target branch or worktree.
    - If no target is specified, use the current worktree and branch.
    - For multiple targets, process sequentially and stop on the first failure.
+   - On resume, revalidate any supplied PR/head/trigger and follow-up record.
+     Reuse verified completed operations and enter the earliest incomplete phase.
+     If a trigger already awaits output for the same published head, resume step
+     4 rather than posting another request. If matching output already completed,
+     continue with Prepare or the pending publication/Writeback phase. Evidence
+     for an older head does not satisfy a review of the current head.
 2. Use `github-pr-publish`.
    - Preserve that skill's verification, staging, commit, push, and PR rules.
    - Capture the PR number, PR URL, branch, commit, and verification result.

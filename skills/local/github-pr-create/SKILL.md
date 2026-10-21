@@ -1,6 +1,6 @@
 ---
 name: github-pr-create
-description: Use only when the user explicitly invokes `$github-pr-create` or names `github-pr-create` for creating or resolving a GitHub pull request from the current branch without committing, pushing, or requesting review.
+description: Use only when the user explicitly requests `github-pr-create`, or when `github-pr-publish` delegates PR creation for an explicitly user-requested publication workflow. Create or resolve a PR from the current branch without committing, pushing, or requesting review.
 ---
 
 # GitHub PR Create
@@ -11,6 +11,11 @@ Use this skill to create a GitHub pull request from the current branch while
 respecting the repository's pull request template when one exists. Templates
 are optional; if no template exists, create a minimal generic body with summary
 and test sections.
+
+For delegated calls, require the actual enclosing user request, exact branch/base,
+and authorization for PR creation. A reference to this skill or automatic
+selection does not authorize a GitHub write; request any missing approval before
+creation.
 
 This skill is not for:
 - committing changes

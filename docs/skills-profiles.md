@@ -121,6 +121,21 @@ the verified fixes, and invokes its Writeback phase. It does not automatically
 request another review after fixes. Composite skills own ordering and handoffs;
 underlying skills own operation details.
 
+`github-issue-delivery` coordinates the full issue workflow: isolated worktree,
+`design-preflight-with-docs`, implementation, both local reviews, the PR Codex
+review cycle, confirmed merge, and confirmed local cleanup. Invoke it with issue
+numbers, for example `/github-issue-delivery 12 36` in Claude Code or
+`$github-issue-delivery 12 36` in Codex. Use `base,github` for its prerequisites.
+Claude Code uses the installed `/codex:review` and `/codex:adversarial-review`
+plugin commands; Codex uses `code-review` and `adversarial-review` skills.
+An explicit full delivery request selects the delegated preflight, adversarial,
+and PR-cycle phases; automatic discovery alone does not authorize them.
+It repeats review after worthwhile fixes within bounded rounds, preserves resume
+records outside tracked docs, and requires separate target-specific merge and
+cleanup confirmation. Checkpoint commits before local branch review follow the
+applicable commit approval rules. The standalone PR cycle retains its one-review
+behavior; the delivery skill owns repetition and final completion checks.
+
 Do not add a separate external skill pool/catalog file. Profiles are the source of truth for curated external skill groups.
 
 The root `skills-lock.json` should stop acting as a global all-skills catalog after this migration. If the dotfiles repository itself needs project-scoped skills, root `skills-lock.json` can be generated for this repository like any other project.
