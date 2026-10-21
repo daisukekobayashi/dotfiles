@@ -21,7 +21,8 @@ the implementation owner's informal inspection for a completed review.
 Record the task URL/acceptance criteria, applicable standards, worktree, branch,
 base SHA, merge-base, head SHA, and dirty/untracked state. Use the task workspace's
 recorded base; do not ask for a fixed point already established by workspace
-preparation. Review the entire task diff, not only the last fix commit.
+preparation. For a full review, cover the entire task diff, not only the last fix
+commit. Use a full pair unless the caller selects focused follow-up below.
 
 `code-review` reviews `git diff <fixed-point>...HEAD`. To include a new implementation
 and new files, prepare a normal scoped checkpoint commit after verification and
@@ -34,13 +35,34 @@ If approval is pending, the checkpoint and reviews remain pending; an empty
 
 Use the same approach for the plugin branch reviews so both hosts review a fixed
 snapshot. After every worthwhile fix, verify and make the next authorized scoped
-commit before repeating the pair. A commit permits local review; publication
-still belongs to the caller's publication phase and its approval rules.
+commit before the next review or follow-up. A commit permits local review;
+publication still belongs to the caller's publication phase and its approval rules.
 
 If unrelated dirty files must remain, identify them explicitly and use branch
 scope for both passes. If any intended task changes remain outside the committed
 snapshot, report incomplete coverage and do not advance. Keep the snapshot stable
-until both results arrive; invalidate results if another writer changes it.
+until the required results arrive; invalidate affected coverage if another writer
+changes it.
+
+## Focused follow-up
+
+When the caller selects focused follow-up after a completed full pair, retain the
+full-review base/head and completed follow-up coverage. Pin the new committed
+head, and give the relevant independent reviewers the accepted findings,
+dispositions, and all changes since the preceding reviewed snapshot. Have them
+verify the fixes and check regressions in affected paths, with enough surrounding
+context to trace behavior. Use both reviewers when changes affect both areas of
+coverage. Wait for the required results before the implementation owner edits.
+
+Return the reviewed head, scope, confirmed fixes, remaining findings, and coverage
+limits. Earlier review evidence remains valid for unaffected areas; the caller
+decides whether broader changes require another full pair. Keep newly discovered
+material risks visible for that assessment.
+
+Use the reviewer's supported follow-up interface. If it supports only a full
+branch review, invoke that supported review and let the caller assess the results
+under its completion criteria. Preserve the route's independence and read-only
+requirements; use only supported arguments.
 
 ## Claude Code plugin
 

@@ -55,8 +55,9 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
 4. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Keep a separate record per issue: URL, scope,
    worktree, branch, base ref and SHA, current phase, accepted design decisions,
-   verification, reviewed head SHAs, review round counts, PR and trigger/thread
-   identifiers, dispositions, blockers, and next action. Report the resume path.
+   verification, full-review and follow-up head SHAs and coverage, review round
+   counts, PR and trigger/thread identifiers, dispositions, blockers, and next
+   action. Report the resume path.
    Keep durable definitions and decisions in the repository's normal docs.
 
 On resume, reconcile the record with actual local and GitHub state. Reuse matching
@@ -82,21 +83,30 @@ and material coverage limits; a successful baseline is not implementation
 verification. Complete this phase only with an implementation and verification
 evidence ready for review, or an explicit blocker.
 
-### 2. Run both local reviews, assess, and repeat
+### 2. Run both local reviews and verify fixes
 
 Follow [Local Review](../delivery-common/references/local-review.md) to select the host's reviewers
-and give both the same base, issue, and implementation snapshot. Reviewers remain
-read-only. Wait for both completed results before the implementation owner edits.
+and run an initial full review with both on the same base, issue, and implementation
+snapshot. Reviewers remain read-only. Wait for both completed results before the
+implementation owner edits.
 
 Assess each finding against the issue, code, and evidence. Apply worthwhile fixes;
 record a concise reason for explained, duplicate, stale, or skipped findings.
-Leave disputed material findings or design decisions open for the user. Avoid
-scope expansion and speculative churn.
+Treat concrete failures affecting acceptance criteria, correctness, security,
+data integrity, regressions, or mandatory repository rules as material. Minor
+improvements may be deferred with a reason. Leave disputed material findings or
+design decisions open for the user. Avoid scope expansion and speculative churn.
 
-After fixes, run relevant checks and repeat both local reviews on the new
-snapshot. Advance only when both passes completed on the current implementation,
-verification is current, and no material actionable finding or human decision
-remains open. Failed, unavailable, empty, or partial review output is not a pass.
+After fixes, run relevant checks and use focused follow-up from Local Review to
+confirm accepted fixes and check regressions in affected paths. Repeat the full
+pair when the design or change scope shifts materially, or new evidence makes
+the earlier full-review coverage insufficient.
+
+Advance when acceptance criteria are met, verification is current, the initial
+pair and completed follow-ups cover the current head, and no material actionable
+finding or human decision remains open. Recorded deferrals of minor improvements
+do not require another round or a result with zero findings. Failed, unavailable,
+empty, or partial review output is not a pass.
 
 ### 3. Publish and complete hosted Codex review
 
@@ -111,12 +121,14 @@ unresolved items. An acknowledgement or an `eyes` reaction is not a completed
 review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
-and obtain a fresh hosted Codex review for the resulting published head. Reuse
-the existing PR and call the cycle again for that target; it does not request
-another review automatically. If any other edit or new commit changes the head,
-invalidate the affected review evidence. Advance only when the current published
-head has completed both local reviews and hosted review, worthwhile fixes are
-verified and published, and remaining thread dispositions clearly close them.
+for focused follow-up or a full pair under its escalation rule, and obtain a fresh
+hosted Codex review for the resulting published head. Reuse the existing PR and
+call the cycle again for that target; it does not request another review
+automatically. If any other edit or new commit changes the head, refresh the
+affected review coverage. Advance only when the current published head is covered
+by the full local reviews and completed follow-ups, has completed hosted review,
+worthwhile fixes are verified and published, and remaining thread dispositions
+clearly close them.
 
 ### 4. Confirm and perform the merge
 
@@ -149,12 +161,16 @@ than a fully completed issue delivery.
 ## Bounds and Handoffs
 
 Default to at most three local review rounds and three hosted Codex review rounds
-per issue across this delivery, including resumes. A local round runs both
-reviewers; a hosted round requires actual output. A clean result may advance
-immediately. User-specified lower limits take precedence. At the limit, repeated
-non-progress, a timeout, a failed required check, or a material human decision,
-preserve progress and report the next action. Ask before extending the budget or
-retrying a timed-out external review; do not repeatedly post triggers.
+per issue across this delivery, including resumes. Count the initial full pair,
+each focused follow-up on a fixed snapshot, and each required new full pair as one
+local round apiece; hosted-fix follow-ups use the same local budget. A hosted round
+requires actual output. Advance as soon as the completion criteria are met.
+User-specified lower limits take precedence. If the limit is reached with required
+work remaining, progress repeatedly stalls, a review times out, a required check
+fails, or a material human decision is needed, preserve progress and report the
+next action.
+Ask before extending the budget or retrying a timed-out external review; do not
+repeatedly post triggers.
 
 Use the cycle's bounded waiting rules and keep the user informed. Stop further
 publication targets after a cycle failure. Independent local work may continue
