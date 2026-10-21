@@ -16,8 +16,8 @@ function Show-Usage {
 Usage: claude-pick [--env ENV] [-m MODEL] [-e EFFORT] [MODEL [EFFORT]] [-- CLAUDE_ARGS...]
 Create or refresh environments with: .\setup.ps1 claude --env NAME
 
-Without arguments, choose an environment, model, and effort with fzf.
-An explicit environment alone uses its saved model/effort without a picker.
+Without arguments, choose an environment with fzf and use its saved model/effort.
+An explicit environment alone launches without a picker.
 With a model or effort specified, choose the missing one interactively.
 Use "keep" for model/effort to leave Claude's configuration in control.
 Effort choices: keep, low, medium, high, xhigh, max (support varies by model).
@@ -183,10 +183,8 @@ try {
   $ClaudeCommand = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $ClaudeCommand) { Stop-Picker 127 'Required command not found: claude' }
   if ($ClaudeCommand.Source -match '\.(cmd|bat)$') { Stop-Picker 2 'Use the native Claude executable (claude.exe); cmd/bat shims cannot preserve arbitrary arguments.' }
-  $InteractiveEnv = $false
   if (-not $SelectedEnv) {
     $SelectedEnv = Select-Row 'Env' @(Get-EnvRows)
-    $InteractiveEnv = $true
   }
   if ($SelectedEnv -ceq 'default') { $ConfigDirectory = Join-Path $HOME '.claude' }
   else {
@@ -208,7 +206,7 @@ try {
   if ($Maintenance) {
     if ($SelectedModel -or $SelectedEffort) { Stop-Picker 2 'Model/effort do not apply to this subcommand' }
     $SelectedModel = 'keep'; $SelectedEffort = 'keep'
-  } elseif (-not $InteractiveEnv -and -not $SelectedModel -and -not $SelectedEffort) {
+  } elseif (-not $SelectedModel -and -not $SelectedEffort) {
     $SelectedModel = 'keep'; $SelectedEffort = 'keep'
   }
   if ($HasModel) {

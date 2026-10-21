@@ -304,7 +304,7 @@ claude-pick --env acme -- auth login --claudeai # Log in separately for this env
 claude-pick --env acme                       # Launch with its configured defaults
 claude-pick --env acme opus high -- --resume
 claude-pick --env default                    # Use the existing ~/.claude
-claude-pick                                  # Choose an existing env, model, effort
+claude-pick                                  # Choose an existing env and use its saved defaults
 ```
 
 In PowerShell, use `claude-pick.ps1` and quote the separator as `'--'` so
@@ -315,6 +315,48 @@ In PowerShell, use `claude-pick.ps1` and quote the separator as `'--'` so
 claude-pick.ps1 --env acme '--' auth login
 claude-pick.ps1 --env acme opus high '--' --resume
 ```
+
+To use a local model or gateway, supply its connection when creating the env.
+Enter the address at runtime; no server address or credential is embedded in the
+setup scripts or shared settings. On Linux/macOS:
+
+```sh
+printf 'Gateway URL: '
+read -r gateway_url
+printf 'Model ID: '
+read -r gateway_model
+./setup.sh claude --env local --base-url "$gateway_url" \
+  --model "$gateway_model" --context-tokens 262144 --dry-run
+```
+
+On Windows:
+
+```powershell
+$gatewayUrl = Read-Host 'Gateway URL'
+$gatewayModel = Read-Host 'Model ID'
+.\setup.ps1 claude --env local --base-url $gatewayUrl `
+  --model $gatewayModel --context-tokens 262144 --dry-run
+```
+
+Use the context window actually configured on the server. Review the preview,
+then rerun without `--dry-run`; setup asks for a missing gateway auth token with
+hidden input. For automation on either platform, pipe a token directly into the
+shared runtime: `node setup/claude.js --env local --auth-token-stdin`.
+Never pass a token as a command-line argument. Dry-run does not read tokens,
+print connection values, or contact the server.
+
+The URL must expose Anthropic Messages (`/v1/messages`). An OpenAI-compatible
+endpoint that lacks that format needs a translating gateway. Non-Claude models
+need their tool calling, streaming, compaction, and thinking/effort behavior
+checked with the actual server.
+
+After setup, run `claude-pick --env local` (`claude-pick.ps1 --env local` on
+Windows), or select `local` from `claude-pick`. Connection options are stored only
+under `~/.claude-envs/local`; omitted options persist on refresh. The saved model
+also supplies the Fable/Opus/Sonnet/Haiku aliases for this single-model gateway.
+Connection metadata contains no token. The independent `settings.json` and its
+local backups contain the token; keep these env files outside version control.
+To rotate a token, rerun setup with `--auth-token-stdin` and the same env name.
 
 Before installing links, run `./tools/claude/claude-pick` or `.\tools\claude\claude-pick.ps1`.
 Open a new shell after updating: `claude` is now the original command, while
@@ -337,7 +379,7 @@ Local settings changes, history, MCP configuration and local skills are preserve
 Conflicting edits or shared-link targets stop setup before writing; unmanaged or
 incomplete homes are not adopted. `default` keeps using `setup links`.
 
-An explicit environment alone skips model/effort selection. Supplying one of model
+Selecting an environment alone skips model/effort selection. Supplying one of model
 or effort prompts for the other; use `keep` to retain Claude's configuration.
 Use `-m MODEL` and `-e EFFORT` or the positional form shown above. Effort options
 are `low`, `medium`, `high`, `xhigh`, and `max`; support depends on Claude's model

@@ -7,8 +7,8 @@ Usage: claude-pick [--env ENV] [-m MODEL] [-e EFFORT] [MODEL [EFFORT]] [-- CLAUD
 
 Create or refresh environments with: ./setup.sh claude --env NAME
 
-Without arguments, choose an environment, model, and effort with fzf.
-An explicit environment alone uses its saved model/effort without a picker.
+Without arguments, choose an environment with fzf and use its saved model/effort.
+An explicit environment alone launches without a picker.
 With a model or effort specified, choose the missing one interactively.
 Use "keep" for model/effort to leave Claude's configuration in control.
 Effort choices: keep, low, medium, high, xhigh, max (support varies by model).
@@ -90,7 +90,7 @@ env_rows() {
   done
 }
 
-env_name="" model="" effort="" create_name="" interactive_env=0
+env_name="" model="" effort="" create_name=""
 skills=() positional=() claude_args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -140,7 +140,6 @@ fi
 require_command claude
 if [[ -z "$env_name" ]]; then
   env_name="$(pick Env "$(env_rows)")"
-  interactive_env=1
 fi
 if [[ "$env_name" = default ]]; then
   config_dir="$HOME/.claude"
@@ -164,7 +163,7 @@ case "${claude_args[0]:-}" in auth|doctor|update|install|setup-token|mcp|plugin|
 if [[ "$maintenance" -eq 1 ]]; then
   [[ -z "$model$effort" ]] || die 2 "Model/effort do not apply to this subcommand"
   model=keep effort=keep
-elif [[ "$interactive_env" -eq 0 && -z "$model$effort" ]]; then
+elif [[ -z "$model$effort" ]]; then
   model=keep effort=keep
 fi
 if [[ "$has_model" -eq 1 ]]; then

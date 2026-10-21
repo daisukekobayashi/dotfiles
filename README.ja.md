@@ -272,7 +272,7 @@ claude-pick --env acme -- auth login --claudeai
 claude-pick --env acme                        # 保存済み設定で起動
 claude-pick --env acme opus high -- --resume
 claude-pick --env default                     # 既存の ~/.claude を使う
-claude-pick                                  # 既存 env, model, effort を選択
+claude-pick                                  # 既存 env を選び, 保存済み設定で起動
 ```
 
 PowerShell では区切りを `'--'` と引用して
@@ -283,6 +283,49 @@ PowerShell では区切りを `'--'` と引用して
 claude-pick.ps1 --env acme '--' auth login --claudeai
 claude-pick.ps1 --env acme opus high '--' --resume
 ```
+
+ローカルモデルや gateway は, env の作成と同時に接続設定を指定できます.
+接続先は実行時に入力し, setup スクリプトや共通設定には固定しません.
+Linux/macOS の例:
+
+```sh
+printf 'Gateway URL: '
+read -r gateway_url
+printf 'Model ID: '
+read -r gateway_model
+./setup.sh claude --env local --base-url "$gateway_url" \
+  --model "$gateway_model" --context-tokens 262144 --dry-run
+```
+
+Windows の例:
+
+```powershell
+$gatewayUrl = Read-Host 'Gateway URL'
+$gatewayModel = Read-Host 'Model ID'
+.\setup.ps1 claude --env local --base-url $gatewayUrl `
+  --model $gatewayModel --context-tokens 262144 --dry-run
+```
+
+コンテキスト長はサーバーで実際に有効な値に合わせてください.
+予定を確認してから `--dry-run` を外して再実行すると,
+未設定の gateway 認証トークンを非表示で入力できます.
+自動化では両 OS とも共有 runtime の
+`node setup/claude.js --env local --auth-token-stdin` に直接トークンをパイプで渡します.
+トークンそのものをコマンド引数には渡しません.
+dry-run はトークンを読み取らず, 接続設定の値を表示せず, サーバーにも接続しません.
+
+接続先には Anthropic Messages (`/v1/messages`) が必要です.
+その形式を提供しない OpenAI 互換サーバーでは, 変換 gateway を使います.
+Claude 以外のモデルでは, ツール呼び出し・ストリーミング・要約・
+thinking/effort の対応を実際のサーバーで確認してください.
+
+作成後は `claude-pick --env local` (Windows は `claude-pick.ps1 --env local`),
+または `claude-pick` の一覧から `local` を選ぶだけで起動します.
+接続設定は `~/.claude-envs/local` 内だけに保存し, 再設定で省略した項目は保持します.
+1 モデルの gateway として, Fable/Opus/Sonnet/Haiku の別名も指定モデルに揃えます.
+生成元の記録にはトークンを含めません. env 固有の `settings.json` と
+そのローカルバックアップにはトークンを含むため, env は Git 管理外に置きます.
+トークンの更新は, 同じ env に `--auth-token-stdin` を指定して再実行します.
 
 旧 `-p` / `--profile` は `--env` の別名です.
 旧 `--create-env` / `--create` は移行メッセージを出して setup に委譲し,
@@ -305,7 +348,7 @@ env ごとの skill 選択は不要です.
 未管理・作成途中のディレクトリは引き継ぎません.
 `default` の配置には従来どおり `setup links` を使います.
 
-env だけの指定では model/effort 選択を省略します. どちらかを指定すると
+env だけの選択では model/effort 選択を省略します. どちらかを指定すると
 残りを選択し, `keep` なら保存済みの設定を使います.
 `-m MODEL` / `-e EFFORT` も利用できます. effort は `low`, `medium`, `high`,
 `xhigh`, `max` で, 対応範囲はモデル・バージョンによります.

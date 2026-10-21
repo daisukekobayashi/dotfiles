@@ -53,6 +53,10 @@ codex args:
 
 claude args:
   --env <name>               Create or refresh a named environment
+  --base-url <url>           Save an Anthropic Messages endpoint in that env
+  --model <id>               Save its default model
+  --context-tokens <n>       Set the server's actual context window
+  --auth-token-stdin         Read a gateway token from a pipe instead of hidden input
   --skill <name>             Check a required installed skill (legacy, repeatable)
                              All installed dotfiles user skills are shared
   --dry-run                  Preview setup without changing files

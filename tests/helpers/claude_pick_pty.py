@@ -1,4 +1,4 @@
-"""Run picker contract tests with a real terminal and a bounded lifetime."""
+"""Run CLI contract tests with a real terminal and a bounded lifetime."""
 
 import errno
 import os
@@ -13,6 +13,8 @@ if pid == 0:
     os.execvp(sys.argv[1], sys.argv[1:])
 
 output = bytearray()
+prompt = os.environ.get("PTY_PROMPT", "").encode()
+sent_input = False
 deadline = time.monotonic() + 10
 try:
     while time.monotonic() < deadline:
@@ -27,9 +29,12 @@ try:
             if not chunk:
                 break
             output.extend(chunk)
+            if prompt and not sent_input and prompt in output:
+                os.write(terminal, os.environ["PTY_INPUT"].encode())
+                sent_input = True
     else:
         os.kill(pid, signal.SIGKILL)
-        raise TimeoutError("claude-pick did not finish within 10 seconds")
+        raise TimeoutError("CLI did not finish within 10 seconds")
     _, status = os.waitpid(pid, 0)
     sys.stdout.buffer.write(output)
     sys.exit(os.waitstatus_to_exitcode(status))

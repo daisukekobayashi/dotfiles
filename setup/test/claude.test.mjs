@@ -28,8 +28,8 @@ function fixture(t) {
   for (const name of ["one", "two"]) write(path.join(dotfiles, ".agents/user/skills", name, "SKILL.md"), `# ${name}\n`);
   write(path.join(home, ".claude/settings.json"), '{"enabledPlugins":{"private":true}}\n');
   const env = { ...process.env, SETUP_HOME: home, SETUP_DOTFILES_ROOT: dotfiles, SETUP_DRY_RUN: "0" };
-  const run = (args = [], extra = {}) => spawnSync(process.execPath, [runtime, ...args], { env: { ...env, ...extra }, encoding: "utf8" });
-  const initialize = (args = [], extra = {}) => run(["--env", "acme", ...args], extra);
+  const run = (args = [], extra = {}, options = {}) => spawnSync(process.execPath, [runtime, ...args], { env: { ...env, ...extra }, encoding: "utf8", ...options });
+  const initialize = (args = [], extra = {}, options = {}) => run(["--env", "acme", ...args], extra, options);
   const inject = source => {
     const preload = path.join(root, "inject.cjs");
     fs.writeFileSync(preload, source);
@@ -81,6 +81,155 @@ test("creates independent settings from the shared source and links every instal
   assert.equal(fs.existsSync(path.join(f.destination, ".credentials.json")), false);
   assert.equal(fs.existsSync(path.join(f.destination, "mcp.json")), false);
   assert.equal(fs.readFileSync(path.join(f.home, ".claude/settings.json"), "utf8"), '{"enabledPlugins":{"private":true}}\n');
+});
+
+test("gateway setup saves connection and token only in the selected local home", t => {
+  const f = fixture(t);
+  const sharedBefore = fs.readFileSync(path.join(f.dotfiles, "claude/settings.json"), "utf8");
+  const result = f.initialize(["--base-url", "https://gateway.invalid", "--model", "local-model", "--context-tokens", "262144", "--auth-token-stdin"], {}, { input: "test-gateway-token\r\n" });
+  success(result);
+  const settings = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
+  assert.equal(settings.model, "local-model");
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "https://gateway.invalid");
+  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "test-gateway-token");
+  assert.equal(settings.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, "262144");
+  for (const family of ["FABLE", "OPUS", "SONNET", "HAIKU"]) assert.equal(settings.env[`ANTHROPIC_DEFAULT_${family}_MODEL`], "local-model");
+  const metadataText = fs.readFileSync(path.join(f.destination, ".dotfiles-env.json"), "utf8");
+  const metadata = JSON.parse(metadataText);
+  assert.deepEqual(metadata.connection, { baseUrl: "https://gateway.invalid", model: "local-model", contextTokens: 262144 });
+  assert.doesNotMatch(metadataText, /ANTHROPIC_AUTH_TOKEN|test-gateway-token/);
+  assert.doesNotMatch(result.stdout + result.stderr, /gateway\.invalid|test-gateway-token/);
+  assert.equal(fs.readFileSync(path.join(f.dotfiles, "claude/settings.json"), "utf8"), sharedBefore);
+  assert.equal(fs.readFileSync(path.join(f.home, ".claude/settings.json"), "utf8"), '{"enabledPlugins":{"private":true}}\n');
+  success(f.run(["--env", "second"]));
+  assert.doesNotMatch(fs.readFileSync(path.join(f.envs, "second/settings.json"), "utf8"), /gateway\.invalid|test-gateway-token|local-model/);
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.join(f.destination, "settings.json")).mode & 0o777, 0o600);
+});
+
+test("gateway refresh retains omitted options and tokens across shared model changes", t => {
+  const f = fixture(t);
+  success(f.initialize(["--base-url=https://gateway.invalid", "--model=local-model", "--context-tokens=262144", "--auth-token-stdin"], {}, { input: "test-original-token\n" }));
+  updateSource(f, source => { source.model = "opus"; source.theme = "dark"; source.env = { SHARED: "new" }; });
+  success(f.initialize());
+  let settings = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
+  assert.equal(settings.model, "local-model");
+  assert.equal(settings.theme, "dark");
+  assert.equal(settings.env.SHARED, "new");
+  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "test-original-token");
+  assert.equal(settings.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, "262144");
+  success(f.initialize(["--model", "another-local-model"]));
+  success(f.initialize(["--auth-token-stdin"], {}, { input: "test-replacement-token\n" }));
+  settings = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
+  assert.equal(settings.model, "another-local-model");
+  assert.equal(settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, "another-local-model");
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "https://gateway.invalid");
+  assert.equal(settings.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, "262144");
+  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "test-replacement-token");
+  const before = snapshot(f);
+  success(f.initialize());
+  assert.deepEqual(snapshot(f), before);
+});
+
+test("gateway options can be added to an existing environment without changing local state", t => {
+  const f = fixture(t);
+  success(f.initialize());
+  const settingsPath = path.join(f.destination, "settings.json");
+  const current = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  current.theme = "local-theme";
+  f.write(settingsPath, JSON.stringify(current));
+  f.write(path.join(f.destination, "history.jsonl"), "history placeholder\n");
+  success(f.initialize(["--base-url", "https://gateway.invalid", "--model", "local-model", "--auth-token-stdin"], {}, { input: "test-gateway-token\n" }));
+  const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  assert.equal(settings.model, "local-model");
+  assert.equal(settings.theme, "local-theme");
+  assert.equal(settings.env.CLAUDE_MEM_DATA_DIR, current.env.CLAUDE_MEM_DATA_DIR);
+  assert.equal(fs.readFileSync(path.join(f.destination, "history.jsonl"), "utf8"), "history placeholder\n");
+});
+
+test("gateway dry-run does not read a token or print connection values", t => {
+  const f = fixture(t);
+  const result = f.initialize(["--base-url", "https://gateway.invalid", "--model", "local-model", "--context-tokens", "262144", "--auth-token-stdin", "--dry-run"]);
+  success(result);
+  assert.match(result.stdout, /Auth token: hidden input/);
+  assert.doesNotMatch(result.stdout + result.stderr, /gateway\.invalid|local-model|262144/);
+  assert.equal(fs.existsSync(f.envs), false);
+});
+
+test("invalid connection and token arguments fail without exposing their values", t => {
+  const f = fixture(t);
+  const invalid = [
+    ["--base-url", "not-a-url"], ["--base-url", "file:///private"],
+    ["--base-url", "https://user:test-private-value@gateway.invalid"],
+    ["--base-url", "https://gateway.invalid?token=test-private-value"],
+    ["--base-url", "https://gateway.invalid/#test-private-value"],
+    ["--base-url", "https://gateway.invalid\ntest-private-value"],
+    ["--model", "test-private-value\nmodel"],
+    ...["0", "-1", "1.5", "1e3", "invalid", "9007199254740992"].map(value => ["--context-tokens", value]),
+    ["--auth-token=test-private-value"], ["--auth-token-stdin"],
+  ];
+  for (const args of invalid) {
+    const result = f.initialize(args);
+    assert.equal(result.status, 2, JSON.stringify(args));
+    assert.doesNotMatch(result.stdout + result.stderr, /test-private-value/);
+    assert.equal(fs.existsSync(f.envs), false);
+  }
+});
+
+test("missing and malformed tokens do not leave a partial environment or change existing settings", t => {
+  const f = fixture(t);
+  const args = ["--base-url", "https://gateway.invalid"];
+  const missing = f.initialize(args);
+  assert.equal(missing.status, 2);
+  assert.match(missing.stderr, /hidden input.*--auth-token-stdin/);
+  assert.equal(fs.existsSync(f.envs), false);
+  for (const input of ["", "\n", "test-token\nextra-token\n", "test token\n"]) {
+    assert.equal(f.initialize([...args, "--auth-token-stdin"], {}, { input }).status, 2);
+    assert.equal(fs.existsSync(f.envs), false);
+  }
+  success(f.initialize([...args, "--auth-token-stdin"], {}, { input: "test-token\n" }));
+  const before = snapshot(f);
+  assert.equal(f.initialize(["--auth-token-stdin"], {}, { input: "" }).status, 2);
+  assert.deepEqual(snapshot(f), before);
+});
+
+test("gateway refresh detects local model conflicts and rejects invalid connection metadata", t => {
+  const f = fixture(t);
+  success(f.initialize(["--base-url", "https://gateway.invalid", "--model", "local-model", "--auth-token-stdin"], {}, { input: "test-token\n" }));
+  const settingsPath = path.join(f.destination, "settings.json");
+  const current = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  current.model = "user-model";
+  f.write(settingsPath, JSON.stringify(current));
+  const before = snapshot(f);
+  const result = f.initialize(["--model", "another-model"]);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Conflicting local and dotfiles changes: settings.json.model/);
+  assert.deepEqual(snapshot(f), before);
+  const metadataPath = path.join(f.destination, ".dotfiles-env.json");
+  const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+  metadata.connection.authToken = "test-private-value";
+  f.write(metadataPath, JSON.stringify(metadata));
+  const invalid = f.initialize();
+  assert.equal(invalid.status, 2);
+  assert.doesNotMatch(invalid.stdout + invalid.stderr, /test-private-value/);
+  assert.equal(fs.readFileSync(settingsPath, "utf8"), before["settings.json"]);
+});
+
+test("a failed gateway update restores the previous token and connection", t => {
+  const f = fixture(t);
+  success(f.initialize(["--base-url", "https://gateway.invalid", "--model", "local-model", "--auth-token-stdin"], {}, { input: "test-original-token\n" }));
+  const before = snapshot(f);
+  const injected = f.inject(`const fs = require('node:fs');
+const original = fs.renameSync;
+fs.renameSync = function(source, target) {
+  if (target.endsWith('.dotfiles-env.json')) throw new Error('Injected connection metadata failure');
+  return original.apply(this, arguments);
+};`);
+  const result = f.initialize(["--model", "another-model", "--auth-token-stdin"], injected, { input: "test-replacement-token\n" });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Injected connection metadata failure/);
+  assert.doesNotMatch(result.stdout + result.stderr, /test-original-token|test-replacement-token|gateway\.invalid/);
+  assert.deepEqual(snapshot(f), before);
+  assert.equal(fs.readdirSync(f.destination).some(name => name.startsWith('.dotfiles-claude-stage-')), false);
 });
 
 test("new environments isolate memory and reserve different ports without copying default data", t => {

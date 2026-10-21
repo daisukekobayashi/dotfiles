@@ -48,7 +48,7 @@ picker_env() {
 
 run_picker() { run picker_env "$PICKER" "$@"; }
 create_env() { run picker_env SETUP_HOME="$TEST_HOME" SETUP_DOTFILES_ROOT="$ROOT" "$ROOT/setup.sh" claude --env "$@"; }
-run_tty_picker() { run picker_env python3 "$ROOT/tests/helpers/claude_pick_pty.py" "$PICKER"; }
+run_tty_picker() { run picker_env python3 "$ROOT/tests/helpers/claude_pick_pty.py" "$PICKER" "$@"; }
 
 assert_log() {
   python3 - "$PICK_LOG" "$@" <<'PY'
@@ -139,6 +139,53 @@ PY
   [ ! -e "$PICK_LOG" ]
 }
 
+@test "gateway setup reads a hidden token from a terminal and env selection keeps its model" {
+  run picker_env SETUP_HOME="$TEST_HOME" SETUP_DOTFILES_ROOT="$ROOT" \
+    PTY_PROMPT='Gateway auth token (hidden): ' PTY_INPUT=$'terminal-test-token\n' \
+    python3 "$ROOT/tests/helpers/claude_pick_pty.py" "$ROOT/setup.sh" claude --env gateway \
+    --base-url https://gateway.invalid --model local-model --context-tokens 262144
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Gateway auth token (hidden): '* ]]
+  [[ "$output" != *terminal-test-token* ]]
+  [[ "$output" != *gateway.invalid* ]]
+  python3 - "$TEST_HOME/.claude-envs/gateway" <<'PY'
+import json, pathlib, sys
+home = pathlib.Path(sys.argv[1])
+settings = json.loads((home / 'settings.json').read_text())
+assert settings['model'] == 'local-model'
+assert settings['env']['ANTHROPIC_AUTH_TOKEN'] == 'terminal-test-token'
+assert settings['env']['CLAUDE_CODE_MAX_CONTEXT_TOKENS'] == '262144'
+assert 'terminal-test-token' not in (home / '.dotfiles-env.json').read_text()
+PY
+  printf 'gateway\n' > "$FZF_CHOICES"
+  run_tty_picker
+  [ "$status" -eq 0 ]
+  assert_log env '"gateway"' args '[]' api_key_present false
+  [ -z "$(tr -d '\n' < "$FZF_CHOICES")" ]
+}
+
+@test "cancelling hidden gateway token input creates no environment" {
+  run picker_env SETUP_HOME="$TEST_HOME" SETUP_DOTFILES_ROOT="$ROOT" \
+    PTY_PROMPT='Gateway auth token (hidden): ' PTY_INPUT=$'\003' \
+    python3 "$ROOT/tests/helpers/claude_pick_pty.py" "$ROOT/setup.sh" claude --env gateway \
+    --base-url https://gateway.invalid
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'Auth token input cancelled'* ]]
+  [ ! -e "$TEST_HOME/.claude-envs/gateway" ]
+  [ ! -e "$PICK_LOG" ]
+}
+
+@test "gateway token stdin passes through the Linux setup entry point" {
+  run picker_env SETUP_HOME="$TEST_HOME" SETUP_DOTFILES_ROOT="$ROOT" \
+    "$ROOT/setup.sh" claude --env gateway --base-url https://gateway.invalid \
+    --model local-model --auth-token-stdin <<< 'stdin-test-token'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *stdin-test-token* ]]
+  run_picker --env gateway
+  [ "$status" -eq 0 ]
+  assert_log env '"gateway"' args '[]'
+}
+
 @test "explicit named profile preserves arguments exit code and profile settings" {
   create_env acme
   [ "$status" -eq 0 ]
@@ -194,7 +241,7 @@ PY
 
 @test "named profiles reject inherited credentials and routes without exposing values" {
   create_env acme
-  for name in ANTHROPIC_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_PROFILE CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_MCP_CONFIG; do
+  for name in ANTHROPIC_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_PROFILE CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_MCP_CONFIG; do
     run picker_env "$name=test-private-value" "$PICKER" -p acme
     [ "$status" -eq 2 ]
     [[ "$output" == *"$name"* ]]
@@ -260,10 +307,10 @@ PY
 }
 
 @test "zero-profile interactive start offers the standard environment" {
-  printf 'default\nopus\nhigh\n' > "$FZF_CHOICES"
+  printf 'default\n' > "$FZF_CHOICES"
   run_tty_picker
   [ "$status" -eq 0 ]
-  assert_log profile '"default"' effort '"high"'
+  assert_log profile '"default"' effort null
   [ ! -e "$TEST_HOME/.claude-envs" ]
 }
 
@@ -271,8 +318,8 @@ PY
   printf 'cancel\n' > "$FZF_CHOICES"
   run_tty_picker
   [ "$status" -eq 130 ]
-  printf 'default\nkeep\ncancel\n' > "$FZF_CHOICES"
-  run_tty_picker
+  printf 'default\ncancel\n' > "$FZF_CHOICES"
+  run_tty_picker --model opus
   [ "$status" -eq 130 ]
   [ ! -e "$TEST_HOME/.claude-envs" ]
   [ ! -e "$PICK_LOG" ]
@@ -281,7 +328,7 @@ PY
 @test "interactive selection launches an environment prepared by setup" {
   create_env acme
   [ "$status" -eq 0 ]
-  printf 'acme\nkeep\nkeep\n' > "$FZF_CHOICES"
+  printf 'acme\n' > "$FZF_CHOICES"
   run_tty_picker
   [ "$status" -eq 0 ]
   assert_log env '"acme"' args '[]'

@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const readline = require("node:readline");
+const node_stream_1 = require("node:stream");
 const node_util_1 = require("node:util");
 function entry(file) {
     try {
@@ -42,6 +44,87 @@ function readSettings(text, label) {
     catch {
         throw new Error(`Missing or invalid JSON object: ${label}`);
     }
+}
+function readConnection(value) {
+    if (value === undefined)
+        return {};
+    if (!table(value) || Object.keys(value).some(key => !["baseUrl", "model", "contextTokens"].includes(key))) {
+        throw new Error("Invalid Claude connection settings");
+    }
+    if (value.baseUrl !== undefined) {
+        try {
+            if (typeof value.baseUrl !== "string" || /\s/.test(value.baseUrl))
+                throw new Error();
+            const url = new URL(value.baseUrl);
+            if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash)
+                throw new Error();
+        }
+        catch {
+            throw new Error("--base-url requires an HTTP(S) URL without credentials, query or fragment");
+        }
+    }
+    if (value.model !== undefined && (typeof value.model !== "string" || !value.model || /^-|\s/.test(value.model))) {
+        throw new Error("--model requires a model ID without whitespace or a leading hyphen");
+    }
+    if (value.contextTokens !== undefined && (typeof value.contextTokens !== "number" || !Number.isSafeInteger(value.contextTokens) || value.contextTokens <= 0)) {
+        throw new Error("--context-tokens requires a positive integer");
+    }
+    return value;
+}
+function withConnection(shared, connection) {
+    if (!Object.keys(connection).length)
+        return shared;
+    if (shared.env !== undefined && !table(shared.env))
+        throw new Error("Expected an env object in claude/settings.json");
+    const env = { ...shared.env };
+    if (connection.baseUrl !== undefined)
+        env.ANTHROPIC_BASE_URL = connection.baseUrl;
+    if (connection.contextTokens !== undefined)
+        env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(connection.contextTokens);
+    if (connection.baseUrl && connection.model) {
+        // A single-model gateway must also accept requests from built-in aliases.
+        for (const family of ["FABLE", "OPUS", "SONNET", "HAIKU"])
+            env[`ANTHROPIC_DEFAULT_${family}_MODEL`] = connection.model;
+    }
+    return { ...shared, ...(connection.model !== undefined ? { model: connection.model } : {}), env };
+}
+async function readAuthToken(fromStdin) {
+    let token;
+    if (fromStdin) {
+        if (process.stdin.isTTY)
+            throw new Error("--auth-token-stdin requires piped input");
+        process.stdin.setEncoding("utf8");
+        token = "";
+        for await (const chunk of process.stdin) {
+            token += chunk;
+            if (token.length > 65536)
+                throw new Error("Auth token input is too long");
+        }
+        token = token.replace(/^\uFEFF/, "").replace(/\r?\n$/, "");
+    }
+    else {
+        if (!process.stdin.isTTY)
+            throw new Error("Auth token required: run in a terminal for hidden input, or use --auth-token-stdin");
+        const silent = new node_stream_1.Writable({ write(_chunk, _encoding, callback) { callback(); } });
+        const prompt = readline.createInterface({ input: process.stdin, output: silent, terminal: true, historySize: 0 });
+        try {
+            const answer = new Promise((resolve, reject) => {
+                prompt.once("SIGINT", () => reject(new Error("Auth token input cancelled")));
+                prompt.once("close", () => reject(new Error("Auth token input cancelled")));
+                prompt.question("", resolve);
+            });
+            process.stderr.write("Gateway auth token (hidden): ");
+            token = await answer;
+        }
+        finally {
+            prompt.close();
+            silent.end();
+            process.stderr.write("\n");
+        }
+    }
+    if (!token || /[\s\x00-\x1f\x7f]/.test(token))
+        throw new Error("Auth token must be nonempty and contain no whitespace or control characters");
+    return token;
 }
 function memoryPorts(home, root) {
     const ports = new Set();
@@ -293,18 +376,26 @@ function applyChanges(root, destination, existing, links, changes, guards) {
 async function main() {
     let env = "";
     let dryRun = process.env.SETUP_DRY_RUN === "1";
+    let tokenFromStdin = false;
+    const requested = {};
     const skills = new Set();
     const args = process.argv.slice(2);
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg === "--help" || arg === "-h") {
-            console.log(`Usage: setup claude --env NAME [--dry-run]
+            console.log(`Usage: setup claude --env NAME [--base-url URL] [--model ID]
+                    [--context-tokens N] [--auth-token-stdin] [--dry-run]
 
 Create or refresh a named Claude Code environment without login or launch.
 Generate settings from claude/settings.json; preserve independent local edits.
 Conflicting edits stop before writes. Previous settings are backed up on refresh.
 All installed dotfiles user skills, shared rules and statusline use symlinks.
 New environments get a private claude-mem data directory and unused worker port.
+Connection options are saved only in the selected local environment; omitted values persist.
+The endpoint must speak Anthropic Messages. Gateway model aliases use the saved model.
+Missing gateway tokens are requested with hidden input; --auth-token-stdin reads a pipe.
+Tokens are never accepted as arguments or saved in generation metadata.
+Dry-run does not read tokens, contact the endpoint, or print connection values.
 Legacy --skill NAME validates that a skill is installed; it does not filter sharing.
 The default environment keeps using setup links.
 Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter.`);
@@ -314,12 +405,27 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
             dryRun = true;
             continue;
         }
-        if (arg === "--env" || arg === "--skill" || arg.startsWith("--env=")) {
-            const value = arg.startsWith("--env=") ? arg.slice(6) : args[++i];
+        if (arg === "--auth-token-stdin") {
+            tokenFromStdin = true;
+            continue;
+        }
+        const separator = arg.indexOf("=");
+        const option = separator === -1 ? arg : arg.slice(0, separator);
+        if (["--env", "--skill", "--base-url", "--model", "--context-tokens"].includes(option)) {
+            const value = separator === -1 ? args[++i] : arg.slice(separator + 1);
             if (!value || value.startsWith("-"))
-                throw new Error(`${arg.split("=")[0]} requires a value`);
-            if (arg === "--skill")
+                throw new Error(`${option} requires a value`);
+            if (option === "--skill")
                 skills.add(value);
+            else if (option === "--base-url")
+                requested.baseUrl = value;
+            else if (option === "--model")
+                requested.model = value;
+            else if (option === "--context-tokens") {
+                if (!/^\d+$/.test(value))
+                    throw new Error("--context-tokens requires a positive integer");
+                requested.contextTokens = Number(value);
+            }
             else {
                 if (env && env !== value)
                     throw new Error("Environment specified twice with different names");
@@ -327,8 +433,9 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
             }
         }
         else
-            throw new Error(`Unknown Claude setup argument: ${arg}`);
+            throw new Error("Unknown Claude setup argument; see --help (tokens must not be passed as arguments)");
     }
+    readConnection(requested);
     if (!env)
         throw new Error("Claude setup requires --env NAME");
     if (env === "default")
@@ -359,7 +466,11 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
     for (const name of ["rules", "skills"])
         directory(path.join(destination, name), `${name} directory`);
     directory(path.join(destination, ".dotfiles-claude-backups"), "backup directory");
-    const source = readSettings(readOptional(path.join(dotfiles, "claude/settings.json"), "claude/settings.json"), "claude/settings.json");
+    const saved = baselineBefore === undefined ? undefined : readSettings(baselineBefore, ".dotfiles-env.json");
+    if (saved && (saved.version !== 1 || saved.env !== env || !table(saved.settings)))
+        throw new Error("Invalid Claude environment baseline");
+    const connection = readConnection({ ...readConnection(saved?.connection), ...requested });
+    const source = withConnection(readSettings(readOptional(path.join(dotfiles, "claude/settings.json"), "claude/settings.json"), "claude/settings.json"), connection);
     let settings = source;
     let memory;
     if (!existing) {
@@ -376,36 +487,14 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
     if (settingsBefore !== undefined) {
         const current = readSettings(settingsBefore, "settings.json");
         let previous;
-        if (baselineBefore !== undefined) {
-            const baseline = readSettings(baselineBefore, ".dotfiles-env.json");
-            if (baseline.version !== 1 || baseline.env !== env || !table(baseline.settings))
-                throw new Error("Invalid Claude environment baseline");
-            previous = baseline.settings;
+        if (saved) {
+            previous = saved.settings;
         }
         else {
             previous = readSettings(readOptional(path.join(dotfiles, "claude/profile-settings.json"), "claude/profile-settings.json"), "claude/profile-settings.json");
         }
         settings = mergeSettings(previous, current, source, "settings.json", baselineBefore === undefined);
     }
-    const settingsAfter = settingsBefore !== undefined && (0, node_util_1.isDeepStrictEqual)(settings, readSettings(settingsBefore, "settings.json"))
-        ? settingsBefore : JSON.stringify(settings, null, 2) + "\n";
-    const baseline = { version: 1, env, settings: source };
-    const baselineAfter = baselineBefore !== undefined && (0, node_util_1.isDeepStrictEqual)(readSettings(baselineBefore, ".dotfiles-env.json"), baseline)
-        ? baselineBefore : JSON.stringify(baseline, null, 2) + "\n";
-    const guards = [
-        { name: "settings.json", before: settingsBefore },
-        { name: ".dotfiles-env.json", before: baselineBefore },
-        { name: ".claude-pick", before: markerBefore },
-        ...(!existing ? [{ name: "claude-mem/settings.json", before: undefined }] : []),
-    ];
-    const changes = [
-        { ...guards[0], after: settingsAfter },
-        { ...guards[1], after: baselineAfter },
-        ...(!existing ? [
-            { ...guards[3], after: JSON.stringify(memory, null, 2) + "\n" },
-            { ...guards[2], after: "1\n" },
-        ] : []),
-    ].filter(change => change.before !== change.after);
     const candidates = [
         { name: "statusline.cjs", source: path.join(dotfiles, "claude/statusline.cjs") },
         { name: "rules/00-global.md", source: path.join(dotfiles, "ai-rules/base/global.md") },
@@ -427,6 +516,33 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
         else
             links.push(link);
     }
+    const settingsEnv = settings.env === undefined ? {} : settings.env;
+    if (!table(settingsEnv))
+        throw new Error("Expected an env object in settings.json");
+    const needsToken = tokenFromStdin || (connection.baseUrl !== undefined && !settingsEnv.ANTHROPIC_AUTH_TOKEN);
+    if (tokenFromStdin && !settingsEnv.ANTHROPIC_BASE_URL)
+        throw new Error("--auth-token-stdin requires a gateway base URL");
+    if (needsToken && !dryRun) {
+        settings = { ...settings, env: { ...settingsEnv, ANTHROPIC_AUTH_TOKEN: await readAuthToken(tokenFromStdin) } };
+    }
+    const settingsAfter = settingsBefore !== undefined && (0, node_util_1.isDeepStrictEqual)(settings, readSettings(settingsBefore, "settings.json"))
+        ? settingsBefore : JSON.stringify(settings, null, 2) + "\n";
+    const baseline = { version: 1, env, settings: source, ...(Object.keys(connection).length ? { connection } : {}) };
+    const baselineAfter = saved && (0, node_util_1.isDeepStrictEqual)(saved, baseline) ? baselineBefore : JSON.stringify(baseline, null, 2) + "\n";
+    const guards = [
+        { name: "settings.json", before: settingsBefore },
+        { name: ".dotfiles-env.json", before: baselineBefore },
+        { name: ".claude-pick", before: markerBefore },
+        ...(!existing ? [{ name: "claude-mem/settings.json", before: undefined }] : []),
+    ];
+    const changes = [
+        { ...guards[0], after: settingsAfter },
+        { ...guards[1], after: baselineAfter },
+        ...(!existing ? [
+            { ...guards[3], after: JSON.stringify(memory, null, 2) + "\n" },
+            { ...guards[2], after: "1\n" },
+        ] : []),
+    ].filter(change => change.before !== change.after);
     if (dryRun) {
         console.log(`Would ${existing ? "refresh" : "create"} environment: ${env}`);
         if (memory)
@@ -435,6 +551,8 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
             console.log(`  ${change.before === undefined ? "Create" : "Update"} ${change.name}`);
         for (const link of links)
             console.log(`  Link ${link.name}`);
+        if (needsToken)
+            console.log("  Auth token: hidden input or --auth-token-stdin required on apply");
         return;
     }
     if (changes.length || links.length)

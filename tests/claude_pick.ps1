@@ -25,7 +25,7 @@ function Invoke-Case {
 }
 
 function Invoke-Picker {
-  param([string[]]$Arguments, [hashtable]$Environment = @{}, [string]$ScriptRelative = 'tools/claude/claude-pick.ps1')
+  param([string[]]$Arguments, [hashtable]$Environment = @{}, [string]$ScriptRelative = 'tools/claude/claude-pick.ps1', $InputText = $null)
   # Exercise PowerShell's parser too, including the documented quoted '--'.
   $quotedArgs = @($Arguments | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ' '
   $scriptPath = (Join-Path $FixtureRoot $ScriptRelative).Replace("'", "''")
@@ -43,6 +43,7 @@ exit `$LASTEXITCODE
   $start.UseShellExecute = $false
   $start.RedirectStandardOutput = $true
   $start.RedirectStandardError = $true
+  $start.RedirectStandardInput = $null -ne $InputText
   # Set only the child environment, never the caller's user profile or credentials.
   $start.EnvironmentVariables['USERPROFILE'] = $TestUserDir
   $start.EnvironmentVariables['HOME'] = $TestUserDir
@@ -58,6 +59,7 @@ exit `$LASTEXITCODE
   }
   foreach ($key in $Environment.Keys) { $start.EnvironmentVariables[$key] = $Environment[$key] }
   $process = [Diagnostics.Process]::Start($start)
+  if ($null -ne $InputText) { $process.StandardInput.Write([string]$InputText); $process.StandardInput.Close() }
   $stdout = $process.StandardOutput.ReadToEndAsync()
   $stderr = $process.StandardError.ReadToEndAsync()
   if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'Picker timed out' }
@@ -67,8 +69,8 @@ exit `$LASTEXITCODE
 }
 
 function Invoke-EnvSetup {
-  param([string[]]$Arguments)
-  return Invoke-Picker -ScriptRelative 'setup.ps1' -Arguments (@('claude') + $Arguments)
+  param([string[]]$Arguments, $InputText = $null)
+  return Invoke-Picker -ScriptRelative 'setup.ps1' -Arguments (@('claude') + $Arguments) -InputText $InputText
 }
 
 function Read-Launch {
@@ -172,6 +174,38 @@ public class FakeClaude {
     Assert-True ($result.Code -eq 7) 'auth subcommand failed'
     $values = Read-Launch
     Assert-True ($values[0] -ceq $profileDir -and $values[4] -ceq 'auth' -and $values[5] -ceq 'login') 'auth selected wrong profile'
+  }
+  Invoke-Case 'gateway setup saves a private connection and launcher keeps its configured model' {
+    if (-not (Test-Path -LiteralPath (Join-Path $TestUserDir '.claude-envs/acme/.claude-pick'))) {
+      Write-Output 'skip - gateway creation requires symlink privileges'
+      return
+    }
+    $commonPath = Join-Path $FixtureRoot 'claude/settings.json'
+    $commonBefore = Get-Content -LiteralPath $commonPath -Raw
+    $connection = @('--env', 'gateway', '--base-url', 'https://gateway.invalid', '--model', 'local-model', '--context-tokens', '262144', '--auth-token-stdin')
+    $preview = Invoke-EnvSetup ($connection + @('--dry-run'))
+    Assert-True ($preview.Code -eq 0) $preview.Output
+    Assert-True ($preview.Output -notmatch 'gateway\.invalid') 'dry-run printed the endpoint'
+    $result = Invoke-EnvSetup $connection -InputText "native-test-token`r`n"
+    Assert-True ($result.Code -eq 0) $result.Output
+    Assert-True ($result.Output -notmatch 'native-test-token|gateway\.invalid') 'setup printed private connection data'
+    $directory = Join-Path $TestUserDir '.claude-envs/gateway'
+    $settings = Get-Content -LiteralPath (Join-Path $directory 'settings.json') -Raw | ConvertFrom-Json
+    Assert-True ($settings.model -ceq 'local-model') 'default model missing'
+    Assert-True ($settings.env.ANTHROPIC_BASE_URL -ceq 'https://gateway.invalid') 'endpoint missing'
+    Assert-True ($settings.env.ANTHROPIC_AUTH_TOKEN -ceq 'native-test-token') 'stdin token missing'
+    Assert-True ($settings.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS -ceq '262144') 'context window missing'
+    $metadata = Get-Content -LiteralPath (Join-Path $directory '.dotfiles-env.json') -Raw
+    Assert-True ($metadata -notmatch 'ANTHROPIC_AUTH_TOKEN|native-test-token') 'metadata contains the token'
+    Assert-True ((Get-Content -LiteralPath $commonPath -Raw) -ceq $commonBefore) 'shared settings changed'
+    $refresh = Invoke-EnvSetup @('--env', 'gateway')
+    Assert-True ($refresh.Code -eq 0) $refresh.Output
+    $launch = Invoke-Picker @('--env', 'gateway')
+    Assert-True ($launch.Code -eq 7) $launch.Output
+    $values = Read-Launch
+    Assert-True ($values[0] -ceq $directory -and $values.Count -eq 4) 'launcher overrode the saved model or effort'
+    $guard = Invoke-Picker @('--env', 'gateway') @{ CLAUDE_CODE_MAX_CONTEXT_TOKENS = 'test-private-value' }
+    Assert-True ($guard.Code -eq 2 -and $guard.Output -notmatch 'test-private-value') 'inherited context guard failed'
   }
 } finally {
   if (Test-Path -LiteralPath $TestRoot) {
