@@ -330,9 +330,9 @@ Legacy `--create-env`/`--create` delegate to setup with a migration message and
 still reject existing environments. An unknown explicit name is an error;
 cancelling selection never launches Claude.
 
-Rerun `./setup.sh claude --env acme` after changing common settings or restoring
-skills with `setup skills`. Setup regenerates settings and adds links to all
-installed dotfiles user skills, without selecting skills separately for each env.
+Rerun `./setup.sh claude --env acme` after changing common settings. Setup
+regenerates settings and adds links to all installed dotfiles user skills,
+without selecting skills separately for each env.
 Local settings changes, history, MCP configuration and local skills are preserved.
 Conflicting edits or shared-link targets stop setup before writing; unmanaged or
 incomplete homes are not adopted. `default` keeps using `setup links`.
@@ -380,11 +380,15 @@ Refresh preserves existing memory settings and does not migrate older envs or
 the default home. Other plugins with external stores still need their own
 storage configuration; `CLAUDE_CONFIG_DIR` alone does not relocate those stores.
 
-Shared skill definitions follow source edits through symlinks. Rerun setup to add
-newly installed skills; existing links and local skills are not deleted when a
-shared source disappears. The env's `skills/synced/` and other account-owned data
-stay in its own directory. If dotfiles skills have not been installed yet, the
-env starts without them; restore them with `setup skills`, then rerun env setup.
+Shared skill definitions follow source edits through symlinks. User-scope
+`setup skills` also adds missing skill links to all existing managed environments
+when `claude-code` is selected (the default). `SETUP_DRY_RUN=1` previews the links;
+`SETUP_SKIP_USER_AGENT_SKILL_LINKS=1` skips them. Environment settings stay intact;
+conflicting local entries are preserved with a warning. Existing links and local
+skills are not deleted when a shared source disappears. The env's `skills/synced/`
+and other account-owned data stay in its own directory. If dotfiles skills have
+not been installed yet, the env starts without them; restoring them with
+`setup skills` also adds the environment links.
 Legacy `--skill NAME` remains an availability check and does not limit sharing.
 
 Named environments refuse inherited auth/provider environment variables listed in

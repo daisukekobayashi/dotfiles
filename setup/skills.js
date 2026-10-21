@@ -619,6 +619,72 @@ function linkUserAgentSkillDirs(restoreSkillsDir, setupHome, agents) {
         fail(`unsupported skills agent: ${agent}`);
     }
 }
+function claudeEnvironmentSkillDirs(setupHome) {
+    const root = path.join(setupHome, ".claude-envs");
+    const stat = fs.lstatSync(root, { throwIfNoEntry: false });
+    if (!stat) {
+        return [];
+    }
+    if (!stat.isDirectory()) {
+        warn(`Skipping symlink or unexpected Claude environment directory: ${root}`);
+        return [];
+    }
+    const directories = [];
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isDirectory()) {
+            continue;
+        }
+        const environment = path.join(root, entry.name);
+        const marker = path.join(environment, ".claude-pick");
+        const settings = path.join(environment, "settings.json");
+        if (!fs.lstatSync(marker, { throwIfNoEntry: false })?.isFile()
+            || !fs.lstatSync(settings, { throwIfNoEntry: false })?.isFile()
+            || fs.readFileSync(marker, "utf8").replace(/[\r\n]+$/, "") !== "1") {
+            continue;
+        }
+        const skills = path.join(environment, "skills");
+        const skillsStat = fs.lstatSync(skills, { throwIfNoEntry: false });
+        if (skillsStat && !skillsStat.isDirectory()) {
+            warn(`Skipping symlink or unexpected Claude environment skills directory: ${skills}`);
+            continue;
+        }
+        directories.push(skills);
+    }
+    return directories;
+}
+function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRun) {
+    if (directories.length === 0) {
+        return;
+    }
+    for (const name of names.sort()) {
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) || /^(synced|anthropic-skills)$/i.test(name)) {
+            continue;
+        }
+        const source = path.join(restoreSkillsDir, name);
+        const definition = path.join(source, "SKILL.md");
+        if (!dryRun && (!fs.existsSync(definition) || !fs.statSync(definition).isFile())) {
+            continue;
+        }
+        for (const directory of directories) {
+            const target = path.join(directory, name);
+            if (fs.lstatSync(target, { throwIfNoEntry: false })) {
+                const linked = getLinkTarget(target);
+                if (!linked || path.resolve(directory, linked) !== source) {
+                    warn(`Preserving existing Claude environment skill: ${target}`);
+                }
+                continue;
+            }
+            if (dryRun) {
+                info(`DRY-RUN ln -s ${source} ${target}`);
+            }
+            else {
+                fs.mkdirSync(directory, { recursive: true });
+                fs.symlinkSync(source, target, "dir");
+                info(`Linked Claude environment skill: ${target}`);
+            }
+        }
+    }
+}
 function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agents, dryRun, skipUserLocalSkillLinks, skipUserAgentSkillLinks) {
     const requestedProfiles = csv(profilesCsv || "base");
     const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "user");
@@ -652,6 +718,13 @@ function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agen
         }
         else {
             logDryRunUserAgentSkillDirs(restoreSkillsDir, setupHome, agents);
+            if (agents.includes("claude-code")) {
+                const names = [...new Set([
+                        ...plan.external.flatMap(entry => entry.skills),
+                        ...(skipUserLocalSkillLinks ? [] : plan.local.map(skill => skill.name)),
+                    ])];
+                linkClaudeEnvironmentSkills(restoreSkillsDir, claudeEnvironmentSkillDirs(setupHome), names, true);
+            }
         }
         info(`User skills installed for profiles: ${requestedProfiles.join(",")}`);
         return;
@@ -688,6 +761,9 @@ function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agen
     }
     else {
         linkUserAgentSkillDirs(restoreSkillsDir, setupHome, agents);
+        if (agents.includes("claude-code")) {
+            linkClaudeEnvironmentSkills(restoreSkillsDir, claudeEnvironmentSkillDirs(setupHome), fs.readdirSync(restoreSkillsDir), false);
+        }
     }
     info(`User skills installed for profiles: ${requestedProfiles.join(",")}`);
 }

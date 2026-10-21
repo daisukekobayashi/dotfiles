@@ -297,8 +297,7 @@ picker には既存 env の選択だけを表示し, 名前付き env が無け�
 従来の Zsh wrapper が追加していた共通 MCP 設定は `--env default` で使えます.
 公式の `claude` は直接実行でき, `claude-raw` も利用できます.
 
-共通設定の変更や `setup skills` での skill 復元後に,
-`./setup.sh claude --env acme` を再実行します.
+共通設定を変更した場合は `./setup.sh claude --env acme` を再実行します.
 設定を再生成し, 導入済みの全 dotfiles user skill へのリンクを配置します.
 env ごとの skill 選択は不要です.
 個別設定・履歴・MCP 設定・ローカル skill は保持します.
@@ -348,10 +347,14 @@ plugin の初回利用時に新しく作成します. dry-run では保存先と
 他の独自保存先を持つ plugin は個別に設定が必要です. `CLAUDE_CONFIG_DIR` だけでは移動しません.
 
 共通 skill 定義の編集は symlink を通じて反映されます.
-新しく導入した skill の追加には setup を再実行します.
+user scope の `setup skills` は, `claude-code` を選択した場合 (既定値),
+既存の管理対象 env すべてにも不足している skill リンクを追加します.
+`SETUP_DRY_RUN=1` で予定を確認でき,
+`SETUP_SKIP_USER_AGENT_SKILL_LINKS=1` でリンク追加を省略できます.
+env の設定は変更せず, 同名のローカル項目があれば警告して保持します.
 共有元が消えても既存リンクやローカル skill は自動削除しません.
 `skills/synced/` などアカウントから同期されるデータは env 内に残します.
-未導入の状態では共有 skill は空です. `setup skills` で復元後に env setup を再実行します.
+未導入の状態では共有 skill は空です. `setup skills` で復元すると env のリンクも追加されます.
 旧 `--skill NAME` は導入済みかの確認として受け付け, 共有する skill の絞り込みは行いません.
 
 名前付き env では `tools/claude/auth-env.txt` の認証・接続先の環境変数を検出すると
