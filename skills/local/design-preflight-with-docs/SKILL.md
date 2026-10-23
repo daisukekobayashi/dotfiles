@@ -9,9 +9,9 @@ Use `design-preflight` and `domain-modeling` together. Read both skills before s
 
 ## Composition
 
-Forward `durable`, `quick`, or `open`, along with the user's context and limits, to `design-preflight`. With no mode, use its default `durable` mode. Inherit its design principles, question budget, and completion rules rather than redefining them here.
+Forward `durable`, `conservative`, `quick`, or `open`, along with the user's context and limits, to `design-preflight`. With no mode, use its default `durable` mode. Inherit its design principles, question budget, and completion rules rather than redefining them here.
 
-Use `domain-modeling` for terminology, glossary updates, and selective ADRs. In `durable` and `quick`, its proposed questions must meet the selected preflight question bar and count toward the same session budget. Documentation does not create a separate interview or justify reopening settled decisions. In `open`, retain the underlying `grilling` scope and completion rules.
+Use `domain-modeling` for terminology, glossary updates, and selective ADRs. In every mode except `open`, its proposed questions must meet the selected preflight question bar and count toward the same session budget. Documentation does not create a separate interview or justify reopening settled decisions. In `open`, retain the underlying `grilling` scope and completion rules.
 
 ## Documentation
 

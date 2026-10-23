@@ -18,30 +18,33 @@ or Work Item context; a reference to this skill alone is insufficient.
 
 This skill is a wrapper, not a replacement. Use `grilling` as the questioning engine and provide it with the brief below.
 
-In `durable` and `quick`, inherit its fact-finding, recommended answers, and dependency-aware rounds. This wrapper overrides its exhaustive question scope, question budget, and completion rules with the rules below. In `open`, use `grilling` unchanged.
+In every mode except `open`, inherit its fact-finding, recommended answers, and dependency-aware rounds. This wrapper overrides its exhaustive question scope, question budget, recommendation baseline, and completion rules with the rules below. In `open`, use `grilling` unchanged.
 
 ## Public Interface
 
 | Invocation | Meaning |
 |---|---|
 | `$design-preflight` | Same as `durable`. |
-| `$design-preflight durable` | Controlled grilling for high-impact, hard-to-change design decisions. |
-| `$design-preflight quick` | Blocker-only preflight. Ask at most 3 questions. |
+| `$design-preflight durable` | Target-design stance: recommend the best end state for current requirements. |
+| `$design-preflight conservative` | Preserve-current stance: recommend the smallest change that keeps existing behavior working. |
+| `$design-preflight quick` | Blocker-only modifier. Combine with a stance (`conservative quick`); alone it uses `durable`. |
 | `$design-preflight open` | Raw `grilling`; do not apply this skill's filtering. |
 
 Treat unknown words as context hints, not CLI errors. Natural-language limits like "3 questions max" or "blockers only" are upper bounds.
 
-## Presets
+## Stances
+
+The stance sets the **baseline**: the default every recommendation and every unasked decision falls back to.
 
 ### durable
 
-Default. Use when the user wants durable design instead of compatibility-preserving defaults.
+Default. Use when the design should move toward the best target, typically during active development.
 
-Internal brief: `focus=one-way-door decisions`, `budget=5 by default, extend only for unresolved high-impact decisions`, `threshold=high`, `compatibility=not assumed`.
+Internal brief: `focus=one-way-door decisions`, `budget=5 soft`, `threshold=high`, `compatibility=not assumed`, `baseline=target design`.
 
-Do not assume backward compatibility is required. Treat compatibility as real only when the user, public contract, stored data, external integration, rollout plan, or operational reality makes it real.
+The target design is the design you would choose for the current requirements if starting now. Recommend from it, not from the current structure. "Simplest" means the simplest end state, not the smallest diff. Within real constraints, prefer long-term maintainability, clear responsibilities and boundaries, and a single coherent model. Accept justified short-term migration work when it reduces long-term architectural debt. Base the design on current requirements and evidenced future constraints; add abstractions or extension points only for evidenced needs.
 
-Within real constraints, prefer long-term maintainability, clear responsibilities and boundaries, and a single coherent model. Accept justified short-term migration work when it reduces long-term architectural debt. Base the design on current requirements and evidenced future constraints; do not add abstractions or extension points for speculative needs. Choose the simplest design that meets those requirements.
+Do not assume backward compatibility is required. Treat compatibility as real only when the user, public contract, stored data, external integration, rollout plan, or operational reality makes it real. When such evidence appears, honor it and note in the handoff that `conservative` may fit this target.
 
 Prefer questions that reveal whether to:
 
@@ -51,33 +54,52 @@ Prefer questions that reveal whether to:
 - remove or rename an awkward interface before it spreads
 - accept short-term migration work to avoid long-term architectural debt
 
+Refactoring and migration agreed in the preflight are part of the requested change, not unrelated refactors.
+
+### conservative
+
+Use when existing behavior is relied upon, typically for systems in operation.
+
+Internal brief: `focus=one-way-door decisions`, `budget=5 soft`, `threshold=high`, `compatibility=assumed`, `baseline=current structure`.
+
+Treat existing behavior, public contracts, stored data, and external integrations as compatibility constraints. Recommend the smallest change that fits the current structure and conventions. Propose a breaking change, migration, or boundary change only when the requirement cannot be met within the current structure, and ask before adopting it. Record target-design improvements as follow-up proposals; keep them out of the implementation.
+
+Prefer questions that reveal whether:
+
+- an assumed constraint has real dependents, or can be relaxed
+- the change needs a migration, feature flag, or staged rollout
+- a breaking change is unavoidable, and how to version or announce it
+- an awkward existing interface must be extended rather than replaced
+
 ### quick
 
-Use when the user wants only blockers.
+A modifier on either stance for when the user wants only blockers.
 
-Internal brief: `focus=blocker-level one-way-door decisions`, `budget=3`, `threshold=blocker-only`, `compatibility=not assumed`.
+Internal brief: the stance's brief with `focus=blocker-level one-way-door decisions`, `budget=3 hard`, `threshold=blocker-only`.
 
 Ask only questions where a wrong default is likely to force rework, migration, or a visible contract change.
 
 ### open
 
-Use raw `grilling`. Do not impose this skill's one-way-door filter, compatibility stance, or question budget.
+Use raw `grilling`. Do not impose this skill's one-way-door filter, stance, or question budget.
 
 ## Brief To Give Grilling
 
-For `durable` and `quick`, start the `grilling` session with this brief:
+In every mode except `open`, start the `grilling` session with this brief, adding the selected stance's internal brief and baseline paragraph:
 
 ```text
 This is a design preflight, not an open-ended interview.
 
 Ask only questions whose answers affect hard-to-change design decisions.
 Apply the selected mode's question budget across the whole session, not per round.
-Do not ask filler questions.
+For each question, state the one-way door it affects and the cost if the default proves wrong.
 Stop early if no question clears the bar.
 
 Prioritize one-way-door risks: public contracts, data models, architecture boundaries, dependency direction, migration cost, rollout constraints, operational assumptions, security boundaries, and long-term maintenance cost.
 
-For durable mode: challenge compatibility-preserving defaults. Ask whether compatibility is a real constraint or merely an assumed safe choice.
+Base every recommended answer on the stance's baseline.
+For durable: recommend from the target design and challenge compatibility-preserving defaults; ask whether compatibility is a real constraint or merely an assumed safe choice.
+For conservative: recommend from the current structure and challenge changes that break existing behavior; ask whether a break is truly required.
 ```
 
 ## Question Bar
@@ -99,17 +121,17 @@ Do not ask about:
 
 ## Question Budget and Completion
 
-For `durable` and `quick`:
+In every mode except `open`:
 
 - Carry forward the user's stated preferences and settled decisions. Reopen them only when new evidence or a contradiction materially affects the design.
-- In `durable`, aim for at most 5 questions. If high-impact, hard-to-change decisions remain unresolved, briefly explain why further questions are needed and ask only those questions.
+- In `durable` and `conservative`, aim for at most 5 questions. If high-impact, hard-to-change decisions remain unresolved, briefly explain why further questions are needed and ask only those questions.
 - In `quick`, ask at most 3 questions. Explicit user limits are hard caps in every mode. Count separately answerable decisions separately; do not bundle them to evade a cap.
-- Stop when no unresolved decision meets the selected question bar. Do not exhaust branches outside that scope. For minor, reversible choices, use repo conventions and state material assumptions as needed.
+- Stop when no unresolved decision meets the selected question bar. Do not exhaust branches outside that scope. Settle decisions below the bar from the stance's baseline and repo conventions, and state the material ones as assumptions.
 - If a hard cap leaves a high-impact decision unresolved, summarize it and its implications. Continue only work that does not depend on it; do not silently choose an answer or treat the cap as approval.
 - Replace `grilling`'s blanket final confirmation with a brief handoff, then proceed within the user's already authorized scope. Still obtain any independently required approval. A request for preflight alone does not authorize implementation.
 
 ## Output
 
-For `durable` and `quick`, briefly summarize the chosen direction, compatibility constraints to preserve, agreed breaking changes or migration work, and remaining material assumptions or unresolved decisions. Omit empty categories. Keep this in the conversation unless a durable document is requested or required by repo conventions.
+In every mode except `open`, briefly summarize the stance, chosen direction, compatibility constraints to preserve, agreed breaking changes or migration work, remaining material assumptions or unresolved decisions, and, in `conservative`, target-design follow-up proposals. Omit empty categories. Keep this in the conversation unless a durable document is requested or required by repo conventions.
 
 If no question clears the bar, say so briefly and give the applicable direction and assumptions without requiring an extra confirmation.
