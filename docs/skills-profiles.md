@@ -106,7 +106,8 @@ Issue tasks use `github-issue-create`, `github-issue-triage`,
 `github-issue-review`, and `github-issue-start` as needed. The start skill
 prepares an isolated worktree and continues implementation.
 `github-worktree-cleanup` removes completed local worktrees and branches after
-safety checks and approval.
+safety checks and approval, and proposes deleting the remote branch when its tip
+still matches the merged PR head.
 
 `github-pr-create` creates or reuses a PR from a published branch;
 `github-pr-publish` owns verification, commit, push, and PR creation.
@@ -359,7 +360,8 @@ Azure DevOps workflow skills:
 implementation. `azure-devops-pr-create` creates or reuses a PR, while
 `azure-devops-pr-publish` handles verification, commit, and push before delegating
 PR creation. `azure-devops-worktree-cleanup` removes completed work's local
-branches and worktrees.
+branches and worktrees, and proposes deleting the remote source branch when its
+tip still matches the completed PR's merged source.
 
 `azure-devops-work-item-delivery` coordinates the full Work Item workflow for
 Azure Boards and Azure Repos Git on Azure DevOps Services: isolated worktree,

@@ -155,9 +155,9 @@ merge commit before cleanup; a queued or scheduled merge remains pending.
 ### 5. Confirm cleanup and verify completion
 
 Use `github-worktree-cleanup` for this issue's branch and worktree. Pass the
-verified merge evidence. Let it inspect runtime resources, show exact local
-targets, obtain confirmation, and perform its safety checks. Preserve remote
-branches unless their deletion was separately requested. A merge confirmation
+verified merge evidence. Let it inspect runtime resources, show exact
+targets including any remote branch it proposes, obtain confirmation, and
+perform its safety checks. A merge confirmation
 alone does not approve cleanup. Preserve a dirty, busy, or otherwise unsafe
 worktree and report the blocker.
 

@@ -106,7 +106,8 @@ Issue の仕事には、必要に応じて `github-issue-create`、
 `github-issue-triage`、`github-issue-review`、`github-issue-start` を使います。
 `start` は独立した worktree を準備し、実装まで進めます。
 `github-worktree-cleanup` は安全確認と承認を経て、完了した仕事のローカル
-worktree とブランチを削除します。
+worktree とブランチを削除します。リモートブランチの先頭がマージ済み PR の
+head と一致する場合は、その削除も提案します。
 
 `github-pr-create` は公開済みブランチから PR を作成または再利用し、
 `github-pr-publish` は検証・commit・push・PR 作成を担当します。
@@ -354,6 +355,7 @@ Azure DevOps workflow skill:
 `azure-devops-pr-create` は PR の作成・再利用を担当し、
 `azure-devops-pr-publish` は検証・commit・push の後に PR 作成を委譲します。
 `azure-devops-worktree-cleanup` は完了した作業のローカル branch と worktree を削除します。
+リモートの source branch の先頭が完了済み PR のマージ元と一致する場合は、その削除も提案します。
 
 `azure-devops-work-item-delivery` は Azure DevOps Services の Azure Boards と
 Azure Repos Git を対象に、独立 worktree、`design-preflight-with-docs`、実装、

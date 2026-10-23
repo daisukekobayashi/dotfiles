@@ -139,10 +139,9 @@ separately, verify the result instead. A queued merge remains pending.
 
 After verifying actual PR completion and the merged source/merge commit, use
 `azure-devops-worktree-cleanup` for the exact item branch/worktree. Pass merge
-evidence and let it inspect runtimes, show exact local resources, obtain separate
-confirmation, and perform its safety checks. Preserve dirty, busy, or otherwise
-unsafe resources and report the blocker. Preserve remote branches unless their
-deletion was separately requested.
+evidence and let it inspect runtimes, show exact resources including any remote
+branch it proposes, obtain separate confirmation, and perform its safety checks.
+Preserve dirty, busy, or otherwise unsafe resources and report the blocker.
 
 Verify that confirmed local targets are gone. Read the Work Item's actual state
 and verify completion under its process; PR completion does not prove Work Item
