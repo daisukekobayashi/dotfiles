@@ -31,28 +31,39 @@ issues easier to implement and review.
    - Prefer one issue when the work has one clear outcome and one implementation path.
    - Split into multiple issues when the work has independent deliverables, different owners/subsystems, meaningful sequencing, or parts that can be implemented in parallel.
    - Identify dependencies between proposed issues.
-   - Mark issues as parallelizable only when they touch mostly separate subsystems and do not require the same schema, config, workflow, or policy decision.
+   - Estimate each issue's touched areas: the files, directories, or modules it is expected to change, plus shared resources such as schemas, config, migrations, lockfiles, or public interfaces.
+   - When otherwise parallel issues need the same schema, interface, config, workflow, or policy decision, extract that decision into a precursor issue that settles the contract, and make the dependent issues blocked by it instead of serializing all of them.
+   - Group issues into waves: each wave contains issues whose dependencies are all in earlier waves. Mark issues in the same wave as parallelizable only when their touched areas do not overlap.
    - Propose a tracker issue only when there are 3 or more child issues, or when dependencies/order make a coordination issue useful.
 5. Draft each issue title and body from the chosen template.
    - Carry over template defaults such as labels or assignees when the template makes them clear and they fit the issue.
    - If the repository uses an issue form, convert the form fields into an equivalent markdown issue body.
-   - If no issue template exists, fall back to a compact generic issue body with `Summary`, `Background`, `Acceptance Criteria`, `Implementation Notes`, `Dependencies`, and `Parallelization`.
+   - If no issue template exists, fall back to a compact generic issue body with `Summary`, `Background`, `Acceptance Criteria`, `Implementation Notes`, `Touched Areas`, `Dependencies`, and `Parallelization`.
+   - When the chosen template has no equivalent fields, append `Touched Areas` and `Dependencies` sections after the template content.
+   - Write touched areas as a list of repository paths or module names, marking each entry as an estimate.
+   - Write dependencies as one `Blocked by #<n>` line per blocking issue so other skills can parse them. Use a placeholder such as `Blocked by <precursor title>` in the preview and replace it with the real number at creation time.
    - Include only facts supported by the discussion, investigation, repository context, or user-provided requirements.
    - Leave unknowns as explicit open questions instead of inventing answers.
 6. Show a preview before creating anything:
    - proposed issue count and why that split is appropriate
    - tracker issue, if proposed, with why it is useful
-   - for each issue: chosen template, title, body, labels or assignees if any, dependencies, and parallelization notes
+   - for each issue: chosen template, title, body, labels or assignees if any, touched areas, dependencies, and parallelization notes
+   - the waves, any precursor issues and the contract each one settles, and any touched-area overlaps that kept issues out of the same wave
+   - the GitHub relationships that will be registered: sub-issue links to the tracker and `blocked by` dependencies
    - the exact creation order when dependencies exist
 7. Wait for explicit user confirmation before creating any issue.
 8. After confirmation, create the GitHub issues in dependency-aware order.
    - Create tracker issues before child issues when a tracker was approved.
+   - Create blocking issues before the issues they block, so every `Blocked by #<n>` line uses the real issue number.
    - Link related issues in their bodies when useful.
+   - Register the previewed relationships with GitHub's native features: add child issues as sub-issues of the tracker, and add each `Blocked by #<n>` as an issue dependency. Both APIs take the issue's database `id`, not its number.
+   - If a relationship API is unavailable or fails, keep the body text as the source of truth, continue, and report which relationships were not registered.
    - Do not apply labels or assignees unless they came from the template or the user explicitly approved them.
 9. Return the created issue numbers and URLs plus:
    - a short summary of each issue
    - dependencies or suggested implementation order
-   - safe parallel groups, if any
+   - the waves and safe parallel groups, if any
+   - any relationships that could not be registered natively
    - the recommended next command, such as `$github-issue-start #<n>` or `$github-issue-start #<a> #<b>`
 
 ## Guardrails
@@ -60,6 +71,7 @@ issues easier to implement and review.
 - This skill is current-repo only.
 - Do not create any issue before showing a preview and receiving explicit confirmation.
 - Do not force one broad issue when the work naturally splits into independent or parallelizable issues.
+- Do not put issues with overlapping touched areas in the same parallel wave.
 - Do not create a tracker issue by default. Propose one only for 3 or more child issues or meaningful dependencies/order.
 - If the best template is unclear, say so and ask instead of guessing.
 - If required information is missing, ask before creating issues.

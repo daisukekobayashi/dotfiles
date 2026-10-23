@@ -25,6 +25,10 @@ not start implementation.
    - List open issues with `gh issue list --state open --limit 100 --json number,title,labels,assignees,updatedAt,createdAt,url`.
    - List open pull requests with `gh pr list --state open --limit 50 --json number,title,headRefName,baseRefName,labels,updatedAt,url`.
    - For each plausible work issue, fetch details with `gh issue view <number> --json number,title,body,labels,comments,url,state`.
+   - Collect each issue's dependencies from `Blocked by #<n>` lines in its body and from GitHub's native relationships: `gh api repos/<owner>/<repo>/issues/<number>/dependencies/blocked_by` and, for trackers, `gh api repos/<owner>/<repo>/issues/<number>/sub_issues`.
+   - If a relationship API is unavailable or fails, use the body lines alone and mention that native relationships could not be read.
+   - Collect each issue's `Touched Areas` section when present.
+   - For open PRs that may overlap with candidate issues, fetch changed files with `gh pr view <number> --json files`.
 3. Read local repository guidance before ranking.
    - Check project instructions such as `AGENTS.md`.
    - Check product or roadmap docs if present, commonly `README.md`, `docs/*.md`, `WORKFLOW.md`, or milestone docs.
@@ -32,17 +36,21 @@ not start implementation.
 4. Classify each open issue.
    - Parent tracker or milestone issue.
    - Directly actionable implementation issue.
-   - Blocked by another issue or PR.
+   - Blocked by another issue or PR. Treat an issue as blocked while any of its blocking issues is still open, whether the dependency came from a `Blocked by #<n>` line or a native relationship.
+   - If body lines and native relationships disagree, use their union and note the disagreement.
    - Future-scope or out-of-scope work.
    - Duplicate or already represented by an open PR.
 5. Rank actionable issues.
-   - Prefer issues that unblock later work.
+   - Prefer issues that unblock later work, especially precursor issues that settle a contract for several blocked issues.
    - Prefer work aligned with current product direction and repository instructions.
    - Prefer clear acceptance criteria and moderate blast radius.
    - Defer broad, ambiguous, high-risk, or future-scope work unless it is explicitly the priority.
    - Treat parent tracking issues as coordination items, not the next coding task, unless all children are complete.
 6. Identify parallel work candidates.
-   - Consider parallel only when issues touch mostly separate subsystems or can be assigned to disjoint worktrees.
+   - Build the current wave: actionable issues that have no open blocking issues.
+   - Within the current wave, group issues as parallel only when their touched areas do not overlap, including shared resources such as schemas, config, migrations, lockfiles, or public interfaces.
+   - Also check each candidate's touched areas against the changed files of open PRs, and flag overlaps as conflicts with in-flight work.
+   - When an issue has no `Touched Areas` section, infer its likely areas from the body and repository, and label them as inferred.
    - Do not recommend parallel work when one issue defines policy, schema, or workflow behavior that another issue depends on.
    - Mention likely conflict areas such as shared config modules, schemas, migrations, job orchestration, or the same UI files.
 7. Recommend the next step without starting work.
@@ -65,7 +73,10 @@ Use this structure:
 | 1 | #<n> <title> | Do next | <why> |
 
 **Parallel Work**
-- <safe parallel grouping, or "No safe parallel split right now">
+- Current wave: #<a>, #<b> (<parallel groups, or why they must not run together>)
+- Overlaps: <touched-area overlaps between issues or with open PRs, or "none">
+- Next wave after #<n> closes: #<c>, #<d>
+- Or: "No safe parallel split right now"
 
 **Next Step**
 - Start with `$github-issue-start #<n>` if the user wants to implement the top recommendation.
