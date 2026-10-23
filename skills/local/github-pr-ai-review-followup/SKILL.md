@@ -25,8 +25,8 @@ This skill does not commit or push; the user or an orchestration skill owns publ
 2. Fetch PR metadata and AI review comments with the GitHub plugin.
 3. When inline context, resolution state, stale/outdated state, or GitHub writeback matters, follow `github:gh-address-comments`; flat comment reads are insufficient.
 4. Identify the latest Copilot or Codex review feedback. If the source is ambiguous, say so instead of guessing.
-5. Split feedback into actionable, explanation-only, stale/resolved/duplicate/non-actionable, and ambiguous/conflicting/risky items.
-6. Apply only the worthwhile local fixes. Skip speculative churn, style-only noise, and anything likely to cause regression.
+5. Split feedback into actionable, explanation-only, pre-existing, stale/resolved/duplicate/non-actionable, and ambiguous/conflicting/risky items. Check with `git blame` or the PR base whether a reported defect exists without this PR.
+6. Apply only the worthwhile local fixes. Skip speculative churn, style-only noise, and anything likely to cause regression. Defer Low-severity and pre-existing items by default; when fixing an item, fix other instances of the same bug class in the PR diff in the same round.
 7. Run the smallest relevant verification for local fixes and record its result.
    If it fails or cannot run, report the cause and leave the fixes unpublished;
    do not represent them as verified or ready for writeback.
@@ -45,6 +45,7 @@ This skill does not commit or push; the user or an orchestration skill owns publ
 - `applied`: Addressed by local code or tests. Draft a short response and mark as a resolve candidate.
 - `explained`: Needs explanation, not code. Resolve only if the explanation fully closes the point.
 - `skipped`: Intentionally not applied. Include the technical reason. Leave open if reasonable disagreement remains.
+- `pre-existing`: The defect exists at the PR base and this PR does not make it newly reachable or worse. Draft a note proposing separate follow-up and leave open unless the user approves resolving it.
 - `stale`: No longer applies to the current diff. Draft a stale note and mark as a resolve candidate.
 - `duplicate`: Covered elsewhere. Reference the covering item and mark as a resolve candidate.
 - `needs-human-decision`: Ambiguous, conflicting, policy-sensitive, or risky. Draft the question or tradeoff and leave open.

@@ -6,6 +6,7 @@ description: Shared local review procedure for GitHub issue and Azure DevOps Wor
 # Delivery Common
 
 Use [Local Review](references/local-review.md) when a delivery workflow reaches
-its paired local reviews or selects focused follow-up. The calling workflow owns
-implementation, assessment, review round limits, publication, and approvals.
+its paired local reviews or selects focused follow-up, and apply its
+Assess findings defaults to local and hosted findings. The calling workflow owns
+implementation, assessment decisions, review round limits, publication, and approvals.
 Return the completed results, review scope, and reviewed snapshot to that caller.

@@ -46,8 +46,14 @@ Prioritize:
 
 Trace each finding through the changed code and nearby contracts. A material
 finding states what fails, the conditions that trigger it, its impact, and a
-specific correction. Exclude praise, style-only preferences, unrelated legacy
-problems, and unsupported speculation. Weight the user's focus heavily.
+specific correction. Exclude praise, style-only preferences, and unsupported
+speculation. Weight the user's focus heavily.
+
+Mark a finding `pre-existing` when the defect is reachable at the merge-base
+without this change. Report a pre-existing defect as a finding only when the
+change makes it newly reachable or worse; otherwise list it under Coverage as an
+out-of-scope observation. Name each finding's bug class and list other instances
+of that class in the reviewed diff so one fix round can cover them.
 
 ## Output
 
@@ -55,8 +61,9 @@ Respond in the user's language:
 
 ```markdown
 **Findings**
-- [High|Medium|Low] <title> - <file:line or diff context> - confidence <0-1>
+- [High|Medium|Low] <title> - <file:line or diff context> - confidence <0-1> - <introduced|pre-existing>
   <failure, trigger, evidence, impact, and recommended correction>
+  Class: <bug class>; other instances: <locations or "none found">
 - If none: No material findings found.
 
 **Review Target**

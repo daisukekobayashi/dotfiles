@@ -90,8 +90,9 @@ and run an initial full review with both on the same base, issue, and implementa
 snapshot. Reviewers remain read-only. Wait for both completed results before the
 implementation owner edits.
 
-Assess each finding against the issue, code, and evidence. Apply worthwhile fixes;
-record a concise reason for explained, duplicate, stale, or skipped findings.
+Assess each finding against the issue, code, and evidence, using the Assess
+findings defaults in Local Review. Apply worthwhile fixes; record a concise reason
+for explained, duplicate, stale, pre-existing, or skipped findings.
 Treat concrete failures affecting acceptance criteria, correctness, security,
 data integrity, regressions, or mandatory repository rules as material. Minor
 improvements may be deferred with a reason. Leave disputed material findings or
@@ -121,12 +122,17 @@ unresolved items. An acknowledgement or an `eyes` reaction is not a completed
 review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
-for focused follow-up or a full pair under its escalation rule, and obtain a fresh
-hosted Codex review for the resulting published head. Reuse the existing PR and
-call the cycle again for that target; it does not request another review
-automatically. If any other edit or new commit changes the head, refresh the
-affected review coverage. Advance only when the current published head is covered
-by the full local reviews and completed follow-ups, has completed hosted review,
+for focused follow-up or a full pair under its escalation rule. Obtain a fresh
+hosted Codex review for the resulting published head only when hosted follow-up
+applied a material fix: correctness, security, data integrity, or a change to the
+design or a public contract. For other fixes, local focused follow-up covering the
+new head is sufficient; record the head the hosted review covered and why the
+remaining delta did not need another hosted round. To request another review,
+reuse the existing PR and call the cycle again for that target; it does not
+request another review automatically. If any other edit or new commit changes
+the head, refresh the affected review coverage. Advance only when the current
+published head is covered by the full local reviews and completed follow-ups,
+has completed hosted review or the recorded non-material exemption above,
 worthwhile fixes are verified and published, and remaining thread dispositions
 clearly close them.
 
@@ -168,7 +174,8 @@ requires actual output. Advance as soon as the completion criteria are met.
 User-specified lower limits take precedence. If the limit is reached with required
 work remaining, progress repeatedly stalls, a review times out, a required check
 fails, or a material human decision is needed, preserve progress and report the
-next action.
+next action. At the limit, include the remaining-findings classification from
+Local Review's Assess findings.
 Ask before extending the budget or retrying a timed-out external review; do not
 repeatedly post triggers.
 

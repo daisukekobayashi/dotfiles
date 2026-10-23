@@ -45,6 +45,27 @@ snapshot, report incomplete coverage and do not advance. Keep the snapshot stabl
 until the required results arrive; invalidate affected coverage if another writer
 changes it.
 
+## Assess findings
+
+The caller applies these defaults when assessing local or hosted findings:
+
+- **Pre-existing:** Check with `git blame` or the merge-base whether the defect
+  exists without this change. Do not fix it in this delivery unless the change
+  makes it newly reachable or worse; record it as a follow-up candidate and
+  report it to the user rather than creating an issue or Work Item silently.
+- **Low severity:** Record and defer by default. Every fix creates a new
+  snapshot and another review round; fix a Low finding only when it is a
+  trivial, local correction bundled with a material fix in the same round.
+- **Bug class:** When fixing a finding, fix all instances of its class in the
+  task diff in the same round, not only the reported location.
+- **Repeats:** A finding already dispositioned in an earlier round is a
+  `duplicate` unless new evidence changes the assessment.
+
+At the round limit, classify the remaining findings before reporting: mostly
+pre-existing (recommend proceeding with follow-up candidates), repeated in one
+area or approach (recommend revisiting the design through design-preflight), or
+genuinely new material defects (recommend extending the budget).
+
 ## Focused follow-up
 
 When the caller selects focused follow-up after a completed full pair, retain the

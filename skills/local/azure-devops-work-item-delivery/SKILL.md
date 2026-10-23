@@ -92,9 +92,9 @@ Follow [Local Review](../delivery-common/references/local-review.md). Give both
 read-only reviewers the same recorded base, Work Item/spec, and committed
 snapshot. Wait for both results before the implementation owner edits.
 
-Assess findings against the requirements, code, and evidence. Apply worthwhile
-fixes; record concise reasons for explained, duplicate, stale, or skipped
-findings. Keep disputed material findings and design decisions open for the user.
+Assess findings against the requirements, code, and evidence, using the Assess
+findings defaults in Local Review. Apply worthwhile fixes; record concise reasons
+for explained, duplicate, stale, pre-existing, or skipped findings. Keep disputed material findings and design decisions open for the user.
 After fixes, verify and repeat both reviews on the new snapshot.
 
 Advance only after both passes completed on the current implementation,
@@ -156,7 +156,8 @@ Allow at most three local review rounds per item across this delivery, including
 resumes; one round includes both reviewers. A clean result may advance
 immediately. Honor lower user limits. At the limit, repeated non-progress, a
 timeout, failed required check, or material human decision, preserve progress
-and report the next action. Ask before extending the budget.
+and report the next action, including the remaining-findings classification
+from Local Review's Assess findings at the limit. Ask before extending the budget.
 
 Check policies when reaching merge or resuming; avoid indefinite polling. If the
 user asks to wait, use a bounded window and report its limit; otherwise report
