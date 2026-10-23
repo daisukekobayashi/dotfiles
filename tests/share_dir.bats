@@ -131,6 +131,10 @@ teardown() {
     --name share-dir-cache-test
 
   [ "$status" -eq 0 ]
-  grep -F -- "database: /home/filebrowser/data/database.db" "${DOCKER_CONFIG_LOG}"
+  grep -F -- "  database:" "${DOCKER_CONFIG_LOG}"
+  grep -F -- "    path: /home/filebrowser/data/database.sqlite" "${DOCKER_CONFIG_LOG}"
+  if grep -F -- "database: /home/filebrowser/data/database.db" "${DOCKER_CONFIG_LOG}"; then
+    return 1
+  fi
   grep -F -- "cacheDir: /home/filebrowser/data/cache" "${DOCKER_CONFIG_LOG}"
 }
