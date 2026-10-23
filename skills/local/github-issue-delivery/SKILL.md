@@ -92,11 +92,10 @@ implementation owner edits.
 
 Assess each finding against the issue, code, and evidence, using the Assess
 findings defaults in Local Review. Apply worthwhile fixes; record a concise reason
-for explained, duplicate, stale, pre-existing, or skipped findings.
-Treat concrete failures affecting acceptance criteria, correctness, security,
-data integrity, regressions, or mandatory repository rules as material. Minor
-improvements may be deferred with a reason. Leave disputed material findings or
-design decisions open for the user. Avoid scope expansion and speculative churn.
+for explained, duplicate, stale, pre-existing, or skipped findings. Material,
+minor, and pre-existing follow Local Review's Triage; minor findings may be
+deferred with a reason. Leave disputed material findings or design decisions
+open for the user. Avoid scope expansion and speculative churn.
 
 After fixes, run relevant checks and use focused follow-up from Local Review to
 confirm accepted fixes and check regressions in affected paths. Repeat the full
@@ -105,9 +104,9 @@ the earlier full-review coverage insufficient.
 
 Advance when acceptance criteria are met, verification is current, the initial
 pair and completed follow-ups cover the current head, and no material actionable
-finding or human decision remains open. Recorded deferrals of minor improvements
-do not require another round or a result with zero findings. Failed, unavailable,
-empty, or partial review output is not a pass.
+finding or human decision remains open. Recorded deferrals of minor or
+pre-existing findings do not require another round or a result with zero
+findings. Failed, unavailable, empty, or partial review output is not a pass.
 
 ### 3. Publish and complete hosted Codex review
 
@@ -116,6 +115,8 @@ branch, worktree, issue/spec, recorded base, verification, and local review
 evidence. Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
 -> confirm remote head -> Writeback ordering, and stop-on-failure behavior.
+Pass the earlier local and hosted dispositions from the progress record, and
+have its follow-up assess hosted findings with Local Review's Assess findings.
 
 Record the returned status, PR, published head, reviewed head, dispositions, and
 unresolved items. An acknowledgement or an `eyes` reaction is not a completed
@@ -123,16 +124,17 @@ review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
 for focused follow-up or a full pair under its escalation rule. Obtain a fresh
-hosted Codex review for the resulting published head only when hosted follow-up
-applied a material fix: correctness, security, data integrity, or a change to the
-design or a public contract. For other fixes, local focused follow-up covering the
-new head is sufficient; record the head the hosted review covered and why the
-remaining delta did not need another hosted round. To request another review,
+hosted Codex review when the delta from the last hosted-reviewed head to the
+published head contains a material change under Local Review's Triage, whether
+it came from hosted or local follow-up; when uncertain, request it. Otherwise,
+local focused follow-up covering the new head is sufficient; record the head the
+hosted review covered and why the remaining delta did not need another hosted
+round. To request another review,
 reuse the existing PR and call the cycle again for that target; it does not
 request another review automatically. If any other edit or new commit changes
 the head, refresh the affected review coverage. Advance only when the current
 published head is covered by the full local reviews and completed follow-ups,
-has completed hosted review or the recorded non-material exemption above,
+has completed hosted review or the recorded non-material delta above,
 worthwhile fixes are verified and published, and remaining thread dispositions
 clearly close them.
 

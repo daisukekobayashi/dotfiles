@@ -67,11 +67,13 @@ finding states what fails, the conditions that trigger it, its impact, and a
 specific correction. Exclude praise, style-only preferences, and unsupported
 speculation. Weight the user's focus heavily.
 
-Mark a finding `pre-existing` when the defect is reachable at the merge-base
-without this change. Report a pre-existing defect as a finding only when the
-change makes it newly reachable or worse; otherwise list it under Coverage as an
-out-of-scope observation. Name each finding's bug class and list other instances
-of that class in the reviewed diff so one fix round can cover them.
+Tag each finding `introduced` when this change creates the failure, `worsened`
+when an older defect becomes newly reachable or more severe through this change
+(name the new path), or `pre-existing` when the same failure and impact occur
+at the merge-base. Keep all three in the findings so the caller can verify the
+tag; base the verdict only on introduced and worsened findings. Name each
+finding's bug class and list other instances of that class in the reviewed
+diff so one fix round can cover them.
 
 ## Output
 
@@ -79,7 +81,7 @@ Respond in the user's language:
 
 ```markdown
 **Findings**
-- [High|Medium|Low] <title> - <file:line or diff context> - confidence <0-1> - <introduced|pre-existing>
+- [High|Medium|Low] <title> - <file:line or diff context> - confidence <0-1> - <introduced|worsened|pre-existing>
   <failure, trigger, evidence, impact, and recommended correction>
   Class: <bug class>; other instances: <locations or "none found">
 - If none: No material findings found.
@@ -97,9 +99,9 @@ Respond in the user's language:
 - Request changes | Comment | Approve
 ```
 
-Use `Request changes` only for a defensible blocker. `Approve` means no
-material finding was supported by the reviewed evidence, not that the change
-was proven correct.
+Use `Request changes` only for a defensible introduced or worsened blocker.
+`Approve` means no material finding was supported by the reviewed evidence, not
+that the change was proven correct.
 
 ## Guardrails
 

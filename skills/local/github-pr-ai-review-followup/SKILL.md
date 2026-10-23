@@ -24,9 +24,9 @@ This skill does not commit or push; the user or an orchestration skill owns publ
 1. Resolve the current-repo PR from a provided number/URL or the current branch; ask if ambiguous.
 2. Fetch PR metadata and AI review comments with the GitHub plugin.
 3. When inline context, resolution state, stale/outdated state, or GitHub writeback matters, follow `github:gh-address-comments`; flat comment reads are insufficient.
-4. Identify the latest Copilot or Codex review feedback. If the source is ambiguous, say so instead of guessing.
-5. Split feedback into actionable, explanation-only, pre-existing, stale/resolved/duplicate/non-actionable, and ambiguous/conflicting/risky items. Check with `git blame` or the PR base whether a reported defect exists without this PR.
-6. Apply only the worthwhile local fixes. Skip speculative churn, style-only noise, and anything likely to cause regression. Defer Low-severity and pre-existing items by default; when fixing an item, fix other instances of the same bug class in the PR diff in the same round.
+4. Identify the latest Copilot or Codex review feedback. If the source is ambiguous, say so instead of guessing. When the caller supplies earlier dispositions or assessment defaults, apply them; an item already dispositioned earlier is a `duplicate` of that item unless new evidence changes the assessment.
+5. Split feedback into actionable, explanation-only, pre-existing, stale/resolved/duplicate/non-actionable, and ambiguous/conflicting/risky items. Treat an item as pre-existing only when the same failure, with the same impact, occurs at the PR base; trace its path there, including callers and inputs this PR adds. `git blame` alone is only a hint, and an older defect this PR makes newly reachable or worse is actionable.
+6. Apply only the worthwhile local fixes. Skip speculative churn, style-only noise, and anything likely to cause regression. Defer minor and pre-existing items by default. Reviewer labels are hints: a concrete failure affecting correctness, security, data integrity, regressions, a public contract, or mandatory repository rules is not minor whatever its label; when fixing an item, fix other instances of the same bug class in the PR diff in the same round.
 7. Run the smallest relevant verification for local fixes and record its result.
    If it fails or cannot run, report the cause and leave the fixes unpublished;
    do not represent them as verified or ready for writeback.
@@ -45,7 +45,7 @@ This skill does not commit or push; the user or an orchestration skill owns publ
 - `applied`: Addressed by local code or tests. Draft a short response and mark as a resolve candidate.
 - `explained`: Needs explanation, not code. Resolve only if the explanation fully closes the point.
 - `skipped`: Intentionally not applied. Include the technical reason. Leave open if reasonable disagreement remains.
-- `pre-existing`: The defect exists at the PR base and this PR does not make it newly reachable or worse. Draft a note proposing separate follow-up and leave open unless the user approves resolving it.
+- `pre-existing`: The same failure and impact occur at the PR base; this PR does not make it newly reachable or worse. Draft a note proposing separate follow-up and leave open unless the user approves resolving it.
 - `stale`: No longer applies to the current diff. Draft a stale note and mark as a resolve candidate.
 - `duplicate`: Covered elsewhere. Reference the covering item and mark as a resolve candidate.
 - `needs-human-decision`: Ambiguous, conflicting, policy-sensitive, or risky. Draft the question or tradeoff and leave open.

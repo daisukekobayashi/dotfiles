@@ -43,17 +43,29 @@ changes it.
 
 The caller applies these defaults when assessing local or hosted findings:
 
-- **Pre-existing:** Check with `git blame` or the merge-base whether the defect
-  exists without this change. Do not fix it in this delivery unless the change
-  makes it newly reachable or worse; record it as a follow-up candidate and
-  report it to the user rather than creating an issue or Work Item silently.
-- **Low severity:** Record and defer by default. Every fix creates a new
-  snapshot and another review round; fix a Low finding only when it is a
-  trivial, local correction bundled with a material fix in the same round.
+- **Triage:** Classify each finding as `material`, `minor`, or `pre-existing`.
+  Reviewer labels (High/Medium/Low, P0-P3, critical-low, or none) are hints. A
+  concrete failure affecting acceptance criteria, correctness, security, data
+  integrity, regressions, a public contract, or mandatory repository rules is
+  `material` whatever its label. Fix material findings or leave them open for
+  the user.
+- **Minor:** Record and defer by default. Every fix creates a new snapshot and
+  another review round; fix a minor finding only when it is a trivial, local
+  correction bundled with a material fix in the same round.
+- **Pre-existing:** A finding is pre-existing only when the same failure, with
+  the same impact, occurs at the merge-base. Verify by tracing the failure path
+  at the merge-base, including callers and inputs this change adds; `git blame`
+  on the reported line is only a hint. An older defect that this change makes
+  newly reachable or more severe is `worsened` and material. Do not fix
+  pre-existing findings in this delivery; record them as follow-up candidates
+  and report them to the user rather than creating an issue or Work Item
+  silently.
 - **Bug class:** When fixing a finding, fix all instances of its class in the
   task diff in the same round, not only the reported location.
 - **Repeats:** A finding already dispositioned in an earlier round is a
-  `duplicate` unless new evidence changes the assessment.
+  `duplicate` unless new evidence changes the assessment. Pass the earlier local
+  and hosted dispositions from the progress record to hosted follow-up so it
+  applies the same rule.
 
 At the round limit, classify the remaining findings before reporting: mostly
 pre-existing (recommend proceeding with follow-up candidates), repeated in one

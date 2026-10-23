@@ -93,6 +93,7 @@ Still stop and ask before:
      review follow-up against stale or absent output.
 5. Use only the **Prepare** phase of `github-pr-ai-review-followup` on the
    latest Codex review feedback.
+   - Forward any earlier dispositions and assessment defaults the caller supplied.
    - Capture its prepared record, including per-thread dispositions, verification,
      proposed replies, and pending publication. Do not reply or resolve yet,
      even though this cycle authorizes later writeback.
@@ -140,7 +141,7 @@ Use this structure:
 - PR: <url>
 - Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result>`
 - Codex: `<acknowledged/completed/blocked summary>`
-- Follow-up: `<applied/explained/skipped/stale/duplicate counts>`
+- Follow-up: `<applied/explained/skipped/pre-existing/stale/duplicate counts>`
 - Review fix commit: `<sha>` or "No review-fix commit needed"
 - Writeback: `<replied/resolved counts>`
 

@@ -64,11 +64,13 @@ Trace concrete failure paths and weight the user's focus heavily. A material
 finding states what fails, why, its impact, and a risk reduction. Exclude praise,
 style, cleanup, and speculation. Prefer one strong finding; mark inferences.
 
-Mark a finding `pre-existing` when the defect is reachable at the merge-base
-without this change. Report a pre-existing defect as a finding only when the
-change makes it newly reachable or worse; otherwise list it under Coverage as an
-out-of-scope observation. Name each finding's bug class and list other instances
-of that class in the reviewed diff.
+Tag each finding `introduced` when this change creates the failure, `worsened`
+when an older defect becomes newly reachable or more severe through this change
+(name the new path), or `pre-existing` when the same failure and impact occur
+at the merge-base. Keep all three in the findings so the caller can verify the
+tag; base the verdict only on introduced and worsened findings. Name each
+finding's bug class and list other instances of that class in the reviewed
+diff.
 
 ## Output
 
@@ -83,7 +85,7 @@ Respond in the user's language:
 - <worktree, target, base, merge-base, issue/PR, layers>
 
 **Material Findings**
-- [High|Medium] <title> - <location> - confidence <0-1> - <introduced|pre-existing>
+- [High|Medium] <title> - <location> - confidence <0-1> - <introduced|worsened|pre-existing>
   <failure, evidence, impact, recommendation>
   Class: <bug class>; other instances: <locations or "none found">
 - If none: No material findings found.
@@ -98,8 +100,8 @@ Respond in the user's language:
 - <coverage, skipped evidence, test gaps, stale refs, uncertainty>
 ```
 
-Use `Do not ship` only for a defensible blocker. A clean result means no
-material finding was supported, not that safety was proven.
+Use `Do not ship` only for a defensible introduced or worsened blocker. A clean
+result means no material finding was supported, not that safety was proven.
 
 ## Guardrails
 
