@@ -57,9 +57,16 @@ by a tool timeout may never reach its `down` trap.
    - When the target is a primary checkout (the one that owns `.git`) or the
      list came from `--stale`, the stacks may belong to other sessions: list
      them and let the user choose, with no pre-selected default.
+   - A stack is worktree-owned when the target is a linked worktree, the list
+     came from a path, and the reason is exactly `under target`. For these,
+     also preview the volumes from
+     `docker volume ls --filter label=com.docker.compose.project=<project>`;
+     the confirmation covers deleting them, because they are unreachable once
+     the worktree is gone.
 4. Run `docker compose -p <project> down --remove-orphans` for each confirmed
-   project. Volumes stay; add `--volumes` only when the user asks to delete
-   data.
+   project, adding `--volumes` for worktree-owned stacks. For other stacks,
+   volumes stay; add `--volumes` only when the user asks to delete data.
+   Volumes marked `external` survive `--volumes` either way.
 5. Re-run the same `list-stacks.sh` command and report what stopped and what
    remains.
 

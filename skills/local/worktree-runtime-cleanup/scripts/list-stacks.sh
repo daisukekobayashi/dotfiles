@@ -9,11 +9,13 @@
 #
 # Output: one tab-separated line per project:
 #   <project> <running>/<total> <working_dir> <reason>
+# In PATH mode the reason is "under target", plus "; explicit project name"
+# when the project name is not derived from working_dir and may be shared.
 # The script only reads Docker state; it never stops containers.
 set -euo pipefail
 
 usage() {
-  sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -94,11 +96,23 @@ stale_reason() {
   fi
 }
 
+# Compose's default project name for a directory: lowercased basename with
+# characters outside [a-z0-9_-] dropped and leading separators trimmed.
+default_project_name() {
+  local name
+  name="$(basename "$1" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
+  printf '%s\n' "${name#"${name%%[a-z0-9]*}"}"
+}
+
 while IFS=$'\t' read -r project dir running total; do
   case "${mode}" in
     path)
       if [[ "${dir}" == "${target}" || "${dir}" == "${target}/"* ]]; then
-        printf '%s\t%s/%s\t%s\t%s\n' "${project}" "${running}" "${total}" "${dir}" "under target"
+        reason="under target"
+        if [[ "${project}" != "$(default_project_name "${dir}")" ]]; then
+          reason="${reason}; explicit project name"
+        fi
+        printf '%s\t%s/%s\t%s\t%s\n' "${project}" "${running}" "${total}" "${dir}" "${reason}"
       fi
       ;;
     stale)
