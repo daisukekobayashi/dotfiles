@@ -2,15 +2,10 @@
 
 Use the caller's GitHub issue or Azure DevOps Work Item as the task context.
 
-Select reviewers from the actual host and available capabilities. Read the
-installed command or skill instructions; do not infer the host from a directory
-name or invoke a slash command as shell text.
-
-| Host | First pass | Second pass |
-|---|---|---|
-| Claude Code with the Codex plugin | `/codex:review` | `/codex:adversarial-review` |
-| Codex | `codex-review` skill | `codex-adversarial-review` skill |
-| Claude Code without the plugin | `codex-review` skill, when available | `codex-adversarial-review` skill, when available |
+On every host, use the `change-review` skill for the first pass and the
+`change-adversarial-review` skill for the second. Codex executes both; read the
+installed skill instructions for how the actual host runs them. Do not infer the
+host from a directory name.
 
 Report the selected route. If either required reviewer is unavailable or cannot
 be invoked under its policy, report the missing prerequisite; do not substitute
@@ -34,9 +29,8 @@ temporary progress records untouched. Do not amend or create an empty commit.
 If approval is pending, the checkpoint and reviews remain pending; an empty
 `HEAD` diff cannot establish that uncommitted work passed local review.
 
-Use the same approach for the plugin branch reviews so both hosts review a fixed
-snapshot. After every worthwhile fix, verify and make the next authorized scoped
-commit before the next review or follow-up. A commit permits local review;
+After every worthwhile fix, verify and make the next authorized scoped commit
+before the next review or follow-up. A commit permits local review;
 publication still belongs to the caller's publication phase and its approval rules.
 
 If unrelated dirty files must remain, identify them explicitly and use branch
@@ -81,41 +75,21 @@ limits. Earlier review evidence remains valid for unaffected areas; the caller
 decides whether broader changes require another full pair. Keep newly discovered
 material risks visible for that assessment.
 
-Use the reviewer's supported follow-up interface. If it supports only a full
-branch review, invoke that supported review and let the caller assess the results
-under its completion criteria. Preserve the route's independence and read-only
-requirements; use only supported arguments.
+Run the relevant skills with `--base <preceding reviewed head> --scope branch`
+and pass the accepted findings and dispositions as focus text. Preserve the
+route's independence and read-only requirements.
 
-## Claude Code plugin
+## Run the pair
 
-Resolve the currently installed `codex` plugin from host metadata and read its
-`review` and `adversarial-review` command definitions. Use their supported
-foreground execution so orchestration waits for actual output. Where supported:
-
-```text
-/codex:review --wait --base <base-sha> --scope branch
-/codex:adversarial-review --wait --base <base-sha> --scope branch
-```
-
-When the host cannot delegate a slash command, use the foreground runtime
-documented by that installed command, under the same user authorization and
-review-only constraints. Resolve its plugin root dynamically; never assume a
-cache version/path or replace the plugin with a newly downloaded package.
-Preserve the command's output as required and return to the parent workflow for
-assessment after the command finishes. Launching a background task is not a
-completed review. A narrower native review contract is not permission to append
-unsupported focus text to `/codex:review`.
-
-## Codex or skill fallback
-
-For a full pair, delegate `codex-review` and `codex-adversarial-review` to separate
-reviewers independent of the implementation owner. Give both the same exact worktree,
-branch, committed head, `--base <base-sha> --scope branch`, task criteria, and
-accepted design/docs. Require the normal review's findings, test gaps, verdict,
-and coverage, and the adversarial review's verdict, concrete failure paths,
-coverage, and residual risk. Report unavailable delegation instead of claiming
-independence.
+For a full pair, run `change-review` and `change-adversarial-review` as separate
+reviewers independent of the implementation owner: separate subagents on Codex,
+or a separate fresh Codex task for each on Claude Code. Give both the same exact
+worktree, branch, committed head, `--base <base-sha> --scope branch`, task
+criteria, accepted design/docs, and the user's delivery request. Require the
+normal review's findings, test gaps, verdict, and coverage, and the adversarial
+review's verdict, concrete failure paths, coverage, and residual risk. Report
+unavailable delegation instead of claiming independence.
 
 Keep both skill executions read-only; only the parent implementation phase applies
-accepted fixes. Wait for required results before editing. Do not run both
-the plugin and fallback routes merely because both are installed.
+accepted fixes. Wait for required results before editing. Do not substitute or
+add the plugin's `/codex:review` or `/codex:adversarial-review` commands.

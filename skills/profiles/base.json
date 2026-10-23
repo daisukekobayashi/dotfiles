@@ -61,8 +61,8 @@
     }
   ],
   "local": [
-    "codex-adversarial-review",
-    "codex-review",
+    "change-adversarial-review",
+    "change-review",
     "delivery-common",
     "design-preflight",
     "design-preflight-with-docs",

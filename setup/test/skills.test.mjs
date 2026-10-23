@@ -36,8 +36,8 @@ const azureDevOpsLocalSkills = [
   "azure-devops-worktree-cleanup",
 ];
 const baseLocalSkills = [
-  "codex-adversarial-review",
-  "codex-review",
+  "change-adversarial-review",
+  "change-review",
   "delivery-common",
   "design-preflight",
   "design-preflight-with-docs",
@@ -461,36 +461,44 @@ test("design preflight delegates to the installed grilling primitive", async () 
   assert.doesNotMatch(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grill-me`\./);
 });
 
-test("Codex review skills are explicit-only and share target selection", async () => {
-  const adversarialRoot = path.join(repoRoot, "skills", "local", "codex-adversarial-review");
-  const codexReviewRoot = path.join(repoRoot, "skills", "local", "codex-review");
+test("change review skills are explicit-only and share target selection", async () => {
+  const adversarialRoot = path.join(repoRoot, "skills", "local", "change-adversarial-review");
+  const changeReviewRoot = path.join(repoRoot, "skills", "local", "change-review");
   const adversarial = await readText(path.join(adversarialRoot, "SKILL.md"));
-  const codexReview = await readText(path.join(codexReviewRoot, "SKILL.md"));
+  const changeReview = await readText(path.join(changeReviewRoot, "SKILL.md"));
   const adversarialMetadata = await readText(path.join(adversarialRoot, "agents", "openai.yaml"));
-  const codexReviewMetadata = await readText(
-    path.join(codexReviewRoot, "agents", "openai.yaml"),
+  const changeReviewMetadata = await readText(
+    path.join(changeReviewRoot, "agents", "openai.yaml"),
   );
   const targetSection = (skill) => skill.match(/## Resolve and Collect\n[\s\S]*?(?=\n## )/)?.[0];
+  const runnerSection = (skill) => skill.match(/## Run on Codex\n[\s\S]*?(?=\n## )/)?.[0];
 
-  assert.match(adversarial, /Use only when explicitly invoked with `\$codex-adversarial-review`/);
-  assert.match(codexReview, /Use only when explicitly invoked with `\$codex-review`/);
+  assert.match(adversarial, /Use only when explicitly invoked with `\$change-adversarial-review`/);
+  assert.match(changeReview, /Use only when explicitly invoked with `\$change-review`/);
   assert.match(adversarialMetadata, /allow_implicit_invocation:\s*false/);
-  assert.match(codexReviewMetadata, /allow_implicit_invocation:\s*false/);
+  assert.match(changeReviewMetadata, /allow_implicit_invocation:\s*false/);
   assert.ok(targetSection(adversarial));
-  assert.equal(targetSection(codexReview), targetSection(adversarial));
-  assert.match(targetSection(codexReview), /git worktree list --porcelain/);
-  assert.match(targetSection(codexReview), /merge-base/);
-  assert.match(targetSection(codexReview), /git diff --cached/);
-  assert.match(targetSection(codexReview), /Issue Context/);
-  assert.match(codexReview, /correctness/i);
-  assert.match(codexReview, /regression/i);
+  assert.equal(targetSection(changeReview), targetSection(adversarial));
+  assert.match(targetSection(changeReview), /git worktree list --porcelain/);
+  assert.match(targetSection(changeReview), /merge-base/);
+  assert.match(targetSection(changeReview), /git diff --cached/);
+  assert.match(targetSection(changeReview), /Issue Context/);
+  for (const [skill, name] of [[changeReview, "change-review"], [adversarial, "change-adversarial-review"]]) {
+    assert.match(runnerSection(skill), /codex-companion\.mjs" task --fresh --cwd/);
+    assert.match(runnerSection(skill), /no `--write`/);
+    assert.match(runnerSection(skill), new RegExp(`'Use \\$${name} `));
+  }
+  assert.match(changeReview, /correctness/i);
+  assert.match(changeReview, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
   assert.match(adversarial, /review-only/i);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "code-review")), false);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "local-code-review")), false);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "adversarial-review", "SKILL.md")), false);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "review-change", "SKILL.md")), false);
-  assert.doesNotMatch(`${codexReview}\n${adversarial}`, /\$code-review|local-code-review/);
+  assert.equal(existsSync(path.join(repoRoot, "skills", "local", "codex-review", "SKILL.md")), false);
+  assert.equal(existsSync(path.join(repoRoot, "skills", "local", "codex-adversarial-review", "SKILL.md")), false);
+  assert.doesNotMatch(`${changeReview}\n${adversarial}`, /\$code-review|local-code-review|\$codex-review/);
 });
 
 test("profile validate accepts selected profiles", async () => {
@@ -500,6 +508,34 @@ test("profile validate accepts selected profiles", async () => {
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /Profiles valid: base,office/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("profile validate rejects skill name collisions", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.dotfiles, "skills", "local", "find-skills"), { recursive: true });
+    await writeFile(
+      path.join(fixture.dotfiles, "skills", "profiles", "collide.json"),
+      JSON.stringify(
+        {
+          description: "Colliding test profile",
+          includes: ["base"],
+          external: [{ source: "acme/skills", skills: ["docx"] }],
+          local: ["find-skills"],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+
+    const result = runSkills(["profile", "validate", "--profile", "office,collide"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skill name collision: docx \(anthropics\/skills, acme\/skills\)/);
+    assert.match(result.stderr, /find-skills \(vercel-labs\/skills, local\)/);
   } finally {
     await fixture.cleanup();
   }

@@ -126,8 +126,9 @@ underlying skills own operation details.
 review cycle, confirmed merge, and confirmed local cleanup. Invoke it with issue
 numbers, for example `/github-issue-delivery 12 36` in Claude Code or
 `$github-issue-delivery 12 36` in Codex. Use `base,github` for its prerequisites.
-Claude Code uses the installed `/codex:review` and `/codex:adversarial-review`
-plugin commands; Codex uses `codex-review` and `codex-adversarial-review` skills.
+Both hosts use the `change-review` and `change-adversarial-review` skills, and
+Codex executes them; Claude Code runs them through the installed Codex plugin's
+read-only `task` runtime.
 An explicit full delivery request selects the delegated preflight, local review,
 and PR-cycle phases; automatic discovery alone does not authorize them.
 It repeats review after worthwhile fixes within bounded rounds, preserves resume
@@ -136,9 +137,9 @@ cleanup confirmation. Checkpoint commits before local branch review follow the
 applicable commit approval rules. The standalone PR cycle retains its one-review
 behavior; the delivery skill owns repetition and final completion checks.
 
-The local `codex-review` and `codex-adversarial-review` skills adapt the OpenAI
-plugin's review behavior to the host's tools. Each definition records its upstream
-sources and the compared commit. Matt Pocock's `code-review` remains available
+The local `change-review` and `change-adversarial-review` skills started as
+adaptations of the OpenAI plugin's review commands and now carry local review
+rules. Each definition records its upstream sources and the compared commit. Matt Pocock's `code-review` remains available
 for separate Standards/Spec reviews; it is not the delivery default.
 
 Do not add a separate external skill pool/catalog file. Profiles are the source of truth for curated external skill groups.
@@ -188,7 +189,7 @@ Include:
 - `frontend-design`, `webapp-testing`, and `web-design-guidelines` for UI creation, testing, and review
 - `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
-- `repo-execution-context`, `codex-review`, `codex-adversarial-review`, and runtime isolation local skills
+- `repo-execution-context`, `change-review`, `change-adversarial-review`, and runtime isolation local skills
 - `delivery-common` for the shared committed-snapshot local review procedure
 - `git-commit`
 
@@ -243,7 +244,7 @@ reported as a limitation, not simulated independence.
 
 `architect` consults `codebase-design` when available and leaves explicitly
 requested preflight to `design-preflight`. `interrogate` reads criteria from
-`codex-review` and `codex-adversarial-review` when available without invoking those
+`change-review` and `change-adversarial-review` when available without invoking those
 explicit-only workflows. Standalone `pstack` provides small fallback criteria.
 Read-only investigation/review stays separate from executable probes and fixes.
 Commit, push, dependency, remote-write, and destructive-operation approvals
@@ -460,6 +461,7 @@ Node runtime responsibilities:
 - Expand `includes`.
 - Merge external skills by source.
 - Validate local skill names.
+- Reject skill name collisions between local and external skills or across external sources.
 - Call `npx skills add` for external skills.
 - Link local skills.
 - Back up and roll back project outputs.
@@ -501,6 +503,8 @@ repo/.claude/skills/<name> -> ~/.dotfiles/skills/local/<name>
 User scope should also symlink local skills into the generated user profile view.
 
 If a target path already exists and is not a dotfiles-managed symlink, fail instead of overwriting it.
+
+Skill names must be unique across the selected profiles. A local skill must not share a name with an external skill, and two external sources must not provide the same name; `profile validate` and installation fail on a collision before any external install. Avoid generic names that hosts or popular skill sets already use, such as `review` or `code-review`.
 
 ## Agents
 

@@ -280,6 +280,22 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
     for (const profileName of requestedProfiles) {
         load(profileName, []);
     }
+    const owners = new Map();
+    for (const [source, skills] of externalBySource) {
+        for (const skillName of skills) {
+            owners.set(skillName, (owners.get(skillName) ?? []).concat(source));
+        }
+    }
+    for (const skillName of localSkills) {
+        owners.set(skillName, (owners.get(skillName) ?? []).concat("local"));
+    }
+    const collisions = Array.from(owners.entries())
+        .filter(([, skillOwners]) => skillOwners.length > 1)
+        .map(([skillName, skillOwners]) => `${skillName} (${skillOwners.join(", ")})`)
+        .sort();
+    if (collisions.length > 0) {
+        fail(`skill name collision: ${collisions.join("; ")}`);
+    }
     return {
         generatedBy: "dotfiles setup skills",
         scope,

@@ -36,7 +36,7 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    worktrees/PRs. Require at least one actual issue target. Check that the
    component skills and the selected local reviewers are available. The normal
    installation is `base,github`; the GitHub profile alone does not supply the
-   preflight and fallback review skills. Report a missing prerequisite rather
+   preflight and review skills. Report a missing prerequisite rather
    than silently installing it or skipping a required phase.
 2. Use `github-issue-start` with the per-issue workflow below as its implementation
    brief. Have it prepare the worktree and baseline before entering preflight;
