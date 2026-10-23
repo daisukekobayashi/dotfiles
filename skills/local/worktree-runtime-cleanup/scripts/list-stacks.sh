@@ -5,7 +5,8 @@
 #   list-stacks.sh [PATH]   Projects whose working_dir is PATH or below it.
 #                           PATH defaults to the current git worktree root.
 #   list-stacks.sh --stale  Projects whose working_dir no longer exists or is
-#                           not a registered git worktree.
+#                           not a registered git worktree, plus projects left
+#                           with only volumes (working_dir shown as "-").
 #
 # Output: one tab-separated line per project:
 #   <project> <running>/<total> <working_dir> <reason>
@@ -15,7 +16,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -52,21 +53,22 @@ containers="$(
     --format '{{.Label "com.docker.compose.project"}}	{{.Label "com.docker.compose.project.working_dir"}}	{{.State}}'
 )"
 
-[[ -z "${containers}" ]] && exit 0
-
 # Collapse to project<TAB>working_dir<TAB>running<TAB>total.
-projects="$(
-  printf '%s\n' "${containers}" |
-    awk -F'\t' '{
-      key = $1 FS $2
-      total[key]++
-      if ($3 == "running") running[key]++
-    }
-    END {
-      for (k in total) printf "%s\t%d\t%d\n", k, running[k] + 0, total[k]
-    }' |
-    sort
-)"
+projects=""
+if [[ -n "${containers}" ]]; then
+  projects="$(
+    printf '%s\n' "${containers}" |
+      awk -F'\t' '{
+        key = $1 FS $2
+        total[key]++
+        if ($3 == "running") running[key]++
+      }
+      END {
+        for (k in total) printf "%s\t%d\t%d\n", k, running[k] + 0, total[k]
+      }' |
+      sort
+  )"
+fi
 
 # Prints a reason when working_dir is stale; prints nothing when it is a live worktree.
 stale_reason() {
@@ -105,6 +107,7 @@ default_project_name() {
 }
 
 while IFS=$'\t' read -r project dir running total; do
+  [[ -z "${project}" ]] && continue
   case "${mode}" in
     path)
       if [[ "${dir}" == "${target}" || "${dir}" == "${target}/"* ]]; then
@@ -123,3 +126,18 @@ while IFS=$'\t' read -r project dir running total; do
       ;;
   esac
 done <<<"${projects}"
+
+# Compose volumes carry no working_dir label, so a project left with only
+# volumes cannot be matched to a path; --stale lists it for the user to judge.
+if [[ "${mode}" == "stale" ]]; then
+  container_projects="$(cut -f1 <<<"${projects}")"
+  docker volume ls \
+    --filter label=com.docker.compose.project \
+    --format '{{.Label "com.docker.compose.project"}}' |
+    sort | uniq -c |
+    while read -r count project; do
+      if ! grep -Fxq "${project}" <<<"${container_projects}"; then
+        printf '%s\t0/0\t-\t%s\n' "${project}" "volume-only: ${count} volume(s), working_dir unknown"
+      fi
+    done
+fi

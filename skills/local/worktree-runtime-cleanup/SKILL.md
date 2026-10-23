@@ -49,6 +49,8 @@ by a tool timeout may never reach its `down` trap.
    - No argument: `list-stacks.sh` targets the current worktree root.
    - `--stale` given: `list-stacks.sh --stale` lists stacks whose `working_dir`
      is missing or is not a registered worktree, across every repository.
+     It also lists projects left with only volumes (`working_dir` shown as
+     `-`), whose owner cannot be determined from Docker state.
      This discovers Compose stacks only; native processes still require known
      launch context.
 2. If nothing is listed, report that and continue with temporary-file cleanup.
@@ -67,6 +69,10 @@ by a tool timeout may never reach its `down` trap.
    project, adding `--volumes` for worktree-owned stacks. For other stacks,
    volumes stay; add `--volumes` only when the user asks to delete data.
    Volumes marked `external` survive `--volumes` either way.
+   - A volume-only project has nothing to bring down. Delete its volumes only
+     when the user chooses that project: preview the names from
+     `docker volume ls --filter label=com.docker.compose.project=<project>`,
+     then run `docker volume rm` on exactly those names.
 5. Re-run the same `list-stacks.sh` command and report what stopped and what
    remains.
 
