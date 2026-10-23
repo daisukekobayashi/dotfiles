@@ -22,22 +22,45 @@ DevOps.
    - Prefer repository or project guidance when it defines the query.
    - Otherwise use `az boards query --wiql` for active, relevant Work Items in
      the current project.
+   - For plausible candidates, fetch details and relations with
+     `az boards work-item show --id <id> --expand relations`.
+   - Collect dependencies from `Predecessor` relations and from
+     `Blocked by #<id>` lines in the description.
+   - Collect each Work Item's `Touched Areas` section when present.
 3. Fetch open PRs with `az repos pr list`.
+   - For PRs that may overlap with candidates, compare changed files with
+     `git diff --name-only <target>...<source>` when both branches are
+     available as local or remote-tracking refs. Do not fetch or check out
+     branches only for this.
 4. Read local repository guidance such as `AGENTS.md`, `README.md`,
    `docs/*.md`, and roadmap docs when present.
 5. Classify Work Items:
    - parent/tracking item
    - directly actionable implementation item
-   - blocked by another Work Item or PR
+   - blocked by another Work Item or PR. Treat an item as blocked while any
+     blocker is not in a completed state under the project's process. If the
+     state meaning is unclear, say so instead of guessing.
+   - If relations and `Blocked by` lines disagree, use their union and note
+     the disagreement.
    - future-scope or out-of-scope work
    - duplicate or already represented by an open PR
 6. Rank actionable Work Items.
-   - Prefer unblocking work, clear acceptance criteria, moderate blast radius,
-     and alignment with repository guidance.
+   - Prefer unblocking work, especially precursor items that settle a contract
+     for several blocked items, plus clear acceptance criteria, moderate blast
+     radius, and alignment with repository guidance.
    - Defer ambiguous, broad, high-risk, or policy-setting items unless they are
      explicitly the priority.
-7. Identify safe parallel candidates only when they touch separate subsystems
-   and have no ordering dependency.
+7. Identify safe parallel candidates.
+   - Build the current wave: actionable Work Items with no incomplete
+     blockers.
+   - Within the current wave, group items as parallel only when their touched
+     areas do not overlap, including shared resources such as schemas, config,
+     migrations, lockfiles, or public interfaces.
+   - Flag overlaps between candidates and open PR changes as conflicts with
+     in-flight work.
+   - When a Work Item has no `Touched Areas` section, infer its likely areas
+     from the description and repository, and label them as inferred.
+   - Do not group items with an ordering dependency.
 
 ## Output Format
 
@@ -53,7 +76,10 @@ DevOps.
 | 1 | #<id> <title> | Do next | <why> |
 
 **Parallel Work**
-- <safe parallel grouping, or "No safe parallel split right now">
+- Current wave: #<a>, #<b> (<parallel groups, or why they must not run together>)
+- Overlaps: <touched-area overlaps between items or with open PRs, or "none">
+- Next wave after #<n> completes: #<c>, #<d>
+- Or: "No safe parallel split right now"
 
 **Next Step**
 - Start with `$azure-devops-work-item-start <id>` if the user wants to implement the top recommendation.
