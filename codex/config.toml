@@ -1,12 +1,12 @@
 model = "gpt-6.1-sol"
-model_reasoning_effort = "max"
+model_reasoning_effort = "xhigh"
 model_reasoning_summary = "auto"
 
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
 plan_mode_reasoning_effort = "max"
 approvals_reviewer = "guardian_subagent"
-service_tier = "fast"
+service_tier = "default"
 
 [sandbox_workspace_write]
 network_access = true
