@@ -14,9 +14,10 @@ Start Beads issue work safely from the current repository. A single actionable b
 1. Run `bd prime`; if needed, run `bd where`.
 2. Resolve bead IDs from the user prompt. If no ID is provided, run `bd ready` and ask which ready bead to start.
 3. Inspect every target:
-   - `bd show <id>`
-   - classify as actionable, parent/tracker, blocked, already in progress, or ambiguous.
-4. Stop before creating worktrees if a bead is blocked, closed, a parent tracker, ambiguous, or likely to conflict with another requested bead.
+   - `bd show <id>`, including dependencies and the `Touched areas` section when present. When it is absent, infer likely areas from the description and repository, and label them as inferred.
+   - classify as actionable, parent/tracker, blocked, already in progress, or ambiguous. Use `bd` dependencies as the source of truth for blocked; if a `Blocked by` section names a blocker that `bd` does not record, treat the bead as blocked and note the disagreement.
+   - When multiple beads were requested, also inspect in-progress or claimed beads so their touched areas can be checked for conflicts.
+4. Stop before creating worktrees if a bead is blocked, closed, a parent tracker, ambiguous, or likely to conflict with another requested bead or in-progress bead. Report the overlapping areas.
 5. Choose branch/worktree names for actionable beads.
    - Branch format: `<type>/<bead-id>-<slug>`.
    - Use `fix` for bugs, `feat` for features, `chore` for maintenance/internal workflow.
@@ -46,9 +47,11 @@ during cleanup.
 
 ## Multiple Beads
 
-Create separate worktrees only when the beads touch mostly separate subsystems, have no dependency relationship, and do not share schema/config/workflow decisions. Otherwise recommend a sequential order.
+Create separate worktrees only when the beads' touched areas do not overlap, including shared resources such as schemas, config, migrations, lockfiles, or public interfaces; they have no dependency relationship; and they do not share schema/config/workflow decisions. Otherwise recommend a sequential order.
 
 For parallel work, each worker owns exactly one bead and one worktree. Do not let two workers edit the same worktree.
+
+Give each worker its bead's touched areas, marked as declared or inferred, and the touched areas assigned to sibling workers. Before editing outside its touched areas, especially in a sibling's areas or shared resources, the worker pauses and reports the needed change instead of making it. Its report lists files changed outside its touched areas. Decide whether such a change conflicts with a sibling before letting the worker continue; when it does, sequence the work or report the conflict to the user.
 
 ## Guardrails
 

@@ -24,10 +24,21 @@ exact target, and existing approvals to the worker; a brief alone grants none.
 1. Resolve the current Azure DevOps organization, project, repository, and parse
    every Work Item ID in the prompt.
 2. Fetch Work Item metadata with `az boards work-item show --id <id> --expand all`.
+   - Collect dependencies from `Predecessor` relations and from
+     `Blocked by #<id>` lines in the description.
+   - Collect each Work Item's `Touched Areas` section when present. When it is
+     absent, infer likely areas from the description and repository, and label
+     them as inferred.
+   - When multiple Work Items were provided, list open PRs with
+     `az repos pr list` and compare changed files with
+     `git diff --name-only <target>...<source>` when both branches are
+     available as local or remote-tracking refs. Do not fetch or check out
+     branches only for this.
 3. Summarize and classify each Work Item:
    - directly actionable implementation work
    - parent/tracking item
-   - blocked or dependent on another Work Item or PR
+   - blocked or dependent on another Work Item or PR, including any item with
+     a blocker that is not in a completed state under the project's process
    - ambiguous and needing clarification
 4. For each directly actionable Work Item, choose a branch name:
    - format: `type/<id>-<slug>`
@@ -37,16 +48,28 @@ exact target, and existing approvals to the worker; a brief alone grants none.
    - Follow **Worktree Preparation** below, then implement in that worktree.
 6. If multiple Work Items were provided:
    - Stop before creating worktrees unless the set is safe to parallelize.
-   - Treat items as safe only when they touch separate subsystems, have no
-     ordering dependency, and do not require the same schema, config, workflow,
-     or policy decision.
+   - Treat items as safe only when their touched areas do not overlap,
+     including shared resources such as schemas, config, migrations,
+     lockfiles, or public interfaces; they have no ordering dependency; and
+     they do not require the same schema, config, workflow, or policy
+     decision.
+   - Also treat overlap between an item's touched areas and an open PR's
+     changed files as a conflict with in-flight work. When stopping, report
+     the overlapping areas.
    - Follow **Worktree Preparation** for each safe Work Item, keeping one branch
      and worktree per item with separate worker ownership.
    - Dispatch one worker per item/worktree within host capacity. Give it the
      Work Item/spec, assigned branch/path, base and baseline, repository rules,
-     implementation brief, and expected verification/blocker report. Keep every
-     worker inside its assigned scope. The delivery caller coordinates these
-     workers rather than launching a second set.
+     implementation brief, its touched areas marked as declared or inferred,
+     the touched areas assigned to sibling workers, and expected
+     verification/blocker report including files changed outside its touched
+     areas. Keep every worker inside its assigned scope. The delivery caller
+     coordinates these workers rather than launching a second set.
+   - Before editing outside its touched areas, especially in a sibling's areas
+     or shared resources, a worker pauses and reports the needed change instead
+     of making it. Decide whether the change conflicts with a sibling before
+     letting it continue; when it does, sequence the work or report the
+     conflict to the user.
 7. Report each Work Item summary, branch, worktree path, base commit, baseline
    command/result, worker assignment when applicable, and next implementation step.
 

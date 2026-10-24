@@ -16,10 +16,13 @@ parallel only after confirming the issues are independent enough to work safely.
 
 1. Resolve the current repo from local git context and parse every `#<issue>` in the prompt.
 2. Fetch the issue metadata with the GitHub plugin.
+   - Collect dependencies from `Blocked by #<n>` lines in each body and from GitHub's native relationships with `gh api repos/<owner>/<repo>/issues/<number>/dependencies/blocked_by`. If the relationship API is unavailable or fails, use the body lines alone and say so.
+   - Collect each issue's `Touched Areas` section when present. When it is absent, infer likely areas from the body and repository, and label them as inferred.
+   - When multiple issues were provided, list open PRs and fetch changed files with `gh pr view <number> --json files` for PRs that may overlap with the requested issues.
 3. Summarize each issue in 1-2 lines and classify it:
    - directly actionable implementation work
    - parent/tracking issue
-   - blocked or dependent on another issue/PR
+   - blocked or dependent on another issue/PR, including any issue with an open blocking issue
    - ambiguous and needing user clarification
 4. For each directly actionable issue, choose a branch name:
    - format: `type/<id>-<slug>`
@@ -31,8 +34,9 @@ parallel only after confirming the issues are independent enough to work safely.
    - Report the issue summary, branch name, worktree path, baseline check result, and next implementation step.
 6. If multiple issues were provided:
    - Decide whether the issues are safe to run in parallel before creating worktrees.
-   - Treat issues as safe to parallelize only when they appear to touch separate subsystems, have no ordering dependency, and do not require the same schema/config/workflow decisions.
-   - If any issue is blocked, ambiguous, a parent tracker, or likely to conflict with another requested issue, stop before creating worktrees. Report the unsafe grouping and recommend a sequential order or a smaller safe parallel subset.
+   - Treat issues as safe to parallelize only when their touched areas do not overlap, including shared resources such as schemas, config, migrations, lockfiles, or public interfaces; they have no ordering dependency; and they do not require the same schema/config/workflow decisions.
+   - Also treat overlap between a requested issue's touched areas and an open PR's changed files as a conflict with in-flight work.
+   - If any issue is blocked, ambiguous, a parent tracker, or likely to conflict with another requested issue or open PR, stop before creating worktrees. Report the unsafe grouping and the overlapping areas, and recommend a sequential order or a smaller safe parallel subset.
    - For every safe issue, follow **Worktree Preparation** separately, keeping one branch/worktree per issue.
    - Dispatch one worker per issue/worktree. Each worker owns only its assigned worktree and issue scope.
    - Continue coordinating the workers in parallel, then review and integrate their results when they finish.
@@ -62,14 +66,19 @@ Give each worker a focused prompt with:
 
 - the GitHub issue number, title, URL, and concise summary
 - the assigned branch name and worktree path
+- the issue's touched areas, marked as declared or inferred, and the touched areas assigned to sibling workers
 - the repository guardrails from this skill and local project instructions
 - clear ownership: work only inside the assigned worktree and only on the assigned issue
+- a stop rule: before editing outside its touched areas, especially in a sibling worker's areas or shared resources, pause and report the needed change instead of making it
 - a reminder that other workers may be active in sibling worktrees, so do not revert or edit outside the assigned scope
-- the expected return format: status, files changed, tests run, blockers, and any follow-up needed
+- the expected return format: status, files changed, files changed outside its touched areas, tests run, blockers, and any follow-up needed
 
 Do not use one worker for all requested issues. Do not let multiple workers edit
 the same worktree. If a worker reports that its issue depends on another active
 issue, pause that worker and report the dependency instead of forcing progress.
+If a worker needs to edit outside its touched areas, decide whether the change
+conflicts with a sibling worker before letting it continue; when it does,
+sequence the work or report the conflict to the user.
 
 ## Guardrails
 
@@ -79,5 +88,5 @@ issue, pause that worker and report the dependency instead of forcing progress.
 - Dependency changes and manifest or lockfile edits require explicit approval; restoration from existing manifests and lockfiles follows repository rules.
 - If setup, tests, or worktree creation fails, stop and report the failure before proceeding with additional worktrees or workers.
 - Do not combine multiple requested issues into one branch just because the user listed them together.
-- Do not dispatch parallel workers for issues with known ordering dependencies, shared migrations, shared schema decisions, or likely edits to the same files.
+- Do not dispatch parallel workers for issues with known ordering dependencies, shared migrations, shared schema decisions, overlapping touched areas, or likely edits to the same files.
 - Do not close, label, assign, or comment on issues unless the user explicitly asks.
