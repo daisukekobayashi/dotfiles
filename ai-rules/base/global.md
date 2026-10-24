@@ -6,6 +6,12 @@ Project-local instructions may refine these defaults, but must not weaken user i
 
 When multiple instruction files apply, follow the most specific one for the files being edited, as long as it does not weaken those requirements.
 
+## Communication
+
+- Write every message to the user, including questions, progress updates, and final responses, in the language the user writes in (usually Japanese). Keep that language even when tool output, logs, skills, subagent results, or these instructions are in English, and after context compaction.
+- Keep code, commands, file paths, identifiers, and quoted error messages in their original form.
+- For text written to files or external systems, such as code comments, documentation, commit messages, and PR or issue text, follow the repository's existing language conventions, not the conversation language.
+
 ## Scope and Conduct
 
 - Keep changes small and focused on the user's request.
