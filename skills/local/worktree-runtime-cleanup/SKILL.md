@@ -1,14 +1,14 @@
 ---
 name: worktree-runtime-cleanup
-description: Stop a worktree's Compose stacks and confirmed dev servers/watchers, then clean up temporary files created by those runs.
+description: Stop a worktree's Compose stacks and confirmed dev servers, watchers, and tool daemons, then clean up temporary files created by those runs.
 disable-model-invocation: true
 ---
 
 # Worktree Runtime Cleanup
 
-Dev servers, watchers, and Compose dependencies can outlive their worktree or
-launcher. Tie cleanup to confirmed runtime ownership and retain verification
-evidence.
+Dev servers, watchers, tool daemons, and Compose dependencies can outlive their
+worktree or launcher. Tie cleanup to confirmed runtime ownership and retain
+verification evidence.
 
 Worktree cleanup skills (`github-worktree-cleanup`,
 `azure-devops-worktree-cleanup`, `beads-merge-cleanup`) read this file and run
@@ -18,24 +18,45 @@ Run this before `git worktree remove`: the live worktree helps establish runtime
 ownership, and Compose stacks can be matched by path rather than the weaker
 `--stale` reasons.
 
-## Dev Servers and Watchers
+## Dev Servers, Watchers, and Tool Daemons
 
-1. Resolve the target worktree and identify its dev servers/watchers from existing
-   launch information, tool sessions, or explicit user-provided targets. Confirm
-   ownership using the worktree path and launch context; a port or process name
-   alone is insufficient. Report uncertain candidates and leave them running.
-2. Preview the exact processes and owned children to stop. Obtain any required
-   approval, honoring authorization already given for those targets. Immediately
-   before stopping, recheck PID, start time, and launch context to detect PID reuse.
-   If they no longer match, leave the process untouched and report it as unverified.
+Tools can launch detached processes in a worktree that survive the session
+that started them: Codex plugin brokers (`app-server-broker.mjs --cwd
+<worktree>`) with their `codex app-server`, MCP servers such as Serena, and
+language servers such as Expert. No launch information for them exists in the
+cleanup session, so discover them from process state.
+
+1. Resolve the target worktree and list candidates with
+   `scripts/list-processes.sh` in this skill's directory. The script only reads
+   process state.
+   - A worktree path given: `list-processes.sh <path>`.
+   - No argument: `list-processes.sh` targets the current worktree root.
+   - `--stale` given: `list-processes.sh --stale` lists processes whose cwd or
+     `--cwd` argument no longer exists, such as runtimes left by a worktree
+     already removed.
+   Add dev servers/watchers known from existing launch information, tool
+   sessions, or explicit user-provided targets. A cwd or `--cwd` under the
+   target establishes ownership; a port or process name alone is insufficient.
+   Interactive shells, terminal panes, and agent sessions with a tty (such as
+   `zsh`, `claude`, or `codex` TUIs) are not runtimes: report them and leave them
+   running. Report other uncertain candidates and leave them running too.
+2. Group the candidates into trees by `ppid` and stop each tree from its
+   topmost listed process, so the owner shuts down its children. Codex plugin
+   brokers handle SIGTERM by closing their `codex app-server` and removing their
+   socket and PID file. Preview the exact processes and owned children to stop.
+   Obtain any required approval, honoring authorization already given for those
+   targets. Immediately before stopping, recheck PID, start time, and launch
+   context to detect PID reuse. If they no longer match, leave the process
+   untouched and report it as unverified.
 3. Prefer the documented shutdown command or owning tool session; otherwise use
    graceful termination. Include children only when their ownership is established,
    and signal a process group only when it is dedicated to this runtime. If shutdown
    fails, report what remains; obtain any additional approval needed for a forceful
    stop.
-4. Verify that the owned processes and their listeners have exited. Sending a
-   signal or ending the launcher alone does not establish cleanup. Report remaining
-   processes and unverified ownership explicitly.
+4. Verify that the owned processes and their listeners have exited by re-running
+   the same `list-processes.sh` command. Sending a signal or ending the launcher
+   alone does not establish cleanup. Report remaining processes and unverified
+   ownership explicitly.
 
 ## Compose Stacks
 

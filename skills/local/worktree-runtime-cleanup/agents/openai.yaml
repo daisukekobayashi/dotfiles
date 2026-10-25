@@ -1,7 +1,7 @@
 interface:
   display_name: "Worktree Runtime Cleanup"
   short_description: "Clean up worktree runtimes and owned temporary files"
-  default_prompt: "Use $worktree-runtime-cleanup to stop this worktree's Compose stacks and confirmed dev servers/watchers, then clean up temporary files created by those runs."
+  default_prompt: "Use $worktree-runtime-cleanup to stop this worktree's Compose stacks and confirmed dev servers, watchers, and tool daemons, then clean up temporary files created by those runs."
 
 policy:
   allow_implicit_invocation: false
