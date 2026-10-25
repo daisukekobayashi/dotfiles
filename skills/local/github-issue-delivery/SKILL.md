@@ -56,8 +56,8 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    agent-work storage or `/tmp`. Keep a separate record per issue: URL, scope,
    worktree, branch, base ref and SHA, current phase, accepted design decisions,
    verification, full-review and follow-up head SHAs and coverage, review round
-   counts, PR and trigger/thread identifiers, dispositions, blockers, and next
-   action. Report the resume path.
+   counts, PR and trigger/thread identifiers, dispositions, follow-up candidates,
+   blockers, and next action. Report the resume path.
    Keep durable definitions and decisions in the repository's normal docs.
 
 On resume, reconcile the record with actual local and GitHub state. Reuse matching
@@ -154,6 +154,9 @@ merge commit before cleanup; a queued or scheduled merge remains pending.
 
 ### 5. Confirm cleanup and verify completion
 
+Before cleanup, keep this issue's follow-up candidates in a record outside the
+worktree being removed; move or copy them first when needed.
+
 Use `github-worktree-cleanup` for this issue's branch and worktree. Pass the
 verified merge evidence. Let it inspect runtime resources, show exact
 targets including any remote branch it proposes, obtain confirmation, and
@@ -194,3 +197,10 @@ as `In progress`, `Waiting for user`, `Waiting for review/CI`, `Blocked`,
 criteria, current verification/reviews, actual merge, issue closure, and confirmed
 local cleanup have all been verified. Overall completion requires every requested
 issue to meet that condition.
+
+After the per-issue reports, including a stopping report, list the follow-up
+candidates from all targets with duplicates merged. Give each its source issue/PR
+and review round or thread, evidence, and create-or-drop recommendation. Ask which
+to create, and pass only approved candidates with their evidence and source links
+to `github-issue-create`. Pending candidates do not block `Complete`; report them
+as a separate open list.

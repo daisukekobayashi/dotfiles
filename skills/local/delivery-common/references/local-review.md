@@ -60,6 +60,10 @@ The caller applies these defaults when assessing local or hosted findings:
   pre-existing findings in this delivery; record them as follow-up candidates
   and report them to the user rather than creating an issue or Work Item
   silently.
+- **Follow-up candidates:** Record deferred minor findings, pre-existing
+  findings, and out-of-scope problems found during the delivery in the progress
+  record. Include the source target, phase, and review round or thread, the
+  evidence, and a recommendation to create or drop it.
 - **Bug class:** When fixing a finding, fix all instances of its class in the
   task diff in the same round, not only the reported location.
 - **Repeats:** A finding already dispositioned in an earlier round is a

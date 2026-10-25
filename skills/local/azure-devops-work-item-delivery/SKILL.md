@@ -62,8 +62,8 @@ cycle.
    project/repository IDs, Work Item URL and scope, branch/worktree, base ref/SHA,
    phase, accepted design, verification, reviewed head SHAs and local round
    count, PR ID/URL and source/target refs, published head, policy/merge state,
-   Work Item state, finding dispositions, blockers, and next action. Report the
-   resume path. Keep stable definitions and decisions in normal repository docs.
+   Work Item state, finding dispositions, follow-up candidates, blockers, and next
+   action. Report the resume path. Keep stable definitions and decisions in normal repository docs.
 
 On resume, reconcile the record with actual local and Azure DevOps state. Reuse
 matching worktrees and PRs; a completed PR resumes completion checks rather than
@@ -137,6 +137,9 @@ separately, verify the result instead. A queued merge remains pending.
 
 ### 5. Confirm cleanup and verify completion
 
+Before cleanup, keep this item's follow-up candidates in a record outside the
+worktree being removed; move or copy them first when needed.
+
 After verifying actual PR completion and the merged source/merge commit, use
 `azure-devops-worktree-cleanup` for the exact item branch/worktree. Pass merge
 evidence and let it inspect runtimes, show exact resources including any remote
@@ -172,3 +175,10 @@ policy/merge state, Work Item state, and exact pending decision/action. Use
 Mark `Complete` only after acceptance criteria, current verification/local
 reviews, actual merge, Work Item completion, and confirmed local cleanup have
 all been verified. Overall completion requires every requested item to qualify.
+
+After the per-item reports, including a stopping report, list the follow-up
+candidates from all targets with duplicates merged. Give each its source Work
+Item/PR and review round or thread, evidence, and create-or-drop recommendation.
+Ask which to create, and pass only approved candidates with their evidence and
+source links to `azure-devops-work-item-create`. Pending candidates do not block
+`Complete`; report them as a separate open list.
