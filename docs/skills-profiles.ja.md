@@ -129,7 +129,8 @@ head と一致する場合は、その削除も提案します。
 呼び出します。前提スキルを揃えるには `base,github` を使います。
 どちらのホストも `change-review` と `change-adversarial-review` スキルを使い、
 実行は Codex が担います。Claude Code では、導入済み Codex plugin の読み取り専用
-`task` ランタイム経由で実行します。
+`task` ランタイム経由で実行し、Codex が未導入の場合は新しい Claude subagent で
+実行して独立性の低下を報告します。
 ユーザーが一括フローを明示依頼した場合は preflight、local review、
 PR サイクルへの委譲も含みます。自動検出だけではこれらを実行しません。
 有用な指摘の修正後は上限内で再レビューし、再開用の進捗は追跡対象の文書に

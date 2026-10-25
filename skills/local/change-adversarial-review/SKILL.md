@@ -23,8 +23,17 @@ node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
 ```
 
 Return Codex's completed output. A launched background job is not a completed
-review. If the plugin or Codex is unavailable, report the missing prerequisite;
-review in the current session only when the user accepts that substitution.
+review.
+
+If the `codex` plugin or Codex CLI is not installed, fall back to one fresh
+Claude Code subagent instead of reviewing in the current session. Give it this
+skill's path, the arguments, target, focus, and caller context, and require it
+to follow the steps below read-only without editing files or running mutating
+commands. Report the route as `Claude subagent (same model family, not
+sandboxed)` in Review Target and the reduced independence in Coverage and
+Residual Risk. If Codex is installed but the task fails, such as on
+authentication, timeout, or runtime error, report the failure and stop; do not
+fall back.
 
 ## Resolve and Collect
 
@@ -120,6 +129,6 @@ Local adaptation of OpenAI's [adversarial review command](https://github.com/ope
 and [review prompt](https://github.com/openai/codex-plugin-cc/blob/db52e28f4d9ded852ab3942cea316258ae4ef346/plugins/codex/prompts/adversarial-review.md).
 Last compared on 2026-10-21 with upstream commit
 [`db52e28`](https://github.com/openai/codex-plugin-cc/commit/db52e28f4d9ded852ab3942cea316258ae4ef346).
-Codex executes this skill on both hosts. Local behavior preserves issue/worktree
+Codex executes this skill on both hosts when installed. Local behavior preserves issue/worktree
 targeting, evidence-based findings, and coverage reporting in the user's language
 instead of the plugin runtime's structured JSON output.
