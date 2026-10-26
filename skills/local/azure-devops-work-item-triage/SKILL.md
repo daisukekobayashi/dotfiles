@@ -18,6 +18,9 @@ DevOps.
 
 1. Resolve the current Azure DevOps organization, project, repository, branch,
    and dirty state.
+   - List other worktrees with `git worktree list --porcelain`, and map each to
+     a Work Item ID when its branch or path names one; report the rest as
+     unmapped.
 2. Fetch candidate Work Items.
    - Prefer repository or project guidance when it defines the query.
    - Otherwise use `az boards query --wiql` for active, relevant Work Items in
@@ -44,6 +47,7 @@ DevOps.
      the disagreement.
    - future-scope or out-of-scope work
    - duplicate or already represented by an open PR
+   - already in progress in another local worktree
 6. Rank actionable Work Items.
    - Prefer unblocking work, especially precursor items that settle a contract
      for several blocked items, plus clear acceptance criteria, moderate blast
@@ -58,6 +62,10 @@ DevOps.
      migrations, lockfiles, or public interfaces.
    - Flag overlaps between candidates and open PR changes as conflicts with
      in-flight work.
+   - For other worktrees that may overlap candidates, list changed files with
+     `git -C <path> diff --name-only <default-branch>...HEAD` and
+     `git -C <path> status --short`, and flag overlaps the same way. Skip
+     worktrees with no changes.
    - When a Work Item has no `Touched Areas` section, infer its likely areas
      from the description and repository, and label them as inferred.
    - Do not group items with an ordering dependency.
@@ -68,6 +76,7 @@ DevOps.
 **Current State**
 - Candidate Work Items: <count>
 - Open PRs: <count>
+- Active worktrees: <count, mapped Work Items>
 - Local branch/state: <short note>
 
 **Recommended Order**
@@ -77,7 +86,7 @@ DevOps.
 
 **Parallel Work**
 - Current wave: #<a>, #<b> (<parallel groups, or why they must not run together>)
-- Overlaps: <touched-area overlaps between items or with open PRs, or "none">
+- Overlaps: <touched-area overlaps between items or with open PRs or worktrees, or "none">
 - Next wave after #<n> completes: #<c>, #<d>
 - Or: "No safe parallel split right now"
 

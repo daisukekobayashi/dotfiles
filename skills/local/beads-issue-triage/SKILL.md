@@ -16,6 +16,7 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
 1. Resolve the current Beads workspace.
    - Run `bd prime`; if it prints nothing, run `bd where`.
    - Confirm local branch and dirty state with `git status --short --branch`.
+   - List other worktrees with `git worktree list --porcelain`, and map each to a bead ID when its branch or path names one; report the rest as unmapped.
 2. Fetch candidate issues.
    - Start with `bd ready`.
    - Also run `bd list --status=open` to see blocked, parent, and in-progress work.
@@ -29,7 +30,7 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
    - blocked by another issue, using `bd` dependencies as the source of truth
    - parent, epic, or tracking issue
    - If a `Blocked by` section names a blocker that `bd` does not record, treat the bead as blocked and note the disagreement.
-   - already in progress or claimed
+   - already in progress or claimed, or in progress in another local worktree
    - future-scope, out-of-scope, duplicate, or ambiguous work
 5. Rank actionable issues.
    - Prefer issues that unblock later work, especially precursor issues that settle a contract for several blocked issues.
@@ -39,6 +40,7 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
    - Build the current wave: actionable ready issues with no open blockers.
    - Within the current wave, group issues as parallel only when their touched areas do not overlap, including shared resources such as schemas, config, migrations, lockfiles, or public interfaces.
    - Also check each candidate's touched areas against in-progress or claimed beads, and flag overlaps as conflicts with in-flight work.
+   - For other worktrees that may overlap candidates, list changed files with `git -C <path> diff --name-only <default-branch>...HEAD` and `git -C <path> status --short`, and flag overlaps the same way. Skip worktrees with no changes.
    - When a bead has no `Touched areas` section, infer its likely areas from the description and repository, and label them as inferred.
    - Recommend parallel work only when issues have no dependency relationship.
    - Mention likely conflict areas such as shared config, schemas, migrations, test harnesses, or the same UI files.
@@ -52,6 +54,7 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
 **Current State**
 - Ready issues: <count>
 - Open issues: <count>
+- Active worktrees: <count, mapped beads>
 - Local branch/state: <short note>
 
 **Recommended Order**
@@ -61,7 +64,7 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
 
 **Parallel Work**
 - Current wave: <id>, <id> (<parallel groups, or why they must not run together>)
-- Overlaps: <touched-area overlaps between beads or with in-progress beads, or "none">
+- Overlaps: <touched-area overlaps between beads or with in-progress beads or worktrees, or "none">
 - Next wave after <id> closes: <id>, <id>
 - Or: "No safe parallel split right now"
 

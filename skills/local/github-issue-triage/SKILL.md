@@ -20,6 +20,7 @@ not start implementation.
 
 1. Resolve the current repository from local git context.
    - Confirm the branch and dirty state with `git status --short --branch`.
+   - List other worktrees with `git worktree list --porcelain`, and map each to an issue number when its branch or path names one; report the rest as unmapped.
    - Resolve the GitHub repository with `gh repo view --json nameWithOwner,url,defaultBranchRef`.
 2. Fetch the current GitHub state.
    - List open issues with `gh issue list --state open --limit 100 --json number,title,labels,assignees,updatedAt,createdAt,url`.
@@ -40,6 +41,7 @@ not start implementation.
    - If body lines and native relationships disagree, use their union and note the disagreement.
    - Future-scope or out-of-scope work.
    - Duplicate or already represented by an open PR.
+   - Already in progress in another local worktree.
 5. Rank actionable issues.
    - Prefer issues that unblock later work, especially precursor issues that settle a contract for several blocked issues.
    - Prefer work aligned with current product direction and repository instructions.
@@ -50,6 +52,7 @@ not start implementation.
    - Build the current wave: actionable issues that have no open blocking issues.
    - Within the current wave, group issues as parallel only when their touched areas do not overlap, including shared resources such as schemas, config, migrations, lockfiles, or public interfaces.
    - Also check each candidate's touched areas against the changed files of open PRs, and flag overlaps as conflicts with in-flight work.
+   - For other worktrees that may overlap candidates, list changed files with `git -C <path> diff --name-only <default-branch>...HEAD` and `git -C <path> status --short`, and flag overlaps the same way. Skip worktrees with no changes.
    - When an issue has no `Touched Areas` section, infer its likely areas from the body and repository, and label them as inferred.
    - Do not recommend parallel work when one issue defines policy, schema, or workflow behavior that another issue depends on.
    - Mention likely conflict areas such as shared config modules, schemas, migrations, job orchestration, or the same UI files.
@@ -65,6 +68,7 @@ Use this structure:
 **Current State**
 - Open issues: <count>
 - Open PRs: <count>
+- Active worktrees: <count, mapped issues>
 - Local branch/state: <short note>
 
 **Recommended Order**
@@ -74,7 +78,7 @@ Use this structure:
 
 **Parallel Work**
 - Current wave: #<a>, #<b> (<parallel groups, or why they must not run together>)
-- Overlaps: <touched-area overlaps between issues or with open PRs, or "none">
+- Overlaps: <touched-area overlaps between issues or with open PRs or worktrees, or "none">
 - Next wave after #<n> closes: #<c>, #<d>
 - Or: "No safe parallel split right now"
 
