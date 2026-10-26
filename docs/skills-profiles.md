@@ -127,10 +127,11 @@ underlying skills own operation details.
 review cycle, confirmed merge, and confirmed local cleanup. Invoke it with issue
 numbers, for example `/github-issue-delivery 12 36` in Claude Code or
 `$github-issue-delivery 12 36` in Codex. Use `base,github` for its prerequisites.
-Both hosts use the `change-review` and `change-adversarial-review` skills, and
-Codex executes them; Claude Code runs them through the installed Codex plugin's
-read-only `task` runtime, or through fresh Claude subagents with the reduced
-independence reported when Codex is not installed.
+Both hosts use the `change-review` and `change-adversarial-review` skills and
+run each in a fresh subagent of the current host, reporting the reduced
+independence. Another tool, such as Codex through the installed Codex plugin's
+read-only `task` runtime on Claude Code, runs them only when the user explicitly
+names it.
 An explicit full delivery request selects the delegated preflight, local review,
 and PR-cycle phases; automatic discovery alone does not authorize them.
 It repeats review after worthwhile fixes within bounded rounds, preserves resume

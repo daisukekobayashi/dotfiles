@@ -3,10 +3,11 @@
 Use the caller's GitHub issue or Azure DevOps Work Item as the task context.
 
 On every host, use the `change-review` skill for the first pass and the
-`change-adversarial-review` skill for the second. Codex executes both; read the
-installed skill instructions for how the actual host runs them, including their
-Claude subagent fallback when Codex is not installed on Claude Code. Do not
-infer the host from a directory name.
+`change-adversarial-review` skill for the second. Each runs in a fresh subagent
+of the current host unless the user's delivery request explicitly names another
+review tool, such as Codex; forward that instruction to both skills and read
+their instructions for how each route runs. Do not infer the host from a
+directory name.
 
 Report the selected route. If either required reviewer is unavailable or cannot
 be invoked under its policy, report the missing prerequisite; do not substitute
@@ -99,10 +100,10 @@ route's independence and read-only requirements.
 ## Run the pair
 
 For a full pair, run `change-review` and `change-adversarial-review` as separate
-reviewers independent of the implementation owner: separate subagents on Codex,
-or a separate fresh Codex task for each on Claude Code. When Codex is not
-installed on Claude Code, use a separate fresh Claude subagent for each as the
-skills define, and report the reduced independence. Give both the same exact
+reviewers independent of the implementation owner: a separate fresh subagent of
+the current host for each, or a separate fresh run of the explicitly named tool
+for each, as the skills define. Report the reduced independence of same-host
+subagents. Give both the same exact
 worktree, branch, committed head, `--base <base-sha> --scope branch`, task
 criteria, accepted design/docs, and the user's delivery request. Require the
 normal review's findings, test gaps, verdict, and coverage, and the adversarial

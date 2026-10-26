@@ -471,7 +471,7 @@ test("change review skills are explicit-only and share target selection", async 
     path.join(changeReviewRoot, "agents", "openai.yaml"),
   );
   const targetSection = (skill) => skill.match(/## Resolve and Collect\n[\s\S]*?(?=\n## )/)?.[0];
-  const runnerSection = (skill) => skill.match(/## Run on Codex\n[\s\S]*?(?=\n## )/)?.[0];
+  const runnerSection = (skill) => skill.match(/## Run the Reviewer\n[\s\S]*?(?=\n## )/)?.[0];
 
   assert.match(adversarial, /Use only when explicitly invoked with `\$change-adversarial-review`/);
   assert.match(changeReview, /Use only when explicitly invoked with `\$change-review`/);
@@ -483,7 +483,12 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(targetSection(changeReview), /merge-base/);
   assert.match(targetSection(changeReview), /git diff --cached/);
   assert.match(targetSection(changeReview), /Issue Context/);
+  assert.equal(runnerSection(changeReview).replaceAll("change-review", "NAME"),
+    runnerSection(adversarial).replaceAll("change-adversarial-review", "NAME"));
   for (const [skill, name] of [[changeReview, "change-review"], [adversarial, "change-adversarial-review"]]) {
+    assert.match(runnerSection(skill), /By default, run this review in one fresh subagent of the current host/);
+    assert.match(runnerSection(skill), /only when the user explicitly names it/);
+    assert.match(runnerSection(skill), /do\s+not fall back/);
     assert.match(runnerSection(skill), /codex-companion\.mjs" task --fresh --cwd/);
     assert.match(runnerSection(skill), /no `--write`/);
     assert.match(runnerSection(skill), new RegExp(`'Use \\$${name} `));
