@@ -165,20 +165,52 @@ function Invoke-UserSkillSymlinks {
   )
 
   if ($DryRun) {
-    $action = if ($Copy) { "copy" } else { "link (copy if symbolic link privileges are unavailable)" }
+    $action = if ($Copy) { "copy" } else { "link (retry elevated, then copy if privileges are unavailable)" }
     Write-Output "DRY-RUN $action user local skills from .agents\user\skills-profile.json"
-  } else {
-    foreach ($entry in (Get-UserLocalSkillLinks -SetupContext $SetupContext)) {
-      New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target -Copy:$Copy
-    }
   }
-
-  foreach ($entry in (Get-UserAgentSkillLinks -SetupContext $SetupContext -Agents $Agents)) {
-    if ($DryRun) {
+  $links = @(Get-UserAgentSkillLinks -SetupContext $SetupContext -Agents $Agents)
+  if ($DryRun) {
+    foreach ($entry in $links) {
       Write-Output "DRY-RUN $action $($entry.Target) $($entry.Link)"
-      continue
     }
-    New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target -Copy:$Copy
+  } else {
+    $links = @(Get-UserLocalSkillLinks -SetupContext $SetupContext) + $links
+    if ($Agents -contains "claude-code") {
+      $root = Join-Path $SetupContext.HomeDir ".claude-envs"
+      $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction SilentlyContinue
+      if ($rootItem -and $rootItem.PSIsContainer -and -not ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        $restore = Join-Path $SetupContext.DotfilesRoot ".agents/user/skills"
+        $names = @((Get-UserLocalSkillLinks -SetupContext $SetupContext) | ForEach-Object { Split-Path -Leaf $_.Link })
+        $names += @(Get-ChildItem -LiteralPath $restore -Directory | Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "SKILL.md") } | ForEach-Object { $_.Name })
+        foreach ($environment in Get-ChildItem -LiteralPath $root -Directory) {
+          if ($environment.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+          $marker = Join-Path $environment.FullName ".claude-pick"
+          $baseline = Join-Path $environment.FullName ".dotfiles-env.json"
+          $skillsDir = Join-Path $environment.FullName "skills"
+          $skillsItem = Get-Item -LiteralPath $skillsDir -Force -ErrorAction SilentlyContinue
+          if (-not $skillsItem -or -not $skillsItem.PSIsContainer -or ($skillsItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+          $markerItem = Get-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+          $baselineItem = Get-Item -LiteralPath $baseline -Force -ErrorAction SilentlyContinue
+          if (-not $markerItem -or -not $baselineItem -or $markerItem.PSIsContainer -or $baselineItem.PSIsContainer -or
+              ($markerItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or ($baselineItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+          try { $saved = Get-Content -Raw -LiteralPath $baseline -Encoding UTF8 | ConvertFrom-Json } catch {
+            Write-Warning "Skipping invalid Claude environment baseline: $baseline"
+            continue
+          }
+          if (-not $saved -or $saved.PSObject.Properties.Name -notcontains "version" -or $saved.PSObject.Properties.Name -notcontains "env") { continue }
+          if ((Get-Content -Raw -LiteralPath $marker).Trim() -ne "1" -or $saved.version -ne 1 -or $saved.env -ne $environment.Name) { continue }
+          foreach ($name in @($names | Sort-Object -Unique)) {
+            if ($name -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]*$' -or $name -match '^(synced|anthropic-skills)$') { continue }
+            $target = Join-Path $skillsDir $name
+            if (Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue) { continue }
+            $copyMarker = Join-Path $skillsDir ".dotfiles-copy-$name.json"
+            if (Get-Item -LiteralPath $copyMarker -Force -ErrorAction SilentlyContinue) { continue }
+            $links += @{ Link = $target; Target = Join-Path $restore $name; CopyMarker = $copyMarker }
+          }
+        }
+      }
+    }
+    Invoke-SetupLinkBatch -Links $links -Copy:$Copy
   }
 }
 

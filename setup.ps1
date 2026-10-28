@@ -29,8 +29,8 @@ Subcommands:
 Behavior:
   all (non-admin): runs packages, then links
   all (admin): skips packages and runs links only
-  links/skills: automatically copy when symbolic link privileges are unavailable; no elevation prompt
-  -Copy: always copy for links, all, or user-scope skills; rerun setup to refresh copies
+  links/skills/claude: retry link creation elevated when privileges are unavailable, then copy if needed
+  -Copy: skip link attempts for links, all, user-scope skills or claude; rerun setup to refresh copies
   skills: runs the shared Node skills setup runtime
   codex: accepts --env <name>, --provider azure|openai|chatgpt, --base-url <url>, --api-version <value>,
          --profile <name> and --dry-run (requires Node.js).
@@ -55,8 +55,8 @@ try {
 
   $copyArguments = @()
   if ($Copy) {
-    if ($Subcommand.ToLowerInvariant() -notin @("all", "links", "skills")) {
-      throw "-Copy is supported only for all, links, or skills."
+    if ($Subcommand.ToLowerInvariant() -notin @("all", "links", "skills", "claude")) {
+      throw "-Copy is supported only for all, links, skills, or claude."
     }
     $copyArguments = @("-Copy")
   }
@@ -128,7 +128,7 @@ try {
           $setupContext.HomeDir,
           "-DotfilesRoot",
           $setupContext.DotfilesRoot
-        ) + $SubcommandArgs
+        ) + $copyArguments + $SubcommandArgs
       )
     }
     "packages" {

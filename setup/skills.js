@@ -5,6 +5,7 @@ const node_child_process_1 = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const shared_links_1 = require("./shared-links");
 const SUPPORTED_AGENTS = new Set(["codex", "claude-code"]);
 function fail(message) {
     throw new Error(message);
@@ -413,36 +414,47 @@ function isManagedLocalSymlink(targetPath, expectedRoot) {
     const resolvedRoot = normalizePath(expectedRoot);
     return resolvedLinked === resolvedRoot || resolvedLinked.startsWith(`${resolvedRoot}${path.sep}`);
 }
-function isSymlinkPermissionError(error) {
-    const code = error.code;
-    return code === "EPERM" || code === "EACCES";
-}
-function copyPath(sourcePath, targetPath) {
-    removePath(targetPath);
-    fs.cpSync(sourcePath, targetPath, {
-        recursive: true,
-        dereference: true,
-        force: true,
-    });
-}
-function createSymlink(sourcePath, targetPath, expectedRoot) {
-    const resolvedSource = normalizePath(sourcePath);
-    if (fs.existsSync(targetPath) || fs.existsSync(path.dirname(targetPath)) && getLinkTarget(targetPath) !== null) {
-        if (expectedRoot && !isManagedLocalSymlink(targetPath, expectedRoot)) {
-            fail(`skill target already exists and is not a dotfiles local symlink: ${targetPath}`);
-        }
-        removePath(targetPath);
-    }
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+function createSymlinks(links, expectedRoot) {
+    const stages = [];
+    const pending = [];
     try {
-        fs.symlinkSync(resolvedSource, targetPath, "dir");
-    }
-    catch (error) {
-        if (!isSymlinkPermissionError(error)) {
-            throw error;
+        for (const link of links) {
+            const source = path.resolve(link.source);
+            let copy = false;
+            const linked = getLinkTarget(link.target);
+            if (linked !== null && path.resolve(path.dirname(link.target), linked) === source)
+                continue;
+            const marker = path.join(path.dirname(link.target), (0, shared_links_1.copyMarker)(path.basename(link.target)));
+            if (fs.lstatSync(link.target, { throwIfNoEntry: false }) &&
+                ((expectedRoot && !isManagedLocalSymlink(link.target, expectedRoot)) || fs.existsSync(marker))) {
+                const change = (0, shared_links_1.planSharedLink)(path.dirname(link.target), { name: path.basename(link.target), source, directory: true });
+                if (!change)
+                    continue;
+                copy = change.copy === true;
+            }
+            fs.mkdirSync(path.dirname(link.target), { recursive: true });
+            const stage = fs.mkdtempSync(path.join(path.dirname(link.target), ".dotfiles-skill-link-"));
+            stages.push(stage);
+            pending.push({ source, target: link.target, artifact: path.join(stage, path.basename(link.target)), copy });
         }
-        copyPath(resolvedSource, targetPath);
-        warn(`Symlink permission denied for ${targetPath}; copied ${resolvedSource} instead`);
+        (0, shared_links_1.stageSharedLinks)(pending.map(link => ({ source: link.source, target: link.artifact, directory: true, copy: link.copy })), true);
+        for (const link of pending) {
+            const copied = !fs.lstatSync(link.artifact).isSymbolicLink();
+            const marker = path.join(path.dirname(link.target), (0, shared_links_1.copyMarker)(path.basename(link.target)));
+            const metadata = copied ? (0, shared_links_1.copyMetadata)(link.source, (0, shared_links_1.snapshot)(link.artifact)) : undefined;
+            removePath(link.target);
+            fs.renameSync(link.artifact, link.target);
+            if (metadata) {
+                fs.writeFileSync(marker, metadata);
+                warn(`Copied skill directory: ${link.target}; rerun setup to refresh copies.`);
+            }
+            else if (fs.existsSync(marker))
+                fs.unlinkSync(marker);
+        }
+    }
+    finally {
+        for (const stage of stages)
+            fs.rmSync(stage, { recursive: true, force: true });
     }
 }
 function agentSkillDir(root, agent) {
@@ -457,17 +469,13 @@ function agentSkillDir(root, agent) {
 function linkLocalSkills(plan, dotfilesRoot, target, rootOrSkillsDir) {
     const localRoot = path.join(dotfilesRoot, "skills", "local");
     if (target === "user") {
-        for (const skill of plan.local) {
-            createSymlink(skill.path, path.join(rootOrSkillsDir, skill.name), localRoot);
-        }
+        createSymlinks(plan.local.map(skill => ({ source: skill.path, target: path.join(rootOrSkillsDir, skill.name) })), localRoot);
         return;
     }
-    for (const agent of plan.agents) {
+    createSymlinks(plan.agents.flatMap(agent => {
         const skillsDir = agentSkillDir(rootOrSkillsDir, agent);
-        for (const skill of plan.local) {
-            createSymlink(skill.path, path.join(skillsDir, skill.name), localRoot);
-        }
-    }
+        return plan.local.map(skill => ({ source: skill.path, target: path.join(skillsDir, skill.name) }));
+    }), localRoot);
 }
 function runCommand(command, args, cwd, env = process.env) {
     const result = (0, node_child_process_1.spawnSync)(command, args, {
@@ -621,19 +629,7 @@ function swapUserSkillsView(restoreRoot, restoreSkillsDir, stagingSkillsDir, sta
     removePath(backupMetadata);
 }
 function linkUserAgentSkillDirs(restoreSkillsDir, setupHome, agents) {
-    for (const agent of agents) {
-        if (agent === "codex") {
-            fs.mkdirSync(path.join(setupHome, ".agents"), { recursive: true });
-            createSymlink(restoreSkillsDir, path.join(setupHome, ".agents", "skills"));
-            continue;
-        }
-        if (agent === "claude-code") {
-            fs.mkdirSync(path.join(setupHome, ".claude"), { recursive: true });
-            createSymlink(restoreSkillsDir, path.join(setupHome, ".claude", "skills"));
-            continue;
-        }
-        fail(`unsupported skills agent: ${agent}`);
-    }
+    createSymlinks(agents.map(agent => ({ source: restoreSkillsDir, target: agentSkillDir(setupHome, agent) })));
 }
 function claudeEnvironmentSkillDirs(setupHome) {
     const root = path.join(setupHome, ".claude-envs");
@@ -672,6 +668,7 @@ function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRu
     if (directories.length === 0) {
         return;
     }
+    const links = [];
     for (const name of names.sort()) {
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) || /^(synced|anthropic-skills)$/i.test(name)) {
             continue;
@@ -694,12 +691,11 @@ function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRu
                 info(`DRY-RUN ln -s ${source} ${target}`);
             }
             else {
-                fs.mkdirSync(directory, { recursive: true });
-                fs.symlinkSync(source, target, "dir");
-                info(`Linked Claude environment skill: ${target}`);
+                links.push({ source, target });
             }
         }
     }
+    createSymlinks(links);
 }
 function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agents, dryRun, skipUserLocalSkillLinks, skipUserAgentSkillLinks) {
     const requestedProfiles = csv(profilesCsv || "base");

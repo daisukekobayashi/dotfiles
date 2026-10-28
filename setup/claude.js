@@ -7,6 +7,7 @@ const path = require("node:path");
 const readline = require("node:readline");
 const node_stream_1 = require("node:stream");
 const node_util_1 = require("node:util");
+const shared_links_1 = require("./shared-links");
 function entry(file) {
     try {
         return fs.lstatSync(file);
@@ -241,8 +242,8 @@ function sharedSkills(dotfiles, required) {
     return names.filter(name => valid(name) && installed(name))
         .map(name => ({ name: `skills/${name}`, source: path.join(root, name), directory: true }));
 }
-function applyChanges(root, destination, existing, links, changes, guards) {
-    const createdLinks = [];
+function applyChanges(root, destination, existing, links, changes, guards, copy) {
+    const sharedApplied = [];
     const createdDirectories = [];
     const applied = [];
     let stage;
@@ -264,7 +265,7 @@ function applyChanges(root, destination, existing, links, changes, guards) {
         else
             directory(file, "environment directory");
     };
-    const checkFiles = () => {
+    const checkFiles = (verifyShared = false) => {
         directory(root, "Claude environment directory");
         directory(destination, "Claude environment home");
         for (const name of ["rules", "skills", ...(!existing ? ["claude-mem"] : [])])
@@ -273,6 +274,20 @@ function applyChanges(root, destination, existing, links, changes, guards) {
             const expected = applied.find(change => change.name === guard.name)?.after ?? guard.before;
             if (readOptional(path.join(destination, guard.name), guard.name) !== expected) {
                 throw new Error(`Target changed during generation: ${guard.name}`);
+            }
+        }
+        for (const link of verifyShared ? links : []) {
+            const applied = sharedApplied.find(item => item.link === link);
+            const target = path.join(destination, link.name);
+            if (applied?.installed) {
+                const stat = entry(target);
+                if (stat?.ino !== applied.installed.ino || stat.dev !== applied.installed.dev ||
+                    (applied.files && !(0, shared_links_1.sameSnapshot)((0, shared_links_1.snapshot)(target), applied.files))) {
+                    throw new Error(`Target changed during generation: ${link.name}`);
+                }
+            }
+            else if (link.before ? !(0, shared_links_1.sameSnapshot)((0, shared_links_1.snapshot)(target), link.before) : entry(target) !== undefined) {
+                throw new Error(`Target changed during generation: ${link.name}`);
             }
         }
     };
@@ -291,6 +306,17 @@ function applyChanges(root, destination, existing, links, changes, guards) {
         if (!existing)
             mkdir(path.join(destination, "claude-mem"));
         stage = fs.mkdtempSync(path.join(destination, ".dotfiles-claude-stage-"));
+        checkFiles();
+        (0, shared_links_1.stageSharedLinks)(links.map(link => ({
+            source: link.source, target: path.join(stage, "shared", link.name), directory: link.directory, copy: copy || link.copy,
+        })));
+        for (const link of links) {
+            const artifact = path.join(stage, "shared", link.name);
+            if (!fs.lstatSync(artifact).isSymbolicLink()) {
+                changes.push({ name: (0, shared_links_1.copyMarker)(link.name), before: link.markerBefore, after: (0, shared_links_1.copyMetadata)(link.source, (0, shared_links_1.snapshot)(artifact)) });
+                console.warn(`Copied shared entry: ${link.name}; rerun setup to refresh copies.`);
+            }
+        }
         for (let i = 0; i < changes.length; i++) {
             fs.writeFileSync(path.join(stage, `${i}.new`), changes[i].after, { flag: "wx", mode: 0o600 });
         }
@@ -301,32 +327,41 @@ function applyChanges(root, destination, existing, links, changes, guards) {
             fs.mkdirSync(backups, { recursive: true, mode: 0o700 });
             backup = fs.mkdtempSync(path.join(backups, "update-"));
             for (const change of changes) {
-                if (change.before !== undefined)
-                    fs.writeFileSync(path.join(backup, change.name), change.before, { flag: "wx", mode: 0o600 });
-            }
-        }
-        for (const link of links) {
-            const target = path.join(destination, link.name);
-            try {
-                fs.symlinkSync(link.source, target, link.directory ? "dir" : "file");
-            }
-            catch (error) {
-                if (["EPERM", "EACCES"].includes(error.code || "")) {
-                    throw new Error("Cannot create a shared-file symlink. On Windows, enable Developer Mode or use an appropriately privileged terminal for setup.");
+                if (change.before !== undefined) {
+                    const file = path.join(backup, change.name);
+                    fs.mkdirSync(path.dirname(file), { recursive: true });
+                    fs.writeFileSync(file, change.before, { flag: "wx", mode: 0o600 });
                 }
-                throw error;
             }
-            createdLinks.push({ file: target, stat: fs.lstatSync(target) });
         }
-        checkFiles();
+        checkFiles(true);
+        for (const link of links) {
+            checkFiles();
+            const target = path.join(destination, link.name);
+            if (link.before ? !(0, shared_links_1.sameSnapshot)((0, shared_links_1.snapshot)(target), link.before) : entry(target) !== undefined) {
+                throw new Error(`Target changed during generation: ${link.name}`);
+            }
+            const artifact = path.join(stage, "shared", link.name);
+            const stat = fs.lstatSync(artifact);
+            const item = { link, old: path.join(stage, `previous-shared-${sharedApplied.length}`), installed: undefined,
+                files: stat.isSymbolicLink() ? undefined : (0, shared_links_1.snapshot)(artifact) };
+            sharedApplied.push(item);
+            if (link.before)
+                fs.renameSync(target, item.old);
+            fs.renameSync(artifact, target);
+            item.installed = stat;
+        }
+        checkFiles(true);
         for (let i = 0; i < changes.length; i++) {
             checkFiles();
             fs.renameSync(path.join(stage, `${i}.new`), path.join(destination, changes[i].name));
             applied.push(changes[i]);
         }
+        checkFiles(true);
         complete = true;
     }
     catch (error) {
+        let rollbackError;
         try {
             for (const change of applied.reverse()) {
                 const target = path.join(destination, change.name);
@@ -344,22 +379,39 @@ function applyChanges(root, destination, existing, links, changes, guards) {
         }
         catch (restoreError) {
             keepStage = true;
-            throw restoreError;
+            rollbackError = restoreError;
         }
+        try {
+            for (const item of sharedApplied.reverse()) {
+                if (!item.installed && !entry(item.old))
+                    continue;
+                const target = path.join(destination, item.link.name);
+                const current = entry(target);
+                if (current) {
+                    if (!item.installed || current.dev !== item.installed.dev || current.ino !== item.installed.ino ||
+                        (item.files && !(0, shared_links_1.sameSnapshot)((0, shared_links_1.snapshot)(target), item.files))) {
+                        throw new Error(`Rollback stopped because a target changed: ${item.link.name}. Recovery files: ${stage}`);
+                    }
+                    if (current.isSymbolicLink())
+                        fs.unlinkSync(target);
+                    else
+                        fs.rmSync(target, { recursive: true });
+                }
+                if (entry(item.old))
+                    fs.renameSync(item.old, target);
+            }
+        }
+        catch (restoreError) {
+            keepStage = true;
+            rollbackError ??= restoreError;
+        }
+        if (rollbackError)
+            throw rollbackError;
         throw error;
     }
     finally {
-        if (!complete) {
-            for (const { file, stat } of createdLinks.reverse()) {
-                const current = entry(file);
-                if (current?.dev === stat.dev && current.ino === stat.ino)
-                    fs.unlinkSync(file);
-            }
-        }
         if (stage && !keepStage) {
-            for (const file of fs.readdirSync(stage))
-                fs.unlinkSync(path.join(stage, file));
-            fs.rmdirSync(stage);
+            fs.rmSync(stage, { recursive: true, force: true });
         }
         if (!complete) {
             for (const file of createdDirectories.reverse()) {
@@ -376,6 +428,7 @@ function applyChanges(root, destination, existing, links, changes, guards) {
 async function main() {
     let env = "";
     let dryRun = process.env.SETUP_DRY_RUN === "1";
+    let copy = false;
     let tokenFromStdin = false;
     const requested = {};
     const skills = new Set();
@@ -384,12 +437,14 @@ async function main() {
         const arg = args[i];
         if (arg === "--help" || arg === "-h") {
             console.log(`Usage: setup claude --env NAME [--base-url URL] [--model ID]
-                    [--context-tokens N] [--auth-token-stdin] [--dry-run]
+                    [--context-tokens N] [--auth-token-stdin] [--copy] [--dry-run]
 
 Create or refresh a named Claude Code environment without login or launch.
 Generate settings from claude/settings.json; preserve independent local edits.
 Conflicting edits stop before writes. Previous settings are backed up on refresh.
-All installed dotfiles user skills, shared rules and statusline use symlinks.
+Shared skills, rules and statusline prefer symlinks. On Windows, retry elevated,
+then copy if link privileges remain unavailable. --copy skips link attempts.
+Managed copies refresh on rerun; conflicting local edits stop before writes.
 New environments get a private claude-mem data directory and unused worker port.
 Connection options are saved only in the selected local environment; omitted values persist.
 The endpoint must speak Anthropic Messages. Gateway model aliases use the saved model.
@@ -403,6 +458,10 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
         }
         if (arg === "--dry-run") {
             dryRun = true;
+            continue;
+        }
+        if (arg === "--copy") {
+            copy = true;
             continue;
         }
         if (arg === "--auth-token-stdin") {
@@ -506,15 +565,9 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
         if (!fs.existsSync(link.source) || !(link.directory ? fs.statSync(link.source).isDirectory() : fs.statSync(link.source).isFile())) {
             throw new Error(`Missing shared file for ${link.name}`);
         }
-        const target = path.join(destination, link.name);
-        const stat = entry(target);
-        if (stat) {
-            if (!stat.isSymbolicLink() || path.resolve(path.dirname(target), fs.readlinkSync(target)) !== link.source) {
-                throw new Error(`Refusing to replace an existing entry: ${link.name}`);
-            }
-        }
-        else
-            links.push(link);
+        const change = (0, shared_links_1.planSharedLink)(destination, link);
+        if (change)
+            links.push(change);
     }
     const settingsEnv = settings.env === undefined ? {} : settings.env;
     if (!table(settingsEnv))
@@ -534,6 +587,7 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
         { name: ".dotfiles-env.json", before: baselineBefore },
         { name: ".claude-pick", before: markerBefore },
         ...(!existing ? [{ name: "claude-mem/settings.json", before: undefined }] : []),
+        ...links.map(link => ({ name: (0, shared_links_1.copyMarker)(link.name), before: link.markerBefore })),
     ];
     const changes = [
         { ...guards[0], after: settingsAfter },
@@ -550,13 +604,13 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
         for (const change of changes)
             console.log(`  ${change.before === undefined ? "Create" : "Update"} ${change.name}`);
         for (const link of links)
-            console.log(`  Link ${link.name}`);
+            console.log(`  ${copy || link.copy ? "Copy" : "Link"} ${link.name}`);
         if (needsToken)
             console.log("  Auth token: hidden input or --auth-token-stdin required on apply");
         return;
     }
     if (changes.length || links.length)
-        applyChanges(root, destination, existing, links, changes, guards);
+        applyChanges(root, destination, existing, links, changes, guards, copy);
     console.log(`${existing ? (changes.length || links.length ? "Refreshed" : "Unchanged") : "Created"} environment: ${env}`);
     if (memory)
         console.log(`claude-mem: ${memory.CLAUDE_MEM_DATA_DIR} (127.0.0.1:${memory.CLAUDE_MEM_WORKER_PORT})`);

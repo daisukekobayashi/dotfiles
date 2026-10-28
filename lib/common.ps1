@@ -84,6 +84,68 @@ function Test-IsAdminRequiredError {
   return $ErrorRecord.Exception.Message -like "*Administrator privilege required*"
 }
 
+function Invoke-ElevatedLinkBatch {
+  param([object[]]$Links)
+
+  # Pass paths only. Package installation, credentials and configuration
+  # generation stay in the original, unelevated process.
+  $work = Join-Path ([IO.Path]::GetTempPath()) "dotfiles-elevate-$([guid]::NewGuid().ToString('N'))"
+  New-Item -ItemType Directory -Path $work | Out-Null
+  $plan = Join-Path $work "links.json"
+  $result = Join-Path $work "result.txt"
+  try {
+    [IO.File]::WriteAllText($plan, (ConvertTo-Json -InputObject @($Links) -Depth 8))
+    $helper = Join-Path $PSScriptRoot "windows-links.ps1"
+    $command = "& '$($helper.Replace("'", "''"))' -PlanPath '$($plan.Replace("'", "''"))' -ResultPath '$($result.Replace("'", "''"))' -Elevated"
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+    try {
+      $process = Start-Process -FilePath (Get-PowerShellExecutablePath) -Verb RunAs -WindowStyle Hidden -Wait -PassThru -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encoded)
+    } catch {
+      $exception = $_.Exception
+      while ($null -ne $exception) {
+        if (($exception -is [System.ComponentModel.Win32Exception] -and $exception.NativeErrorCode -in @(5, 740, 1223, 1314)) -or
+            ($exception.HResult -band 0xFFFF) -in @(5, 740, 1223, 1314)) { return $false }
+        $exception = $exception.InnerException
+      }
+      throw
+    }
+    if ($process.ExitCode -ne 0) {
+      $detail = if (Test-Path -LiteralPath $result) { Get-Content -Raw -LiteralPath $result } else { "Elevated link setup exited with code $($process.ExitCode)." }
+      throw $detail
+    }
+    if (Test-Path -LiteralPath $result) { Write-Information (Get-Content -Raw -LiteralPath $result) -InformationAction Continue }
+    return $true
+  } finally {
+    # This directory is created above, contains only our plan and result, and
+    # never contains installation targets.
+    if ([IO.Path]::GetFullPath($work).StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()), [StringComparison]::OrdinalIgnoreCase) -and
+        [IO.Path]::GetFileName($work) -like "dotfiles-elevate-*") {
+      Remove-Item -LiteralPath $work -Recurse -Force
+    }
+  }
+}
+
+function Invoke-SetupLinkBatch {
+  param([object[]]$Links, [switch]$Copy, [switch]$Elevated)
+
+  $defer = -not $Copy -and -not $Elevated -and -not (Test-IsAdministrator)
+  try {
+    foreach ($entry in $Links) {
+      $loader = if ($entry.Contains("CopyLoader")) { $entry.CopyLoader } else { "" }
+      $marker = if ($entry.Contains("CopyMarker")) { $entry.CopyMarker } else { "" }
+      New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target -Copy:$Copy -CopyLoader $loader -CopyMarker $marker -DeferPrivilegeFallback:$defer
+    }
+  } catch {
+    if (-not $defer -or -not (Test-IsAdminRequiredError $_)) { throw }
+    Write-Output "Symbolic link privileges are unavailable. Requesting elevation for link creation..."
+    if (Invoke-ElevatedLinkBatch -Links $Links) { return }
+    Write-Warning "Elevation was cancelled or unavailable. Copying settings instead; rerun setup to refresh copies."
+    # Preserve working links. Retry without another elevation request, copying
+    # only entries whose symbolic link creation still lacks privileges.
+    Invoke-SetupLinkBatch -Links $Links -Elevated
+  }
+}
+
 function Ensure-Directory {
   param (
     [Parameter(Mandatory = $true)]
@@ -157,6 +219,8 @@ function New-DotfilesSymbolicLink {
     [Parameter(Mandatory = $true)]
     [string]$TargetPath,
     [switch]$Copy,
+    [switch]$DeferPrivilegeFallback,
+    [string]$CopyMarker = "",
     [ValidateSet("", "PowerShell", "Vim")]
     [string]$CopyLoader = ""
   )
@@ -176,6 +240,7 @@ function New-DotfilesSymbolicLink {
   $parentPath = Split-Path -Parent $resolvedLink
   $tempName = ".dotfiles-link-$([System.Guid]::NewGuid().ToString('N'))"
   $tempPath = Join-Path $parentPath $tempName
+  $markerTemp = "$tempPath.json"
   Ensure-Directory -Path $parentPath
 
   try {
@@ -187,6 +252,7 @@ function New-DotfilesSymbolicLink {
         if (-not (Test-IsAdminRequiredError -ErrorRecord $_)) {
           throw
         }
+        if ($DeferPrivilegeFallback) { throw }
         $copyInstead = $true
         Write-Warning "Symbolic link creation requires privileges; copying instead: $resolvedLink"
       }
@@ -205,6 +271,23 @@ function New-DotfilesSymbolicLink {
           Copy-Item -LiteralPath $resolvedTarget -Destination $tempPath -Recurse -Force -ErrorAction Stop
         }
       }
+      if ($CopyMarker) {
+        $files = @{}
+        $visit = {
+          param([string]$File, [string]$Name)
+          $item = Get-Item -LiteralPath $File -Force
+          if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Unexpected link in shared copy: $Name" }
+          if ($item.PSIsContainer) {
+            $files[$Name] = "directory"
+            foreach ($child in Get-ChildItem -LiteralPath $File -Force) {
+              $childName = if ($Name -eq ".") { $child.Name } else { "$Name/$($child.Name)" }
+              & $visit $child.FullName $childName
+            }
+          } else { $files[$Name] = (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant() }
+        }
+        & $visit $tempPath "."
+        [IO.File]::WriteAllText($markerTemp, (ConvertTo-Json -Depth 8 -InputObject @{ version = 1; source = $resolvedTarget; files = $files }))
+      }
     }
 
     $existingItem = Get-Item -LiteralPath $resolvedLink -Force -ErrorAction SilentlyContinue
@@ -218,6 +301,7 @@ function New-DotfilesSymbolicLink {
     }
 
     Move-Item -LiteralPath $tempPath -Destination $resolvedLink -Force
+    if ($copyInstead -and $CopyMarker) { Move-Item -LiteralPath $markerTemp -Destination $CopyMarker -Force }
     if ($copyInstead -and $CopyLoader) {
       Write-Output "Created loader: $resolvedLink -> $resolvedTarget"
     } elseif ($copyInstead) {
@@ -227,8 +311,10 @@ function New-DotfilesSymbolicLink {
       Write-Output "Created symbolic link: $resolvedLink -> $resolvedTarget"
     }
   } catch {
+    if (Test-IsAdminRequiredError $_) { throw }
     throw "Failed to install '$resolvedLink' from '$resolvedTarget'. $($_.Exception.Message)"
   } finally {
+    if (Test-Path -LiteralPath $markerTemp) { Remove-Item -LiteralPath $markerTemp -Force }
     $tempItem = Get-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
     if ($null -ne $tempItem) {
       if ($tempItem.PSIsContainer -and ($tempItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {

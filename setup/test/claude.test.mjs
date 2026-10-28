@@ -52,6 +52,131 @@ function updateSource(f, change) {
   fs.writeFileSync(file, JSON.stringify(value));
 }
 
+test("copy mode creates shared files and binary skill assets and refreshes managed copies", t => {
+  const f = fixture(t);
+  const asset = path.join(f.dotfiles, ".agents/user/skills/one/asset.bin");
+  f.write(asset, Buffer.from([0, 255, 128, 10]));
+  success(f.initialize(["--copy"]));
+  const target = path.join(f.destination, "skills/one");
+  assert.equal(fs.lstatSync(target).isSymbolicLink(), false);
+  assert.deepEqual(fs.readFileSync(path.join(target, "asset.bin")), fs.readFileSync(asset));
+  f.write(path.join(f.dotfiles, "ai-rules/base/global.md"), "updated rules\n");
+  f.write(asset, Buffer.from([255, 0, 1]));
+  success(f.initialize());
+  assert.equal(fs.readFileSync(path.join(f.destination, "rules/00-global.md"), "utf8"), "updated rules\n");
+  assert.deepEqual(fs.readFileSync(path.join(target, "asset.bin")), fs.readFileSync(asset));
+});
+
+test("copy refresh preserves local-only edits and rejects conflicting shared changes before writes", t => {
+  const f = fixture(t);
+  success(f.initialize(["--copy"]));
+  const rule = path.join(f.destination, "rules/00-global.md");
+  f.write(rule, "local rules\n");
+  success(f.initialize());
+  assert.equal(fs.readFileSync(rule, "utf8"), "local rules\n");
+  const before = snapshot(f);
+  f.write(path.join(f.dotfiles, "ai-rules/base/global.md"), "changed shared rules\n");
+  const result = f.initialize();
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Conflicting local and dotfiles changes: rules\/00-global.md/);
+  assert.deepEqual(snapshot(f), before);
+  assert.equal(fs.readFileSync(rule, "utf8"), "local rules\n");
+});
+
+test("copy refresh rolls back shared entries and markers when configuration replacement fails", t => {
+  const f = fixture(t);
+  success(f.initialize(["--copy"]));
+  const before = snapshot(f);
+  const rule = path.join(f.destination, "rules/00-global.md");
+  const marker = path.join(f.destination, "rules/.dotfiles-copy-00-global.md.json");
+  const ruleBefore = fs.readFileSync(rule, "utf8");
+  const markerBefore = fs.readFileSync(marker, "utf8");
+  f.write(path.join(f.dotfiles, "ai-rules/base/global.md"), "new shared rules\n");
+  updateSource(f, source => { source.theme = "dark"; });
+  const injected = f.inject(`const fs = require('node:fs');
+const original = fs.renameSync;
+fs.renameSync = (source, target) => {
+  if (target.endsWith('.dotfiles-env.json')) throw new Error('Injected replacement failure');
+  return original(source, target);
+};`);
+  const result = f.initialize([], injected);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Injected replacement failure/);
+  assert.deepEqual(snapshot(f), before);
+  assert.equal(fs.readFileSync(rule, "utf8"), ruleBefore);
+  assert.equal(fs.readFileSync(marker, "utf8"), markerBefore);
+  assert.equal(fs.readdirSync(f.destination).some(name => name.startsWith('.dotfiles-claude-stage-')), false);
+});
+
+test("a failed shared copy leaves no incomplete environment", t => {
+  const f = fixture(t);
+  const injected = f.inject(`const fs = require('node:fs');
+fs.cpSync = (source, target) => {
+  fs.mkdirSync(target, { recursive: true });
+  fs.writeFileSync(require('node:path').join(target, 'partial'), 'partial');
+  throw Object.assign(new Error('Injected copy failure'), { code: 'ENOSPC' });
+};`);
+  const result = f.initialize(["--copy"], injected);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Injected copy failure/);
+  assert.equal(fs.existsSync(f.envs), false);
+});
+
+test("Windows privilege failures retry one link batch, preserve gateway input, and copy after cancellation or continued denial", { skip: process.platform !== "win32" }, t => {
+  for (const mode of ["cancel", "privilege", "other"]) {
+    const f = fixture(t);
+    const helper = path.join(f.root, "Windows helper's files");
+    fs.mkdirSync(helper);
+    for (const name of ["common.ps1", "windows-links.ps1"]) fs.copyFileSync(path.join(repo, "lib", name), path.join(helper, name));
+    const log = path.join(f.root, "elevation.log");
+    fs.appendFileSync(path.join(helper, "common.ps1"), `
+function Test-IsAdministrator { return $false }
+function New-Item {
+  [CmdletBinding()]
+  param([string]$ItemType, [string]$Path, [string]$Name, [object]$Value, [switch]$Force)
+  if ($ItemType -eq 'SymbolicLink') {
+    throw [Management.Automation.ErrorRecord]::new([UnauthorizedAccessException]::new('Test privilege denial'), 'NewItemSymbolicLinkElevationRequired', 'PermissionDenied', $Path)
+  }
+  Microsoft.PowerShell.Management\\New-Item @PSBoundParameters
+}
+function Invoke-ElevatedLinkBatch {
+  param([object[]]$Links)
+  Add-Content -LiteralPath '${log.replaceAll("'", "''")}' -Value 'elevate'
+  if ($env:SETUP_TEST_ELEVATION_MODE -eq 'other') { throw 'Unrelated elevated failure' }
+  if ($env:SETUP_TEST_ELEVATION_MODE -eq 'cancel') { return $false }
+  Invoke-SetupLinkBatch -Links $Links -Elevated | Out-Null
+  return $true
+}
+`);
+    const injected = f.inject(`const fs = require('node:fs');
+const child = require('node:child_process');
+const originalSpawn = child.spawnSync;
+fs.symlinkSync = () => { throw Object.assign(new Error('Test privilege denial'), { code: 'EPERM' }); };
+child.spawnSync = (command, args, options) => {
+  const plan = fs.readFileSync(args[args.indexOf('-PlanPath') + 1], 'utf8');
+  if (plan.includes('test-gateway-token') || plan.includes('gateway.invalid')) throw new Error('Private connection was passed to elevation');
+  args[args.indexOf('-File') + 1] = ${JSON.stringify(path.join(helper, "windows-links.ps1"))};
+  return originalSpawn(command, args, options);
+};`);
+    const result = f.initialize(["--base-url", "https://gateway.invalid", "--auth-token-stdin"], { ...injected, SETUP_TEST_ELEVATION_MODE: mode }, { input: "test-gateway-token\n" });
+    assert.ok(fs.existsSync(log), result.stderr || result.stdout);
+    assert.equal(fs.readFileSync(log, "utf8").trim().split(/\r?\n/).length, 1);
+    assert.doesNotMatch(result.stdout + result.stderr, /test-gateway-token|gateway\.invalid/);
+    if (mode === "other") {
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /Unrelated elevated failure/);
+      assert.equal(fs.existsSync(f.envs), false);
+    } else {
+      success(result);
+      assert.equal(fs.lstatSync(path.join(f.destination, "skills/one")).isSymbolicLink(), false);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8")).env.ANTHROPIC_AUTH_TOKEN, "test-gateway-token");
+      f.write(path.join(f.dotfiles, ".agents/user/skills/one/SKILL.md"), "updated skill\n");
+      success(f.initialize());
+      assert.equal(fs.readFileSync(path.join(f.destination, "skills/one/SKILL.md"), "utf8"), "updated skill\n");
+    }
+  }
+});
+
 test("creates independent settings from the shared source and links every installed skill", t => {
   const f = fixture(t);
   fs.unlinkSync(path.join(f.dotfiles, "claude/profile-settings.json"));
@@ -446,14 +571,14 @@ test("failed creation rolls back only its own entries and keeps concurrent addit
 const original = fs.symlinkSync;
 fs.symlinkSync = (source, target, type) => {
   if (target.endsWith('10-claude.md')) {
-    fs.writeFileSync(require('node:path').join(require('node:path').dirname(target), 'concurrent.txt'), 'keep');
-    throw Object.assign(new Error('Injected failure'), { code: 'EPERM' });
+    fs.writeFileSync(${JSON.stringify(path.join(f.destination, 'rules/concurrent.txt'))}, 'keep');
+    throw Object.assign(new Error('Injected failure'), { code: 'EACCES' });
   }
   return original(source, target, type);
 };`);
   const result = f.initialize([], injected);
   assert.equal(result.status, 2);
-  assert.match(result.stderr, /Cannot create a shared-file symlink/);
+  assert.match(result.stderr, /Injected failure/);
   assert.equal(fs.existsSync(path.join(f.destination, ".claude-pick")), false);
   assert.deepEqual(fs.readdirSync(f.destination), ["rules"]);
   assert.equal(fs.readFileSync(path.join(f.destination, "rules/concurrent.txt"), "utf8"), "keep");

@@ -122,11 +122,6 @@ try {
     }
   }
 
-  foreach ($entry in $linkMap) {
-    $copyLoader = if ($entry.ContainsKey("CopyLoader")) { $entry.CopyLoader } else { "" }
-    New-DotfilesSymbolicLink -LinkPath $entry.Link -TargetPath $entry.Target -Copy:$Copy -CopyLoader $copyLoader
-  }
-
   $ipyProfileDir = Join-Path $setupContext.HomeDir ".ipython\profile_default"
   $dotIpyProfile = Join-Path $setupContext.DotfilesRoot "ipython\profile_default"
   $ipyStartupDir = Join-Path $ipyProfileDir "startup"
@@ -134,14 +129,13 @@ try {
 
   Ensure-Directory -Path $ipyProfileDir
   Ensure-Directory -Path $ipyStartupDir
-  New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_config.py") -Copy:$Copy
-  New-DotfilesSymbolicLink -LinkPath (Join-Path $ipyProfileDir "ipython_kernel_config.py") -TargetPath (Join-Path $dotIpyProfile "ipython_kernel_config.py") -Copy:$Copy
-
-	  Get-ChildItem -LiteralPath $dotIpyStartupDir -Filter "*.py" | ForEach-Object {
-	    New-DotfilesSymbolicLink `
-	      -LinkPath (Join-Path $ipyStartupDir $_.Name) `
-	      -TargetPath $_.FullName -Copy:$Copy
-	  }
+  foreach ($file in @("ipython_config.py", "ipython_kernel_config.py")) {
+    $linkMap += @{ Link = Join-Path $ipyProfileDir $file; Target = Join-Path $dotIpyProfile $file }
+  }
+  Get-ChildItem -LiteralPath $dotIpyStartupDir -Filter "*.py" | ForEach-Object {
+    $linkMap += @{ Link = Join-Path $ipyStartupDir $_.Name; Target = $_.FullName }
+  }
+  Invoke-SetupLinkBatch -Links $linkMap -Copy:$Copy
 
   if (Test-CommandAvailable -Name "git") {
     & git -C $setupContext.DotfilesRoot rev-parse --is-inside-work-tree *> $null

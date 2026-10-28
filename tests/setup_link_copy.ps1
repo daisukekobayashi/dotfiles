@@ -16,7 +16,7 @@ function Assert-True {
 function Write-FixtureFile {
   param([string]$Path, [string]$Content = "fixture")
   New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
-  Set-Content -LiteralPath $Path -Value $Content -Encoding utf8
+  [IO.File]::WriteAllText($Path, $Content, (New-Object Text.UTF8Encoding $false))
 }
 
 function New-Fixture {
@@ -26,15 +26,39 @@ function New-Fixture {
     HomeDir = Join-Path $root "home space's"
     DotfilesRoot = Join-Path $root "dotfiles space's"
   }
-  foreach ($file in @("setup.ps1", "lib/common.ps1", "setup/links.ps1", "setup/skills.ps1", "setup/skills.js")) {
+  foreach ($file in @("setup.ps1", "lib/common.ps1", "lib/windows-links.ps1", "setup/links.ps1", "setup/skills.ps1", "setup/skills.js", "setup/shared-links.js")) {
     $destination = Join-Path $fixture.DotfilesRoot $file
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $RepoRoot $file) -Destination $destination
   }
+  & git init -q $fixture.DotfilesRoot
+  if ($LASTEXITCODE -ne 0) { throw "Cannot initialize fixture repository" }
 
   # Emulate a non-admin session and inject failures at filesystem boundaries.
   $shim = @'
 function Test-IsAdministrator { return $false }
+$script:OriginalElevatedLinkBatch = ${function:Invoke-ElevatedLinkBatch}
+
+function Start-Process {
+  param([string]$FilePath, [string]$Verb, [string]$WindowStyle, [switch]$Wait, [switch]$PassThru, [string[]]$ArgumentList)
+  if ($Verb -ne "RunAs" -or $WindowStyle -ne "Hidden" -or -not $Wait -or -not $PassThru) { throw "Invalid elevated process options" }
+  if ($Env:SETUP_TEST_ELEVATION -eq "launch-cancel") { throw [InvalidOperationException]::new("Cancelled", [ComponentModel.Win32Exception]::new(1223)) }
+  if ($Env:SETUP_TEST_ELEVATION -eq "launch-error") { throw [InvalidOperationException]::new("Invalid executable", [ComponentModel.Win32Exception]::new(2)) }
+  & $FilePath @ArgumentList
+  return [pscustomobject]@{ ExitCode = $LASTEXITCODE }
+}
+
+function Invoke-ElevatedLinkBatch {
+  param([object[]]$Links)
+  Add-Content -LiteralPath $Env:SETUP_TEST_ELEVATION_LOG -Value "elevate"
+  if ($Env:SETUP_TEST_ELEVATION -like "launch*") { return (& $script:OriginalElevatedLinkBatch -Links $Links) }
+  if ($Env:SETUP_TEST_ELEVATION -eq "error") { throw "ELEVATED_OTHER_FAILURE" }
+  if ($Env:SETUP_TEST_ELEVATION -eq "privilege") {
+    Invoke-SetupLinkBatch -Links $Links -Elevated | Out-Null
+    return $true
+  }
+  return $false
+}
 
 function New-Item {
   [CmdletBinding()]
@@ -92,6 +116,8 @@ function Invoke-FixtureSetup {
     [object]$Fixture,
     [string[]]$Arguments,
     [string]$LinkError = "NewItemSymbolicLinkElevationRequired",
+    [string]$Elevation = "cancel",
+    [string]$NodeOptions = "",
     [switch]$FailCopy,
     [switch]$FailDirectoryCopy
   )
@@ -102,6 +128,9 @@ function Invoke-FixtureSetup {
     SETUP_DRY_RUN = "0"
     SETUP_TEST_LINK_ERROR = $LinkError
     SETUP_TEST_COPY_ERROR = $(if ($FailCopy) { "1" } elseif ($FailDirectoryCopy) { "directory" } else { "0" })
+    SETUP_TEST_ELEVATION = $Elevation
+    SETUP_TEST_ELEVATION_LOG = Join-Path $Fixture.Root "elevation.log"
+    NODE_OPTIONS = $NodeOptions
   }
   $previous = @{}
   try {
@@ -145,6 +174,93 @@ Invoke-Test "privilege detection uses error identifiers and native codes" {
   $exception = [System.UnauthorizedAccessException]::new("Localized error")
   $record = [System.Management.Automation.ErrorRecord]::new($exception, "AccessDenied", "PermissionDenied", $null)
   Assert-True (-not (Test-IsAdminRequiredError $record)) "ordinary access denial was treated as a missing privilege"
+}
+
+Invoke-Test "links requests elevation once and copies after cancellation" {
+  param($fixture)
+  $result = Invoke-FixtureSetup $fixture @("links")
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  Assert-True (@(Get-Content (Join-Path $fixture.Root "elevation.log")).Count -eq 1) "elevation was not requested exactly once"
+  Assert-True ($result.Output -match "Elevation was cancelled") "cancellation fallback was not reported"
+}
+
+Invoke-Test "cancelling elevation preserves existing working directory links" {
+  param($fixture)
+  $target = Join-Path $fixture.HomeDir ".config/mise"
+  New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+  New-Item -ItemType Junction -Path $target -Value (Join-Path $fixture.DotfilesRoot "mise") | Out-Null
+  $result = Invoke-FixtureSetup $fixture @("links")
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  Assert-True ([bool]((Get-Item $target).Attributes -band [IO.FileAttributes]::ReparsePoint)) "a working link was converted to a copy"
+}
+
+Invoke-Test "links copies when elevated link creation still lacks privileges" {
+  param($fixture)
+  $result = Invoke-FixtureSetup $fixture @("links") -Elevation "privilege"
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  Assert-True (@(Get-Content (Join-Path $fixture.Root "elevation.log")).Count -eq 1) "elevated retry looped"
+  Assert-True (Test-Path (Join-Path $fixture.HomeDir "_vimrc")) "elevated fallback did not install copies"
+}
+
+Invoke-Test "elevated helper preserves paths with spaces and apostrophes and retries only links" {
+  param($fixture)
+  $result = Invoke-FixtureSetup $fixture @("skills", "--profile", "base") -Elevation "launch"
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  Assert-True (@(Get-Content (Join-Path $fixture.Root "elevation.log")).Count -eq 1) "helper requested elevation more than once"
+  Assert-True ((Get-Content -Raw (Join-Path $fixture.HomeDir ".agents/skills/local-one/SKILL.md")).Trim() -eq "local skill") "helper lost source or destination paths"
+}
+
+Invoke-Test "wrapped UAC cancellation falls back to copies" {
+  param($fixture)
+  $result = Invoke-FixtureSetup $fixture @("links") -Elevation "launch-cancel"
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  Assert-True (Test-Path (Join-Path $fixture.HomeDir "_vimrc")) "UAC cancellation did not fall back to copies"
+}
+
+Invoke-Test "unrelated process launch errors stop without copying" {
+  param($fixture)
+  $result = Invoke-FixtureSetup $fixture @("links") -Elevation "launch-error"
+  Assert-True ($result.ExitCode -ne 0) "invalid executable was hidden"
+  Assert-True (-not (Test-Path (Join-Path $fixture.HomeDir "_vimrc"))) "copied after an unrelated launch error"
+}
+
+Invoke-Test "skills adds tracked copies to managed Claude environments in the same link batch" {
+  param($fixture)
+  $environment = Join-Path $fixture.HomeDir ".claude-envs/acme"
+  Write-FixtureFile (Join-Path $environment ".claude-pick") "1"
+  Write-FixtureFile (Join-Path $environment ".dotfiles-env.json") '{"version":1,"env":"acme","settings":{}}'
+  New-Item -ItemType Directory -Path (Join-Path $environment "skills") -Force | Out-Null
+  $result = Invoke-FixtureSetup $fixture @("skills", "--profile", "base")
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  Assert-True (Test-Path (Join-Path $environment "skills/local-one/SKILL.md")) "environment skill was not installed"
+  $marker = Get-Content -Raw (Join-Path $environment "skills/.dotfiles-copy-local-one.json") | ConvertFrom-Json
+  Assert-True ($marker.version -eq 1) "copy marker is missing"
+  Assert-True ($marker.files.'SKILL.md' -eq (Get-FileHash (Join-Path $environment "skills/local-one/SKILL.md")).Hash.ToLowerInvariant()) "copy marker does not fingerprint the installed contents"
+  Assert-True (@(Get-Content (Join-Path $fixture.Root "elevation.log")).Count -eq 1) "environment skills triggered another elevation prompt"
+}
+
+Invoke-Test "project skills retry a single batch and copy definitions for both agents" {
+  param($fixture)
+  $preload = Join-Path $fixture.Root "deny-symlink.cjs"
+  Write-FixtureFile $preload 'require("node:fs").symlinkSync = () => { throw Object.assign(new Error("Test privilege denial"), { code: "EPERM" }); };'
+  Push-Location -LiteralPath $fixture.DotfilesRoot
+  try {
+    $result = Invoke-FixtureSetup $fixture @("skills", "--scope", "project", "--profile", "base") -NodeOptions "--require `"$($preload.Replace('\', '/'))`""
+  } finally { Pop-Location }
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  foreach ($agent in @(".agents", ".claude")) {
+    Assert-True (Test-Path (Join-Path $fixture.DotfilesRoot "$agent/skills/local-one/SKILL.md")) "project skill is missing for $agent"
+    Assert-True (-not ((Get-Item (Join-Path $fixture.DotfilesRoot "$agent/skills/local-one")).Attributes -band [IO.FileAttributes]::ReparsePoint)) "project skill was not copied"
+  }
+  Assert-True (@(Get-Content (Join-Path $fixture.Root "elevation.log")).Count -eq 1) "project links requested multiple elevations"
+}
+
+Invoke-Test "unrelated elevated failures stop without copying" {
+  param($fixture)
+  $result = Invoke-FixtureSetup $fixture @("links") -Elevation "error"
+  Assert-True ($result.ExitCode -ne 0) "unrelated elevated failure was hidden"
+  Assert-True ($result.Output -match "ELEVATED_OTHER_FAILURE") "elevated failure was not reported"
+  Assert-True (-not (Test-Path (Join-Path $fixture.HomeDir "_vimrc"))) "copied after unrelated elevated failure"
 }
 
 Invoke-Test "links falls back to complete copies and refreshes them" {
@@ -258,7 +374,7 @@ Invoke-Test "PowerShell fallback loader preserves source-relative paths and exit
   Write-FixtureFile -Path $source -Content 'ConvertTo-Json -Compress -InputObject @($args); exit 19'
   $output = @(& $PowerShellPath -NoProfile -File $installed --env "test env" '--' "prompt's text")
   Assert-True ($LASTEXITCODE -eq 19) "loader lost the source exit status"
-  $forwarded = @($output -join "`n" | ConvertFrom-Json)
+  $forwarded = ConvertFrom-Json -InputObject ($output -join "`n")
   Assert-True (($forwarded -join "|") -ceq "--env|test env|--|prompt's text") "loader changed arguments"
 }
 

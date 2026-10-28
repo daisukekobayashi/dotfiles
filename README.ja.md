@@ -44,16 +44,21 @@ cd ~/.dotfiles
 - `./setup.sh packages`
 - `./setup.sh post`
 
-Windows の `.\setup.ps1 links` と `.\setup.ps1 skills` は, symlink 作成に必要な
-権限がない場合にファイル・ディレクトリのコピーへ自動で切り替えます.
-管理者権限への昇格は要求しません. 最初からコピーする場合は次を使います.
+Windows の `.\setup.ps1 links`, user scope の `skills`, 名前付き `claude` env は,
+通常権限でリンクを作成し, symlink 権限が不足するとリンク作成だけを UAC で昇格して
+一度再試行します. パッケージ導入・設定生成・認証情報入力は元のプロセスで実行し,
+リンク先にも元のユーザーのパスを引き継ぎます. 昇格のキャンセル・利用不可, または
+昇格後もリンク権限が不足する場合はコピーへ切り替えます. 最初からコピーする場合:
 
 ```powershell
 .\setup.ps1 links -Copy
 .\setup.ps1 skills -Copy
+.\setup.ps1 claude --env personal -Copy
 ```
 
 `-Copy` は `.\setup.ps1 all` の links 処理でも使えます. skills では user scope が対象です.
+Codex env は独立ファイルを生成し, skills は共通の `~/.agents/skills` を参照するため,
+env の生成には symlink や昇格が不要です.
 コピーは元ファイルの変更に追従しないため, dotfiles や local skill を更新した後は
 対応する setup を再実行してください. 一時パスへのコピーが完了してから配置先を置き換えます.
 権限不足以外のエラーでは処理を中断します.
@@ -257,9 +262,10 @@ macOS/Linux は `./setup.sh links`, Windows は `.\setup.ps1 links` で,
 起動処理は Bash / PowerShell 5.1+ です. 対話選択には `fzf` が必要ですが,
 引数で指定すれば不要です. status line には Node.js を使います.
 env 作成は両 OS とも共有 Node.js 18+ runtime を使い, Claude のインストールは不要です.
-名前付き Claude env の作成 (`setup claude`) では symlink 作成権限が必要です.
-Developer Mode を有効にするか, 適切な権限の端末で setup を実行します.
-上記のコピーへの切り替えは `setup links` と user scope の `setup skills` が対象です.
+名前付き Claude env の作成 (`setup claude`) は symlink を優先します. Windows では
+権限不足時にリンク作成を昇格して再試行し, 昇格できない場合や権限不足が続く場合は
+コピーへ切り替えます. Developer Mode が有効なら通常権限でリンクを作成できます.
+PowerShell の `-Copy`, または Node runtime の `--copy` で新しい共有項目をコピーにできます.
 Windows での起動には native `claude.exe` が必要ですが, 権限の昇格は不要です.
 
 Codex と同じく, env の作成・共通リンクの更新は setup, 選択・起動は picker が担います.
@@ -360,9 +366,9 @@ env だけの選択では model/effort 選択を省略します. どちらかを
 | env 内の項目 | 扱い |
 | --- | --- |
 | `settings.json` | `claude/settings.json` から生成. 再実行で共通設定の更新と個別変更をマージ |
-| `rules/00-global.md`, `rules/10-claude.md` | `ai-rules/` の共通ソースへ symlink |
-| `statusline.cjs` | 共通 renderer へ symlink. 選択した env 名を表示 |
-| `skills/` | env 固有の実ディレクトリ. 導入済みの全 `.agents/user/skills` 定義へ個別に symlink |
+| `rules/00-global.md`, `rules/10-claude.md` | `ai-rules/` の共通ソースへのリンクまたは管理対象のコピー |
+| `statusline.cjs` | 共通 renderer へのリンクまたは管理対象のコピー. 選択した env 名を表示 |
+| `skills/` | env 固有の実ディレクトリ. 導入済みの全 `.agents/user/skills` 定義へのリンクまたは管理対象のコピー |
 | `mcp.json` | 任意の env 固有 MCP 設定. 明示した `--mcp-config` が優先 |
 | `claude-mem/` | 新規 env 専用の記憶保存先. worker の loopback ポートも個別に割り当て |
 | ログイン・履歴・メモリ・plugins | 選択した保存先で Claude が個別管理 |
@@ -389,7 +395,11 @@ plugin の初回利用時に新しく作成します. dry-run では保存先と
 再実行では既存の記憶設定を保持し, 旧 env や default の保存先は自動移行しません.
 他の独自保存先を持つ plugin は個別に設定が必要です. `CLAUDE_CONFIG_DIR` だけでは移動しません.
 
-共通 skill 定義の編集は symlink を通じて反映されます.
+共通 skill 定義の編集は symlink を通じて反映されます. コピーの場合は隣接する
+`.dotfiles-copy-*.json` に生成元のパスと内容のハッシュを記録するため, env と一緒に保持します.
+`setup claude --env NAME` の再実行でコピーを更新できます. ローカルだけの編集は保持し,
+生成元とコピーの両方が異なる内容へ変更された場合は書き込み前に競合として停止します.
+管理情報のない既存ファイルは引き継ぎません.
 user scope の `setup skills` は, `claude-code` を選択した場合 (既定値),
 既存の管理対象 env すべてにも不足している skill リンクを追加します.
 `SETUP_DRY_RUN=1` で予定を確認でき,
@@ -467,8 +477,8 @@ shellcheck tools/claude/claude-pick tests/claude_pick.bats tests/claude_wrapper.
 
 native Windows では PowerShell 5.1 以降で `.\tests\claude_pick.ps1` を実行します.
 Node.js と Windows PowerShell 組み込みのコンパイラで確認用の実行環境を用意し,
-setup・引数・プロセスの動作を確認します. symlink 権限が無い場合, 作成成功の確認は
-skip し, 作成失敗時に途中のファイルが残らないことを確認します.
+setup・引数・プロセスの動作を確認します. symlink 権限が無い場合は管理対象のコピーで
+作成します. UAC は模擬処理に置き換えているため, テスト中に昇格を要求しません.
 
 Manual bootstrap E2E は opt-in です. 新しい Docker container で実行し,
 package download や build を伴うため, 通常の `bats tests` には含めません.

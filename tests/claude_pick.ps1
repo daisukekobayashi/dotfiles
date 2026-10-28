@@ -81,11 +81,15 @@ function Read-Launch {
 
 try {
   foreach ($directory in @($FixtureRoot, $TestUserDir, $TestBin)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
-  foreach ($relative in @('setup.ps1', 'setup/claude.ps1', 'setup/claude.js', 'lib/common.ps1', 'tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
+  foreach ($relative in @('setup.ps1', 'setup/claude.ps1', 'setup/claude.js', 'setup/shared-links.js', 'lib/common.ps1', 'lib/windows-links.ps1', 'tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
     $target = Join-Path $FixtureRoot $relative
     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $RepoRoot $relative) -Destination $target
   }
+  # Exercise real setup and copy fallback without opening a UAC dialog in tests.
+  Add-Content -LiteralPath (Join-Path $FixtureRoot 'lib/common.ps1') -Value @'
+function Invoke-ElevatedLinkBatch { param([object[]]$Links) return $false }
+'@
   $sharedSkill = Join-Path $FixtureRoot '.agents/user/skills/shared-test'
   New-Item -ItemType Directory -Path $sharedSkill -Force | Out-Null
   [IO.File]::WriteAllText((Join-Path $sharedSkill 'SKILL.md'), '# Shared test skill')
@@ -143,15 +147,10 @@ public class FakeClaude {
     }
     Assert-True ((Invoke-Picker @()).Code -eq 2) 'missing selection did not fail'
   }
-  Invoke-Case 'creation succeeds with symlink privileges or rolls back cleanly' {
+  Invoke-Case 'creation succeeds with links or managed copies' {
     $result = Invoke-EnvSetup @('--env', 'acme')
     $profileDir = Join-Path $TestUserDir '.claude-envs/acme'
-    if ($result.Code -ne 0) {
-      Assert-True ($result.Output -match 'Cannot create a shared-file symlink') $result.Output
-      Assert-True (-not (Test-Path -LiteralPath $profileDir)) 'partial profile survived failure'
-      Write-Output 'skip - successful symlink creation requires Developer Mode or appropriate privileges'
-      return
-    }
+    Assert-True ($result.Code -eq 0) $result.Output
     Assert-True (Test-Path -LiteralPath (Join-Path $profileDir '.claude-pick')) 'profile not ready'
     $settings = Get-Content -LiteralPath (Join-Path $profileDir 'settings.json') -Raw
     $common = Get-Content -LiteralPath (Join-Path $FixtureRoot 'claude/settings.json') -Raw | ConvertFrom-Json

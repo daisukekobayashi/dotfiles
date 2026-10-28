@@ -44,17 +44,24 @@ Main subcommands.
 - `./setup.sh packages`
 - `./setup.sh post`
 
-On Windows, `.\setup.ps1 links` and `.\setup.ps1 skills` automatically copy files
-and directories when symbolic link creation requires unavailable privileges.
-No elevation prompt is shown. To copy from the start, use:
+On Windows, link creation in `.\setup.ps1 links`, user-scope `skills`, and named
+`claude` environments first uses the current privileges. If symbolic link
+privileges are missing, setup requests UAC elevation once for the link batch.
+Only link installation is retried; package installation, configuration generation
+and credential input stay in the original process with the original user's paths.
+Cancelling or being unable to elevate, or missing link privileges after elevation,
+falls back to copies. Other errors stop setup. To copy from the start, use:
 
 ```powershell
 .\setup.ps1 links -Copy
 .\setup.ps1 skills -Copy
+.\setup.ps1 claude --env personal -Copy
 ```
 
 `-Copy` also applies to the links step of `.\setup.ps1 all`; skills supports it
-for user scope. Copies do not follow source edits: rerun the corresponding setup
+for user scope. Codex environments generate independent files and read user skills
+from `~/.agents/skills`, so their generation needs no symbolic links or elevation.
+Copies do not follow source edits: rerun the corresponding setup
 command after updating dotfiles or local skills. A copy is completed in a temporary
 path before replacing the installed setting. Other errors still stop setup.
 The Vim entry file and `claude-pick.ps1` use small loader files so they can find
@@ -287,9 +294,10 @@ This installs `claude-pick` or `claude-pick.ps1` into `~/.local/bin`.
 The launchers use Bash and PowerShell 5.1+, respectively. Interactive selection
 requires `fzf`; explicit arguments do not. Environment setup uses the shared
 Node.js 18+ runtime on both platforms and does not require Claude to be installed.
-Named Claude environment setup (`setup claude`) needs permission to create
-symbolic links: enable Developer Mode or use an appropriately privileged terminal.
-The copy fallback above applies to `setup links` and user-scope `setup skills`.
+Named Claude environment setup (`setup claude`) prefers symbolic links. On Windows
+it retries link creation elevated, then copies if privileges remain unavailable
+or UAC is cancelled. Developer Mode allows unelevated links. `-Copy` in PowerShell,
+or `--copy` in the shared Node runtime, uses copies for new shared entries directly.
 Launching requires native `claude.exe` on Windows and does not require elevation.
 The status line also uses Node.js.
 
@@ -390,9 +398,9 @@ its `-p`/`--print`. Auth and maintenance subcommands skip these selections.
 | Environment entry | Behavior |
 | --- | --- |
 | `settings.json` | Generated from `claude/settings.json`; refresh merges shared updates with local edits |
-| `rules/00-global.md`, `rules/10-claude.md` | Symlinks to the shared sources under `ai-rules/` |
-| `statusline.cjs` | Symlink to the shared renderer; shows the selected environment name |
-| `skills/` | A real env directory with individual symlinks to all installed `.agents/user/skills` definitions |
+| `rules/00-global.md`, `rules/10-claude.md` | Links or managed copies of the shared sources under `ai-rules/` |
+| `statusline.cjs` | Link or managed copy of the shared renderer; shows the selected environment name |
+| `skills/` | A real env directory with individual links or managed copies of installed `.agents/user/skills` definitions |
 | `mcp.json` | Optional per-environment MCP config; explicit `--mcp-config` takes precedence |
 | `claude-mem/` | New envs get private memory storage and a separate loopback worker port |
 | Login, history, memory, plugins | Managed separately by Claude under the selected config directory |
@@ -422,7 +430,11 @@ Refresh preserves existing memory settings and does not migrate older envs or
 the default home. Other plugins with external stores still need their own
 storage configuration; `CLAUDE_CONFIG_DIR` alone does not relocate those stores.
 
-Shared skill definitions follow source edits through symlinks. User-scope
+Shared skill definitions follow source edits through symlinks. Copies use adjacent
+`.dotfiles-copy-*.json` records containing source paths and content fingerprints;
+keep these records with the environment. Rerun `setup claude --env NAME` to refresh
+copies. Local-only edits survive; a changed source and a differing local copy
+conflict before writes. Untracked files are never adopted. User-scope
 `setup skills` also adds missing skill links to all existing managed environments
 when `claude-code` is selected (the default). `SETUP_DRY_RUN=1` previews the links;
 `SETUP_SKIP_USER_AGENT_SKILL_LINKS=1` skips them. Environment settings stay intact;
@@ -511,8 +523,8 @@ shellcheck tools/claude/claude-pick tests/claude_pick.bats tests/claude_wrapper.
 On native Windows, run `.\tests\claude_pick.ps1` in PowerShell 5.1 or later.
 It compiles a small native fixture with the built-in Windows PowerShell compiler
 to check setup, argument forwarding and process behavior. Node.js is required.
-Successful environment creation
-is skipped when symlink privileges are unavailable; failure rollback is checked.
+Environment creation uses managed copies when symlink privileges are unavailable;
+UAC is mocked so tests never prompt for elevation.
 
 Neovim DAP full E2E checks are opt-in because they start real debug adapters and Docker services.
 

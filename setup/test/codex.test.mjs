@@ -61,7 +61,11 @@ trusted_hash = "main-only-hash"
   write(path.join(dotfiles, "ai-rules/base/global.md"), "# Shared rules\n\nKeep changes focused.\n");
   write(path.join(dotfiles, "ai-rules/agents/codex.md"), "# Codex rules\n\nUse existing checks.\n");
   write(path.join(home, ".codex/auth.json"), '{"auth_mode":"chatgpt"}\n');
-  fs.symlinkSync(source, path.join(home, ".codex/config.toml"));
+  try { fs.symlinkSync(source, path.join(home, ".codex/config.toml")); } catch (error) {
+    // setup links can install this shared configuration as a copy on Windows.
+    if (process.platform !== "win32" || error.code !== "EPERM") throw error;
+    fs.copyFileSync(source, path.join(home, ".codex/config.toml"));
+  }
   const env = { ...process.env, SETUP_HOME: home, SETUP_DOTFILES_ROOT: dotfiles, SETUP_DRY_RUN: "0" };
   delete env.AZURE_OPENAI_API_KEY;
   delete env.OPENAI_API_KEY;
