@@ -77,6 +77,7 @@ install_mise_tools() {
   local dry_run="$2"
   local strict_mise="${SETUP_MISE_STRICT:-0}"
   local mise_env
+  local output
   local tool
   local -a mise_tools=()
   local -a failed_tools=()
@@ -91,7 +92,7 @@ install_mise_tools() {
   esac
 
   mise_env="$(detect_mise_env)"
-  if ! mapfile -t mise_tools < <(list_mise_configured_tools "${setup_home}" "${mise_env}"); then
+  if ! output="$(list_mise_configured_tools "${setup_home}" "${mise_env}")"; then
     if [ "${strict_mise}" = "1" ]; then
       log_error "Failed to read configured mise tools."
       return 1
@@ -99,6 +100,12 @@ install_mise_tools() {
     log_warn "Skipping mise install because configured tools could not be read."
     return 0
   fi
+  # macOS ships Bash 3.2, which has no mapfile.
+  while IFS= read -r tool; do
+    if [ -n "${tool}" ]; then
+      mise_tools+=("${tool}")
+    fi
+  done <<< "${output}"
 
   if [ "${#mise_tools[@]}" -eq 0 ]; then
     log_warn "Skipping mise install because no configured tools were found."
@@ -114,8 +121,14 @@ install_mise_tools() {
   fi
 
   if ! run_cmd "${dry_run}" "${cmd[@]}"; then
-    if ! mapfile -t failed_tools < <(list_mise_missing_tools "${setup_home}" "${mise_env}") ||
-      [ "${#failed_tools[@]}" -eq 0 ]; then
+    if output="$(list_mise_missing_tools "${setup_home}" "${mise_env}")"; then
+      while IFS= read -r tool; do
+        if [ -n "${tool}" ]; then
+      failed_tools+=("${tool}")
+    fi
+      done <<< "${output}"
+    fi
+    if [ "${#failed_tools[@]}" -eq 0 ]; then
       # Tools whose versions cannot be resolved are not listed as missing.
       failed_tools=("(see mise output above)")
     fi
@@ -149,25 +162,25 @@ uv_tool_is_installed() {
     grep -Fxq "${tool}"
 }
 
+# Sets the caller's uv_cmd array; Bash 3.2 (macOS) has no namerefs.
 build_uv_command() {
   local setup_home="$1"
-  local -n uv_cmd_ref="$2"
   local mise_env
 
   if command_exists mise; then
     mise_env="$(detect_mise_env)"
     # Without this, mise exec retries every missing configured tool and fails
     # the uv command when any of them cannot be installed.
-    uv_cmd_ref=(env HOME="${setup_home}" MISE_EXEC_AUTO_INSTALL=false mise exec)
+    uv_cmd=(env HOME="${setup_home}" MISE_EXEC_AUTO_INSTALL=false mise exec)
     if [ -n "${mise_env}" ]; then
-      uv_cmd_ref+=(-E "${mise_env}")
+      uv_cmd+=(-E "${mise_env}")
     fi
-    uv_cmd_ref+=(-- uv)
+    uv_cmd+=(-- uv)
     return 0
   fi
 
   if command_exists uv; then
-    uv_cmd_ref=(env HOME="${setup_home}" uv)
+    uv_cmd=(env HOME="${setup_home}" uv)
     return 0
   fi
 
@@ -195,7 +208,7 @@ install_uv_tools() {
     PATH="${local_bin}:${PATH}"
   fi
 
-  if ! build_uv_command "${setup_home}" uv_cmd; then
+  if ! build_uv_command "${setup_home}"; then
     log_warn "Skipping uv tool install because uv is not available."
     return 0
   fi

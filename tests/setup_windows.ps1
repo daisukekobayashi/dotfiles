@@ -312,6 +312,9 @@ function Invoke-SetupForTest {
   )
 
   $previousCustomHome = $Env:CUSTOM_HOME
+  # Windows PowerShell 5.1 turns redirected stderr from a child process into a
+  # terminating error under Stop; the tests inspect that output instead.
+  $ErrorActionPreference = "Continue"
   try {
     $Env:CUSTOM_HOME = $HomeDir
     $powershellPath = (Get-Process -Id $PID).Path
@@ -403,3 +406,6 @@ if ($Failures.Count -gt 0) {
   Write-Error "$($Failures.Count) Windows setup test(s) failed: $($Failures -join ', ')"
   exit 1
 }
+
+# Expected setup failures leave a nonzero $LASTEXITCODE behind.
+exit 0

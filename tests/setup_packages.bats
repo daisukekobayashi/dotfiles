@@ -69,7 +69,10 @@ EOF
     bootstrap --dry-run
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"DRY-RUN install homebrew"* ]]
+  # A Mac host, such as a CI runner, may already have Homebrew.
+  if [ ! -x /opt/homebrew/bin/brew ] && [ ! -x /usr/local/bin/brew ]; then
+    [[ "$output" == *"DRY-RUN install homebrew"* ]]
+  fi
   [[ "$output" == *"DRY-RUN activate homebrew shellenv"* ]]
   [[ "$output" == *"DRY-RUN brew bundle --file="*"/brew/Brewfile"* ]]
 }

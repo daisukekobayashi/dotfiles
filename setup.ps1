@@ -34,6 +34,7 @@ all/links/bootstrap/tools/plugins args:
 
 Behavior:
   Steps other than links need a non-elevated session; elevated runs skip them
+  unless SETUP_ALLOW_ELEVATED=1 (for CI runners that are always elevated)
   A failed step is reported and setup continues, unless SETUP_STRICT=1
   links/skills/claude: retry link creation elevated when privileges are unavailable, then copy if needed
   -Copy: skip link attempts for links, all, user-scope skills or claude; rerun setup to refresh copies
@@ -111,7 +112,7 @@ function Invoke-SetupSteps {
   }
 
   $strict = $Env:SETUP_STRICT -eq "1"
-  $isAdministrator = Test-IsAdministrator
+  $elevationBlocked = Test-SetupElevationBlocked
   $linksScript = Join-Path $SetupContext.DotfilesRoot "setup/links.ps1"
   $packagesScript = Join-Path $SetupContext.DotfilesRoot "setup/packages.ps1"
   $failedSteps = @()
@@ -121,7 +122,7 @@ function Invoke-SetupSteps {
       Write-Output "Skipping step: $step"
       continue
     }
-    if ($step -ne "links" -and $isAdministrator) {
+    if ($step -ne "links" -and $elevationBlocked) {
       Write-Warning "Skipping step: $step because this session is elevated. Rerun it from a non-elevated session."
       continue
     }

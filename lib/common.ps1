@@ -35,6 +35,12 @@ function Test-IsAdministrator {
   return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+# Package steps refuse elevated sessions so they install for the user.
+# SETUP_ALLOW_ELEVATED=1 lifts this where only elevated sessions exist, such as CI runners.
+function Test-SetupElevationBlocked {
+  return ($Env:SETUP_ALLOW_ELEVATED -ne "1") -and (Test-IsAdministrator)
+}
+
 function Get-PowerShellExecutablePath {
   $process = Get-Process -Id $PID
   if (-not $process.Path) {

@@ -110,7 +110,8 @@ another manager, setup leaves it in place and prints the command to remove it;
 rerun setup afterwards to switch to the official install.
 On Windows, `.\setup.ps1` uses the same phases with the steps `links`, `scoop`
 and `mise` (bootstrap), `claude` and `codex` (tools), and `psmux` (plugins), and accepts
-`--only` and `--skip`; steps other than `links` are skipped in an elevated session.
+`--only` and `--skip`; steps other than `links` are skipped in an elevated session
+unless `SETUP_ALLOW_ELEVATED=1` is set (CI uses this on always-elevated runners).
 The `claude` and `codex` steps there use the official PowerShell
 installers (`~\.local\bin\claude.exe` and
 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`); Scoop or npm copies
@@ -548,6 +549,10 @@ bats tests
 When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
 `tests/powershell.bats` parses every tracked `.ps1` file and runs
 `tests/setup_windows.ps1`, skipping the cases that need Windows APIs.
+
+GitHub Actions (`.github/workflows/test.yml`) runs these checks on Ubuntu, the setup
+tests on macOS (whose `/bin/bash` is 3.2), and the PowerShell tests on Windows with
+PowerShell 7 and Windows PowerShell 5.1.
 
 Focused Claude setup and picker checks use temporary homes and fake Claude executables;
 they do not log in or call the API:

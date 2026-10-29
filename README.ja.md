@@ -104,7 +104,7 @@ Homebrew や npm などで既に入っている場合は削除せずにそのま
 削除後に setup を再実行すると公式インストールに切り替わります.
 Windows の `.\setup.ps1` も同じフェーズで, `links`, `scoop` と `mise` (bootstrap), `claude` と `codex` (tools),
 `psmux` (plugins) のステップを持ち, `--only` / `--skip` を使えます. 管理者として実行した場合は
-`links` 以外のステップをスキップします.
+`links` 以外のステップをスキップします (`SETUP_ALLOW_ELEVATED=1` で実行します. 常に管理者で動く CI で使います).
 `claude` / `codex` ステップは公式の PowerShell インストーラで同様に処理します
 (`~\.local\bin\claude.exe` と `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`).
 Scoop や npm で入っている場合は残したまま削除コマンドを表示します.
@@ -498,6 +498,9 @@ bats tests
 `pwsh` がある場合 (mise が Linux, WSL, macOS に `powershell` を入れます),
 `tests/powershell.bats` が全ての `.ps1` の構文を確認し, `tests/setup_windows.ps1` を
 Windows の API が必要なケースを除いて実行します.
+
+GitHub Actions (`.github/workflows/test.yml`) が Ubuntu でこれらを, macOS (`/bin/bash` は 3.2) で
+setup のテストを, Windows では PowerShell 7 と Windows PowerShell 5.1 で PowerShell のテストを実行します.
 
 Claude setup / picker の確認は一時 HOME と偽の Claude コマンドを使い,
 ログイン・API 呼び出しは行いません.

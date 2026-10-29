@@ -1,0 +1,89 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Install test tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats shellcheck tmux vim zsh jq
+
+      - name: Install test tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash bats-core shellcheck tmux vim zsh jq
+
+      - name: Install setup dependencies
+        run: npm --prefix setup ci
+
+      - name: Check generated setup scripts
+        run: scripts/check-skills-build.sh
+
+      - name: Node tests
+        run: npm --prefix setup test
+
+      - name: Bats tests (Ubuntu)
+        if: runner.os == 'Linux'
+        run: bats --print-output-on-failure tests
+
+      # The tmux, zsh and skill evaluation suites still assume Linux tools.
+      - name: Bats setup tests (macOS)
+        if: runner.os == 'macOS'
+        run: bats --print-output-on-failure tests/setup*.bats tests/betterleaks_scan.bats
+
+  windows:
+    runs-on: windows-latest
+    env:
+      # GitHub-hosted Windows runners only have elevated sessions.
+      SETUP_ALLOW_ELEVATED: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Install setup dependencies
+        run: npm --prefix setup ci
+
+      - name: PowerShell syntax
+        shell: pwsh
+        run: ./tests/helpers/check_powershell_syntax.ps1 $PWD
+
+      - name: Setup tests (PowerShell 7)
+        shell: pwsh
+        run: ./tests/setup_windows.ps1
+
+      - name: Setup tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./tests/setup_windows.ps1
+
+      # tests/setup_link_copy.ps1 is not run yet: six of its cases fail on
+      # main as well and need their own fix.
+      - name: claude-pick tests
+        shell: pwsh
+        run: ./tests/claude_pick.ps1
