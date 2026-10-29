@@ -59,6 +59,19 @@ list_mise_configured_tools() {
   '
 }
 
+list_mise_missing_tools() {
+  local setup_home="$1"
+  local mise_env="$2"
+  local -a cmd
+
+  cmd=(env HOME="${setup_home}" mise ls --missing --no-header)
+  if [ -n "${mise_env}" ]; then
+    cmd+=(-E "${mise_env}")
+  fi
+
+  "${cmd[@]}" | awk '!seen[$1]++ { print $1 }'
+}
+
 install_mise_tools() {
   local setup_home="$1"
   local dry_run="$2"
@@ -92,19 +105,23 @@ install_mise_tools() {
     return 0
   fi
 
-  for tool in "${mise_tools[@]}"; do
-    log_info "Installing mise tool: ${tool}"
-    cmd=(env HOME="${setup_home}" mise install)
-    if [ -n "${mise_env}" ]; then
-      cmd+=(-E "${mise_env}")
-    fi
-    cmd+=("${tool}")
+  # A single install lets mise run tools in parallel (MISE_JOBS) and order
+  # configured install dependencies; it keeps going past individual failures.
+  log_info "Installing mise tools: ${mise_tools[*]}"
+  cmd=(env HOME="${setup_home}" mise install)
+  if [ -n "${mise_env}" ]; then
+    cmd+=(-E "${mise_env}")
+  fi
 
-    if ! run_cmd "${dry_run}" "${cmd[@]}"; then
-      failed_tools+=("${tool}")
-      log_warn "Failed to install mise tool: ${tool}"
+  if ! run_cmd "${dry_run}" "${cmd[@]}"; then
+    if ! mapfile -t failed_tools < <(list_mise_missing_tools "${setup_home}" "${mise_env}") ||
+      [ "${#failed_tools[@]}" -eq 0 ]; then
+      failed_tools=("(unknown)")
     fi
-  done
+    for tool in "${failed_tools[@]}"; do
+      log_warn "Failed to install mise tool: ${tool}"
+    done
+  fi
 
   if [ "${#failed_tools[@]}" -gt 0 ]; then
     if [ "${strict_mise}" = "1" ]; then
@@ -138,7 +155,9 @@ build_uv_command() {
 
   if command_exists mise; then
     mise_env="$(detect_mise_env)"
-    uv_cmd_ref=(env HOME="${setup_home}" mise exec)
+    # Without this, mise exec retries every missing configured tool and fails
+    # the uv command when any of them cannot be installed.
+    uv_cmd_ref=(env HOME="${setup_home}" MISE_EXEC_AUTO_INSTALL=false mise exec)
     if [ -n "${mise_env}" ]; then
       uv_cmd_ref+=(-E "${mise_env}")
     fi

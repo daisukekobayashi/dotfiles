@@ -1,0 +1,28 @@
+# Debian/Ubuntu packages needed by ./setup.sh on Linux and WSL.
+# Checked by the `apt` package step; installed only with SETUP_APT_INSTALL=1.
+
+# Base tools used by setup and mise downloads
+ca-certificates
+curl
+git
+unzip
+xz-utils
+zsh
+
+# Compilers for source builds (tmux, erlang, cargo tools)
+build-essential
+pkg-config
+autoconf
+m4
+bison
+
+# tmux
+libevent-dev
+libncurses-dev
+
+# erlang (kerl build)
+libssl-dev
+
+# luarocks
+lua5.1
+liblua5.1-0-dev

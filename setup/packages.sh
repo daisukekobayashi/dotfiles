@@ -2,7 +2,7 @@
 
 is_supported_package() {
   case "$1" in
-    sheldon | mise | alacritty | tmux | luarocks | quarto | nvtop)
+    apt | sheldon | mise | alacritty | tmux | luarocks | quarto | nvtop)
       return 0
       ;;
     *)
@@ -25,7 +25,7 @@ validate_package_csv() {
     [ -z "${item}" ] && continue
     if ! is_supported_package "${item}"; then
       log_error "Unknown package in --${label}: ${item}"
-      log_error "Supported packages: sheldon,mise,alacritty,tmux,luarocks,quarto,nvtop"
+      log_error "Supported packages: apt,sheldon,mise,alacritty,tmux,luarocks,quarto,nvtop"
       return 1
     fi
   done
@@ -45,6 +45,63 @@ should_run_package() {
   fi
 
   return 0
+}
+
+list_apt_packages() {
+  local dotfiles_root="$1"
+
+  sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "${dotfiles_root}/setup/apt-packages.txt"
+}
+
+apt_package_installed() {
+  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'
+}
+
+check_apt_packages() {
+  local dotfiles_root="$1"
+  local dry_run="$2"
+  local install_apt="${SETUP_APT_INSTALL:-0}"
+  local package
+  local -a missing=()
+  local -a sudo_cmd=()
+
+  case "${install_apt}" in
+    0 | 1) ;;
+    *)
+      log_error "SETUP_APT_INSTALL must be 0 or 1: ${install_apt}"
+      return 1
+      ;;
+  esac
+
+  if ! command_exists dpkg-query || ! command_exists apt-get; then
+    log_info "Skipping apt check because apt is not available."
+    return 0
+  fi
+
+  while IFS= read -r package; do
+    if ! apt_package_installed "${package}"; then
+      missing+=("${package}")
+    fi
+  done < <(list_apt_packages "${dotfiles_root}")
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    log_info "All apt packages are installed."
+    return 0
+  fi
+
+  if [ "${install_apt}" != "1" ]; then
+    log_warn "Missing apt packages: ${missing[*]}"
+    log_warn "Source builds (tmux, luarocks, erlang, cargo tools) may fail. Install them with:"
+    log_warn "  sudo apt-get install -y ${missing[*]}"
+    log_warn "or rerun with SETUP_APT_INSTALL=1."
+    return 0
+  fi
+
+  if [ "$(id -u)" -ne 0 ]; then
+    sudo_cmd=(sudo)
+  fi
+  run_cmd "${dry_run}" "${sudo_cmd[@]}" apt-get update || return
+  run_cmd "${dry_run}" "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
 }
 
 install_sheldon() {
@@ -232,14 +289,14 @@ install_luarocks() {
     return 0
   fi
 
-  curl -fLo "${luarocks_tarball}" "https://luarocks.github.io/luarocks/releases/${luarocks_targz_name}"
-  tar -zxf "${luarocks_tarball}" -C "${setup_tmpdir}"
+  curl -fLo "${luarocks_tarball}" "https://luarocks.github.io/luarocks/releases/${luarocks_targz_name}" || return
+  tar -zxf "${luarocks_tarball}" -C "${setup_tmpdir}" || return
   (
     cd "${luarocks_srcdir}" &&
       ./configure --prefix="${setup_home}/.local" &&
       make &&
       make install
-  )
+  ) || return
   rm -rf "${luarocks_srcdir}"
   rm -f "${luarocks_tarball}"
 }
@@ -266,10 +323,10 @@ install_quarto_linux_amd64() {
   make_directory "${setup_home}/.local/bin"
   make_directory "${setup_home}/.local/share"
 
-  curl -fLo "${quarto_tarball}" "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.tar.gz"
-  tar xf "${quarto_tarball}" -C "${setup_tmpdir}"
-  cp -r "${quarto_srcdir}/bin/"* "${setup_home}/.local/bin/"
-  cp -r "${quarto_srcdir}/share/"* "${setup_home}/.local/share/"
+  curl -fLo "${quarto_tarball}" "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.tar.gz" || return
+  tar xf "${quarto_tarball}" -C "${setup_tmpdir}" || return
+  cp -r "${quarto_srcdir}/bin/"* "${setup_home}/.local/bin/" || return
+  cp -r "${quarto_srcdir}/share/"* "${setup_home}/.local/share/" || return
   rm -rf "${quarto_srcdir}"
   rm -f "${quarto_tarball}"
 }
@@ -316,16 +373,16 @@ install_nvtop_linux_amd64() {
   rm -rf "${work_dir}"
   mkdir -p "${work_dir}" "${install_parent}"
 
-  curl -fLo "${appimage_path}" "https://github.com/Syllo/nvtop/releases/download/${NVTOP_VERSION}/nvtop-${NVTOP_VERSION}-x86_64.AppImage"
+  curl -fLo "${appimage_path}" "https://github.com/Syllo/nvtop/releases/download/${NVTOP_VERSION}/nvtop-${NVTOP_VERSION}-x86_64.AppImage" || return
   chmod +x "${appimage_path}"
 
   (
     cd "${work_dir}" &&
       "${appimage_path}" --appimage-extract >/dev/null
-  )
+  ) || return
 
   rm -rf "${install_dir}"
-  cp -R "${work_dir}/squashfs-root" "${install_dir}"
+  cp -R "${work_dir}/squashfs-root" "${install_dir}" || return
   rm -f "${wrapper_path}"
   cat > "${wrapper_path}" <<EOF
 #!/usr/bin/env bash
@@ -345,7 +402,7 @@ setup_packages_linux() {
   local archstr="$7"
   local package_name
   local step_status
-  local package_order=(sheldon mise alacritty tmux luarocks quarto nvtop)
+  local package_order=(apt sheldon mise alacritty tmux luarocks quarto nvtop)
   local -a failed_packages=()
 
   for package_name in "${package_order[@]}"; do
@@ -357,6 +414,9 @@ setup_packages_linux() {
     log_info "Running package step: ${package_name}"
     step_status=0
     case "${package_name}" in
+      apt)
+        check_apt_packages "${dotfiles_root}" "${dry_run}" || step_status=$?
+        ;;
       sheldon)
         install_sheldon "${setup_home}" "${dry_run}" || step_status=$?
         ;;

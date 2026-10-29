@@ -421,13 +421,11 @@ case "$*" in
 /fake/config.linux.toml  azure
 OUT
     ;;
-  *)
-    if [[ "$1" == "install" ]]; then
-      tool="${!#}"
-      if [[ "${tool}" == "azure" ]]; then
-        exit 1
-      fi
-    fi
+  "install -E linux")
+    exit 1
+    ;;
+  "ls --missing --no-header -E linux")
+    printf 'azure  2.91.0 (missing)  /fake/config.linux.toml  2.91.0\n'
     ;;
 esac
 EOF
@@ -461,11 +459,12 @@ EOF
     post
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Installing mise tool: python"* ]]
-  [[ "$output" == *"Installing mise tool: node"* ]]
-  [[ "$output" == *"Installing mise tool: azure"* ]]
+  [[ "$output" == *"Installing mise tools: python node azure"* ]]
   [[ "$output" == *"Failed to install mise tool: azure"* ]]
+  [[ "$output" != *"Failed to install mise tool: python"* ]]
   [[ "$output" == *"Continuing despite failed mise tool installs: azure"* ]]
+  run grep -Fx "mise install -E linux" "${log_file}"
+  [ "$status" -eq 0 ]
   run grep -F "tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH ${TEST_HOME}/.tmux/plugins/" "${log_file}"
   [ "$status" -eq 0 ]
 }
@@ -491,10 +490,11 @@ case "$*" in
 /fake/config.toml        python, azure
 OUT
     ;;
-  *)
-    if [[ "$1" == "install" && "${!#}" == "azure" ]]; then
-      exit 1
-    fi
+  "install -E linux")
+    exit 1
+    ;;
+  "ls --missing --no-header -E linux")
+    printf 'azure  2.91.0 (missing)  /fake/config.toml  2.91.0\n'
     ;;
 esac
 EOF
@@ -591,7 +591,7 @@ EOF
   [ "$status" -eq 0 ]
   run grep -F "mise config ls --no-header -E wsl" "${log_file}"
   [ "$status" -eq 0 ]
-  run grep -F "mise install -E wsl terraform" "${log_file}"
+  run grep -Fx "mise install -E wsl" "${log_file}"
   [ "$status" -eq 0 ]
 }
 
@@ -744,4 +744,45 @@ EOF
 
   run grep -F '"github:betterleaks/betterleaks" = "1.6.0"' "$(repo_root)/mise/config.wsl.toml"
   [ "$status" -eq 0 ]
+}
+
+@test "post step runs uv through mise exec without auto-installing other tools" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local log_file="${TEST_ROOT}/commands.log"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
+    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+  cat > "${fake_bin}/mise" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "exec" ]; then
+  printf 'mise exec auto_install=%s\n' "${MISE_EXEC_AUTO_INSTALL:-unset}" >> "${LOG_FILE}"
+fi
+exit 0
+EOF
+  chmod +x "${fake_bin}/mise"
+
+  for cmd in git curl tmux; do
+    printf '#!/usr/bin/env bash\nexit 0\n' > "${fake_bin}/${cmd}"
+    chmod +x "${fake_bin}/${cmd}"
+  done
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    LOG_FILE="${log_file}" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    post
+
+  [ "$status" -eq 0 ]
+  run grep -F "mise exec auto_install=false" "${log_file}"
+  [ "$status" -eq 0 ]
+  run grep -vF "mise exec auto_install=false" "${log_file}"
+  [ "$status" -ne 0 ]
 }

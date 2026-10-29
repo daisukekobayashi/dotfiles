@@ -394,3 +394,105 @@ EOF
   run grep -F 'cask "wireshark-chmodbpf"' "$(repo_root)/brew/Brewfile"
   [ "$status" -ne 0 ]
 }
+
+@test "packages reports a failed luarocks build instead of succeeding" {
+  local fake_bin="${TEST_ROOT}/bin"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
+    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+
+  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
+
+  cat > "${fake_bin}/uname" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "-m" ]; then
+  printf 'x86_64\n'
+else
+  printf 'Linux\n'
+fi
+EOF
+  chmod +x "${fake_bin}/uname"
+
+  # tar "extracts" a luarocks source tree whose configure fails.
+  cat > "${fake_bin}/tar" <<'EOF'
+#!/usr/bin/env bash
+dest="${@: -1}"
+mkdir -p "${dest}/luarocks-3.11.1"
+printf '#!/usr/bin/env bash\nexit 1\n' > "${dest}/luarocks-3.11.1/configure"
+chmod +x "${dest}/luarocks-3.11.1/configure"
+EOF
+  chmod +x "${fake_bin}/tar"
+
+  for cmd in curl git; do
+    printf '#!/usr/bin/env bash\nexit 0\n' > "${fake_bin}/${cmd}"
+    chmod +x "${fake_bin}/${cmd}"
+  done
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --only luarocks
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Package step failed: luarocks"* ]]
+  [[ "$output" == *"Continuing despite failed package steps: luarocks"* ]]
+}
+
+write_fake_apt_tools() {
+  local fake_bin="$1"
+
+  cat > "${fake_bin}/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+pkg="${!#}"
+if [ "${pkg}" = "libevent-dev" ]; then
+  exit 1
+fi
+printf 'install ok installed'
+EOF
+  chmod +x "${fake_bin}/dpkg-query"
+
+  printf '#!/usr/bin/env bash\nexit 0\n' > "${fake_bin}/apt-get"
+  chmod +x "${fake_bin}/apt-get"
+}
+
+@test "packages apt step warns about missing apt packages without installing" {
+  local fake_bin="${TEST_ROOT}/bin"
+  mkdir -p "${fake_bin}"
+  write_fake_apt_tools "${fake_bin}"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --only apt --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Missing apt packages: libevent-dev"* ]]
+  [[ "$output" == *"sudo apt-get install -y libevent-dev"* ]]
+  run grep -E 'DRY-RUN .*apt-get' <<< "${output}"
+  [ "$status" -ne 0 ]
+}
+
+@test "packages apt step installs missing apt packages when SETUP_APT_INSTALL=1" {
+  local fake_bin="${TEST_ROOT}/bin"
+  mkdir -p "${fake_bin}"
+  write_fake_apt_tools "${fake_bin}"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    SETUP_APT_INSTALL=1 \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --only apt --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DRY-RUN "*"apt-get update"* ]]
+  [[ "$output" == *"DRY-RUN "*"apt-get install -y libevent-dev"* ]]
+}

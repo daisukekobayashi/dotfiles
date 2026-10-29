@@ -81,6 +81,14 @@ PowerShell 5.1+ と Node.js がある環境では, `.\tests\setup_link_copy.ps1`
 - `SETUP_DOTFILES_ROOT`
 - `SETUP_DRY_RUN` (`0` or `1`)
 - `SETUP_MISE_STRICT` (`0` or `1`, default: `0`)
+- `SETUP_APT_INSTALL` (`0` or `1`, default: `0`)
+- `MISE_JOBS` (mise の並列インストール数, default: mise の `jobs` 設定)
+
+Debian/Ubuntu (WSL を含む) では, `apt` ステップが `setup/apt-packages.txt` の
+ビルド依存を確認し, 不足分を表示します. `sudo apt-get` でのインストールは
+`SETUP_APT_INSTALL=1` のときだけ行います.
+post では `mise install` を 1 回実行して並列にインストールします. 失敗したツールは
+一覧表示され, `SETUP_MISE_STRICT=1` でなければ処理を継続します.
 
 例.
 

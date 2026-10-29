@@ -83,6 +83,14 @@ Optional environment variables.
 - `SETUP_DOTFILES_ROOT`
 - `SETUP_DRY_RUN` (`0` or `1`)
 - `SETUP_MISE_STRICT` (`0` or `1`, default: `0`)
+- `SETUP_APT_INSTALL` (`0` or `1`, default: `0`)
+- `MISE_JOBS` (parallel mise installs, default: mise `jobs` setting)
+
+On Debian/Ubuntu (including WSL), the `apt` package step checks the build
+dependencies listed in `setup/apt-packages.txt` and prints the missing ones.
+It installs them with `sudo apt-get` only when `SETUP_APT_INSTALL=1`.
+Post setup runs a single `mise install` so tools install in parallel; failed
+tools are reported and setup continues unless `SETUP_MISE_STRICT=1`.
 
 Example.
 
