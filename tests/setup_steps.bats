@@ -63,24 +63,15 @@ run_setup_dry() {
   [[ "$output" == *"Unknown links argument: --unknown"* ]]
 }
 
-@test "post is a deprecated alias for its previous steps" {
-  run_setup_dry post
+@test "removed packages and post subcommands point to the phases" {
+  local subcommand
 
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"'post' is deprecated"* ]]
-  run bash -c 'grep -oE "Running step: [a-z-]+" <<< "$1" | cut -d" " -f3 | paste -sd,' _ "$output"
-  [ "$output" = "mise-tools,uv-tools,tpm" ]
-}
+  for subcommand in packages post; do
+    run_setup_dry "${subcommand}"
 
-@test "packages is a deprecated alias for bootstrap, tools, and plugins" {
-  run_setup_dry packages --only apt,claude,tpm
-
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"'packages' is deprecated"* ]]
-  [[ "$output" == *"Running step: apt"* ]]
-  [[ "$output" == *"Running step: claude"* ]]
-  [[ "$output" == *"Running step: tpm"* ]]
-  [[ "$output" != *"step: links"* ]]
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"'${subcommand}' was removed. Use 'bootstrap', 'tools', and 'plugins'"* ]]
+  done
 }
 
 @test "linux-only steps are skipped on macOS" {

@@ -52,9 +52,7 @@ depends on the earlier ones.
 
 Steps that do not apply to the platform are skipped with a message; for example,
 macOS installs `sheldon`, `tmux`, and `luarocks` from
-`brew/Brewfile` in the `homebrew` step. `packages` and `post` remain as deprecated
-aliases: `packages` runs `bootstrap`, `tools`, and `plugins`, and `post` runs
-`mise-tools`, `uv-tools`, and `tpm`.
+`brew/Brewfile` in the `homebrew` step.
 
 On Windows, link creation in `.\setup.ps1 links`, user-scope `skills`, and named
 `claude` environments first uses the current privileges. If symbolic link

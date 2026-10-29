@@ -15,8 +15,7 @@ list_phase_steps() {
   esac
 }
 
-# Steps selected by a subcommand, in phase order. packages and post are
-# deprecated aliases that keep their previous step sets.
+# Steps selected by a subcommand, in phase order.
 list_subcommand_steps() {
   local subcommand="$1"
   local phase
@@ -29,14 +28,6 @@ list_subcommand_steps() {
       ;;
     links | bootstrap | tools | plugins)
       list_phase_steps "${subcommand}"
-      ;;
-    packages)
-      list_phase_steps bootstrap
-      list_phase_steps tools
-      list_phase_steps plugins
-      ;;
-    post)
-      printf '%s\n' mise-tools uv-tools tpm
       ;;
     *)
       return 1

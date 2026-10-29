@@ -40,9 +40,6 @@ Subcommands:
   claude      Create or refresh a separate Claude Code environment
   help        Show this help
 
-  packages    Deprecated: bootstrap, tools, and plugins
-  post        Deprecated: mise-tools, uv-tools, and tpm
-
 all/links/bootstrap/tools/plugins args:
   --only <csv>   Run only selected steps (e.g. claude,codex)
   --skip <csv>   Skip selected steps (e.g. mise-tools,tpm)
@@ -196,15 +193,6 @@ run_step_subcommand() {
     return 1
   }
 
-  case "${subcommand}" in
-    packages)
-      log_warn "'packages' is deprecated; use 'bootstrap', 'tools', and 'plugins' (or 'all --skip links')."
-      ;;
-    post)
-      log_warn "'post' is deprecated; use 'tools --only mise-tools,uv-tools' and 'plugins'."
-      ;;
-  esac
-
   mapfile -t steps < <(list_subcommand_steps "${subcommand}")
   log_info "Running ${subcommand} setup..."
   run_setup_steps "${STEPS_ONLY}" "${STEPS_SKIP}" "${steps[@]}" || return
@@ -232,8 +220,12 @@ main() {
   fi
 
   case "${subcommand}" in
-    all | links | bootstrap | tools | plugins | packages | post)
+    all | links | bootstrap | tools | plugins)
       run_step_subcommand "${subcommand}" "$@"
+      ;;
+    packages | post)
+      log_error "'${subcommand}' was removed. Use 'bootstrap', 'tools', and 'plugins', or 'all --skip links'."
+      return 1
       ;;
     skills)
       if [ "$#" -ge 2 ] && [ "$1" = "profile" ] && [ "$2" = "validate" ]; then

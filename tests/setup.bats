@@ -24,11 +24,11 @@ load 'helpers/test_helper.bash'
   [[ "$output" == *"Flags are not supported."* ]]
 }
 
-@test "packages subcommand rejects unknown flags" {
-  run_setup packages --unknown
+@test "tools subcommand rejects unknown flags" {
+  run_setup tools --unknown
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Unknown packages argument: --unknown"* ]]
+  [[ "$output" == *"Unknown tools argument: --unknown"* ]]
 }
 
 @test "all subcommand accepts reload shell flag" {
@@ -37,8 +37,8 @@ load 'helpers/test_helper.bash'
   [ "$status" -eq 0 ]
 }
 
-@test "post subcommand accepts reload shell flag" {
-  run env SETUP_DRY_RUN=1 "$(setup_script_path)" post --reload-shell
+@test "plugins subcommand accepts reload shell flag" {
+  run env SETUP_DRY_RUN=1 "$(setup_script_path)" plugins --reload-shell
 
   [ "$status" -eq 0 ]
 }

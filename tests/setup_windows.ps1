@@ -356,16 +356,12 @@ Invoke-Test "Windows phase subcommands reject steps from other phases" {
   }
 }
 
-Invoke-Test -WindowsOnly "Windows packages is a deprecated alias without links" {
+Invoke-Test "Windows removed packages subcommand points to the phases" {
   $testRoot = New-TestDirectory
   try {
-    $homeDir = Join-Path $testRoot "home"
-    New-InstalledPsmuxPlugins -HomeDir $homeDir
-
-    $result = Invoke-SetupForTest -HomeDir $homeDir -Arguments @("packages", "--only", "psmux")
-    Assert-True ($result.ExitCode -eq 0) "setup.ps1 packages --only psmux failed: $($result.Output)"
-    Assert-True ($result.Output -match "'packages' is deprecated") "deprecation warning missing: $($result.Output)"
-    Assert-True ($result.Output -notmatch 'step: links') "packages should not include links: $($result.Output)"
+    $result = Invoke-SetupForTest -HomeDir (Join-Path $testRoot "home") -Arguments @("packages")
+    Assert-True ($result.ExitCode -ne 0) "setup.ps1 packages should fail"
+    Assert-True ($result.Output -match "'packages' was removed\. Use 'bootstrap', 'tools', and 'plugins'") "unexpected output: $($result.Output)"
   } finally {
     Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
   }

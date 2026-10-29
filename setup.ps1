@@ -28,8 +28,6 @@ Subcommands:
   claude      Create or refresh a separate Claude Code environment
   help        Show this help
 
-  packages    Deprecated: bootstrap, tools, and plugins
-
 all/links/bootstrap/tools/plugins args:
   --only <csv>   Run only selected steps (e.g. claude,codex)
   --skip <csv>   Skip selected steps (e.g. psmux)
@@ -65,12 +63,8 @@ function Get-SubcommandSteps {
     [string]$Name
   )
 
-  if ($Name -eq "all" -or $Name -eq "packages") {
-    $phaseNames = @($SetupPhases.Keys)
-    if ($Name -eq "packages") {
-      $phaseNames = @($phaseNames | Where-Object { $_ -ne "links" })
-    }
-    return @($phaseNames | ForEach-Object { $SetupPhases[$_] })
+  if ($Name -eq "all") {
+    return @($SetupPhases.Keys | ForEach-Object { $SetupPhases[$_] })
   }
   return @($SetupPhases[$Name])
 }
@@ -179,11 +173,8 @@ try {
   }
 
   switch ($Subcommand.ToLowerInvariant()) {
-    { $_ -in @("all", "links", "bootstrap", "tools", "plugins", "packages") } {
+    { $_ -in @("all", "links", "bootstrap", "tools", "plugins") } {
       $name = $Subcommand.ToLowerInvariant()
-      if ($name -eq "packages") {
-        Write-Warning "'packages' is deprecated; use 'bootstrap', 'tools', and 'plugins' (or 'all --skip links')."
-      }
       $selection = Read-StepArguments -Name $name -Arguments $SubcommandArgs
       Invoke-SetupSteps -Steps (Get-SubcommandSteps -Name $name) -Only $selection.only -Skip $selection.skip `
         -SetupContext $setupContext -CopyArguments $copyArguments
@@ -217,6 +208,9 @@ try {
           $setupContext.DotfilesRoot
         ) + $copyArguments + $SubcommandArgs
       )
+    }
+    "packages" {
+      throw "'packages' was removed. Use 'bootstrap', 'tools', and 'plugins', or 'all --skip links'."
     }
     "help" {
       if ($SubcommandArgs.Count -gt 0) {

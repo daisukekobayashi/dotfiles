@@ -11,7 +11,7 @@ teardown() {
   teardown_test_env
 }
 
-@test "post step seeds tmux plugin manager path before plugin install" {
+@test "plugins seeds tmux plugin manager path before plugin install" {
   touch "${TEST_HOME}/.tmux.conf"
 
   run env \
@@ -19,7 +19,7 @@ teardown() {
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DRY_RUN=1 \
     "$(setup_script_path)" \
-    post
+    plugins
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"DRY-RUN tmux start-server"* ]]
@@ -28,20 +28,20 @@ teardown() {
   [[ "$output" == *"DRY-RUN tmux source-file ${TEST_HOME}/.tmux.conf"* ]]
 }
 
-@test "post step needs no Vim plugin bootstrap" {
+@test "all needs no Vim plugin bootstrap" {
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DRY_RUN=1 \
     "$(setup_script_path)" \
-    post
+    all
 
   [ "$status" -eq 0 ]
   [[ "$output" != *"vim-plug"* ]]
   [[ "$output" != *"PlugInstall"* ]]
 }
 
-@test "post step does not create a tmux session when sessions already exist" {
+@test "plugins does not create a tmux session when sessions already exist" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
@@ -94,7 +94,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    plugins
 
   [ "$status" -eq 0 ]
   run grep -F "tmux list-sessions" "${log_file}"
@@ -105,7 +105,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step cleans up a named tmux bootstrap session when no sessions exist" {
+@test "plugins cleans up a named tmux bootstrap session when no sessions exist" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
@@ -158,7 +158,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    plugins
 
   [ "$status" -eq 0 ]
   run grep -F "tmux list-sessions" "${log_file}"
@@ -171,7 +171,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step creates a tmux bootstrap session before setting server environment when no sessions exist" {
+@test "plugins creates a tmux bootstrap session before setting server environment when no sessions exist" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   local session_state="${TEST_ROOT}/tmux-session-exists"
@@ -234,7 +234,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    plugins
 
   [ "$status" -eq 0 ]
   run grep -nF "tmux new-session -d -s dotfiles-tpm-bootstrap-" "${log_file}"
@@ -247,7 +247,7 @@ EOF
   [ ! -f "${session_state}" ]
 }
 
-@test "post step sources tmux config before removing the only bootstrap session" {
+@test "plugins sources tmux config before removing the only bootstrap session" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   local session_state="${TEST_ROOT}/tmux-session-exists"
@@ -314,7 +314,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    plugins
 
   [ "$status" -eq 0 ]
   run grep -nF "tmux source-file ${TEST_HOME}/.tmux.conf" "${log_file}"
@@ -327,7 +327,7 @@ EOF
   [ ! -f "${session_state}" ]
 }
 
-@test "post step treats tmux plugin install as best effort and cleans up the bootstrap session" {
+@test "plugins treats tmux plugin install as best effort and cleans up the bootstrap session" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
@@ -380,7 +380,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    plugins
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"tmux plugin install failed. Continuing setup."* ]]
@@ -392,7 +392,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step continues when a mise tool install fails by default" {
+@test "mise-tools failures do not stop later steps by default" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
@@ -450,7 +450,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    all --only mise-tools,tpm
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Installing mise tools: python node azure"* ]]
@@ -463,7 +463,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step fails in strict mode when a mise tool install fails" {
+@test "mise-tools fails in strict mode when a mise tool install fails" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
@@ -517,14 +517,14 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    tools --only mise-tools
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"Failed to install mise tool: azure"* ]]
   [[ "$output" == *"mise tool installs failed: azure"* ]]
 }
 
-@test "post step uses wsl mise env when running under WSL" {
+@test "mise-tools uses wsl mise env when running under WSL" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
@@ -578,7 +578,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    tools --only mise-tools
 
   [ "$status" -eq 0 ]
   run grep -F "mise config ls --no-header -E wsl" "${log_file}"
@@ -587,7 +587,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step installs uv-managed cli tools" {
+@test "uv-tools installs uv-managed cli tools" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
@@ -634,7 +634,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    tools --only uv-tools
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Installing uv tool: posting"* ]]
@@ -647,7 +647,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step runs uv-managed cli tools through mise exec when mise is available" {
+@test "uv-tools runs uv-managed cli tools through mise exec when mise is available" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
@@ -705,7 +705,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    tools --only uv-tools
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Installing uv tool: posting"* ]]
@@ -737,7 +737,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "post step runs uv through mise exec without auto-installing other tools" {
+@test "uv-tools runs uv through mise exec without auto-installing other tools" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts"
@@ -768,7 +768,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    post
+    tools --only uv-tools
 
   [ "$status" -eq 0 ]
   run grep -F "mise exec auto_install=false" "${log_file}"
