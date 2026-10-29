@@ -11,43 +11,43 @@ teardown() {
   teardown_test_env
 }
 
-@test "packages --only tmux runs only tmux step in dry-run mode" {
+@test "tools --only tmux runs only tmux step in dry-run mode" {
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only tmux --dry-run
+    tools --only tmux --dry-run
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Running package step: tmux"* ]]
-  [[ "$output" == *"Skipping package step: sheldon"* ]]
-  [[ "$output" == *"Skipping package step: luarocks"* ]]
+  [[ "$output" == *"Running step: tmux"* ]]
+  [[ "$output" == *"Skipping step: claude"* ]]
+  [[ "$output" == *"Skipping step: luarocks"* ]]
 }
 
-@test "packages --skip tmux skips tmux step in dry-run mode" {
+@test "tools --skip tmux skips tmux step in dry-run mode" {
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --skip tmux --dry-run
+    tools --skip tmux --dry-run
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Skipping package step: tmux"* ]]
-  [[ "$output" == *"Running package step: sheldon"* ]]
+  [[ "$output" == *"Skipping step: tmux"* ]]
+  [[ "$output" == *"Running step: claude"* ]]
 }
 
-@test "packages rejects unknown package names" {
+@test "tools rejects unknown step names" {
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only unknown_pkg --dry-run
+    tools --only unknown_pkg --dry-run
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Unknown package in --only: unknown_pkg"* ]]
+  [[ "$output" == *"Unknown step in --only: unknown_pkg"* ]]
 }
 
-@test "packages on macOS bootstraps homebrew and brew bundle in dry-run mode" {
+@test "bootstrap on macOS installs homebrew and runs brew bundle in dry-run mode" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}"
 
@@ -66,7 +66,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --dry-run
+    bootstrap --dry-run
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"DRY-RUN install homebrew"* ]]
@@ -74,7 +74,7 @@ EOF
   [[ "$output" == *"DRY-RUN brew bundle --file="*"/brew/Brewfile"* ]]
 }
 
-@test "packages continues after tmux install failure and logs it" {
+@test "tools continues after tmux install failure and logs it" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}"
 
@@ -166,15 +166,14 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only tmux
+    tools --only tmux
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Package step failed: tmux"* ]]
-  [[ "$output" == *"Continuing despite failed package steps: tmux"* ]]
-  [[ "$output" == *"Running post setup..."* ]]
+  [[ "$output" == *"Step failed: tmux"* ]]
+  [[ "$output" == *"Continuing despite failed steps: tmux"* ]]
 }
 
-@test "packages installs nvtop on linux from extracted AppImage" {
+@test "tools installs nvtop on linux from extracted AppImage" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
     "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
@@ -254,7 +253,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only nvtop
+    tools --only nvtop
 
   [ "$status" -eq 0 ]
   [ -x "${TEST_HOME}/.local/bin/nvtop" ]
@@ -395,7 +394,7 @@ EOF
   [ "$status" -ne 0 ]
 }
 
-@test "packages reports a failed luarocks build instead of succeeding" {
+@test "tools reports a failed luarocks build instead of succeeding" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
     "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
@@ -436,11 +435,11 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only luarocks
+    tools --only luarocks
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Package step failed: luarocks"* ]]
-  [[ "$output" == *"Continuing despite failed package steps: luarocks"* ]]
+  [[ "$output" == *"Step failed: luarocks"* ]]
+  [[ "$output" == *"Continuing despite failed steps: luarocks"* ]]
 }
 
 write_fake_apt_tools() {
@@ -460,7 +459,7 @@ EOF
   chmod +x "${fake_bin}/apt-get"
 }
 
-@test "packages apt step warns about missing apt packages without installing" {
+@test "bootstrap apt step warns about missing apt packages without installing" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}"
   write_fake_apt_tools "${fake_bin}"
@@ -470,7 +469,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only apt --dry-run
+    bootstrap --only apt --dry-run
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Missing apt packages: libevent-dev"* ]]
@@ -479,7 +478,7 @@ EOF
   [ "$status" -ne 0 ]
 }
 
-@test "packages apt step installs missing apt packages when SETUP_APT_INSTALL=1" {
+@test "bootstrap apt step installs missing apt packages when SETUP_APT_INSTALL=1" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}"
   write_fake_apt_tools "${fake_bin}"
@@ -490,7 +489,7 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only apt --dry-run
+    bootstrap --only apt --dry-run
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"DRY-RUN "*"apt-get update"* ]]
@@ -513,20 +512,20 @@ STUB
   chmod +x "${fake_bin}/git" "${fake_bin}/tmux"
 }
 
-@test "packages claude and codex steps run official installers in dry-run mode" {
+@test "tools claude and codex steps run official installers in dry-run mode" {
   run env \
     PATH="/usr/bin:/bin" \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only claude,codex --dry-run
+    tools --only claude,codex --dry-run
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"DRY-RUN install claude from https://claude.ai/install.sh"* ]]
   [[ "$output" == *"DRY-RUN install codex from https://chatgpt.com/codex/install.sh"* ]]
 }
 
-@test "packages installs claude and codex into SETUP_HOME with official installers" {
+@test "tools installs claude and codex into SETUP_HOME with official installers" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}"
   write_agent_cli_post_stubs "${fake_bin}"
@@ -559,17 +558,17 @@ STUB
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only claude,codex
+    tools --only claude,codex
 
   [ "$status" -eq 0 ]
-  [[ "$output" != *"Package step failed"* ]]
+  [[ "$output" != *"Step failed"* ]]
   [ -x "${TEST_HOME}/.local/bin/claude" ]
   [ -x "${TEST_HOME}/.local/bin/codex" ]
   [[ "$(cat "${TEST_HOME}/claude-installer.path")" == "${TEST_HOME}/.local/bin:"* ]]
   [ "$(cat "${TEST_HOME}/codex-installer.env")" = "true ${TEST_HOME}/.codex" ]
 }
 
-@test "packages skips claude and codex installed by other managers with removal hints" {
+@test "tools skips claude and codex installed by other managers with removal hints" {
   local fake_bin="${TEST_ROOT}/bin"
   local brew_bin="${TEST_ROOT}/opt/homebrew/bin"
   local node_root="${TEST_ROOT}/mise/installs/node/24.0.0"
@@ -589,7 +588,7 @@ STUB
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only claude,codex
+    tools --only claude,codex
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Skipping claude official installer because claude is installed at ${brew_bin}/claude."* ]]
@@ -600,7 +599,7 @@ STUB
   [ ! -e "${TEST_HOME}/.local/bin/codex" ]
 }
 
-@test "packages warns when another claude shadows the official install" {
+@test "tools warns when another claude shadows the official install" {
   local fake_bin="${TEST_ROOT}/bin"
   local brew_bin="${TEST_ROOT}/opt/homebrew/bin"
   mkdir -p "${fake_bin}" "${brew_bin}" "${TEST_HOME}/.local/bin"
@@ -615,7 +614,7 @@ STUB
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --only claude --dry-run
+    tools --only claude --dry-run
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"claude at ${brew_bin}/claude shadows the official install at ${TEST_HOME}/.local/bin/claude."* ]]
@@ -623,7 +622,7 @@ STUB
   [[ "$output" != *"DRY-RUN install claude"* ]]
 }
 
-@test "packages on macOS runs claude and codex official installers in dry-run mode" {
+@test "tools on macOS runs claude and codex official installers in dry-run mode" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}"
   printf '#!/usr/bin/env bash\nif [ "$1" = "-m" ]; then echo arm64; else echo Darwin; fi\n' > "${fake_bin}/uname"
@@ -634,9 +633,55 @@ STUB
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    packages --dry-run
+    tools --dry-run
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"DRY-RUN install claude from https://claude.ai/install.sh"* ]]
+  [[ "$output" == *"DRY-RUN install codex from https://chatgpt.com/codex/install.sh"* ]]
+}
+
+@test "tools resolves a mise shim to the real codex for the removal hint" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local shims="${TEST_ROOT}/mise/shims"
+  local node_bin="${TEST_ROOT}/mise/installs/node/24.0.0/bin"
+  mkdir -p "${fake_bin}" "${shims}" "${node_bin}"
+  printf '#!/bin/sh\n' > "${shims}/codex"
+  printf '#!/bin/sh\n' > "${node_bin}/codex"
+  chmod +x "${shims}/codex" "${node_bin}/codex"
+  cat > "${fake_bin}/mise" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = "which" ] && [ "\$2" = "codex" ]; then
+  printf '%s\n' "${node_bin}/codex"
+  exit 0
+fi
+exit 1
+STUB
+  chmod +x "${fake_bin}/mise"
+
+  run env \
+    PATH="${fake_bin}:${shims}:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    tools --only codex --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"npm uninstall -g @openai/codex"* ]]
+  [[ "$output" != *"rm ${shims}/codex"* ]]
+}
+
+@test "tools keeps uv-tools PATH changes out of later steps" {
+  mkdir -p "${TEST_HOME}/.local/share/mise/shims"
+  printf '#!/bin/sh\n' > "${TEST_HOME}/.local/share/mise/shims/codex"
+  chmod +x "${TEST_HOME}/.local/share/mise/shims/codex"
+
+  run env \
+    PATH="/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    tools --only uv-tools,codex --dry-run
+
+  [ "$status" -eq 0 ]
   [[ "$output" == *"DRY-RUN install codex from https://chatgpt.com/codex/install.sh"* ]]
 }

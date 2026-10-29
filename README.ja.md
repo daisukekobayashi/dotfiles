@@ -37,12 +37,22 @@ cd ~/.dotfiles
 ./setup.sh help
 ```
 
-主なサブコマンド.
+setup はフェーズ単位で実行します. `all` は次の順に実行し, 後のフェーズは前のフェーズに依存します.
+
+| フェーズ | ステップ |
+| --- | --- |
+| `links` | `links` (設定ファイルのリンクと生成) |
+| `bootstrap` | `apt`, `homebrew`, `sheldon`, `mise` (OS パッケージとツールの管理ツール) |
+| `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks`, `quarto`, `nvtop` |
+| `plugins` | `alacritty`, `tpm`, `themes` (ツールの上に乗るプラグインや付属ファイル) |
 
 - `./setup.sh all`
-- `./setup.sh links`
-- `./setup.sh packages`
-- `./setup.sh post`
+- `./setup.sh links`, `./setup.sh bootstrap`, `./setup.sh tools`, `./setup.sh plugins`
+
+その環境で対象外のステップは, メッセージを表示してスキップします. 例えば macOS では
+`sheldon`, `tmux`, `luarocks`, `quarto`, `nvtop` を `homebrew` ステップで `brew/Brewfile` から入れます.
+`packages` と `post` は非推奨の別名として残しています. `packages` は `bootstrap`, `tools`,
+`plugins` を, `post` は `mise-tools`, `uv-tools`, `tpm`, `themes` を実行します.
 
 Windows の `.\setup.ps1 links`, user scope の `skills`, 名前付き `claude` env は,
 通常権限でリンクを作成し, symlink 権限が不足するとリンク作成だけを UAC で昇格して
@@ -67,11 +77,12 @@ Vim の設定入口と `claude-pick.ps1` は, 関連ファイルを見つけら�
 PowerShell 5.1+ と Node.js がある環境では, `.\tests\setup_link_copy.ps1` で
 両 entry point と権限不足・コピー失敗の回帰テストをオフライン実行できます.
 
-`packages` サブコマンドの追加オプション.
+ステップの絞り込みは `all` とすべてのフェーズのサブコマンドで使えます.
 
-- `./setup.sh packages --only tmux,luarocks`
-- `./setup.sh packages --skip quarto`
-- `./setup.sh packages --dry-run`
+- `./setup.sh all --only claude,codex`
+- `./setup.sh tools --only tmux,luarocks`
+- `./setup.sh all --skip quarto,tpm`
+- `./setup.sh all --dry-run`
 - `./setup.sh all --reload-shell`
 
 利用可能な環境変数.
@@ -80,21 +91,23 @@ PowerShell 5.1+ と Node.js がある環境では, `.\tests\setup_link_copy.ps1`
 - `SETUP_TMPDIR`
 - `SETUP_DOTFILES_ROOT`
 - `SETUP_DRY_RUN` (`0` or `1`)
-- `SETUP_MISE_STRICT` (`0` or `1`, default: `0`)
+- `SETUP_STRICT` (`0` or `1`, default: `0`. 最初に失敗したステップで停止)
+- `SETUP_MISE_STRICT` (`0` or `1`, default: `0`. mise ツールの失敗をステップの失敗として扱う)
 - `SETUP_APT_INSTALL` (`0` or `1`, default: `0`)
 - `MISE_JOBS` (mise の並列インストール数, default: mise の `jobs` 設定)
 
 Debian/Ubuntu (WSL を含む) では, `apt` ステップが `setup/apt-packages.txt` の
 ビルド依存を確認し, 不足分を表示します. `sudo apt-get` でのインストールは
 `SETUP_APT_INSTALL=1` のときだけ行います.
-`claude` / `codex` ステップ (macOS では常に実行) は, `PATH` 上に無い場合に
+失敗したステップは表示して次のステップに進みます. `SETUP_STRICT=1` のときは停止します.
+`claude` / `codex` ステップは, `PATH` 上に無い場合に
 Claude Code と Codex CLI を公式の自動更新インストーラで `~/.local/bin` に入れます.
 Homebrew や npm などで既に入っている場合は削除せずにそのまま残し, 削除コマンドを表示します.
 削除後に setup を再実行すると公式インストールに切り替わります.
 Windows では `.\setup.ps1 packages` が公式の PowerShell インストーラで同様に処理します
 (`~\.local\bin\claude.exe` と `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`).
 Scoop や npm で入っている場合は残したまま削除コマンドを表示します.
-post では `mise install` を 1 回実行して並列にインストールします. 失敗したツールは
+`mise-tools` ステップでは `mise install` を 1 回実行して並列にインストールします. 失敗したツールは
 一覧表示され, `SETUP_MISE_STRICT=1` でなければ処理を継続します.
 
 例.

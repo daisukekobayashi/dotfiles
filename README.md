@@ -37,12 +37,24 @@ cd ~/.dotfiles
 ./setup.sh help
 ```
 
-Main subcommands.
+Setup runs in phases. `all` runs them in this order, and each later phase
+depends on the earlier ones.
+
+| Phase | Steps |
+| --- | --- |
+| `links` | `links` (config links and generated files) |
+| `bootstrap` | `apt`, `homebrew`, `sheldon`, `mise` (OS packages and tool managers) |
+| `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks`, `quarto`, `nvtop` |
+| `plugins` | `alacritty`, `tpm`, `themes` (plugins and assets on top of the tools) |
 
 - `./setup.sh all`
-- `./setup.sh links`
-- `./setup.sh packages`
-- `./setup.sh post`
+- `./setup.sh links`, `./setup.sh bootstrap`, `./setup.sh tools`, `./setup.sh plugins`
+
+Steps that do not apply to the platform are skipped with a message; for example,
+macOS installs `sheldon`, `tmux`, `luarocks`, `quarto`, and `nvtop` from
+`brew/Brewfile` in the `homebrew` step. `packages` and `post` remain as deprecated
+aliases: `packages` runs `bootstrap`, `tools`, and `plugins`, and `post` runs
+`mise-tools`, `uv-tools`, `tpm`, and `themes`.
 
 On Windows, link creation in `.\setup.ps1 links`, user-scope `skills`, and named
 `claude` environments first uses the current privileges. If symbolic link
@@ -69,11 +81,12 @@ their related files in the checkout; these two continue to load the source there
 Run `.\tests\setup_link_copy.ps1` in PowerShell 5.1+ with Node.js installed for
 offline regression tests of both entry points and privilege/copy failures.
 
-Package step filters.
+Step filters work with `all` and every phase subcommand.
 
-- `./setup.sh packages --only tmux,luarocks`
-- `./setup.sh packages --skip quarto`
-- `./setup.sh packages --dry-run`
+- `./setup.sh all --only claude,codex`
+- `./setup.sh tools --only tmux,luarocks`
+- `./setup.sh all --skip quarto,tpm`
+- `./setup.sh all --dry-run`
 - `./setup.sh all --reload-shell`
 
 Optional environment variables.
@@ -82,14 +95,17 @@ Optional environment variables.
 - `SETUP_TMPDIR`
 - `SETUP_DOTFILES_ROOT`
 - `SETUP_DRY_RUN` (`0` or `1`)
-- `SETUP_MISE_STRICT` (`0` or `1`, default: `0`)
+- `SETUP_STRICT` (`0` or `1`, default: `0`; stop at the first failed step)
+- `SETUP_MISE_STRICT` (`0` or `1`, default: `0`; treat failed mise tools as a failed step)
 - `SETUP_APT_INSTALL` (`0` or `1`, default: `0`)
 - `MISE_JOBS` (parallel mise installs, default: mise `jobs` setting)
 
-On Debian/Ubuntu (including WSL), the `apt` package step checks the build
+On Debian/Ubuntu (including WSL), the `apt` step checks the build
 dependencies listed in `setup/apt-packages.txt` and prints the missing ones.
 It installs them with `sudo apt-get` only when `SETUP_APT_INSTALL=1`.
-The `claude` and `codex` package steps (always run on macOS) install Claude Code
+A failed step is reported and setup continues with the next one, unless
+`SETUP_STRICT=1`.
+The `claude` and `codex` steps install Claude Code
 and Codex CLI with their official self-updating installers into `~/.local/bin`
 when neither is on `PATH`. If one is already installed by Homebrew, npm, or
 another manager, setup leaves it in place and prints the command to remove it;
@@ -98,7 +114,7 @@ On Windows, `.\setup.ps1 packages` does the same with the official PowerShell
 installers (`~\.local\bin\claude.exe` and
 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`); Scoop or npm copies
 are left in place with a removal hint.
-Post setup runs a single `mise install` so tools install in parallel; failed
+The `mise-tools` step runs a single `mise install` so tools install in parallel; failed
 tools are reported and setup continues unless `SETUP_MISE_STRICT=1`.
 
 Example.

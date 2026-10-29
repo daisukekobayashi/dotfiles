@@ -15,29 +15,39 @@ source "${SCRIPT_DIR}/skills.sh"
 source "${SCRIPT_DIR}/codex.sh"
 # shellcheck source=setup/claude.sh
 source "${SCRIPT_DIR}/claude.sh"
-# shellcheck source=setup/packages.sh
-source "${SCRIPT_DIR}/packages.sh"
-# shellcheck source=setup/post.sh
-source "${SCRIPT_DIR}/post.sh"
+# shellcheck source=setup/bootstrap.sh
+source "${SCRIPT_DIR}/bootstrap.sh"
+# shellcheck source=setup/tools.sh
+source "${SCRIPT_DIR}/tools.sh"
+# shellcheck source=setup/plugins.sh
+source "${SCRIPT_DIR}/plugins.sh"
+# shellcheck source=setup/steps.sh
+source "${SCRIPT_DIR}/steps.sh"
 
 usage() {
   cat <<'EOF'
 Usage: ./setup.sh <subcommand> [args]
 
 Subcommands:
-  all         Run all setup steps (default): links -> packages -> post
-  links       Run symbolic link and local config setup only
+  all         Run every phase in order: links -> bootstrap -> tools -> plugins
+  links       Link and generate local config files
+  bootstrap   Install OS packages and tool managers (apt, homebrew, sheldon, mise)
+  tools       Install tools with those managers (mise-tools, uv-tools, claude,
+              codex, tmux, luarocks, quarto, nvtop)
+  plugins     Install plugins and assets on top of the tools (alacritty, tpm, themes)
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment
   claude      Create or refresh a separate Claude Code environment
-  packages    Run required package/tool install and post-setup steps
-  post        Run post-setup steps only
   help        Show this help
 
-packages args:
-  --only <csv>   Run only selected package steps (e.g. tmux,luarocks)
-  --skip <csv>   Skip selected package steps
+  packages    Deprecated: bootstrap, tools, and plugins
+  post        Deprecated: mise-tools, uv-tools, tpm, and themes
+
+all/links/bootstrap/tools/plugins args:
+  --only <csv>   Run only selected steps (e.g. claude,codex)
+  --skip <csv>   Skip selected steps (e.g. mise-tools,tpm)
   --dry-run      Print commands without executing side effects
+  --reload-shell Exec a fresh login zsh after setup completes
 
 codex args:
   --env <name>               Select an independent Codex home
@@ -71,18 +81,13 @@ skills args:
   profile validate --profile <csv>
                              Validate selected profiles only
 
-all/post args:
-  --reload-shell Exec a fresh login zsh after setup completes
-
-packages args:
-  --reload-shell Exec a fresh login zsh after setup completes
-
 Environment:
   SETUP_HOME          Override target home directory (default: $HOME)
   SETUP_TMPDIR        Override temp directory (default: $TMPDIR or /tmp)
   SETUP_DOTFILES_ROOT Override dotfiles root path
   SETUP_DRY_RUN       Force dry-run mode (0 or 1)
   SETUP_EXEC_SHELL    Exec a fresh login zsh after setup completes (0 or 1)
+  SETUP_STRICT        Stop at the first failed step instead of continuing (0 or 1)
 EOF
 }
 
@@ -92,6 +97,15 @@ init_setup_env() {
   SETUP_DOTFILES_ROOT="${SETUP_DOTFILES_ROOT:-${DOTFILES_ROOT}}"
   SETUP_DRY_RUN="${SETUP_DRY_RUN:-0}"
   SETUP_EXEC_SHELL="${SETUP_EXEC_SHELL:-0}"
+  SETUP_STRICT="${SETUP_STRICT:-0}"
+
+  case "${SETUP_STRICT}" in
+    0 | 1) ;;
+    *)
+      log_error "SETUP_STRICT must be 0 or 1: ${SETUP_STRICT}"
+      return 1
+      ;;
+  esac
 
   case "${SETUP_DRY_RUN}" in
     0 | 1) ;;
@@ -132,9 +146,11 @@ maybe_reload_shell() {
   log_info "Setup completed. Run 'exec zsh -l' to load zsh, sheldon, and mise in this terminal."
 }
 
-parse_packages_args() {
-  PACKAGES_ONLY=""
-  PACKAGES_SKIP=""
+parse_step_args() {
+  local subcommand="$1"
+  shift
+  STEPS_ONLY=""
+  STEPS_SKIP=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -143,7 +159,7 @@ parse_packages_args() {
           log_error "--only requires a csv value"
           return 1
         fi
-        PACKAGES_ONLY="$2"
+        STEPS_ONLY="$2"
         shift 2
         ;;
       --skip)
@@ -151,7 +167,7 @@ parse_packages_args() {
           log_error "--skip requires a csv value"
           return 1
         fi
-        PACKAGES_SKIP="$2"
+        STEPS_SKIP="$2"
         shift 2
         ;;
       --dry-run)
@@ -163,28 +179,45 @@ parse_packages_args() {
         shift
         ;;
       *)
-        log_error "Unknown packages argument: $1"
+        log_error "Unknown ${subcommand} argument: $1"
         return 1
         ;;
     esac
   done
 }
 
-run_all() {
-  log_info "Running links setup..."
-  setup_links "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
-  log_info "Running package setup..."
-  setup_packages "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "" ""
-  log_info "Running post setup..."
-  setup_post "${SETUP_HOME}" "${SETUP_DRY_RUN}"
-  maybe_reload_shell
+run_step_subcommand() {
+  local subcommand="$1"
+  shift
+  local -a steps=()
+
+  parse_step_args "${subcommand}" "$@" || {
+    usage
+    return 1
+  }
+
+  case "${subcommand}" in
+    packages)
+      log_warn "'packages' is deprecated; use 'bootstrap', 'tools', and 'plugins' (or 'all --skip links')."
+      ;;
+    post)
+      log_warn "'post' is deprecated; use 'tools --only mise-tools,uv-tools' and 'plugins --only tpm,themes'."
+      ;;
+  esac
+
+  mapfile -t steps < <(list_subcommand_steps "${subcommand}")
+  log_info "Running ${subcommand} setup..."
+  run_setup_steps "${STEPS_ONLY}" "${STEPS_SKIP}" "${steps[@]}" || return
+
+  if [ "${subcommand}" != "links" ]; then
+    maybe_reload_shell
+  fi
 }
 
 main() {
   init_setup_env
 
   local subcommand
-  local -a remaining_args=()
   if [ "$#" -eq 0 ]; then
     subcommand="all"
   else
@@ -193,40 +226,14 @@ main() {
   fi
 
   if [[ "${subcommand}" == --* ]]; then
-    log_error "Flags are not supported. Use subcommands: all, links, skills, codex, claude, packages, post, help."
+    log_error "Flags are not supported. Use subcommands: all, links, bootstrap, tools, plugins, skills, codex, claude, help."
     usage
     return 1
   fi
 
   case "${subcommand}" in
-    all)
-      while [ "$#" -gt 0 ]; do
-        case "$1" in
-          --reload-shell)
-            SETUP_EXEC_SHELL=1
-            shift
-            ;;
-          *)
-            remaining_args+=("$1")
-            shift
-            ;;
-        esac
-      done
-      if [ "${#remaining_args[@]}" -gt 0 ]; then
-        log_error "Unexpected arguments for subcommand 'all': ${remaining_args[*]}"
-        usage
-        return 1
-      fi
-      run_all
-      ;;
-    links)
-      if [ "$#" -gt 0 ]; then
-        log_error "Unexpected arguments for subcommand 'links': $*"
-        usage
-        return 1
-      fi
-      log_info "Running links setup..."
-      setup_links "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
+    all | links | bootstrap | tools | plugins | packages | post)
+      run_step_subcommand "${subcommand}" "$@"
       ;;
     skills)
       if [ "$#" -ge 2 ] && [ "$1" = "profile" ] && [ "$2" = "validate" ]; then
@@ -241,39 +248,6 @@ main() {
       ;;
     claude)
       setup_claude "$@"
-      ;;
-    packages)
-      parse_packages_args "$@" || {
-        usage
-        return 1
-      }
-      log_info "Running package setup..."
-      setup_packages "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}" "${PACKAGES_ONLY}" "${PACKAGES_SKIP}"
-      log_info "Running post setup..."
-      setup_post "${SETUP_HOME}" "${SETUP_DRY_RUN}"
-      maybe_reload_shell
-      ;;
-    post)
-      while [ "$#" -gt 0 ]; do
-        case "$1" in
-          --reload-shell)
-            SETUP_EXEC_SHELL=1
-            shift
-            ;;
-          *)
-            remaining_args+=("$1")
-            shift
-            ;;
-        esac
-      done
-      if [ "${#remaining_args[@]}" -gt 0 ]; then
-        log_error "Unexpected arguments for subcommand 'post': ${remaining_args[*]}"
-        usage
-        return 1
-      fi
-      log_info "Running post setup..."
-      setup_post "${SETUP_HOME}" "${SETUP_DRY_RUN}"
-      maybe_reload_shell
       ;;
     help)
       usage
