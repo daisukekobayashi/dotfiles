@@ -496,3 +496,147 @@ EOF
   [[ "$output" == *"DRY-RUN "*"apt-get update"* ]]
   [[ "$output" == *"DRY-RUN "*"apt-get install -y libevent-dev"* ]]
 }
+
+write_agent_cli_post_stubs() {
+  local fake_bin="$1"
+
+  cat > "${fake_bin}/git" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = "clone" ]; then
+  mkdir -p "$3/scripts"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$3/scripts/install_plugins.sh"
+  chmod +x "$3/scripts/install_plugins.sh"
+fi
+exit 0
+STUB
+  printf '#!/usr/bin/env bash\nexit 0\n' > "${fake_bin}/tmux"
+  chmod +x "${fake_bin}/git" "${fake_bin}/tmux"
+}
+
+@test "packages claude and codex steps run official installers in dry-run mode" {
+  run env \
+    PATH="/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --only claude,codex --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DRY-RUN install claude from https://claude.ai/install.sh"* ]]
+  [[ "$output" == *"DRY-RUN install codex from https://chatgpt.com/codex/install.sh"* ]]
+}
+
+@test "packages installs claude and codex into SETUP_HOME with official installers" {
+  local fake_bin="${TEST_ROOT}/bin"
+  mkdir -p "${fake_bin}"
+  write_agent_cli_post_stubs "${fake_bin}"
+
+  cat > "${fake_bin}/curl" <<'STUB'
+#!/usr/bin/env bash
+url="${@: -1}"
+case "${url}" in
+  https://claude.ai/install.sh)
+    printf 'mkdir -p "$HOME/.local/bin"\n'
+    printf 'printf "%%s\\n" "$PATH" > "$HOME/claude-installer.path"\n'
+    printf 'printf "#!/bin/sh\\n" > "$HOME/.local/bin/claude"\n'
+    printf 'chmod +x "$HOME/.local/bin/claude"\n'
+    ;;
+  https://chatgpt.com/codex/install.sh)
+    printf 'mkdir -p "$CODEX_INSTALL_DIR"\n'
+    printf 'printf "%%s %%s\\n" "$CODEX_NON_INTERACTIVE" "$CODEX_HOME" > "$HOME/codex-installer.env"\n'
+    printf 'printf "#!/bin/sh\\n" > "$CODEX_INSTALL_DIR/codex"\n'
+    printf 'chmod +x "$CODEX_INSTALL_DIR/codex"\n'
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+STUB
+  chmod +x "${fake_bin}/curl"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --only claude,codex
+
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Package step failed"* ]]
+  [ -x "${TEST_HOME}/.local/bin/claude" ]
+  [ -x "${TEST_HOME}/.local/bin/codex" ]
+  [[ "$(cat "${TEST_HOME}/claude-installer.path")" == "${TEST_HOME}/.local/bin:"* ]]
+  [ "$(cat "${TEST_HOME}/codex-installer.env")" = "true ${TEST_HOME}/.codex" ]
+}
+
+@test "packages skips claude and codex installed by other managers with removal hints" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local brew_bin="${TEST_ROOT}/opt/homebrew/bin"
+  local node_root="${TEST_ROOT}/mise/installs/node/24.0.0"
+  mkdir -p "${fake_bin}" "${brew_bin}" "${node_root}/bin" "${node_root}/lib/node_modules/@openai/codex/bin"
+  write_agent_cli_post_stubs "${fake_bin}"
+
+  printf '#!/bin/sh\n' > "${brew_bin}/claude"
+  printf '#!/bin/sh\n' > "${node_root}/lib/node_modules/@openai/codex/bin/codex.js"
+  chmod +x "${brew_bin}/claude" "${node_root}/lib/node_modules/@openai/codex/bin/codex.js"
+  ln -s ../lib/node_modules/@openai/codex/bin/codex.js "${node_root}/bin/codex"
+
+  printf '#!/usr/bin/env bash\nexit 1\n' > "${fake_bin}/curl"
+  chmod +x "${fake_bin}/curl"
+
+  run env \
+    PATH="${fake_bin}:${brew_bin}:${node_root}/bin:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --only claude,codex
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Skipping claude official installer because claude is installed at ${brew_bin}/claude."* ]]
+  [[ "$output" == *"brew uninstall --cask claude-code"* ]]
+  [[ "$output" == *"Skipping codex official installer because codex is installed at ${node_root}/bin/codex."* ]]
+  [[ "$output" == *"npm uninstall -g @openai/codex"* ]]
+  [ ! -e "${TEST_HOME}/.local/bin/claude" ]
+  [ ! -e "${TEST_HOME}/.local/bin/codex" ]
+}
+
+@test "packages warns when another claude shadows the official install" {
+  local fake_bin="${TEST_ROOT}/bin"
+  local brew_bin="${TEST_ROOT}/opt/homebrew/bin"
+  mkdir -p "${fake_bin}" "${brew_bin}" "${TEST_HOME}/.local/bin"
+  write_agent_cli_post_stubs "${fake_bin}"
+
+  printf '#!/bin/sh\n' > "${brew_bin}/claude"
+  printf '#!/bin/sh\n' > "${TEST_HOME}/.local/bin/claude"
+  chmod +x "${brew_bin}/claude" "${TEST_HOME}/.local/bin/claude"
+
+  run env \
+    PATH="${fake_bin}:${brew_bin}:${TEST_HOME}/.local/bin:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --only claude --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"claude at ${brew_bin}/claude shadows the official install at ${TEST_HOME}/.local/bin/claude."* ]]
+  [[ "$output" == *"brew uninstall --cask claude-code"* ]]
+  [[ "$output" != *"DRY-RUN install claude"* ]]
+}
+
+@test "packages on macOS runs claude and codex official installers in dry-run mode" {
+  local fake_bin="${TEST_ROOT}/bin"
+  mkdir -p "${fake_bin}"
+  printf '#!/usr/bin/env bash\nif [ "$1" = "-m" ]; then echo arm64; else echo Darwin; fi\n' > "${fake_bin}/uname"
+  chmod +x "${fake_bin}/uname"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    SETUP_HOME="${TEST_HOME}" \
+    SETUP_TMPDIR="${TEST_TMP}" \
+    "$(setup_script_path)" \
+    packages --dry-run
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DRY-RUN install claude from https://claude.ai/install.sh"* ]]
+  [[ "$output" == *"DRY-RUN install codex from https://chatgpt.com/codex/install.sh"* ]]
+}

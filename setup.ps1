@@ -23,7 +23,7 @@ Subcommands:
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment
   claude      Create or refresh a separate Claude Code environment
-  packages    Install or verify Scoop and psmux PPM
+  packages    Install or verify Scoop, Claude Code, Codex CLI, and psmux PPM
   help        Show this help
 
 Behavior:

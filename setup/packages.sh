@@ -2,7 +2,7 @@
 
 is_supported_package() {
   case "$1" in
-    apt | sheldon | mise | alacritty | tmux | luarocks | quarto | nvtop)
+    apt | sheldon | mise | claude | codex | alacritty | tmux | luarocks | quarto | nvtop)
       return 0
       ;;
     *)
@@ -25,7 +25,7 @@ validate_package_csv() {
     [ -z "${item}" ] && continue
     if ! is_supported_package "${item}"; then
       log_error "Unknown package in --${label}: ${item}"
-      log_error "Supported packages: apt,sheldon,mise,alacritty,tmux,luarocks,quarto,nvtop"
+      log_error "Supported packages: apt,sheldon,mise,claude,codex,alacritty,tmux,luarocks,quarto,nvtop"
       return 1
     fi
   done
@@ -141,6 +141,88 @@ install_mise_linux() {
   elif [ -x "${setup_home}/.local/bin/mise" ]; then
     eval "$("${setup_home}/.local/bin/mise" activate bash)"
   fi
+}
+
+agent_cli_removal_hint() {
+  local found_path="$1"
+  local brew_cask="$2"
+  local npm_package="$3"
+  local target
+
+  target="$(readlink "${found_path}" 2>/dev/null || true)"
+  case "${found_path} ${target}" in
+    */homebrew/* | */Caskroom/*)
+      printf 'brew uninstall --cask %s\n' "${brew_cask}"
+      ;;
+    */node_modules/* | */mise/installs/node/*)
+      printf 'npm uninstall -g %s\n' "${npm_package}"
+      ;;
+    *)
+      printf 'rm %s\n' "${found_path}"
+      ;;
+  esac
+}
+
+# The official installers self-update into ~/.local/bin. Copies from other
+# managers are left in place because they would shadow or conflict with it.
+install_agent_cli() {
+  local name="$1"
+  local setup_home="$2"
+  local dry_run="$3"
+  local brew_cask="$4"
+  local npm_package="$5"
+  local installer_url="$6"
+  local installer_shell="$7"
+  shift 7
+  local managed_path="${setup_home}/.local/bin/${name}"
+  local found_path
+
+  found_path="$(command -v "${name}" 2>/dev/null || true)"
+
+  if [ -x "${managed_path}" ]; then
+    if [ -n "${found_path}" ] && [ "${found_path}" != "${managed_path}" ]; then
+      log_warn "${name} at ${found_path} shadows the official install at ${managed_path}. Remove it with:"
+      log_warn "  $(agent_cli_removal_hint "${found_path}" "${brew_cask}" "${npm_package}")"
+    fi
+    return 0
+  fi
+
+  if [ -n "${found_path}" ]; then
+    log_warn "Skipping ${name} official installer because ${name} is installed at ${found_path}."
+    log_warn "To switch to the self-updating official install, remove it and rerun setup:"
+    log_warn "  $(agent_cli_removal_hint "${found_path}" "${brew_cask}" "${npm_package}")"
+    return 0
+  fi
+
+  if [ "${dry_run}" = "1" ]; then
+    log_info "DRY-RUN install ${name} from ${installer_url}"
+    return 0
+  fi
+
+  # Keep ~/.local/bin on PATH so installers do not append PATH blocks to
+  # shell profiles that may be dotfiles symlinks.
+  curl -fsSL "${installer_url}" |
+    env HOME="${setup_home}" PATH="${setup_home}/.local/bin:${PATH}" "$@" "${installer_shell}" || return
+
+  if [ ! -x "${managed_path}" ]; then
+    log_error "${name} installer finished but ${managed_path} was not found."
+    return 1
+  fi
+}
+
+install_claude() {
+  install_agent_cli claude "$1" "$2" claude-code @anthropic-ai/claude-code \
+    https://claude.ai/install.sh bash
+}
+
+install_codex() {
+  local setup_home="$1"
+
+  install_agent_cli codex "${setup_home}" "$2" codex @openai/codex \
+    https://chatgpt.com/codex/install.sh sh \
+    CODEX_NON_INTERACTIVE=true \
+    CODEX_HOME="${setup_home}/.codex" \
+    CODEX_INSTALL_DIR="${setup_home}/.local/bin"
 }
 
 homebrew_bin_path() {
@@ -402,7 +484,7 @@ setup_packages_linux() {
   local archstr="$7"
   local package_name
   local step_status
-  local package_order=(apt sheldon mise alacritty tmux luarocks quarto nvtop)
+  local package_order=(apt sheldon mise claude codex alacritty tmux luarocks quarto nvtop)
   local -a failed_packages=()
 
   for package_name in "${package_order[@]}"; do
@@ -422,6 +504,12 @@ setup_packages_linux() {
         ;;
       mise)
         install_mise_linux "${setup_home}" "${dry_run}" || step_status=$?
+        ;;
+      claude)
+        install_claude "${setup_home}" "${dry_run}" || step_status=$?
+        ;;
+      codex)
+        install_codex "${setup_home}" "${dry_run}" || step_status=$?
         ;;
       alacritty)
         setup_alacritty "${dotfiles_root}" "${setup_home}" "${dry_run}" || step_status=$?
@@ -461,9 +549,10 @@ setup_packages_linux() {
 
 setup_packages_darwin() {
   local dotfiles_root="$1"
-  local dry_run="$2"
-  local only_csv="$3"
-  local skip_csv="$4"
+  local setup_home="$2"
+  local dry_run="$3"
+  local only_csv="$4"
+  local skip_csv="$5"
 
   if [ -n "${only_csv}" ] || [ -n "${skip_csv}" ]; then
     log_warn "Package filters are ignored on macOS; using brew/Brewfile."
@@ -472,6 +561,11 @@ setup_packages_darwin() {
   install_homebrew_darwin "${dry_run}" || return 1
   activate_homebrew_darwin "${dry_run}" || return 1
   install_homebrew_bundle_darwin "${dotfiles_root}" "${dry_run}" || return 1
+
+  install_claude "${setup_home}" "${dry_run}" ||
+    log_warn "Package step failed: claude. Continuing setup."
+  install_codex "${setup_home}" "${dry_run}" ||
+    log_warn "Package step failed: codex. Continuing setup."
 
   if command_exists mise; then
     if [ "${dry_run}" = "1" ]; then
@@ -509,7 +603,7 @@ setup_packages() {
   if [[ "${unamestr}" == "Linux" ]]; then
     setup_packages_linux "${dotfiles_root}" "${setup_home}" "${setup_tmpdir}" "${dry_run}" "${only_csv}" "${skip_csv}" "${archstr}"
   elif [[ "${unamestr}" == "Darwin" ]]; then
-    setup_packages_darwin "${dotfiles_root}" "${dry_run}" "${only_csv}" "${skip_csv}"
+    setup_packages_darwin "${dotfiles_root}" "${setup_home}" "${dry_run}" "${only_csv}" "${skip_csv}"
   else
     log_warn "Unsupported OS: ${unamestr}"
   fi

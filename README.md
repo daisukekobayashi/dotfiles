@@ -89,6 +89,15 @@ Optional environment variables.
 On Debian/Ubuntu (including WSL), the `apt` package step checks the build
 dependencies listed in `setup/apt-packages.txt` and prints the missing ones.
 It installs them with `sudo apt-get` only when `SETUP_APT_INSTALL=1`.
+The `claude` and `codex` package steps (always run on macOS) install Claude Code
+and Codex CLI with their official self-updating installers into `~/.local/bin`
+when neither is on `PATH`. If one is already installed by Homebrew, npm, or
+another manager, setup leaves it in place and prints the command to remove it;
+rerun setup afterwards to switch to the official install.
+On Windows, `.\setup.ps1 packages` does the same with the official PowerShell
+installers (`~\.local\bin\claude.exe` and
+`%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`); Scoop or npm copies
+are left in place with a removal hint.
 Post setup runs a single `mise install` so tools install in parallel; failed
 tools are reported and setup continues unless `SETUP_MISE_STRICT=1`.
 

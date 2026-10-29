@@ -187,6 +187,12 @@ Invoke-Test "Windows packages setup installs PPM when Scoop already exists" {
     New-Item -ItemType Directory -Path (Join-Path $homeDir "scoop\shims") -Force | Out-Null
     New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
     Set-Content -Path (Join-Path $homeDir "scoop\shims\scoop.ps1") -Value "# fake scoop" -Encoding utf8
+    # Existing official installs keep this test from downloading the agent CLI installers.
+    foreach ($agentCliPath in @(".local\bin\claude.exe", "AppData\Local\Programs\OpenAI\Codex\bin\codex.exe")) {
+      $agentCliFullPath = Join-Path $homeDir $agentCliPath
+      New-Item -ItemType Directory -Path (Split-Path -Parent $agentCliFullPath) -Force | Out-Null
+      Set-Content -Path $agentCliFullPath -Value "" -Encoding ascii
+    }
 
     $gitShim = @'
 @echo off
@@ -247,6 +253,47 @@ exit /b 1
     Assert-True (Test-Path -LiteralPath $continuumPath) "psmux-continuum was not installed"
     Assert-True (Test-Path -LiteralPath $kanagawaPath) "psmux-theme-kanagawa was not installed"
     Assert-True ((Get-Content -Raw $gitLog) -match 'https://github.com/psmux/psmux-plugins.git') "git clone did not use psmux-plugins"
+  } finally {
+    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
+Invoke-Test "Windows packages setup skips agent CLIs installed by other managers" {
+  $testRoot = New-TestDirectory
+  try {
+    $homeDir = Join-Path $testRoot "home"
+    $scoopShims = Join-Path $testRoot "scoop\shims"
+    $npmBin = Join-Path $testRoot "npm"
+    New-Item -ItemType Directory -Path (Join-Path $homeDir "scoop\shims") -Force | Out-Null
+    New-Item -ItemType Directory -Path $scoopShims, $npmBin -Force | Out-Null
+    Set-Content -Path (Join-Path $homeDir "scoop\shims\scoop.ps1") -Value "# fake scoop" -Encoding utf8
+    Set-Content -Path (Join-Path $scoopShims "claude.cmd") -Value "@exit /b 0" -Encoding ascii
+    Set-Content -Path (Join-Path $npmBin "codex.cmd") -Value "@exit /b 0" -Encoding ascii
+    foreach ($plugin in @("ppm\ppm.ps1", "psmux-sensible\plugin.conf", "psmux-pain-control\plugin.conf", "psmux-resurrect\plugin.conf", "psmux-continuum\plugin.conf", "psmux-theme-kanagawa\plugin.conf")) {
+      $pluginPath = Join-Path $homeDir ".psmux\plugins\$plugin"
+      New-Item -ItemType Directory -Path (Split-Path -Parent $pluginPath) -Force | Out-Null
+      Set-Content -Path $pluginPath -Value "# fake plugin" -Encoding ascii
+    }
+
+    $previousCustomHome = $Env:CUSTOM_HOME
+    $previousPath = $Env:PATH
+    try {
+      $Env:CUSTOM_HOME = $homeDir
+      $Env:PATH = "$scoopShims;$npmBin;$previousPath"
+
+      $powershellPath = (Get-Process -Id $PID).Path
+      $output = & $powershellPath -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "setup\packages.ps1") *>&1 | Out-String
+      Assert-True ($LASTEXITCODE -eq 0) "setup\packages.ps1 failed with exit $LASTEXITCODE"
+    } finally {
+      $Env:CUSTOM_HOME = $previousCustomHome
+      $Env:PATH = $previousPath
+    }
+
+    Assert-True ($output -match 'Skipping claude official installer') "claude from scoop was not skipped: $output"
+    Assert-True ($output -match 'scoop uninstall claude-code') "scoop removal hint was not shown: $output"
+    Assert-True ($output -match 'Skipping codex official installer') "codex from npm was not skipped: $output"
+    Assert-True ($output -match 'npm uninstall -g @openai/codex') "npm removal hint was not shown: $output"
+    Assert-True (-not ($output -match 'Installing (claude|codex) from')) "an official installer ran: $output"
   } finally {
     Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
   }

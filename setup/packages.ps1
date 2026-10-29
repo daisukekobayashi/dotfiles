@@ -95,6 +95,130 @@ function Install-PsmuxPlugins {
   }
 }
 
+function Get-AgentCliRemovalHint {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$FoundPath,
+    [Parameter(Mandatory = $true)]
+    [string]$ScoopApp,
+    [Parameter(Mandatory = $true)]
+    [string]$NpmPackage
+  )
+
+  if ($FoundPath -match "\\scoop\\") {
+    return "scoop uninstall $ScoopApp (check the app name with: scoop list $ScoopApp)"
+  }
+  if ($FoundPath -match "node_modules" -or $FoundPath -match "\\npm\\") {
+    return "npm uninstall -g $NpmPackage"
+  }
+  return "Remove-Item `"$FoundPath`""
+}
+
+# The official installers self-update. Copies from other managers are left in
+# place because PATH order would decide which one runs.
+function Install-AgentCli {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$Name,
+    [Parameter(Mandatory = $true)]
+    [string]$ManagedPath,
+    [Parameter(Mandatory = $true)]
+    [string]$InstallerUri,
+    [Parameter(Mandatory = $true)]
+    [string]$ScoopApp,
+    [Parameter(Mandatory = $true)]
+    [string]$NpmPackage,
+    [hashtable]$Environment = @{}
+  )
+
+  $found = Get-Command -Name $Name -CommandType Application, ExternalScript -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  $foundPath = if ($null -ne $found) { $found.Source } else { "" }
+
+  if (Test-Path -LiteralPath $ManagedPath -PathType Leaf) {
+    if ($foundPath -and -not [string]::Equals($foundPath, $ManagedPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+      Write-Warning "$Name at $foundPath shadows the official install at $ManagedPath. Remove it with:"
+      Write-Warning "  $(Get-AgentCliRemovalHint -FoundPath $foundPath -ScoopApp $ScoopApp -NpmPackage $NpmPackage)"
+    } else {
+      Write-Output "$Name is already installed: $ManagedPath"
+    }
+    return
+  }
+
+  if ($foundPath) {
+    Write-Warning "Skipping $Name official installer because $Name is installed at $foundPath."
+    Write-Warning "To switch to the self-updating official install, remove it and rerun setup:"
+    Write-Warning "  $(Get-AgentCliRemovalHint -FoundPath $foundPath -ScoopApp $ScoopApp -NpmPackage $NpmPackage)"
+    return
+  }
+
+  # The installers call exit, so run them as scripts in a child process.
+  $installerPath = Join-Path ([System.IO.Path]::GetTempPath()) "dotfiles-$Name-install-$([System.Guid]::NewGuid().ToString('N')).ps1"
+  $previousEnvironment = @{}
+  try {
+    Write-Output "Installing $Name from $InstallerUri..."
+    Invoke-WebRequest -Uri $InstallerUri -OutFile $installerPath -UseBasicParsing
+
+    foreach ($key in $Environment.Keys) {
+      $previousEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, "Process")
+      [Environment]::SetEnvironmentVariable($key, $Environment[$key], "Process")
+    }
+    Invoke-SetupPowerShellScript -ScriptPath $installerPath
+  } finally {
+    foreach ($key in $previousEnvironment.Keys) {
+      [Environment]::SetEnvironmentVariable($key, $previousEnvironment[$key], "Process")
+    }
+    if (Test-Path -LiteralPath $installerPath) {
+      Remove-Item -LiteralPath $installerPath -Force
+    }
+  }
+
+  if (-not (Test-Path -LiteralPath $ManagedPath -PathType Leaf)) {
+    throw "$Name installer finished but $ManagedPath was not found."
+  }
+  Write-Output "Installed $Name`: $ManagedPath"
+}
+
+function Install-AgentClis {
+  param (
+    [Parameter(Mandatory = $true)]
+    [pscustomobject]$SetupContext
+  )
+
+  $agentClis = @(
+    @{
+      Name = "claude"
+      ManagedPath = Join-Path $SetupContext.HomeDir ".local\bin\claude.exe"
+      InstallerUri = "https://claude.ai/install.ps1"
+      ScoopApp = "claude-code"
+      NpmPackage = "@anthropic-ai/claude-code"
+      Environment = @{
+        USERPROFILE = $SetupContext.HomeDir
+      }
+    },
+    @{
+      Name = "codex"
+      ManagedPath = Join-Path $SetupContext.LocalAppDataDir "Programs\OpenAI\Codex\bin\codex.exe"
+      InstallerUri = "https://chatgpt.com/codex/install.ps1"
+      ScoopApp = "codex"
+      NpmPackage = "@openai/codex"
+      Environment = @{
+        CODEX_NON_INTERACTIVE = "true"
+        CODEX_HOME = Join-Path $SetupContext.HomeDir ".codex"
+        CODEX_INSTALL_DIR = Join-Path $SetupContext.LocalAppDataDir "Programs\OpenAI\Codex\bin"
+      }
+    }
+  )
+
+  foreach ($agentCli in $agentClis) {
+    try {
+      Install-AgentCli @agentCli
+    } catch {
+      Write-Warning "Package step failed: $($agentCli.Name). Continuing setup. $($_.Exception.Message)"
+    }
+  }
+}
+
 try {
   Assert-MinimumPowerShellVersion
   $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
@@ -106,6 +230,7 @@ try {
   $scoopShim = Join-Path $setupContext.HomeDir "scoop\shims\scoop.ps1"
   if (Test-Path -LiteralPath $scoopShim) {
     Write-Output "Scoop is already installed."
+    Install-AgentClis -SetupContext $setupContext
     Install-PsmuxPlugins -HomeDir $setupContext.HomeDir
     exit 0
   }
@@ -119,6 +244,7 @@ try {
   }
 
   Write-Output "Scoop installation completed."
+  Install-AgentClis -SetupContext $setupContext
   Install-PsmuxPlugins -HomeDir $setupContext.HomeDir
 } catch {
   Write-Error $_.Exception.Message

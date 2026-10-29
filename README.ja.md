@@ -87,6 +87,13 @@ PowerShell 5.1+ と Node.js がある環境では, `.\tests\setup_link_copy.ps1`
 Debian/Ubuntu (WSL を含む) では, `apt` ステップが `setup/apt-packages.txt` の
 ビルド依存を確認し, 不足分を表示します. `sudo apt-get` でのインストールは
 `SETUP_APT_INSTALL=1` のときだけ行います.
+`claude` / `codex` ステップ (macOS では常に実行) は, `PATH` 上に無い場合に
+Claude Code と Codex CLI を公式の自動更新インストーラで `~/.local/bin` に入れます.
+Homebrew や npm などで既に入っている場合は削除せずにそのまま残し, 削除コマンドを表示します.
+削除後に setup を再実行すると公式インストールに切り替わります.
+Windows では `.\setup.ps1 packages` が公式の PowerShell インストーラで同様に処理します
+(`~\.local\bin\claude.exe` と `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`).
+Scoop や npm で入っている場合は残したまま削除コマンドを表示します.
 post では `mise install` を 1 回実行して並列にインストールします. 失敗したツールは
 一覧表示され, `SETUP_MISE_STRICT=1` でなければ処理を継続します.
 
