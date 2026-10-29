@@ -1,0 +1,82 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install test tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats shellcheck tmux vim zsh jq
+
+      - name: Install test tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash bats-core shellcheck tmux vim zsh jq
+
+      - name: Install setup dependencies
+        run: npm --prefix setup ci
+
+      - name: Check generated setup scripts
+        run: scripts/check-skills-build.sh
+
+      - name: Node tests
+        run: npm --prefix setup test
+
+      - name: Bats tests
+        run: bats tests
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install setup dependencies
+        run: npm --prefix setup ci
+
+      - name: PowerShell syntax
+        shell: pwsh
+        run: ./tests/helpers/check_powershell_syntax.ps1 $PWD
+
+      - name: Setup tests (PowerShell 7)
+        shell: pwsh
+        run: ./tests/setup_windows.ps1
+
+      - name: Setup tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./tests/setup_windows.ps1
+
+      - name: Link copy tests
+        shell: pwsh
+        run: ./tests/setup_link_copy.ps1
+
+      - name: claude-pick tests
+        shell: pwsh
+        run: ./tests/claude_pick.ps1

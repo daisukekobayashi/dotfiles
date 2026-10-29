@@ -499,6 +499,9 @@ bats tests
 `tests/powershell.bats` が全ての `.ps1` の構文を確認し, `tests/setup_windows.ps1` を
 Windows の API が必要なケースを除いて実行します.
 
+GitHub Actions (`.github/workflows/test.yml`) が Ubuntu と macOS でこれらを実行し,
+Windows では PowerShell 7 と Windows PowerShell 5.1 で PowerShell のテストを実行します.
+
 Claude setup / picker の確認は一時 HOME と偽の Claude コマンドを使い,
 ログイン・API 呼び出しは行いません.
 
