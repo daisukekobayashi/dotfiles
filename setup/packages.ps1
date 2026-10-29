@@ -263,7 +263,7 @@ try {
   Assert-MinimumPowerShellVersion
   $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
 
-  if (Test-IsAdministrator) {
+  if (Test-SetupElevationBlocked) {
     throw "setup/packages.ps1 must be run from a non-elevated PowerShell session."
   }
 

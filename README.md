@@ -110,7 +110,8 @@ another manager, setup leaves it in place and prints the command to remove it;
 rerun setup afterwards to switch to the official install.
 On Windows, `.\setup.ps1` uses the same phases with the steps `links`, `scoop`
 and `mise` (bootstrap), `claude` and `codex` (tools), and `psmux` (plugins), and accepts
-`--only` and `--skip`; steps other than `links` are skipped in an elevated session.
+`--only` and `--skip`; steps other than `links` are skipped in an elevated session
+unless `SETUP_ALLOW_ELEVATED=1` is set (CI uses this on always-elevated runners).
 The `claude` and `codex` steps there use the official PowerShell
 installers (`~\.local\bin\claude.exe` and
 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`); Scoop or npm copies

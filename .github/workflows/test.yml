@@ -47,10 +47,13 @@ jobs:
         run: npm --prefix setup test
 
       - name: Bats tests
-        run: bats tests
+        run: bats --print-output-on-failure tests
 
   windows:
     runs-on: windows-latest
+    env:
+      # GitHub-hosted Windows runners only have elevated sessions.
+      SETUP_ALLOW_ELEVATED: "1"
     steps:
       - uses: actions/checkout@v4
 
