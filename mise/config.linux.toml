@@ -6,8 +6,9 @@ fzf = "0.74.5"
 fd = "10.5.0"
 bat = "0.26.1"
 zoxide = "0.10.0"
-atuin = "18.24.2"
-yazi = "26.9.1"
+# musl builds: the gnu builds require glibc 2.39 (Ubuntu 24.04+).
+"github:atuinsh/atuin" = { version = "18.24.2", asset_pattern = "atuin-x86_64-unknown-linux-musl.tar.gz" }
+"github:sxyazi/yazi" = { version = "26.9.1", asset_pattern = "yazi-x86_64-unknown-linux-musl.zip" }
 delta = "0.20.1"
 lazygit = "0.59"
 lazydocker = "0.25"
