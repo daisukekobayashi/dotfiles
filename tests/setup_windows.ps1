@@ -178,7 +178,7 @@ Invoke-Test "PowerShell profile tolerates empty mise activation output" {
   }
 }
 
-Invoke-Test "Windows packages setup installs PPM when Scoop already exists" {
+Invoke-Test "Windows plugins setup installs PPM and psmux plugins" {
   $testRoot = New-TestDirectory
   try {
     $homeDir = Join-Path $testRoot "home"
@@ -187,12 +187,6 @@ Invoke-Test "Windows packages setup installs PPM when Scoop already exists" {
     New-Item -ItemType Directory -Path (Join-Path $homeDir "scoop\shims") -Force | Out-Null
     New-Item -ItemType Directory -Path $fakeBin -Force | Out-Null
     Set-Content -Path (Join-Path $homeDir "scoop\shims\scoop.ps1") -Value "# fake scoop" -Encoding utf8
-    # Existing official installs keep this test from downloading the agent CLI installers.
-    foreach ($agentCliPath in @(".local\bin\claude.exe", "AppData\Local\Programs\OpenAI\Codex\bin\codex.exe")) {
-      $agentCliFullPath = Join-Path $homeDir $agentCliPath
-      New-Item -ItemType Directory -Path (Split-Path -Parent $agentCliFullPath) -Force | Out-Null
-      Set-Content -Path $agentCliFullPath -Value "" -Encoding ascii
-    }
 
     $gitShim = @'
 @echo off
@@ -232,8 +226,8 @@ exit /b 1
       $Env:PATH = "$fakeBin;$previousPath"
 
       $powershellPath = (Get-Process -Id $PID).Path
-      & $powershellPath -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "setup\packages.ps1")
-      Assert-True ($LASTEXITCODE -eq 0) "setup\packages.ps1 failed with exit $LASTEXITCODE"
+      & $powershellPath -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "setup.ps1") plugins
+      Assert-True ($LASTEXITCODE -eq 0) "setup.ps1 plugins failed with exit $LASTEXITCODE"
     } finally {
       $Env:CUSTOM_HOME = $previousCustomHome
       $Env:GIT_LOG = $previousGitLog
@@ -258,22 +252,15 @@ exit /b 1
   }
 }
 
-Invoke-Test "Windows packages setup skips agent CLIs installed by other managers" {
+Invoke-Test "Windows tools setup skips agent CLIs installed by other managers" {
   $testRoot = New-TestDirectory
   try {
     $homeDir = Join-Path $testRoot "home"
     $scoopShims = Join-Path $testRoot "scoop\shims"
     $npmBin = Join-Path $testRoot "npm"
-    New-Item -ItemType Directory -Path (Join-Path $homeDir "scoop\shims") -Force | Out-Null
-    New-Item -ItemType Directory -Path $scoopShims, $npmBin -Force | Out-Null
-    Set-Content -Path (Join-Path $homeDir "scoop\shims\scoop.ps1") -Value "# fake scoop" -Encoding utf8
+    New-Item -ItemType Directory -Path $homeDir, $scoopShims, $npmBin -Force | Out-Null
     Set-Content -Path (Join-Path $scoopShims "claude.cmd") -Value "@exit /b 0" -Encoding ascii
     Set-Content -Path (Join-Path $npmBin "codex.cmd") -Value "@exit /b 0" -Encoding ascii
-    foreach ($plugin in @("ppm\ppm.ps1", "psmux-sensible\plugin.conf", "psmux-pain-control\plugin.conf", "psmux-resurrect\plugin.conf", "psmux-continuum\plugin.conf", "psmux-theme-kanagawa\plugin.conf")) {
-      $pluginPath = Join-Path $homeDir ".psmux\plugins\$plugin"
-      New-Item -ItemType Directory -Path (Split-Path -Parent $pluginPath) -Force | Out-Null
-      Set-Content -Path $pluginPath -Value "# fake plugin" -Encoding ascii
-    }
 
     $previousCustomHome = $Env:CUSTOM_HOME
     $previousPath = $Env:PATH
@@ -282,8 +269,8 @@ Invoke-Test "Windows packages setup skips agent CLIs installed by other managers
       $Env:PATH = "$scoopShims;$npmBin;$previousPath"
 
       $powershellPath = (Get-Process -Id $PID).Path
-      $output = & $powershellPath -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "setup\packages.ps1") *>&1 | Out-String
-      Assert-True ($LASTEXITCODE -eq 0) "setup\packages.ps1 failed with exit $LASTEXITCODE"
+      $output = & $powershellPath -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "setup.ps1") tools *>&1 | Out-String
+      Assert-True ($LASTEXITCODE -eq 0) "setup.ps1 tools failed with exit $LASTEXITCODE"
     } finally {
       $Env:CUSTOM_HOME = $previousCustomHome
       $Env:PATH = $previousPath
@@ -294,6 +281,80 @@ Invoke-Test "Windows packages setup skips agent CLIs installed by other managers
     Assert-True ($output -match 'Skipping codex official installer') "codex from npm was not skipped: $output"
     Assert-True ($output -match 'npm uninstall -g @openai/codex') "npm removal hint was not shown: $output"
     Assert-True (-not ($output -match 'Installing (claude|codex) from')) "an official installer ran: $output"
+  } finally {
+    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
+function Invoke-SetupForTest {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$HomeDir,
+    [string[]]$Arguments = @()
+  )
+
+  $previousCustomHome = $Env:CUSTOM_HOME
+  try {
+    $Env:CUSTOM_HOME = $HomeDir
+    $powershellPath = (Get-Process -Id $PID).Path
+    $output = & $powershellPath -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "setup.ps1") @Arguments *>&1 | Out-String
+    return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
+  } finally {
+    $Env:CUSTOM_HOME = $previousCustomHome
+  }
+}
+
+function New-InstalledPsmuxPlugins {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$HomeDir
+  )
+
+  foreach ($plugin in @("ppm\ppm.ps1", "psmux-sensible\plugin.conf", "psmux-pain-control\plugin.conf", "psmux-resurrect\plugin.conf", "psmux-continuum\plugin.conf", "psmux-theme-kanagawa\plugin.conf")) {
+    $pluginPath = Join-Path $HomeDir ".psmux\plugins\$plugin"
+    New-Item -ItemType Directory -Path (Split-Path -Parent $pluginPath) -Force | Out-Null
+    Set-Content -Path $pluginPath -Value "# fake plugin" -Encoding ascii
+  }
+}
+
+Invoke-Test "Windows all --only runs selected steps across phases" {
+  $testRoot = New-TestDirectory
+  try {
+    $homeDir = Join-Path $testRoot "home"
+    New-InstalledPsmuxPlugins -HomeDir $homeDir
+
+    $result = Invoke-SetupForTest -HomeDir $homeDir -Arguments @("all", "--only", "psmux")
+    Assert-True ($result.ExitCode -eq 0) "setup.ps1 all --only psmux failed: $($result.Output)"
+    Assert-True ($result.Output -match 'Skipping step: links') "links was not skipped: $($result.Output)"
+    Assert-True ($result.Output -match 'Skipping step: claude') "claude was not skipped: $($result.Output)"
+    Assert-True ($result.Output -match 'Running step: psmux') "psmux did not run: $($result.Output)"
+    Assert-True ($result.Output -match 'Psmux plugins are already installed') "psmux step output missing: $($result.Output)"
+  } finally {
+    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
+Invoke-Test "Windows phase subcommands reject steps from other phases" {
+  $testRoot = New-TestDirectory
+  try {
+    $result = Invoke-SetupForTest -HomeDir (Join-Path $testRoot "home") -Arguments @("tools", "--only", "psmux")
+    Assert-True ($result.ExitCode -ne 0) "setup.ps1 tools --only psmux should fail"
+    Assert-True ($result.Output -match 'Unknown step: psmux\. Steps for this subcommand: claude,codex') "unexpected error: $($result.Output)"
+  } finally {
+    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
+Invoke-Test "Windows packages is a deprecated alias without links" {
+  $testRoot = New-TestDirectory
+  try {
+    $homeDir = Join-Path $testRoot "home"
+    New-InstalledPsmuxPlugins -HomeDir $homeDir
+
+    $result = Invoke-SetupForTest -HomeDir $homeDir -Arguments @("packages", "--only", "psmux")
+    Assert-True ($result.ExitCode -eq 0) "setup.ps1 packages --only psmux failed: $($result.Output)"
+    Assert-True ($result.Output -match "'packages' is deprecated") "deprecation warning missing: $($result.Output)"
+    Assert-True ($result.Output -notmatch 'step: links') "packages should not include links: $($result.Output)"
   } finally {
     Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
   }

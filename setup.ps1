@@ -15,20 +15,28 @@ $DEFAULT_DOTFILES_ROOT = $PSScriptRoot
 
 function Show-Usage {
   @"
-Usage: .\setup.ps1 <subcommand> [-Copy]
+Usage: .\setup.ps1 <subcommand> [-Copy] [args]
 
 Subcommands:
-  all         Run Windows setup for the current privilege level
+  all         Run every phase in order: links -> bootstrap -> tools -> plugins
   links       Install Windows configuration links (copy if privileges are unavailable)
+  bootstrap   Install or verify Scoop (scoop)
+  tools       Install Claude Code and Codex CLI with official installers (claude, codex)
+  plugins     Install psmux PPM and plugins (psmux)
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment
   claude      Create or refresh a separate Claude Code environment
-  packages    Install or verify Scoop, Claude Code, Codex CLI, and psmux PPM
   help        Show this help
 
+  packages    Deprecated: bootstrap, tools, and plugins
+
+all/links/bootstrap/tools/plugins args:
+  --only <csv>   Run only selected steps (e.g. claude,codex)
+  --skip <csv>   Skip selected steps (e.g. psmux)
+
 Behavior:
-  all (non-admin): runs packages, then links
-  all (admin): skips packages and runs links only
+  Steps other than links need a non-elevated session; elevated runs skip them
+  A failed step is reported and setup continues, unless SETUP_STRICT=1
   links/skills/claude: retry link creation elevated when privileges are unavailable, then copy if needed
   -Copy: skip link attempts for links, all, user-scope skills or claude; rerun setup to refresh copies
   skills: runs the shared Node skills setup runtime
@@ -42,16 +50,125 @@ Behavior:
 "@
 }
 
+# Phases run in this order and use the same step names as setup.sh where the
+# step exists on both platforms.
+$SetupPhases = [ordered]@{
+  links = @("links")
+  bootstrap = @("scoop")
+  tools = @("claude", "codex")
+  plugins = @("psmux")
+}
+
+function Get-SubcommandSteps {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$Name
+  )
+
+  if ($Name -eq "all" -or $Name -eq "packages") {
+    $phaseNames = @($SetupPhases.Keys)
+    if ($Name -eq "packages") {
+      $phaseNames = @($phaseNames | Where-Object { $_ -ne "links" })
+    }
+    return @($phaseNames | ForEach-Object { $SetupPhases[$_] })
+  }
+  return @($SetupPhases[$Name])
+}
+
+# PowerShell may pass "a,b" as one argument or as several, so values continue
+# until the next option.
+function Read-StepArguments {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$Name,
+    [string[]]$Arguments = @()
+  )
+
+  $selection = @{ only = @(); skip = @() }
+  $option = $null
+  foreach ($argument in $Arguments) {
+    if ($argument -eq "--only" -or $argument -eq "--skip") {
+      $option = $argument.Substring(2)
+      continue
+    }
+    if ($null -eq $option) {
+      throw "Unknown $Name argument: $argument. Run '.\setup.ps1 help' for usage."
+    }
+    $selection[$option] += @($argument -split '[,\s]+' | Where-Object { $_ })
+  }
+  return $selection
+}
+
+function Invoke-SetupSteps {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string[]]$Steps,
+    [string[]]$Only = @(),
+    [string[]]$Skip = @(),
+    [Parameter(Mandatory = $true)]
+    [pscustomobject]$SetupContext,
+    [string[]]$CopyArguments = @()
+  )
+
+  foreach ($selected in @($Only + $Skip)) {
+    if ($selected -notin $Steps) {
+      throw "Unknown step: $selected. Steps for this subcommand: $($Steps -join ',')"
+    }
+  }
+
+  $strict = $Env:SETUP_STRICT -eq "1"
+  $isAdministrator = Test-IsAdministrator
+  $linksScript = Join-Path $SetupContext.DotfilesRoot "setup/links.ps1"
+  $packagesScript = Join-Path $SetupContext.DotfilesRoot "setup/packages.ps1"
+  $failedSteps = @()
+
+  foreach ($step in $Steps) {
+    if (($Only.Count -gt 0 -and $step -notin $Only) -or $step -in $Skip) {
+      Write-Output "Skipping step: $step"
+      continue
+    }
+    if ($step -ne "links" -and $isAdministrator) {
+      Write-Warning "Skipping step: $step because this session is elevated. Rerun it from a non-elevated session."
+      continue
+    }
+
+    Write-Output "Running step: $step"
+    try {
+      if ($step -eq "links") {
+        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList (@(
+          "-HomeDir",
+          $SetupContext.HomeDir,
+          "-DotfilesRoot",
+          $SetupContext.DotfilesRoot
+        ) + $CopyArguments)
+      } else {
+        Invoke-SetupPowerShellScript -ScriptPath $packagesScript -ArgumentList @("-Step", $step)
+      }
+    } catch {
+      if ($strict) {
+        throw "Step failed: $step. $($_.Exception.Message)"
+      }
+      $failedSteps += $step
+      Write-Warning "Step failed: $step. Continuing setup. $($_.Exception.Message)"
+    }
+  }
+
+  if ($failedSteps.Count -gt 0) {
+    Write-Warning "Continuing despite failed steps: $($failedSteps -join ' ')"
+  }
+}
+
 try {
   Assert-MinimumPowerShellVersion
   $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
   $Env:SETUP_DOTFILES_ROOT = $setupContext.DotfilesRoot
+  if (-not [string]::IsNullOrEmpty($Env:SETUP_STRICT) -and $Env:SETUP_STRICT -notin @("0", "1")) {
+    throw "SETUP_STRICT must be 0 or 1: $Env:SETUP_STRICT"
+  }
 
-  $linksScript = Join-Path $setupContext.DotfilesRoot "setup/links.ps1"
   $skillsScript = Join-Path $setupContext.DotfilesRoot "setup/skills.ps1"
   $codexScript = Join-Path $setupContext.DotfilesRoot "setup/codex.ps1"
   $claudeScript = Join-Path $setupContext.DotfilesRoot "setup/claude.ps1"
-  $packagesScript = Join-Path $setupContext.DotfilesRoot "setup/packages.ps1"
 
   $copyArguments = @()
   if ($Copy) {
@@ -62,44 +179,14 @@ try {
   }
 
   switch ($Subcommand.ToLowerInvariant()) {
-    "all" {
-      if ($SubcommandArgs.Count -gt 0) {
-        Show-Usage
-        throw "Unknown arguments for subcommand '$Subcommand': $($SubcommandArgs -join ' ')"
+    { $_ -in @("all", "links", "bootstrap", "tools", "plugins", "packages") } {
+      $name = $Subcommand.ToLowerInvariant()
+      if ($name -eq "packages") {
+        Write-Warning "'packages' is deprecated; use 'bootstrap', 'tools', and 'plugins' (or 'all --skip links')."
       }
-
-      if (Test-IsAdministrator) {
-        Write-Output "Running elevated. Skipping packages and running links only."
-        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList (@(
-          "-HomeDir",
-          $setupContext.HomeDir,
-          "-DotfilesRoot",
-          $setupContext.DotfilesRoot
-        ) + $copyArguments)
-      } else {
-        Write-Output "Running packages in the current non-elevated session..."
-        Invoke-SetupPowerShellScript -ScriptPath $packagesScript
-        Write-Output "Running links in the current session..."
-        Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList (@(
-          "-HomeDir",
-          $setupContext.HomeDir,
-          "-DotfilesRoot",
-          $setupContext.DotfilesRoot
-        ) + $copyArguments)
-      }
-    }
-    "links" {
-      if ($SubcommandArgs.Count -gt 0) {
-        Show-Usage
-        throw "Unknown arguments for subcommand '$Subcommand': $($SubcommandArgs -join ' ')"
-      }
-
-      Invoke-SetupPowerShellScript -ScriptPath $linksScript -ArgumentList (@(
-        "-HomeDir",
-        $setupContext.HomeDir,
-        "-DotfilesRoot",
-        $setupContext.DotfilesRoot
-      ) + $copyArguments)
+      $selection = Read-StepArguments -Name $name -Arguments $SubcommandArgs
+      Invoke-SetupSteps -Steps (Get-SubcommandSteps -Name $name) -Only $selection.only -Skip $selection.skip `
+        -SetupContext $setupContext -CopyArguments $copyArguments
     }
     "skills" {
       Invoke-SetupPowerShellScript -ScriptPath $skillsScript -ArgumentList (
@@ -130,14 +217,6 @@ try {
           $setupContext.DotfilesRoot
         ) + $copyArguments + $SubcommandArgs
       )
-    }
-    "packages" {
-      if ($SubcommandArgs.Count -gt 0) {
-        Show-Usage
-        throw "Unknown arguments for subcommand '$Subcommand': $($SubcommandArgs -join ' ')"
-      }
-
-      Invoke-SetupPowerShellScript -ScriptPath $packagesScript
     }
     "help" {
       if ($SubcommandArgs.Count -gt 0) {

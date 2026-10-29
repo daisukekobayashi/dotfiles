@@ -1,5 +1,9 @@
 [CmdletBinding()]
-param()
+param(
+  [Parameter(Mandatory = $true)]
+  [ValidateSet("scoop", "claude", "codex", "psmux")]
+  [string]$Step
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -179,60 +183,56 @@ function Install-AgentCli {
   Write-Output "Installed $Name`: $ManagedPath"
 }
 
-function Install-AgentClis {
+function Get-AgentCliSpec {
   param (
+    [Parameter(Mandatory = $true)]
+    [string]$Name,
     [Parameter(Mandatory = $true)]
     [pscustomobject]$SetupContext
   )
 
-  $agentClis = @(
-    @{
-      Name = "claude"
-      ManagedPath = Join-Path $SetupContext.HomeDir ".local\bin\claude.exe"
-      InstallerUri = "https://claude.ai/install.ps1"
-      ScoopApp = "claude-code"
-      NpmPackage = "@anthropic-ai/claude-code"
-      Environment = @{
-        USERPROFILE = $SetupContext.HomeDir
-      }
-    },
-    @{
-      Name = "codex"
-      ManagedPath = Join-Path $SetupContext.LocalAppDataDir "Programs\OpenAI\Codex\bin\codex.exe"
-      InstallerUri = "https://chatgpt.com/codex/install.ps1"
-      ScoopApp = "codex"
-      NpmPackage = "@openai/codex"
-      Environment = @{
-        CODEX_NON_INTERACTIVE = "true"
-        CODEX_HOME = Join-Path $SetupContext.HomeDir ".codex"
-        CODEX_INSTALL_DIR = Join-Path $SetupContext.LocalAppDataDir "Programs\OpenAI\Codex\bin"
+  switch ($Name) {
+    "claude" {
+      return @{
+        Name = "claude"
+        ManagedPath = Join-Path $SetupContext.HomeDir ".local\bin\claude.exe"
+        InstallerUri = "https://claude.ai/install.ps1"
+        ScoopApp = "claude-code"
+        NpmPackage = "@anthropic-ai/claude-code"
+        Environment = @{
+          USERPROFILE = $SetupContext.HomeDir
+        }
       }
     }
-  )
-
-  foreach ($agentCli in $agentClis) {
-    try {
-      Install-AgentCli @agentCli
-    } catch {
-      Write-Warning "Package step failed: $($agentCli.Name). Continuing setup. $($_.Exception.Message)"
+    "codex" {
+      return @{
+        Name = "codex"
+        ManagedPath = Join-Path $SetupContext.LocalAppDataDir "Programs\OpenAI\Codex\bin\codex.exe"
+        InstallerUri = "https://chatgpt.com/codex/install.ps1"
+        ScoopApp = "codex"
+        NpmPackage = "@openai/codex"
+        Environment = @{
+          CODEX_NON_INTERACTIVE = "true"
+          CODEX_HOME = Join-Path $SetupContext.HomeDir ".codex"
+          CODEX_INSTALL_DIR = Join-Path $SetupContext.LocalAppDataDir "Programs\OpenAI\Codex\bin"
+        }
+      }
     }
   }
+
+  throw "Unknown agent CLI: $Name"
 }
 
-try {
-  Assert-MinimumPowerShellVersion
-  $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
+function Install-Scoop {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$HomeDir
+  )
 
-  if (Test-IsAdministrator) {
-    throw "setup/packages.ps1 must be run from a non-elevated PowerShell session."
-  }
-
-  $scoopShim = Join-Path $setupContext.HomeDir "scoop\shims\scoop.ps1"
+  $scoopShim = Join-Path $HomeDir "scoop\shims\scoop.ps1"
   if (Test-Path -LiteralPath $scoopShim) {
     Write-Output "Scoop is already installed."
-    Install-AgentClis -SetupContext $setupContext
-    Install-PsmuxPlugins -HomeDir $setupContext.HomeDir
-    exit 0
+    return
   }
 
   Write-Output "Scoop is not installed. Installing Scoop..."
@@ -244,8 +244,29 @@ try {
   }
 
   Write-Output "Scoop installation completed."
-  Install-AgentClis -SetupContext $setupContext
-  Install-PsmuxPlugins -HomeDir $setupContext.HomeDir
+}
+
+# setup.ps1 runs one step per call so it can report and continue past failures.
+try {
+  Assert-MinimumPowerShellVersion
+  $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
+
+  if (Test-IsAdministrator) {
+    throw "setup/packages.ps1 must be run from a non-elevated PowerShell session."
+  }
+
+  switch ($Step) {
+    "scoop" {
+      Install-Scoop -HomeDir $setupContext.HomeDir
+    }
+    { $_ -in @("claude", "codex") } {
+      $agentCli = Get-AgentCliSpec -Name $Step -SetupContext $setupContext
+      Install-AgentCli @agentCli
+    }
+    "psmux" {
+      Install-PsmuxPlugins -HomeDir $setupContext.HomeDir
+    }
+  }
 } catch {
   Write-Error $_.Exception.Message
   exit 1

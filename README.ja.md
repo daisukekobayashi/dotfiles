@@ -104,7 +104,10 @@ Debian/Ubuntu (WSL を含む) では, `apt` ステップが `setup/apt-packages.
 Claude Code と Codex CLI を公式の自動更新インストーラで `~/.local/bin` に入れます.
 Homebrew や npm などで既に入っている場合は削除せずにそのまま残し, 削除コマンドを表示します.
 削除後に setup を再実行すると公式インストールに切り替わります.
-Windows では `.\setup.ps1 packages` が公式の PowerShell インストーラで同様に処理します
+Windows の `.\setup.ps1` も同じフェーズで, `links`, `scoop` (bootstrap), `claude` と `codex` (tools),
+`psmux` (plugins) のステップを持ち, `--only` / `--skip` を使えます. 管理者として実行した場合は
+`links` 以外のステップをスキップします.
+`claude` / `codex` ステップは公式の PowerShell インストーラで同様に処理します
 (`~\.local\bin\claude.exe` と `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`).
 Scoop や npm で入っている場合は残したまま削除コマンドを表示します.
 `mise-tools` ステップでは `mise install` を 1 回実行して並列にインストールします. 失敗したツールは

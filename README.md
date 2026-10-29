@@ -110,7 +110,10 @@ and Codex CLI with their official self-updating installers into `~/.local/bin`
 when neither is on `PATH`. If one is already installed by Homebrew, npm, or
 another manager, setup leaves it in place and prints the command to remove it;
 rerun setup afterwards to switch to the official install.
-On Windows, `.\setup.ps1 packages` does the same with the official PowerShell
+On Windows, `.\setup.ps1` uses the same phases with the steps `links`, `scoop`
+(bootstrap), `claude` and `codex` (tools), and `psmux` (plugins), and accepts
+`--only` and `--skip`; steps other than `links` are skipped in an elevated session.
+The `claude` and `codex` steps there use the official PowerShell
 installers (`~\.local\bin\claude.exe` and
 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`); Scoop or npm copies
 are left in place with a removal hint.
