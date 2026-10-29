@@ -1,13 +1,13 @@
 [tools]
 neovim = "0.12"
 ripgrep = "15"
-fzf = "0.73.1"
+fzf = "0.74.5"
 lazygit = "0.59"
 gitui = "0.28"
 github-cli = "2"
 ruff = "0.17"
 uv = "0.13"
-yt-dlp = "2026.08.19"
+yt-dlp = "2026.10.26"
 azure = "2"
 gcloud = "543"
 

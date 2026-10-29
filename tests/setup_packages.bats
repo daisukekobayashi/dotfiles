@@ -272,41 +272,41 @@ EOF
   local -a mise_tools=(
     'lazydocker = "0.25"'
     'oxker = "0.13"'
-    'yazi = "26.5.6"'
-    'fzf = "0.73.1"'
-    'fd = "10.4.2"'
+    'yazi = "26.9.1"'
+    'fzf = "0.74.5"'
+    'fd = "10.5.0"'
     'bat = "0.26.1"'
-    'zoxide = "0.9.9"'
-    'atuin = "18.16.1"'
-    'delta = "0.19.2"'
-    '"aqua:dlvhdr/gh-dash" = "4.24.1"'
+    'zoxide = "0.10.0"'
+    'atuin = "18.24.2"'
+    'delta = "0.20.1"'
+    '"aqua:dlvhdr/gh-dash" = "4.26.2"'
     'mprocs = "0.9.3"'
-    'just = "1.51.0"'
-    'watchexec = "2.5.1"'
-    'process-compose = "1.110.0"'
+    'just = "1.59.0"'
+    'watchexec = "2.8.0"'
+    'process-compose = "1.124.0"'
     '"cargo:pueue" = "4.0.4"'
     'duf = "0.9.1"'
-    'gdu = "5.36.1"'
-    'dua = "2.34.0"'
-    'dust = "1.2.4"'
+    'gdu = "5.38.0"'
+    'dua = "2.46.0"'
+    'dust = "1.2.6"'
     '"aqua:jorgerojas26/lazysql" = "0.5.0"'
     '"pipx:harlequin" = { version = "2.5.2", uvx_args = "--python 3.13" }'
     'glow = "2.1.2"'
     'ast-grep = "0.43.0"'
     'jless = "0.9.0"'
     '"aqua:noahgorstein/jqp" = "0.8.0"'
-    '"aqua:tstack/lnav" = "0.14.0"'
+    '"aqua:tstack/lnav" = "0.14.1"'
     '"aqua:wagoodman/dive" = "0.13.1"'
-    '"aqua:hatoo/oha" = "1.14.0"'
-    '"aqua:derailed/k9s" = "0.50.18"'
+    '"aqua:hatoo/oha" = "1.16.0"'
+    '"aqua:derailed/k9s" = "0.51.0"'
     '"cargo:termscp" = { version = "1.0.0", default-features = false }'
-    'eza = "0.23.4"'
-    'jq = "1.8.1"'
-    'yq = "4.53.2"'
+    'eza = "0.23.5"'
+    'jq = "1.8.2"'
+    'yq = "4.54.1"'
     'sd = "1.1.0"'
     'hyperfine = "1.20.0"'
-    '"aqua:dalance/procs" = "0.14.11"'
-    'xh = "0.25.3"'
+    '"aqua:dalance/procs" = "0.14.12"'
+    'xh = "0.26.3"'
     'tokei = "14.0.0"'
   )
 
@@ -327,7 +327,7 @@ EOF
   run grep -F 'brew "oxker"' "$(repo_root)/brew/Brewfile"
   [ "$status" -eq 0 ]
 
-  run grep -F '"aqua:dlvhdr/gh-dash" = "4.24.1"' "$(repo_root)/mise/config.macos.toml"
+  run grep -F '"aqua:dlvhdr/gh-dash" = "4.26.2"' "$(repo_root)/mise/config.macos.toml"
   [ "$status" -eq 0 ]
 
   for config in "$(repo_root)/mise/config.linux.toml" "$(repo_root)/mise/config.wsl.toml"; do
@@ -420,9 +420,9 @@ EOF
   cat > "${fake_bin}/tar" <<'EOF'
 #!/usr/bin/env bash
 dest="${@: -1}"
-mkdir -p "${dest}/luarocks-3.11.1"
-printf '#!/usr/bin/env bash\nexit 1\n' > "${dest}/luarocks-3.11.1/configure"
-chmod +x "${dest}/luarocks-3.11.1/configure"
+mkdir -p "${dest}/luarocks-3.13.0"
+printf '#!/usr/bin/env bash\nexit 1\n' > "${dest}/luarocks-3.13.0/configure"
+chmod +x "${dest}/luarocks-3.13.0/configure"
 EOF
   chmod +x "${fake_bin}/tar"
 
