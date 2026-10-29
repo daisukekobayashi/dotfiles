@@ -1,6 +1,3 @@
-source "${HOME}/.dotfiles/utils.sh"
-load_tool_versions
-
 detect_platform() {
   local unamestr
   unamestr="$(uname)"
@@ -42,14 +39,7 @@ refresh_tmux_path() {
 }
 
 unamestr="$(uname)"
-if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MINGW32_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MSYS_NT-10.0' ]] ||
-   [[ "${unamestr}" == 'MINGW64_NT-10.0' ]] ||
-   [[ "${unamestr}" == 'MINGW32_NT-10.0' ]]; then
-  :
-elif [[ "${unamestr}" == 'Linux' ]]; then
+if [[ "${unamestr}" == 'Linux' ]]; then
   export DOTFILES_PLATFORM="$(detect_platform)"
   export MISE_ENV="$(detect_mise_env)"
   eval "$(~/.local/bin/mise activate zsh)"

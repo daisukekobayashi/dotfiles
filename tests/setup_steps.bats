@@ -26,7 +26,7 @@ run_setup_dry() {
 
   [ "$status" -eq 0 ]
   run bash -c 'grep -oE "Running step: [a-z-]+" <<< "$1" | cut -d" " -f3 | paste -sd,' _ "$output"
-  [ "$output" = "links,apt,homebrew,sheldon,mise,mise-tools,uv-tools,claude,codex,tmux,luarocks,alacritty,tpm,themes" ]
+  [ "$output" = "links,apt,homebrew,sheldon,mise,mise-tools,uv-tools,claude,codex,tmux,luarocks,tpm" ]
 }
 
 @test "all --only applies to every phase" {
@@ -69,7 +69,7 @@ run_setup_dry() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"'post' is deprecated"* ]]
   run bash -c 'grep -oE "Running step: [a-z-]+" <<< "$1" | cut -d" " -f3 | paste -sd,' _ "$output"
-  [ "$output" = "mise-tools,uv-tools,tpm,themes" ]
+  [ "$output" = "mise-tools,uv-tools,tpm" ]
 }
 
 @test "packages is a deprecated alias for bootstrap, tools, and plugins" {

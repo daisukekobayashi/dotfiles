@@ -44,7 +44,7 @@ setup はフェーズ単位で実行します. `all` は次の順に実行し, �
 | `links` | `links` (設定ファイルのリンクと生成) |
 | `bootstrap` | `apt`, `homebrew`, `sheldon`, `mise` (OS パッケージとツールの管理ツール) |
 | `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks` |
-| `plugins` | `alacritty`, `tpm`, `themes` (ツールの上に乗るプラグインや付属ファイル) |
+| `plugins` | `tpm` (ツールの上に乗るプラグイン) |
 
 - `./setup.sh all`
 - `./setup.sh links`, `./setup.sh bootstrap`, `./setup.sh tools`, `./setup.sh plugins`
@@ -52,7 +52,7 @@ setup はフェーズ単位で実行します. `all` は次の順に実行し, �
 その環境で対象外のステップは, メッセージを表示してスキップします. 例えば macOS では
 `sheldon`, `tmux`, `luarocks` を `homebrew` ステップで `brew/Brewfile` から入れます.
 `packages` と `post` は非推奨の別名として残しています. `packages` は `bootstrap`, `tools`,
-`plugins` を, `post` は `mise-tools`, `uv-tools`, `tpm`, `themes` を実行します.
+`plugins` を, `post` は `mise-tools`, `uv-tools`, `tpm` を実行します.
 
 Windows の `.\setup.ps1 links`, user scope の `skills`, 名前付き `claude` env は,
 通常権限でリンクを作成し, symlink 権限が不足するとリンク作成だけを UAC で昇格して

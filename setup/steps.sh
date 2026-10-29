@@ -10,7 +10,7 @@ list_phase_steps() {
     links) printf '%s\n' links ;;
     bootstrap) printf '%s\n' apt homebrew sheldon mise ;;
     tools) printf '%s\n' mise-tools uv-tools claude codex tmux luarocks ;;
-    plugins) printf '%s\n' alacritty tpm themes ;;
+    plugins) printf '%s\n' tpm ;;
     *) return 1 ;;
   esac
 }
@@ -36,7 +36,7 @@ list_subcommand_steps() {
       list_phase_steps plugins
       ;;
     post)
-      printf '%s\n' mise-tools uv-tools tpm themes
+      printf '%s\n' mise-tools uv-tools tpm
       ;;
     *)
       return 1
@@ -163,15 +163,8 @@ run_setup_step() {
       require_linux_step luarocks || return 0
       install_luarocks "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}"
       ;;
-    alacritty)
-      require_linux_step alacritty || return 0
-      setup_alacritty "${SETUP_DOTFILES_ROOT}" "${SETUP_HOME}" "${SETUP_DRY_RUN}"
-      ;;
     tpm)
       install_tmux_plugins "${SETUP_HOME}" "${SETUP_DRY_RUN}"
-      ;;
-    themes)
-      install_terminal_themes "${SETUP_HOME}" "${SETUP_DRY_RUN}"
       ;;
     *)
       log_error "Unknown step: ${step}"

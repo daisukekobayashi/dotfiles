@@ -44,8 +44,7 @@ teardown() {
 @test "post step does not create a tmux session when sessions already exist" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -109,8 +108,7 @@ EOF
 @test "post step cleans up a named tmux bootstrap session when no sessions exist" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -177,8 +175,7 @@ EOF
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   local session_state="${TEST_ROOT}/tmux-session-exists"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -254,8 +251,7 @@ EOF
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   local session_state="${TEST_ROOT}/tmux-session-exists"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
   : > "${TEST_HOME}/.tmux.conf"
 
@@ -334,8 +330,7 @@ EOF
 @test "post step treats tmux plugin install as best effort and cleans up the bootstrap session" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -400,8 +395,7 @@ EOF
 @test "post step continues when a mise tool install fails by default" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -471,8 +465,7 @@ EOF
 
 @test "post step fails in strict mode when a mise tool install fails" {
   local fake_bin="${TEST_ROOT}/bin"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -534,8 +527,7 @@ EOF
 @test "post step uses wsl mise env when running under WSL" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -598,8 +590,7 @@ EOF
 @test "post step installs uv-managed cli tools" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -660,7 +651,7 @@ EOF
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
-    "${TEST_HOME}/.vim/autoload" "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+    "${TEST_HOME}/.vim/autoload"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -749,8 +740,7 @@ EOF
 @test "post step runs uv through mise exec without auto-installing other tools" {
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
 #!/usr/bin/env bash

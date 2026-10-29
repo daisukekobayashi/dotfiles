@@ -45,7 +45,7 @@ depends on the earlier ones.
 | `links` | `links` (config links and generated files) |
 | `bootstrap` | `apt`, `homebrew`, `sheldon`, `mise` (OS packages and tool managers) |
 | `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks` |
-| `plugins` | `alacritty`, `tpm`, `themes` (plugins and assets on top of the tools) |
+| `plugins` | `tpm` (plugins on top of the tools) |
 
 - `./setup.sh all`
 - `./setup.sh links`, `./setup.sh bootstrap`, `./setup.sh tools`, `./setup.sh plugins`
@@ -54,7 +54,7 @@ Steps that do not apply to the platform are skipped with a message; for example,
 macOS installs `sheldon`, `tmux`, and `luarocks` from
 `brew/Brewfile` in the `homebrew` step. `packages` and `post` remain as deprecated
 aliases: `packages` runs `bootstrap`, `tools`, and `plugins`, and `post` runs
-`mise-tools`, `uv-tools`, `tpm`, and `themes`.
+`mise-tools`, `uv-tools`, and `tpm`.
 
 On Windows, link creation in `.\setup.ps1 links`, user-scope `skills`, and named
 `claude` environments first uses the current privileges. If symbolic link

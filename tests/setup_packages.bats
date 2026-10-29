@@ -305,8 +305,7 @@ EOF
 
 @test "tools reports a failed luarocks build instead of succeeding" {
   local fake_bin="${TEST_ROOT}/bin"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
+  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
 #!/usr/bin/env bash

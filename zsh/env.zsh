@@ -33,18 +33,7 @@ select_dotfiles_editor() {
 }
 
 unamestr="$(uname)"
-if [[ "${unamestr}" == 'MSYS_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MINGW64_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MINGW32_NT-6.1' ]] ||
-   [[ "${unamestr}" == 'MSYS_NT-10.0' ]] ||
-   [[ "${unamestr}" == 'MINGW64_NT-10.0' ]] ||
-   [[ "${unamestr}" == 'MINGW32_NT-10.0' ]]; then
-  export CHERE_INVOKING=1
-  WIN_HOME="$(cygpath ${USERPROFILE})"
-  source ${HOME}/.mintty/sol.dark
-  source ${WIN_HOME}/.pve/python${PYTHON3_VERSION}/Scripts/activate
-  ${WIN_HOME}/scoop/apps/nvm/current/nvm.exe use ${NODEJS_VERSION}
-elif [[ "${unamestr}" == 'Linux' ]]; then
+if [[ "${unamestr}" == 'Linux' ]]; then
   export PATH="$HOME/bin:$PATH"
   export PATH="$HOME/.local/bin/nvim/bin:$PATH"
   # iex

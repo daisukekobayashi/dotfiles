@@ -1,25 +1,5 @@
 #!/usr/bin/env bash
 
-setup_alacritty() {
-  local dotfiles_root="$1"
-  local setup_home="$2"
-  local dry_run="$3"
-
-  if [ ! -e "${setup_home}/.config/alacritty" ]; then
-    link_file "${dotfiles_root}/alacritty" "${setup_home}/.config/alacritty" "${dry_run}"
-    if [ ! -e "${setup_home}/.alacritty-colorscheme" ]; then
-      run_cmd "${dry_run}" git clone https://github.com/eendroroy/alacritty-theme.git "${setup_home}/.alacritty-colorscheme"
-    fi
-    if [ ! -e "${setup_home}/.alacritty-colorscheme/themes/kanagawa.toml" ]; then
-      link_file "${dotfiles_root}/alacritty/kanagawa.toml" "${setup_home}/.alacritty-colorscheme/themes/kanagawa.toml" "${dry_run}"
-    fi
-  else
-    if [ -d "${setup_home}/.alacritty-colorscheme" ]; then
-      run_cmd "${dry_run}" git -C "${setup_home}/.alacritty-colorscheme" pull --ff-only
-    fi
-  fi
-}
-
 install_tmux_plugins() {
   local setup_home="$1"
   local dry_run="$2"
@@ -58,18 +38,5 @@ install_tmux_plugins() {
   fi
   if [ "${source_status}" -ne 0 ]; then
     log_warn "tmux config reload failed. Continuing setup."
-  fi
-}
-
-install_terminal_themes() {
-  local setup_home="$1"
-  local dry_run="$2"
-
-  if [ ! -d "${setup_home}/.mintty" ]; then
-    run_cmd "${dry_run}" git clone https://github.com/mavnn/mintty-colors-solarized "${setup_home}/.mintty"
-  fi
-
-  if [ ! -d "${setup_home}/.solarized-mate-terminal" ]; then
-    run_cmd "${dry_run}" git clone https://github.com/oz123/solarized-mate-terminal "${setup_home}/.solarized-mate-terminal"
   fi
 }

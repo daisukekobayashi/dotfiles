@@ -34,14 +34,14 @@ Subcommands:
   bootstrap   Install OS packages and tool managers (apt, homebrew, sheldon, mise)
   tools       Install tools with those managers (mise-tools, uv-tools, claude,
               codex, tmux, luarocks)
-  plugins     Install plugins and assets on top of the tools (alacritty, tpm, themes)
+  plugins     Install plugins on top of the tools (tpm)
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment
   claude      Create or refresh a separate Claude Code environment
   help        Show this help
 
   packages    Deprecated: bootstrap, tools, and plugins
-  post        Deprecated: mise-tools, uv-tools, tpm, and themes
+  post        Deprecated: mise-tools, uv-tools, and tpm
 
 all/links/bootstrap/tools/plugins args:
   --only <csv>   Run only selected steps (e.g. claude,codex)
@@ -201,7 +201,7 @@ run_step_subcommand() {
       log_warn "'packages' is deprecated; use 'bootstrap', 'tools', and 'plugins' (or 'all --skip links')."
       ;;
     post)
-      log_warn "'post' is deprecated; use 'tools --only mise-tools,uv-tools' and 'plugins --only tpm,themes'."
+      log_warn "'post' is deprecated; use 'tools --only mise-tools,uv-tools' and 'plugins'."
       ;;
   esac
 
