@@ -63,17 +63,6 @@ run_setup_dry() {
   [[ "$output" == *"Unknown links argument: --unknown"* ]]
 }
 
-@test "removed packages and post subcommands point to the phases" {
-  local subcommand
-
-  for subcommand in packages post; do
-    run_setup_dry "${subcommand}"
-
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"'${subcommand}' was removed. Use 'bootstrap', 'tools', and 'plugins'"* ]]
-  done
-}
-
 @test "linux-only steps are skipped on macOS" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}"

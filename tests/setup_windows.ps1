@@ -356,17 +356,6 @@ Invoke-Test "Windows phase subcommands reject steps from other phases" {
   }
 }
 
-Invoke-Test "Windows removed packages subcommand points to the phases" {
-  $testRoot = New-TestDirectory
-  try {
-    $result = Invoke-SetupForTest -HomeDir (Join-Path $testRoot "home") -Arguments @("packages")
-    Assert-True ($result.ExitCode -ne 0) "setup.ps1 packages should fail"
-    Assert-True ($result.Output -match "'packages' was removed\. Use 'bootstrap', 'tools', and 'plugins'") "unexpected output: $($result.Output)"
-  } finally {
-    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
-  }
-}
-
 if ($Failures.Count -gt 0) {
   Write-Error "$($Failures.Count) Windows setup test(s) failed: $($Failures -join ', ')"
   exit 1

@@ -209,9 +209,6 @@ try {
         ) + $copyArguments + $SubcommandArgs
       )
     }
-    "packages" {
-      throw "'packages' was removed. Use 'bootstrap', 'tools', and 'plugins', or 'all --skip links'."
-    }
     "help" {
       if ($SubcommandArgs.Count -gt 0) {
         Show-Usage

@@ -223,10 +223,6 @@ main() {
     all | links | bootstrap | tools | plugins)
       run_step_subcommand "${subcommand}" "$@"
       ;;
-    packages | post)
-      log_error "'${subcommand}' was removed. Use 'bootstrap', 'tools', and 'plugins', or 'all --skip links'."
-      return 1
-      ;;
     skills)
       if [ "$#" -ge 2 ] && [ "$1" = "profile" ] && [ "$2" = "validate" ]; then
         log_info "Validating skills profiles..."
