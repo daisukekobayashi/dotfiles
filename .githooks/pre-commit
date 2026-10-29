@@ -18,3 +18,8 @@ case "$(uname -s 2>/dev/null || printf unknown)" in
     scripts/check-skills-build.sh
     ;;
 esac
+
+# Codex and Claude rewrite their settings copies; mention local edits without blocking.
+if command -v node >/dev/null 2>&1 && [ -d setup/node_modules/smol-toml ]; then
+  node setup/managed-copy.js diff --summary || true
+fi

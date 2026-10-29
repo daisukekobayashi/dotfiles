@@ -26,6 +26,7 @@ Subcommands:
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment
   claude      Create or refresh a separate Claude Code environment
+  diff        Show local edits to the Codex and Claude settings copies
   help        Show this help
 
 all/links/bootstrap/tools/plugins args:
@@ -46,6 +47,7 @@ Behavior:
           --auth-token-stdin and --dry-run (requires Node.js).
           Shares all installed user skills and regenerates common settings, preserving local edits.
           Legacy --skill <name> checks availability without limiting shared skills.
+  diff: accepts --check (exit 1 when the copies differ) and --summary (count only); requires Node.js.
 "@
 }
 
@@ -164,6 +166,7 @@ try {
   $skillsScript = Join-Path $setupContext.DotfilesRoot "setup/skills.ps1"
   $codexScript = Join-Path $setupContext.DotfilesRoot "setup/codex.ps1"
   $claudeScript = Join-Path $setupContext.DotfilesRoot "setup/claude.ps1"
+  $managedCopyScript = Join-Path $setupContext.DotfilesRoot "setup/managed-copy.ps1"
 
   $copyArguments = @()
   if ($Copy) {
@@ -179,6 +182,8 @@ try {
       $selection = Read-StepArguments -Name $name -Arguments $SubcommandArgs
       Invoke-SetupSteps -Steps (Get-SubcommandSteps -Name $name) -Only $selection.only -Skip $selection.skip `
         -SetupContext $setupContext -CopyArguments $copyArguments
+      # One line when local settings drifted; never fails setup.
+      & $managedCopyScript -HomeDir $setupContext.HomeDir -DotfilesRoot $setupContext.DotfilesRoot diff --summary
     }
     "skills" {
       Invoke-SetupPowerShellScript -ScriptPath $skillsScript -ArgumentList (
@@ -209,6 +214,11 @@ try {
           $setupContext.DotfilesRoot
         ) + $copyArguments + $SubcommandArgs
       )
+    }
+    "diff" {
+      # Keep the exit status: --check reports differences with 1.
+      & $managedCopyScript -HomeDir $setupContext.HomeDir -DotfilesRoot $setupContext.DotfilesRoot diff @SubcommandArgs
+      exit $LASTEXITCODE
     }
     "help" {
       if ($SubcommandArgs.Count -gt 0) {

@@ -63,32 +63,8 @@ try {
       CopyLoader = "PowerShell"
     },
     @{
-      Link = Join-Path $setupContext.HomeDir ".codex\config.toml"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\config.toml"
-    },
-    @{
       Link = Join-Path $setupContext.HomeDir ".codex\hooks.json"
       Target = Join-Path $setupContext.DotfilesRoot "codex\hooks.json"
-    },
-    @{
-      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-5_6-sol_xhigh.config.toml"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-5_6-sol_xhigh.config.toml"
-    },
-    @{
-      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-5_6-luna_max.config.toml"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-5_6-luna_max.config.toml"
-    },
-    @{
-      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-6-astra_medium.config.toml"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-6-astra_medium.config.toml"
-    },
-    @{
-      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-6-luna_max.config.toml"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-6-luna_max.config.toml"
-    },
-    @{
-      Link = Join-Path $setupContext.HomeDir ".codex\azure_gpt-6_1-sol_max.config.toml"
-      Target = Join-Path $setupContext.DotfilesRoot "codex\azure_gpt-6_1-sol_max.config.toml"
     },
     @{
       Link = Join-Path $setupContext.HomeDir ".codex\rules\user.rules"
@@ -101,10 +77,6 @@ try {
     @{
       Link = Join-Path $setupContext.HomeDir ".gemini\commands"
       Target = Join-Path $setupContext.DotfilesRoot "gemini\commands"
-    },
-    @{
-      Link = Join-Path $setupContext.HomeDir ".claude\settings.json"
-      Target = Join-Path $setupContext.DotfilesRoot "claude\settings.json"
     },
     @{
       Link = Join-Path $setupContext.HomeDir ".claude\statusline.cjs"
@@ -146,6 +118,10 @@ try {
       }
     }
   }
+
+  # ~/.codex/config.toml and ~/.claude/settings.json are copies; see setup/managed-copy.ps1.
+  & (Join-Path $PSScriptRoot "managed-copy.ps1") -HomeDir $setupContext.HomeDir -DotfilesRoot $setupContext.DotfilesRoot apply
+  if ($LASTEXITCODE -ne 0) { throw "Updating the Codex and Claude settings copies failed" }
 } catch {
   Write-Error $_.Exception.Message
   exit 1

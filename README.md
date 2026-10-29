@@ -126,6 +126,34 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 ./setup.sh all --reload-shell
 ```
 
+### Codex and Claude settings copies
+
+Codex and Claude Code write runtime state, such as trusted project paths and hook
+approvals, into their settings files. `setup links` therefore installs
+`~/.codex/config.toml` and `~/.claude/settings.json` as copies of
+`codex/config.toml` and `claude/settings.json` instead of links; their other
+files stay linked. Existing links from an older setup are replaced with copies
+of their current content.
+
+Each run merges dotfiles changes into the copies and keeps local edits. A local
+value that conflicts with a dotfiles change is kept with a warning. The version
+last applied is kept in `.dotfiles-managed/` next to each copy. Runtime state
+keys (Codex `projects`, `hooks.state`, `tui.model_availability_nux`,
+`tui.screen_reader_detection_done` and `notice.model_migrations`) are never
+synced or compared. If Node.js is not installed yet, links only seeds missing
+copies; rerun it after the `tools` phase.
+
+To bring local edits back into dotfiles, review them and edit the tracked files:
+
+```bash
+./setup.sh diff           # + only in the local copy, - only in dotfiles, ~ changed locally
+./setup.sh diff --check   # exit 1 when they differ
+```
+
+Values under `env` and keys that look like tokens, keys or secrets are masked.
+Setup and the pre-commit hook print a one-line count when the copies differ;
+neither fails because of it. On Windows, use `.\setup.ps1 diff`.
+
 ## Editors
 
 `vim/vimrc` and `vim/gvimrc` provide basic Vim settings that also work without plugins.
@@ -308,8 +336,8 @@ preserved or conflicts reported. Provider-prefixed names remain launcher aliases
 for example `codex-pick -p azure_gpt-6_1-sol_max`; within an explicit env, a
 legacy prefix must agree with its provider. The old `--provider`-only setup,
 `--azure-base-url` and `--azure-api-version` forms also remain supported.
-Legacy source files under `codex/azure_*.config.toml` are retained for compatibility;
-new model changes belong under `codex/profiles/`.
+Model profiles live under `codex/profiles/`; the former `codex/azure_*.config.toml`
+files were removed.
 
 Codex and Claude environments are selected independently. For
 [codex-plugin-cc v1.0.6](https://github.com/openai/codex-plugin-cc/blob/v1.0.6/plugins/codex/scripts/lib/app-server.mjs),
