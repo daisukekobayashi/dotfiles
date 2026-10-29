@@ -119,13 +119,12 @@ Invoke-Test "Windows links setup wires psmux config to the user profile" {
   Assert-True ($linksScript -match 'tmux\\psmux\.conf') "setup\links.ps1 does not target tmux\psmux.conf"
 }
 
-Invoke-Test "Windows links setup wires the Codex Azure profile configs" {
+Invoke-Test "Windows links setup copies the settings that Codex and Claude rewrite" {
   $linksScript = Get-Content -Raw (Join-Path $RepoRoot "setup\links.ps1")
-  Assert-True ($linksScript -match '\.codex\\azure_gpt-5_6-sol_xhigh\.config\.toml') "setup\links.ps1 does not link ~/.codex/azure_gpt-5_6-sol_xhigh.config.toml"
-  Assert-True ($linksScript -match 'codex\\azure_gpt-5_6-sol_xhigh\.config\.toml') "setup\links.ps1 does not target codex\azure_gpt-5_6-sol_xhigh.config.toml"
-  Assert-True ($linksScript -match '\.codex\\azure_gpt-5_6-luna_max\.config\.toml') "setup\links.ps1 does not link ~/.codex/azure_gpt-5_6-luna_max.config.toml"
-  Assert-True ($linksScript -match 'codex\\azure_gpt-5_6-luna_max\.config\.toml') "setup\links.ps1 does not target codex\azure_gpt-5_6-luna_max.config.toml"
-  Assert-True ($linksScript -notmatch '\.codex\\azure\.config\.toml') "setup\links.ps1 still links ~/.codex/azure.config.toml"
+  Assert-True ($linksScript -notmatch '\.codex\\config\.toml"') "setup\links.ps1 still links ~/.codex/config.toml"
+  Assert-True ($linksScript -notmatch '\.claude\\settings\.json"') "setup\links.ps1 still links ~/.claude/settings.json"
+  Assert-True ($linksScript -notmatch 'azure_') "setup\links.ps1 still links the retired azure_* profiles"
+  Assert-True ($linksScript -match 'managed-copy\.ps1') "setup\links.ps1 does not install the settings copies"
 }
 
 Invoke-Test "Windows links setup wires the Codex hooks config" {
@@ -397,6 +396,28 @@ Invoke-Test "Windows phase subcommands reject steps from other phases" {
     $result = Invoke-SetupForTest -HomeDir (Join-Path $testRoot "home") -Arguments @("tools", "--only", "psmux")
     Assert-True ($result.ExitCode -ne 0) "setup.ps1 tools --only psmux should fail"
     Assert-True ($result.Output -match 'Unknown step: psmux\. Steps for this subcommand: claude,codex') "unexpected error: $($result.Output)"
+  } finally {
+    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
+Invoke-Test "Windows settings copies are installed and compared with diff" {
+  $testRoot = New-TestDirectory
+  try {
+    $homeDir = Join-Path $testRoot "home"
+    & (Join-Path $RepoRoot "setup\managed-copy.ps1") -HomeDir $homeDir -DotfilesRoot $RepoRoot apply | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) "managed-copy.ps1 apply failed"
+    $settings = Join-Path $homeDir ".claude\settings.json"
+    Assert-True ((Get-Content -Raw $settings) -eq (Get-Content -Raw (Join-Path $RepoRoot "claude\settings.json"))) "settings.json is not a copy of claude\settings.json"
+    Assert-True (Test-Path -LiteralPath (Join-Path $homeDir ".codex\.dotfiles-managed\config.toml")) "the applied config.toml baseline is missing"
+
+    $result = Invoke-SetupForTest -HomeDir $homeDir -Arguments @("diff", "--check")
+    Assert-True ($result.ExitCode -eq 0) "unchanged copies should not differ: $($result.Output)"
+    $json = (Get-Content -Raw $settings) -replace '"model": "[^"]*"', '"model": "local-model"'
+    [System.IO.File]::WriteAllText($settings, $json)
+    $result = Invoke-SetupForTest -HomeDir $homeDir -Arguments @("diff", "--check")
+    Assert-True ($result.ExitCode -eq 1) "diff --check should report the local edit: $($result.Output)"
+    Assert-True ($result.Output -match '~ model: "[^"]*" -> "local-model"') "unexpected diff output: $($result.Output)"
   } finally {
     Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
   }

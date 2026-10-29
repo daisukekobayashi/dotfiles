@@ -118,6 +118,33 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 ./setup.sh all --reload-shell
 ```
 
+### Codex と Claude の設定コピー
+
+Codex と Claude Code は, 信頼したプロジェクトのパスや hook の承認などの実行時の状態を
+設定ファイルに書き込みます. そのため `setup links` は `~/.codex/config.toml` と
+`~/.claude/settings.json` を, `codex/config.toml` と `claude/settings.json` への
+リンクではなくコピーとして置きます. それ以外のファイルはリンクのままです.
+以前の setup で作ったリンクは, その時点の内容のコピーに置き換えます.
+
+setup を実行するたびに dotfiles 側の変更をコピーへマージし, ローカルの変更は残します.
+dotfiles 側の変更と競合したローカルの値は, 警告を表示して残します.
+最後に適用した版は各コピーの隣の `.dotfiles-managed/` に保存します.
+実行時の状態のキー (Codex の `projects`, `hooks.state`, `tui.model_availability_nux`,
+`tui.screen_reader_detection_done`, `notice.model_migrations`) は同期も比較もしません.
+Node.js がまだ無い場合, links は存在しないコピーを置くだけです.
+`tools` フェーズの後にもう一度実行します.
+
+ローカルの変更を dotfiles に取り込むときは, 差分を確認して追跡対象のファイルを編集します.
+
+```bash
+./setup.sh diff           # + ローカルのコピーだけにある, - dotfiles だけにある, ~ ローカルで変更
+./setup.sh diff --check   # 差分があれば終了コード 1
+```
+
+`env` の下の値と, token / key / secret などを名前に含むキーの値は伏せて表示します.
+コピーに差分があると, setup と pre-commit hook は件数を 1 行で表示します.
+どちらもこれを理由に失敗はしません. Windows では `.\setup.ps1 diff` を使います.
+
 ## Editors
 
 `vim/vimrc` と `vim/gvimrc` は, プラグインなしでも使える Vim の基本設定です.
@@ -270,8 +297,7 @@ profile を生成します. ローカル変更は引き継ぐか, 競合とし�
 `codex-pick -p azure_gpt-6_1-sol_max` のような旧名も別名として使えます.
 明示した env と旧名の provider が異なる場合はエラーになります.
 従来の `--provider` だけの setup, `--azure-base-url`, `--azure-api-version` も使えます.
-旧 `codex/azure_*.config.toml` は互換性のため保持し,
-新しいモデル設定は `codex/profiles/` に追加します.
+モデルの profile は `codex/profiles/` に置きます. 旧 `codex/azure_*.config.toml` は削除しました.
 
 Codex と Claude の env は独立です.
 [codex-plugin-cc v1.0.6](https://github.com/openai/codex-plugin-cc/blob/v1.0.6/plugins/codex/scripts/lib/app-server.mjs)

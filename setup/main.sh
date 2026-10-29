@@ -13,6 +13,8 @@ source "${SCRIPT_DIR}/links.sh"
 source "${SCRIPT_DIR}/skills.sh"
 # shellcheck source=setup/codex.sh
 source "${SCRIPT_DIR}/codex.sh"
+# shellcheck source=setup/managed-copy.sh
+source "${SCRIPT_DIR}/managed-copy.sh"
 # shellcheck source=setup/claude.sh
 source "${SCRIPT_DIR}/claude.sh"
 # shellcheck source=setup/bootstrap.sh
@@ -38,6 +40,7 @@ Subcommands:
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment
   claude      Create or refresh a separate Claude Code environment
+  diff        Show local edits to the Codex and Claude settings copies
   help        Show this help
 
 all/links/bootstrap/tools/plugins args:
@@ -67,6 +70,10 @@ claude args:
   --skill <name>             Check a required installed skill (legacy, repeatable)
                              All installed dotfiles user skills are shared
   --dry-run                  Preview setup without changing files
+
+diff args:
+  --check                    Exit 1 when the copies differ from dotfiles
+  --summary                  Print only the number of differences
 
 skills args:
   --scope user|project       Install user or project skills (default: user)
@@ -201,6 +208,7 @@ run_step_subcommand() {
   done < <(list_subcommand_steps "${subcommand}")
   log_info "Running ${subcommand} setup..."
   run_setup_steps "${STEPS_ONLY}" "${STEPS_SKIP}" "${steps[@]}" || return
+  print_managed_copy_summary
 
   if [ "${subcommand}" != "links" ]; then
     maybe_reload_shell
@@ -219,7 +227,7 @@ main() {
   fi
 
   if [[ "${subcommand}" == --* ]]; then
-    log_error "Flags are not supported. Use subcommands: all, links, bootstrap, tools, plugins, skills, codex, claude, help."
+    log_error "Flags are not supported. Use subcommands: all, links, bootstrap, tools, plugins, skills, codex, claude, diff, help."
     usage
     return 1
   fi
@@ -241,6 +249,9 @@ main() {
       ;;
     claude)
       setup_claude "$@"
+      ;;
+    diff)
+      setup_diff "$@"
       ;;
     help)
       usage

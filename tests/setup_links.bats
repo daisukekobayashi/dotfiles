@@ -101,18 +101,81 @@ assert_link_target_is_tracked() {
   [ "$(readlink "${TEST_HOME}/.local/bin/codex-pick")" = "${root}/tools/codex/codex-pick" ]
   [ -L "${TEST_HOME}/.local/bin/claude-pick" ]
   [ "$(readlink "${TEST_HOME}/.local/bin/claude-pick")" = "${root}/tools/claude/claude-pick" ]
-  [ -L "${TEST_HOME}/.codex/config.toml" ]
-  [ "$(readlink "${TEST_HOME}/.codex/config.toml")" = "${root}/codex/config.toml" ]
+  [ -f "${TEST_HOME}/.codex/config.toml" ]
+  [ ! -L "${TEST_HOME}/.codex/config.toml" ]
+  cmp "${TEST_HOME}/.codex/config.toml" "${root}/codex/config.toml"
+  cmp "${TEST_HOME}/.codex/.dotfiles-managed/config.toml" "${root}/codex/config.toml"
+  [ -f "${TEST_HOME}/.claude/settings.json" ]
+  [ ! -L "${TEST_HOME}/.claude/settings.json" ]
+  cmp "${TEST_HOME}/.claude/settings.json" "${root}/claude/settings.json"
   [ -L "${TEST_HOME}/.codex/hooks.json" ]
   [ "$(readlink "${TEST_HOME}/.codex/hooks.json")" = "${root}/codex/hooks.json" ]
-  [ -L "${TEST_HOME}/.codex/azure_gpt-5_6-sol_xhigh.config.toml" ]
-  [ "$(readlink "${TEST_HOME}/.codex/azure_gpt-5_6-sol_xhigh.config.toml")" = "${root}/codex/azure_gpt-5_6-sol_xhigh.config.toml" ]
-  [ -L "${TEST_HOME}/.codex/azure_gpt-5_6-luna_max.config.toml" ]
-  [ "$(readlink "${TEST_HOME}/.codex/azure_gpt-5_6-luna_max.config.toml")" = "${root}/codex/azure_gpt-5_6-luna_max.config.toml" ]
-  [ ! -L "${TEST_HOME}/.codex/azure.config.toml" ]
+  [ ! -e "${TEST_HOME}/.codex/azure_gpt-5_6-sol_xhigh.config.toml" ]
   [ -f "${TEST_HOME}/.codex/AGENTS.md" ]
   [ -f "${TEST_HOME}/.gemini/GEMINI.md" ]
   [ -f "${TEST_HOME}/.claude/CLAUDE.md" ]
+}
+
+@test "links replaces settings links with copies that diff compares to dotfiles" {
+  local root
+  root="$(repo_root)"
+  mkdir -p "${TEST_HOME}/.codex" "${TEST_HOME}/.claude"
+  ln -s "${root}/codex/config.toml" "${TEST_HOME}/.codex/config.toml"
+  ln -s "${root}/claude/settings.json" "${TEST_HOME}/.claude/settings.json"
+
+  run env SETUP_HOME="${TEST_HOME}" SETUP_TMPDIR="${TEST_TMP}" "$(setup_script_path)" links
+  [ "$status" -eq 0 ]
+  [ ! -L "${TEST_HOME}/.codex/config.toml" ]
+  [ ! -L "${TEST_HOME}/.claude/settings.json" ]
+  cmp "${TEST_HOME}/.claude/settings.json" "${root}/claude/settings.json"
+
+  run env SETUP_HOME="${TEST_HOME}" "$(setup_script_path)" diff --check
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  printf '\n[projects."/private/project"]\ntrust_level = "trusted"\n' >> "${TEST_HOME}/.codex/config.toml"
+  node -e '
+    const fs = require("node:fs");
+    const settings = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    settings.env.ANTHROPIC_AUTH_TOKEN = "s3cr3t";
+    settings.skipWorkflowUsageWarning = true;
+    fs.writeFileSync(process.argv[1], JSON.stringify(settings, null, 2) + "\n");
+  ' "${TEST_HOME}/.claude/settings.json"
+
+  run env SETUP_HOME="${TEST_HOME}" "$(setup_script_path)" diff
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"+ env.ANTHROPIC_AUTH_TOKEN = ***"* ]]
+  [[ "$output" == *"+ skipWorkflowUsageWarning = true"* ]]
+  [[ "$output" != *"s3cr3t"* ]]
+  [[ "$output" != *"/private/project"* ]]
+  run env SETUP_HOME="${TEST_HOME}" "$(setup_script_path)" diff --check
+  [ "$status" -eq 1 ]
+
+  run env SETUP_HOME="${TEST_HOME}" SETUP_TMPDIR="${TEST_TMP}" "$(setup_script_path)" links
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Local Codex/Claude settings differ from dotfiles in 2 place(s) (claude/settings.json)"* ]]
+  grep -F '"/private/project"' "${TEST_HOME}/.codex/config.toml"
+  grep -F 's3cr3t' "${TEST_HOME}/.claude/settings.json"
+}
+
+@test "links seeds missing settings copies before Node.js is installed" {
+  local root
+  root="$(repo_root)"
+  mkdir -p "${TEST_HOME}/.claude"
+  ln -s "${root}/claude/settings.json" "${TEST_HOME}/.claude/settings.json"
+
+  run bash -c '
+    source "$1/lib/common.sh"
+    source "$1/setup/managed-copy.sh"
+    managed_copy_runtime_ready() { return 1; }
+    install_managed_copies "$1" "$2" 0
+  ' -- "${root}" "${TEST_HOME}"
+
+  [ "$status" -eq 0 ]
+  cmp "${TEST_HOME}/.codex/config.toml" "${root}/codex/config.toml"
+  cmp "${TEST_HOME}/.codex/.dotfiles-managed/config.toml" "${root}/codex/config.toml"
+  [ -L "${TEST_HOME}/.claude/settings.json" ]
+  [[ "$output" == *"Skipping ${TEST_HOME}/.claude/settings.json"* ]]
 }
 
 @test "links replaces legacy Vim symlinks with grouped config files" {

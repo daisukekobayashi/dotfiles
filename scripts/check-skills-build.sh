@@ -5,4 +5,4 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 
 npm --prefix setup run build
-git diff --exit-code -- setup/skills.js setup/codex.js setup/claude.js
+git diff --exit-code -- setup/skills.js setup/codex.js setup/claude.js setup/managed-copy.js

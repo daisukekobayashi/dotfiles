@@ -38,13 +38,7 @@ setup_links() {
 
   make_directory "${setup_home}/.codex" "${dry_run}"
   make_directory "${setup_home}/.codex/rules" "${dry_run}"
-  link_file "${dotfiles_root}/codex/config.toml" "${setup_home}/.codex/config.toml" "${dry_run}"
   link_file "${dotfiles_root}/codex/hooks.json" "${setup_home}/.codex/hooks.json" "${dry_run}"
-  link_file "${dotfiles_root}/codex/azure_gpt-5_6-sol_xhigh.config.toml" "${setup_home}/.codex/azure_gpt-5_6-sol_xhigh.config.toml" "${dry_run}"
-  link_file "${dotfiles_root}/codex/azure_gpt-5_6-luna_max.config.toml" "${setup_home}/.codex/azure_gpt-5_6-luna_max.config.toml" "${dry_run}"
-  link_file "${dotfiles_root}/codex/azure_gpt-6-astra_medium.config.toml" "${setup_home}/.codex/azure_gpt-6-astra_medium.config.toml" "${dry_run}"
-  link_file "${dotfiles_root}/codex/azure_gpt-6-luna_max.config.toml" "${setup_home}/.codex/azure_gpt-6-luna_max.config.toml" "${dry_run}"
-  link_file "${dotfiles_root}/codex/azure_gpt-6_1-sol_max.config.toml" "${setup_home}/.codex/azure_gpt-6_1-sol_max.config.toml" "${dry_run}"
   local model_profile
   for model_profile in "${dotfiles_root}/codex/profiles/"*.config.toml; do
     [ -f "${model_profile}" ] || continue
@@ -57,7 +51,6 @@ setup_links() {
   link_file "${dotfiles_root}/gemini/commands" "${setup_home}/.gemini/commands" "${dry_run}"
 
   make_directory "${setup_home}/.claude" "${dry_run}"
-  link_file "${dotfiles_root}/claude/settings.json" "${setup_home}/.claude/settings.json" "${dry_run}"
   link_file "${dotfiles_root}/claude/statusline.cjs" "${setup_home}/.claude/statusline.cjs" "${dry_run}"
 
   local rules_composer="${dotfiles_root}/ai-rules/scripts/compose-rules.sh"
@@ -99,4 +92,7 @@ setup_links() {
       log_warn "Failed to configure git hooks path for ${dotfiles_root}"
     fi
   fi
+
+  # ~/.codex/config.toml and ~/.claude/settings.json are copies; see setup/managed-copy.sh.
+  install_managed_copies "${dotfiles_root}" "${setup_home}" "${dry_run}"
 }
