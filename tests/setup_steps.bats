@@ -25,7 +25,7 @@ run_setup_dry() {
   run_setup_dry all
 
   [ "$status" -eq 0 ]
-  run bash -c 'grep -oE "Running step: [a-z-]+" <<< "$1" | cut -d" " -f3 | paste -sd,' _ "$output"
+  run bash -c 'grep -oE "Running step: [a-z-]+" <<< "$1" | cut -d" " -f3 | paste -sd, -' _ "$output"
   [ "$output" = "links,apt,homebrew,sheldon,mise,mise-tools,uv-tools,claude,codex,tmux,luarocks,tpm" ]
 }
 

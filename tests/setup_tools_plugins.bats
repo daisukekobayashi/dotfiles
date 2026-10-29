@@ -396,6 +396,7 @@ EOF
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
+  write_fake_linux_uname "${fake_bin}"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -466,6 +467,7 @@ EOF
 @test "mise-tools fails in strict mode when a mise tool install fails" {
   local fake_bin="${TEST_ROOT}/bin"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
+  write_fake_linux_uname "${fake_bin}"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -528,6 +530,7 @@ EOF
   local fake_bin="${TEST_ROOT}/bin"
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload"
+  write_fake_linux_uname "${fake_bin}"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
@@ -652,6 +655,7 @@ EOF
   local log_file="${TEST_ROOT}/commands.log"
   mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" \
     "${TEST_HOME}/.vim/autoload"
+  write_fake_linux_uname "${fake_bin}"
   : > "${TEST_HOME}/.vim/autoload/plug.vim"
 
   cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'

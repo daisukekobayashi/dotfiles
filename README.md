@@ -550,8 +550,9 @@ When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
 `tests/powershell.bats` parses every tracked `.ps1` file and runs
 `tests/setup_windows.ps1`, skipping the cases that need Windows APIs.
 
-GitHub Actions (`.github/workflows/test.yml`) runs these checks on Ubuntu and macOS,
-and the PowerShell tests on Windows with PowerShell 7 and Windows PowerShell 5.1.
+GitHub Actions (`.github/workflows/test.yml`) runs these checks on Ubuntu, the setup
+tests on macOS (whose `/bin/bash` is 3.2), and the PowerShell tests on Windows with
+PowerShell 7 and Windows PowerShell 5.1.
 
 Focused Claude setup and picker checks use temporary homes and fake Claude executables;
 they do not log in or call the API:

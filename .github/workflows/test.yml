@@ -46,8 +46,14 @@ jobs:
       - name: Node tests
         run: npm --prefix setup test
 
-      - name: Bats tests
+      - name: Bats tests (Ubuntu)
+        if: runner.os == 'Linux'
         run: bats --print-output-on-failure tests
+
+      # The tmux, zsh and skill evaluation suites still assume Linux tools.
+      - name: Bats setup tests (macOS)
+        if: runner.os == 'macOS'
+        run: bats --print-output-on-failure tests/setup*.bats tests/betterleaks_scan.bats
 
   windows:
     runs-on: windows-latest

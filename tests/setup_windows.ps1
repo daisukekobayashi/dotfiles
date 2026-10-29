@@ -312,6 +312,9 @@ function Invoke-SetupForTest {
   )
 
   $previousCustomHome = $Env:CUSTOM_HOME
+  # Windows PowerShell 5.1 turns redirected stderr from a child process into a
+  # terminating error under Stop; the tests inspect that output instead.
+  $ErrorActionPreference = "Continue"
   try {
     $Env:CUSTOM_HOME = $HomeDir
     $powershellPath = (Get-Process -Id $PID).Path
