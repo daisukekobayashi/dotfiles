@@ -352,6 +352,42 @@ Invoke-Test -WindowsOnly "Windows all --only runs selected steps across phases" 
   }
 }
 
+Invoke-Test "Windows bootstrap installs Scoop and mise" {
+  $testRoot = New-TestDirectory
+  try {
+    $result = Invoke-SetupForTest -HomeDir (Join-Path $testRoot "home") -Arguments @("bootstrap", "--only", "psmux")
+    Assert-True ($result.ExitCode -ne 0) "setup.ps1 bootstrap --only psmux should fail"
+    Assert-True ($result.Output -match 'Steps for this subcommand: scoop,mise') "unexpected bootstrap steps: $($result.Output)"
+  } finally {
+    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
+Invoke-Test -WindowsOnly "Windows bootstrap skips mise installed by Scoop" {
+  $testRoot = New-TestDirectory
+  try {
+    $homeDir = Join-Path $testRoot "home"
+    $scoopShims = Join-Path $testRoot "scoop\shims"
+    New-Item -ItemType Directory -Path $homeDir, $scoopShims -Force | Out-Null
+    Set-Content -Path (Join-Path $scoopShims "mise.cmd") -Value "@exit /b 0" -Encoding ascii
+
+    $previousPath = $Env:PATH
+    try {
+      $Env:PATH = "$scoopShims;$previousPath"
+      $result = Invoke-SetupForTest -HomeDir $homeDir -Arguments @("bootstrap", "--only", "mise")
+    } finally {
+      $Env:PATH = $previousPath
+    }
+
+    Assert-True ($result.ExitCode -eq 0) "setup.ps1 bootstrap --only mise failed: $($result.Output)"
+    Assert-True ($result.Output -match 'Skipping mise official installer') "mise from Scoop was not skipped: $($result.Output)"
+    Assert-True ($result.Output -match 'scoop uninstall mise') "scoop removal hint was not shown: $($result.Output)"
+    Assert-True ($result.Output -notmatch 'Installing mise from') "the official installer ran: $($result.Output)"
+  } finally {
+    Remove-Item -LiteralPath $testRoot -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+
 Invoke-Test "Windows phase subcommands reject steps from other phases" {
   $testRoot = New-TestDirectory
   try {

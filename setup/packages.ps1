@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("scoop", "claude", "codex", "psmux")]
+  [ValidateSet("scoop", "mise", "claude", "codex", "psmux")]
   [string]$Step
 )
 
@@ -99,20 +99,19 @@ function Install-PsmuxPlugins {
   }
 }
 
-function Get-AgentCliRemovalHint {
+function Get-OfficialCliRemovalHint {
   param (
     [Parameter(Mandatory = $true)]
     [string]$FoundPath,
     [Parameter(Mandatory = $true)]
     [string]$ScoopApp,
-    [Parameter(Mandatory = $true)]
-    [string]$NpmPackage
+    [string]$NpmPackage = ""
   )
 
   if ($FoundPath -match "\\scoop\\") {
     return "scoop uninstall $ScoopApp (check the app name with: scoop list $ScoopApp)"
   }
-  if ($FoundPath -match "node_modules" -or $FoundPath -match "\\npm\\") {
+  if ($NpmPackage -and ($FoundPath -match "node_modules" -or $FoundPath -match "\\npm\\")) {
     return "npm uninstall -g $NpmPackage"
   }
   return "Remove-Item `"$FoundPath`""
@@ -120,7 +119,7 @@ function Get-AgentCliRemovalHint {
 
 # The official installers self-update. Copies from other managers are left in
 # place because PATH order would decide which one runs.
-function Install-AgentCli {
+function Install-OfficialCli {
   param (
     [Parameter(Mandatory = $true)]
     [string]$Name,
@@ -130,8 +129,7 @@ function Install-AgentCli {
     [string]$InstallerUri,
     [Parameter(Mandatory = $true)]
     [string]$ScoopApp,
-    [Parameter(Mandatory = $true)]
-    [string]$NpmPackage,
+    [string]$NpmPackage = "",
     [hashtable]$Environment = @{}
   )
 
@@ -142,7 +140,7 @@ function Install-AgentCli {
   if (Test-Path -LiteralPath $ManagedPath -PathType Leaf) {
     if ($foundPath -and -not [string]::Equals($foundPath, $ManagedPath, [System.StringComparison]::OrdinalIgnoreCase)) {
       Write-Warning "$Name at $foundPath shadows the official install at $ManagedPath. Remove it with:"
-      Write-Warning "  $(Get-AgentCliRemovalHint -FoundPath $foundPath -ScoopApp $ScoopApp -NpmPackage $NpmPackage)"
+      Write-Warning "  $(Get-OfficialCliRemovalHint -FoundPath $foundPath -ScoopApp $ScoopApp -NpmPackage $NpmPackage)"
     } else {
       Write-Output "$Name is already installed: $ManagedPath"
     }
@@ -152,7 +150,7 @@ function Install-AgentCli {
   if ($foundPath) {
     Write-Warning "Skipping $Name official installer because $Name is installed at $foundPath."
     Write-Warning "To switch to the self-updating official install, remove it and rerun setup:"
-    Write-Warning "  $(Get-AgentCliRemovalHint -FoundPath $foundPath -ScoopApp $ScoopApp -NpmPackage $NpmPackage)"
+    Write-Warning "  $(Get-OfficialCliRemovalHint -FoundPath $foundPath -ScoopApp $ScoopApp -NpmPackage $NpmPackage)"
     return
   }
 
@@ -183,7 +181,7 @@ function Install-AgentCli {
   Write-Output "Installed $Name`: $ManagedPath"
 }
 
-function Get-AgentCliSpec {
+function Get-OfficialCliSpec {
   param (
     [Parameter(Mandatory = $true)]
     [string]$Name,
@@ -192,6 +190,20 @@ function Get-AgentCliSpec {
   )
 
   switch ($Name) {
+    "mise" {
+      $misePath = Join-Path $SetupContext.HomeDir ".local\bin\mise.exe"
+      return @{
+        Name = "mise"
+        ManagedPath = $misePath
+        InstallerUri = "https://mise.run/powershell"
+        ScoopApp = "mise"
+        Environment = @{
+          MISE_INSTALL_PATH = $misePath
+          # Editors and GUI apps do not read $PROFILE, so they use the shims.
+          MISE_INSTALL_SHIMS_PATH = "1"
+        }
+      }
+    }
     "claude" {
       return @{
         Name = "claude"
@@ -220,7 +232,7 @@ function Get-AgentCliSpec {
     }
   }
 
-  throw "Unknown agent CLI: $Name"
+  throw "Unknown official CLI: $Name"
 }
 
 function Install-Scoop {
@@ -259,9 +271,9 @@ try {
     "scoop" {
       Install-Scoop -HomeDir $setupContext.HomeDir
     }
-    { $_ -in @("claude", "codex") } {
-      $agentCli = Get-AgentCliSpec -Name $Step -SetupContext $setupContext
-      Install-AgentCli @agentCli
+    { $_ -in @("mise", "claude", "codex") } {
+      $officialCli = Get-OfficialCliSpec -Name $Step -SetupContext $setupContext
+      Install-OfficialCli @officialCli
     }
     "psmux" {
       Install-PsmuxPlugins -HomeDir $setupContext.HomeDir

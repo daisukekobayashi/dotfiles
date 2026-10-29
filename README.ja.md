@@ -102,7 +102,7 @@ Debian/Ubuntu (WSL を含む) では, `apt` ステップが `setup/apt-packages.
 Claude Code と Codex CLI を公式の自動更新インストーラで `~/.local/bin` に入れます.
 Homebrew や npm などで既に入っている場合は削除せずにそのまま残し, 削除コマンドを表示します.
 削除後に setup を再実行すると公式インストールに切り替わります.
-Windows の `.\setup.ps1` も同じフェーズで, `links`, `scoop` (bootstrap), `claude` と `codex` (tools),
+Windows の `.\setup.ps1` も同じフェーズで, `links`, `scoop` と `mise` (bootstrap), `claude` と `codex` (tools),
 `psmux` (plugins) のステップを持ち, `--only` / `--skip` を使えます. 管理者として実行した場合は
 `links` 以外のステップをスキップします.
 `claude` / `codex` ステップは公式の PowerShell インストーラで同様に処理します

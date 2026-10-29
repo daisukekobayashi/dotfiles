@@ -20,7 +20,7 @@ Usage: .\setup.ps1 <subcommand> [-Copy] [args]
 Subcommands:
   all         Run every phase in order: links -> bootstrap -> tools -> plugins
   links       Install Windows configuration links (copy if privileges are unavailable)
-  bootstrap   Install or verify Scoop (scoop)
+  bootstrap   Install or verify Scoop and mise (scoop, mise)
   tools       Install Claude Code and Codex CLI with official installers (claude, codex)
   plugins     Install psmux PPM and plugins (psmux)
   skills      Restore skills and wire agent skill directories
@@ -52,7 +52,7 @@ Behavior:
 # step exists on both platforms.
 $SetupPhases = [ordered]@{
   links = @("links")
-  bootstrap = @("scoop")
+  bootstrap = @("scoop", "mise")
   tools = @("claude", "codex")
   plugins = @("psmux")
 }
