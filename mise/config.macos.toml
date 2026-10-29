@@ -1,5 +1,6 @@
 [tools]
 "aqua:dlvhdr/gh-dash" = "4.26.2"
+powershell = "7.6.9"
 
 [env]
 CPPFLAGS = "-I/opt/homebrew/include -I/opt/X11/include"

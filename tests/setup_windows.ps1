@@ -26,13 +26,24 @@ function New-TestDirectory {
   return $path
 }
 
+# Windows PowerShell 5.1 has no $IsWindows and runs only on Windows.
+$RunningOnWindows = (-not (Test-Path Variable:IsWindows)) -or $IsWindows
+
 function Invoke-Test {
   param(
     [Parameter(Mandatory = $true)]
     [string]$Name,
     [Parameter(Mandatory = $true)]
-    [scriptblock]$Body
+    [scriptblock]$Body,
+    # The test runs setup steps that use Windows-only APIs, such as the
+    # elevation check.
+    [switch]$WindowsOnly
   )
+
+  if ($WindowsOnly -and -not $RunningOnWindows) {
+    Write-Output "ok - $Name # skip requires Windows"
+    return
+  }
 
   try {
     & $Body
@@ -178,7 +189,7 @@ Invoke-Test "PowerShell profile tolerates empty mise activation output" {
   }
 }
 
-Invoke-Test "Windows plugins setup installs PPM and psmux plugins" {
+Invoke-Test -WindowsOnly "Windows plugins setup installs PPM and psmux plugins" {
   $testRoot = New-TestDirectory
   try {
     $homeDir = Join-Path $testRoot "home"
@@ -252,7 +263,7 @@ exit /b 1
   }
 }
 
-Invoke-Test "Windows tools setup skips agent CLIs installed by other managers" {
+Invoke-Test -WindowsOnly "Windows tools setup skips agent CLIs installed by other managers" {
   $testRoot = New-TestDirectory
   try {
     $homeDir = Join-Path $testRoot "home"
@@ -317,7 +328,7 @@ function New-InstalledPsmuxPlugins {
   }
 }
 
-Invoke-Test "Windows all --only runs selected steps across phases" {
+Invoke-Test -WindowsOnly "Windows all --only runs selected steps across phases" {
   $testRoot = New-TestDirectory
   try {
     $homeDir = Join-Path $testRoot "home"
@@ -345,7 +356,7 @@ Invoke-Test "Windows phase subcommands reject steps from other phases" {
   }
 }
 
-Invoke-Test "Windows packages is a deprecated alias without links" {
+Invoke-Test -WindowsOnly "Windows packages is a deprecated alias without links" {
   $testRoot = New-TestDirectory
   try {
     $homeDir = Join-Path $testRoot "home"

@@ -497,6 +497,10 @@ npm --prefix setup test
 bats tests
 ```
 
+`pwsh` がある場合 (mise が Linux, WSL, macOS に `powershell` を入れます),
+`tests/powershell.bats` が全ての `.ps1` の構文を確認し, `tests/setup_windows.ps1` を
+Windows の API が必要なケースを除いて実行します.
+
 Claude setup / picker の確認は一時 HOME と偽の Claude コマンドを使い,
 ログイン・API 呼び出しは行いません.
 

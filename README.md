@@ -547,6 +547,10 @@ npm --prefix setup test
 bats tests
 ```
 
+When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
+`tests/powershell.bats` parses every tracked `.ps1` file and runs
+`tests/setup_windows.ps1`, skipping the cases that need Windows APIs.
+
 Focused Claude setup and picker checks use temporary homes and fake Claude executables;
 they do not log in or call the API:
 

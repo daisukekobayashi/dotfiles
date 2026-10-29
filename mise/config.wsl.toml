@@ -55,6 +55,7 @@ terraform = "1.14"
 typst = "0.14"
 shellcheck = "0.11"
 bats = "1.13"
+powershell = "7.6.9"
 "aqua:gastownhall/beads" = "1.0"
 "github:betterleaks/betterleaks" = "1.6.0"
 
