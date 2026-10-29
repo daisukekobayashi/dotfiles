@@ -165,6 +165,13 @@ if (`$matches.Count -ne 1) {
   Assert-True ($LASTEXITCODE -eq 0) "profile PATH command failed with exit $LASTEXITCODE`: $output"
 }
 
+Invoke-Test "PowerShell profile activates mise without shims" {
+  $profileScript = Get-Content -Raw (Join-Path $RepoRoot "powershell\Microsoft.PowerShell_profile.ps1")
+  Assert-True ($profileScript -match '& mise activate pwsh\)') "profile does not run mise activate pwsh"
+  Assert-True ($profileScript -notmatch 'activate pwsh --shims') "profile still activates mise through shims"
+  Assert-True ($profileScript -match 'MISE_PWSH_CHPWD_WARNING') "profile does not silence the Windows PowerShell 5.1 warning"
+}
+
 Invoke-Test "PowerShell profile tolerates empty mise activation output" {
   $testRoot = New-TestDirectory
   try {
