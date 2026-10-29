@@ -193,7 +193,12 @@ run_step_subcommand() {
     return 1
   }
 
-  mapfile -t steps < <(list_subcommand_steps "${subcommand}")
+  local -a steps=()
+  local step
+  # macOS ships Bash 3.2, which has no mapfile.
+  while IFS= read -r step; do
+    steps+=("${step}")
+  done < <(list_subcommand_steps "${subcommand}")
   log_info "Running ${subcommand} setup..."
   run_setup_steps "${STEPS_ONLY}" "${STEPS_SKIP}" "${steps[@]}" || return
 

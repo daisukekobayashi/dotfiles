@@ -403,3 +403,6 @@ if ($Failures.Count -gt 0) {
   Write-Error "$($Failures.Count) Windows setup test(s) failed: $($Failures -join ', ')"
   exit 1
 }
+
+# Expected setup failures leave a nonzero $LASTEXITCODE behind.
+exit 0

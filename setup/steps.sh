@@ -185,7 +185,9 @@ run_setup_steps() {
     fi
   done
 
-  if [ "${SETUP_DRY_RUN}" != "1" ] && printf '%s\n' "${selected[@]}" | grep -Fxvq links; then
+  # Bash 3.2 (macOS) treats an empty array as unset under set -u.
+  if [ "${SETUP_DRY_RUN}" != "1" ] && [ "${#selected[@]}" -gt 0 ] &&
+    printf '%s\n' "${selected[@]}" | grep -Fxvq links; then
     require_cmd curl || return 1
     require_cmd tar || return 1
     require_cmd git || return 1

@@ -453,6 +453,7 @@ EOF
     TMUX_CALLER_BUFFER_TEXT="${caller_text}" \
     TMUX_POPUP_PROXY_SCRIPT="${proxy_script}" \
     TMUX_POPUP_CLIPBOARD_OSC52_MAX_BYTES=4 \
+    TMUX_CLIPBOARD_OSC52_MAX_BYTES=4 \
     bash -c "unset DISPLAY WAYLAND_DISPLAY; printf 'popup copy\n' | '${root}/tmux/bin/popup-clipboard-copy'"
 
   [ "$status" -eq 0 ]
@@ -1748,7 +1749,7 @@ EOF
   run grep -F "editor ${selected_file}" "${log_file}"
   [ "$status" -eq 0 ]
 
-  run env PATH="${fake_bin}:/usr/bin:/bin" LOG_FILE="${log_file}" "${root}/tmux/bin/jump-directory"
+  run env PATH="${fake_bin}:/usr/bin:/bin" TMUX="/tmp/tmux-test/default,1,0" LOG_FILE="${log_file}" "${root}/tmux/bin/jump-directory"
   [ "$status" -eq 0 ]
   run grep -F "zoxide query -l" "${log_file}"
   [ "$status" -eq 0 ]
