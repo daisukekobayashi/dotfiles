@@ -9,5 +9,8 @@ ruff = "0.17"
 uv = "0.13"
 yt-dlp = "2026.10.26"
 azure = "2"
-gcloud = "591"
 
+[tools."http:gcloud"]
+version = "591.0.0"
+url = "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-{{ version }}-windows-x86_64.zip"
+bin_path = "google-cloud-sdk/bin"
