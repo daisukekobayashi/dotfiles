@@ -26,7 +26,7 @@ run_setup_dry() {
 
   [ "$status" -eq 0 ]
   run bash -c 'grep -oE "Running step: [a-z-]+" <<< "$1" | cut -d" " -f3 | paste -sd,' _ "$output"
-  [ "$output" = "links,apt,homebrew,sheldon,mise,mise-tools,uv-tools,claude,codex,tmux,luarocks,quarto,nvtop,alacritty,tpm,themes" ]
+  [ "$output" = "links,apt,homebrew,sheldon,mise,mise-tools,uv-tools,claude,codex,tmux,luarocks,alacritty,tpm,themes" ]
 }
 
 @test "all --only applies to every phase" {
@@ -53,7 +53,7 @@ run_setup_dry() {
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"Unknown step in --only: tpm"* ]]
-  [[ "$output" == *"Steps for this subcommand: mise-tools,uv-tools,claude,codex,tmux,luarocks,quarto,nvtop"* ]]
+  [[ "$output" == *"Steps for this subcommand: mise-tools,uv-tools,claude,codex,tmux,luarocks"* ]]
 }
 
 @test "links subcommand rejects unknown args" {
@@ -94,11 +94,11 @@ run_setup_dry() {
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     "$(setup_script_path)" \
-    tools --only tmux,quarto --dry-run
+    tools --only tmux,luarocks --dry-run
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Skipping tmux: Linux only"* ]]
-  [[ "$output" == *"Skipping quarto: Linux only"* ]]
+  [[ "$output" == *"Skipping luarocks: Linux only"* ]]
   [[ "$output" != *"DRY-RUN install tmux"* ]]
 }
 

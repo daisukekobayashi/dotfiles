@@ -56,8 +56,15 @@ typst = "0.14"
 shellcheck = "0.11"
 bats = "1.13"
 powershell = "7.6.9"
+"aqua:quarto-dev/quarto-cli" = "1.9"
+"github:Syllo/nvtop" = { version = "3.3.2", bin = "nvtop" }
 "aqua:gastownhall/beads" = "1.0"
 "github:betterleaks/betterleaks" = "1.6.0"
+
+# nvtop ships only as an AppImage; extract it on launch so it also runs
+# without FUSE (for example on WSL or in containers).
+[env]
+APPIMAGE_EXTRACT_AND_RUN = "1"
 
 [settings]
 cargo.binstall = false

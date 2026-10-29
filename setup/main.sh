@@ -33,7 +33,7 @@ Subcommands:
   links       Link and generate local config files
   bootstrap   Install OS packages and tool managers (apt, homebrew, sheldon, mise)
   tools       Install tools with those managers (mise-tools, uv-tools, claude,
-              codex, tmux, luarocks, quarto, nvtop)
+              codex, tmux, luarocks)
   plugins     Install plugins and assets on top of the tools (alacritty, tpm, themes)
   skills      Restore skills and wire agent skill directories
   codex       Generate a separate Codex environment

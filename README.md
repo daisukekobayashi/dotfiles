@@ -44,14 +44,14 @@ depends on the earlier ones.
 | --- | --- |
 | `links` | `links` (config links and generated files) |
 | `bootstrap` | `apt`, `homebrew`, `sheldon`, `mise` (OS packages and tool managers) |
-| `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks`, `quarto`, `nvtop` |
+| `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks` |
 | `plugins` | `alacritty`, `tpm`, `themes` (plugins and assets on top of the tools) |
 
 - `./setup.sh all`
 - `./setup.sh links`, `./setup.sh bootstrap`, `./setup.sh tools`, `./setup.sh plugins`
 
 Steps that do not apply to the platform are skipped with a message; for example,
-macOS installs `sheldon`, `tmux`, `luarocks`, `quarto`, and `nvtop` from
+macOS installs `sheldon`, `tmux`, and `luarocks` from
 `brew/Brewfile` in the `homebrew` step. `packages` and `post` remain as deprecated
 aliases: `packages` runs `bootstrap`, `tools`, and `plugins`, and `post` runs
 `mise-tools`, `uv-tools`, `tpm`, and `themes`.
@@ -85,7 +85,7 @@ Step filters work with `all` and every phase subcommand.
 
 - `./setup.sh all --only claude,codex`
 - `./setup.sh tools --only tmux,luarocks`
-- `./setup.sh all --skip quarto,tpm`
+- `./setup.sh all --skip luarocks,tpm`
 - `./setup.sh all --dry-run`
 - `./setup.sh all --reload-shell`
 

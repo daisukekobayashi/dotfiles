@@ -173,99 +173,6 @@ EOF
   [[ "$output" == *"Continuing despite failed steps: tmux"* ]]
 }
 
-@test "tools installs nvtop on linux from extracted AppImage" {
-  local fake_bin="${TEST_ROOT}/bin"
-  mkdir -p "${fake_bin}" "${TEST_HOME}/.tmux/plugins/tpm/scripts" "${TEST_HOME}/.vim/autoload" \
-    "${TEST_HOME}/.mintty" "${TEST_HOME}/.solarized-mate-terminal"
-  : > "${TEST_HOME}/.vim/autoload/plug.vim"
-
-  cat > "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${TEST_HOME}/.tmux/plugins/tpm/scripts/install_plugins.sh"
-  mkdir -p "${TEST_HOME}/.local/bin" "${TEST_HOME}/.local/share/nvtop-3.3.2"
-  cat > "${TEST_HOME}/.local/share/nvtop-3.3.2/AppRun" <<'EOF'
-#!/usr/bin/env bash
-exit 127
-EOF
-  chmod +x "${TEST_HOME}/.local/share/nvtop-3.3.2/AppRun"
-  ln -s "${TEST_HOME}/.local/share/nvtop-3.3.2/AppRun" "${TEST_HOME}/.local/bin/nvtop"
-
-  cat > "${fake_bin}/uname" <<'EOF'
-#!/usr/bin/env bash
-if [ "$1" = "-m" ]; then
-  printf 'x86_64\n'
-else
-  printf 'Linux\n'
-fi
-EOF
-  chmod +x "${fake_bin}/uname"
-
-  cat > "${fake_bin}/curl" <<'EOF'
-#!/usr/bin/env bash
-target=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -fLo)
-      target="$2"
-      shift 2
-      ;;
-    *)
-      shift
-      ;;
-  esac
-done
-
-[ -n "${target}" ] || exit 1
-mkdir -p "$(dirname "${target}")"
-cat > "${target}" <<'APPIMAGE'
-#!/usr/bin/env bash
-if [ "${1:-}" = "--appimage-extract" ]; then
-  mkdir -p squashfs-root
-  cat > squashfs-root/AppRun <<'APPRUN'
-#!/usr/bin/env bash
-printf 'nvtop version 3.3.2\n'
-APPRUN
-  chmod +x squashfs-root/AppRun
-  exit 0
-fi
-exit 1
-APPIMAGE
-chmod +x "${target}"
-EOF
-  chmod +x "${fake_bin}/curl"
-
-  cat > "${fake_bin}/git" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/git"
-
-  cat > "${fake_bin}/tar" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${fake_bin}/tar"
-
-  run env \
-    PATH="${fake_bin}:/usr/bin:/bin" \
-    SETUP_HOME="${TEST_HOME}" \
-    SETUP_TMPDIR="${TEST_TMP}" \
-    "$(setup_script_path)" \
-    tools --only nvtop
-
-  [ "$status" -eq 0 ]
-  [ -x "${TEST_HOME}/.local/bin/nvtop" ]
-  [ ! -L "${TEST_HOME}/.local/bin/nvtop" ]
-  run grep -F "${TEST_HOME}/.local/share/nvtop-3.3.2/AppRun" "${TEST_HOME}/.local/bin/nvtop"
-  [ "$status" -eq 0 ]
-
-  run "${TEST_HOME}/.local/bin/nvtop" --version
-  [ "$status" -eq 0 ]
-  [[ "$output" == "nvtop version 3.3.2" ]]
-}
-
 @test "tmux-palette tool dependencies use linux/wsl mise and macOS brew declarations" {
   local tool
   local -a mise_tools=(
@@ -307,6 +214,8 @@ EOF
     '"aqua:dalance/procs" = "0.14.12"'
     'xh = "0.26.3"'
     'tokei = "14.0.0"'
+    '"github:Syllo/nvtop" = { version = "3.3.2", bin = "nvtop" }'
+    'APPIMAGE_EXTRACT_AND_RUN = "1"'
   )
 
   for tool in "${mise_tools[@]}"; do

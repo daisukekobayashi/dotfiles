@@ -9,7 +9,7 @@ list_phase_steps() {
   case "$1" in
     links) printf '%s\n' links ;;
     bootstrap) printf '%s\n' apt homebrew sheldon mise ;;
-    tools) printf '%s\n' mise-tools uv-tools claude codex tmux luarocks quarto nvtop ;;
+    tools) printf '%s\n' mise-tools uv-tools claude codex tmux luarocks ;;
     plugins) printf '%s\n' alacritty tpm themes ;;
     *) return 1 ;;
   esac
@@ -98,17 +98,6 @@ require_linux_step() {
   fi
 }
 
-require_x86_64_step() {
-  local step="$1"
-  local archstr
-
-  archstr="$(uname -m)"
-  if [ "${archstr}" != "x86_64" ]; then
-    log_warn "Skipping ${step} because architecture is not x86_64: ${archstr}"
-    return 1
-  fi
-}
-
 ensure_mise_on_path() {
   if ! command_exists mise && [ -x "${SETUP_HOME}/.local/bin/mise" ]; then
     PATH="${SETUP_HOME}/.local/bin:${PATH}"
@@ -173,16 +162,6 @@ run_setup_step() {
     luarocks)
       require_linux_step luarocks || return 0
       install_luarocks "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}"
-      ;;
-    quarto)
-      require_linux_step quarto || return 0
-      require_x86_64_step quarto || return 0
-      install_quarto_linux_amd64 "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}"
-      ;;
-    nvtop)
-      require_linux_step nvtop || return 0
-      require_x86_64_step nvtop || return 0
-      install_nvtop_linux_amd64 "${SETUP_HOME}" "${SETUP_TMPDIR}" "${SETUP_DRY_RUN}"
       ;;
     alacritty)
       require_linux_step alacritty || return 0

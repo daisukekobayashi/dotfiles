@@ -43,14 +43,14 @@ setup はフェーズ単位で実行します. `all` は次の順に実行し, �
 | --- | --- |
 | `links` | `links` (設定ファイルのリンクと生成) |
 | `bootstrap` | `apt`, `homebrew`, `sheldon`, `mise` (OS パッケージとツールの管理ツール) |
-| `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks`, `quarto`, `nvtop` |
+| `tools` | `mise-tools`, `uv-tools`, `claude`, `codex`, `tmux`, `luarocks` |
 | `plugins` | `alacritty`, `tpm`, `themes` (ツールの上に乗るプラグインや付属ファイル) |
 
 - `./setup.sh all`
 - `./setup.sh links`, `./setup.sh bootstrap`, `./setup.sh tools`, `./setup.sh plugins`
 
 その環境で対象外のステップは, メッセージを表示してスキップします. 例えば macOS では
-`sheldon`, `tmux`, `luarocks`, `quarto`, `nvtop` を `homebrew` ステップで `brew/Brewfile` から入れます.
+`sheldon`, `tmux`, `luarocks` を `homebrew` ステップで `brew/Brewfile` から入れます.
 `packages` と `post` は非推奨の別名として残しています. `packages` は `bootstrap`, `tools`,
 `plugins` を, `post` は `mise-tools`, `uv-tools`, `tpm`, `themes` を実行します.
 
@@ -81,7 +81,7 @@ PowerShell 5.1+ と Node.js がある環境では, `.\tests\setup_link_copy.ps1`
 
 - `./setup.sh all --only claude,codex`
 - `./setup.sh tools --only tmux,luarocks`
-- `./setup.sh all --skip quarto,tpm`
+- `./setup.sh all --skip luarocks,tpm`
 - `./setup.sh all --dry-run`
 - `./setup.sh all --reload-shell`
 
