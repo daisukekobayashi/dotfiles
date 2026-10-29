@@ -9,5 +9,5 @@ ruff = "0.17"
 uv = "0.13"
 yt-dlp = "2026.10.26"
 azure = "2"
-gcloud = "543"
+gcloud = "591"
 

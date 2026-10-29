@@ -50,7 +50,6 @@ uv = "0.13"
 yt-dlp = "2026.10.26"
 azure = "2"
 aws-cli = "2"
-gcloud = "543"
 terraform = "1.14"
 "cargo:tree-sitter-cli" = "0.26.8"
 typst = "0.14"
@@ -86,3 +85,9 @@ bin = "trip"
 version = "2.4.0"
 url = "https://github.com/gcla/termshark/releases/download/v{{ version }}/termshark_{{ version }}_linux_x64.tar.gz"
 bin = "termshark"
+
+# The vfox gcloud plugin fails on newer mise; the tarball bundles Python.
+[tools."http:gcloud"]
+version = "591.0.0"
+url = "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-{{ version }}-linux-x86_64.tar.gz"
+bin_path = "google-cloud-sdk/bin"

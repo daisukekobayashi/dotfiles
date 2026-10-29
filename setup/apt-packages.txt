@@ -23,6 +23,9 @@ libncurses-dev
 # erlang (kerl build)
 libssl-dev
 
+# cargo tools using bindgen (tree-sitter-cli)
+libclang-dev
+
 # luarocks
 lua5.1
 liblua5.1-0-dev

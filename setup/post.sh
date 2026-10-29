@@ -116,7 +116,8 @@ install_mise_tools() {
   if ! run_cmd "${dry_run}" "${cmd[@]}"; then
     if ! mapfile -t failed_tools < <(list_mise_missing_tools "${setup_home}" "${mise_env}") ||
       [ "${#failed_tools[@]}" -eq 0 ]; then
-      failed_tools=("(unknown)")
+      # Tools whose versions cannot be resolved are not listed as missing.
+      failed_tools=("(see mise output above)")
     fi
     for tool in "${failed_tools[@]}"; do
       log_warn "Failed to install mise tool: ${tool}"
