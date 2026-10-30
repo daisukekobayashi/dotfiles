@@ -566,11 +566,18 @@ function linkLocalSkills(plan: SkillsPlan, dotfilesRoot: string, target: "user" 
   }), localRoot);
 }
 
+function isWindowsBatchFile(command: string): boolean {
+  return process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
+}
+
 function runCommand(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env): void {
-  const result = spawnSync(command, args, {
+  // cmd.exe receives the command line unquoted under shell: true, so quote the
+  // batch file path to keep paths such as C:\Program Files intact.
+  const shell = isWindowsBatchFile(command);
+  const result = spawnSync(shell ? `"${command}"` : command, args, {
     cwd,
     env,
-    shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(command),
+    shell,
     stdio: ["ignore", "inherit", "inherit"],
   });
   if (result.error) {
@@ -579,6 +586,25 @@ function runCommand(command: string, args: string[], cwd: string, env: NodeJS.Pr
   if (result.status !== 0) {
     fail(`${command} ${args.join(" ")} failed with exit ${result.status ?? "unknown"}`);
   }
+}
+
+interface NpxInvocation {
+  command: string;
+  args: string[];
+}
+
+// Run npm's npx-cli.js with node when it sits next to the npx.cmd shim, which
+// keeps cmd.exe out of the argument handling. Other shims (for example mise)
+// fall back to running the batch file.
+function resolveNpx(): NpxInvocation {
+  const npxCommand = resolveCommand("npx");
+  if (isWindowsBatchFile(npxCommand)) {
+    const npxCli = path.join(path.dirname(npxCommand), "node_modules", "npm", "bin", "npx-cli.js");
+    if (fs.existsSync(npxCli)) {
+      return { command: process.execPath, args: [npxCli] };
+    }
+  }
+  return { command: npxCommand, args: [] };
 }
 
 function commandPreview(command: string, args: string[]): string {
@@ -644,7 +670,7 @@ function runExternalInstalls(workDir: string, plan: SkillsPlan, agents: Agent[],
   if (plan.external.length === 0) {
     return;
   }
-  const npxCommand = resolveCommand("npx");
+  const npx = resolveNpx();
   fs.mkdirSync(npmCacheDir, { recursive: true });
 
   for (const entry of plan.external) {
@@ -655,7 +681,7 @@ function runExternalInstalls(workDir: string, plan: SkillsPlan, agents: Agent[],
     for (const skill of entry.skills) {
       args.push("--skill", skill);
     }
-    runCommand(npxCommand, args, workDir, {
+    runCommand(npx.command, [...npx.args, ...args], workDir, {
       ...process.env,
       NPM_CONFIG_CACHE: npmCacheDir,
     });
@@ -678,7 +704,7 @@ function runUserExternalInstalls(tempInstallDir: string, restoreSkillsDir: strin
   if (plan.external.length === 0) {
     return;
   }
-  const npxCommand = resolveCommand("npx");
+  const npx = resolveNpx();
   fs.mkdirSync(npmCacheDir, { recursive: true });
 
   for (const entry of plan.external) {
@@ -689,7 +715,7 @@ function runUserExternalInstalls(tempInstallDir: string, restoreSkillsDir: strin
     for (const skill of entry.skills) {
       args.push("--skill", skill);
     }
-    runCommand(npxCommand, args, tempInstallDir, {
+    runCommand(npx.command, [...npx.args, ...args], tempInstallDir, {
       ...process.env,
       NPM_CONFIG_CACHE: npmCacheDir,
     });
