@@ -71,7 +71,6 @@
   },
   "enabledPlugins": {
     "claude-mem@thedotmack": true,
-    "oh-my-claudecode@omc": false,
     "codex@openai-codex": true
   },
   "extraKnownMarketplaces": {
@@ -79,12 +78,6 @@
       "source": {
         "source": "github",
         "repo": "thedotmack/claude-mem"
-      }
-    },
-    "omc": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
       }
     },
     "openai-codex": {
