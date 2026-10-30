@@ -4,12 +4,26 @@ log_info() {
   printf '[INFO] %s\n' "$*"
 }
 
+# Color the label only when stderr is a terminal, so logs stay plain in pipes,
+# files, and tests. NO_COLOR (https://no-color.org) turns it off.
+log_stderr() {
+  local label="$1"
+  local color="$2"
+  shift 2
+
+  if [ -z "${NO_COLOR:-}" ] && [ -t 2 ]; then
+    printf '\033[%sm[%s]\033[0m %s\n' "${color}" "${label}" "$*" >&2
+  else
+    printf '[%s] %s\n' "${label}" "$*" >&2
+  fi
+}
+
 log_warn() {
-  printf '[WARN] %s\n' "$*" >&2
+  log_stderr WARN '1;33' "$@"
 }
 
 log_error() {
-  printf '[ERROR] %s\n' "$*" >&2
+  log_stderr ERROR '1;31' "$@"
 }
 
 make_directory() {

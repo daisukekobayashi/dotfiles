@@ -43,6 +43,7 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 | `SETUP_MISE_STRICT` | `0` | `1` treats failed mise tools as a failed step |
 | `SETUP_APT_INSTALL` | `0` | `1` installs missing apt packages with `sudo apt-get` |
 | `MISE_JOBS` | mise `jobs` | Parallel mise installs |
+| `NO_COLOR` | unset | Any value turns off the `[WARN]` / `[ERROR]` label colors |
 
 ## Platform notes
 

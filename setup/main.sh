@@ -92,6 +92,7 @@ Environment:
   SETUP_DRY_RUN       Force dry-run mode (0 or 1)
   SETUP_EXEC_SHELL    Exec a fresh login zsh after setup completes (0 or 1)
   SETUP_STRICT        Stop at the first failed step instead of continuing (0 or 1)
+  NO_COLOR            Turn off the [WARN] / [ERROR] label colors on a terminal
 EOF
 }
 
