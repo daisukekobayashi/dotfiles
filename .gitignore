@@ -1,5 +1,3 @@
-.config/nvim/lazy-lock.json
-
 # Secrets / local env
 .env
 .env.*
@@ -21,6 +19,7 @@ __pycache__/
 # General caches
 .cache/
 .agents/
+.serena/
 .superpowers/
 .worktrees/
 setup/node_modules/
