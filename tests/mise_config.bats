@@ -11,7 +11,8 @@ load 'helpers/test_helper.bash'
 }
 
 @test "R mise config is opt-in and builds a shared library with cairo" {
-  local config="$(repo_root)/mise/config.r.toml"
+  local config
+  config="$(repo_root)/mise/config.r.toml"
 
   [ -f "${config}" ]
   grep -F '"asdf:mise-plugins/mise-r"' "${config}"
@@ -20,7 +21,8 @@ load 'helpers/test_helper.bash'
 }
 
 @test "JVM extra mise config contains optional Kotlin and Clojure runtimes" {
-  local config="$(repo_root)/mise/config.jvm-extra.toml"
+  local config
+  config="$(repo_root)/mise/config.jvm-extra.toml"
 
   [ -f "${config}" ]
   grep -F 'clojure = "1.12.4"' "${config}"
@@ -28,7 +30,8 @@ load 'helpers/test_helper.bash'
 }
 
 @test "mise README documents optional env configs instead of expanding the root README" {
-  local mise_readme="$(repo_root)/mise/README.md"
+  local mise_readme
+  mise_readme="$(repo_root)/mise/README.md"
 
   [ -f "${mise_readme}" ]
   grep -F 'config.r.toml' "${mise_readme}"

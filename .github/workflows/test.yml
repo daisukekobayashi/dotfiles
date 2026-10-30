@@ -43,6 +43,10 @@ jobs:
       - name: Check generated setup scripts
         run: scripts/check-skills-build.sh
 
+      - name: ShellCheck
+        if: runner.os == 'Linux'
+        run: shellcheck -S warning setup.sh lib/common.sh setup/*.sh tests/helpers/*.bash tests/*.bats
+
       - name: Node tests
         run: npm --prefix setup test
 
