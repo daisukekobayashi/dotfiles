@@ -66,12 +66,11 @@ test("apply replaces links with copies without changing the dotfiles files", t =
   assert.equal(read(f.codexSource), linked);
 });
 
-test("apply merges dotfiles changes with local edits and runtime state", t => {
+test("apply merges dotfiles changes with local edits and local-only keys", t => {
   const f = fixture(t);
   assert.equal(f.run("apply").status, 0);
   f.write(f.codex, `approval_policy = "never"\nmodel = "gpt-6"\n\n[features]\nhooks = true\n\n[projects."/private/project"]\ntrust_level = "trusted"\n\n[tui]\ntheme = "dark"\n\n[tui.model_availability_nux]\ngpt-6 = 1\n`);
-  // Stale state in dotfiles must not reach the local copy.
-  f.write(f.codexSource, 'model = "gpt-6.1"\napproval_policy = "on-request"\n\n[features]\nhooks = true\n\n[projects."/old"]\ntrust_level = "untrusted"\n');
+  f.write(f.codexSource, 'model = "gpt-6.1"\napproval_policy = "on-request"\n\n[features]\nhooks = true\n');
 
   const result = f.run("apply");
   assert.equal(result.status, 0, result.stderr);
@@ -130,7 +129,7 @@ test("apply reports an invalid local file and still updates the others", t => {
   assert.equal(read(f.claude), read(f.claudeSource));
 });
 
-test("diff lists local differences, ignores runtime state and masks secrets", t => {
+test("diff lists every local difference and masks secrets", t => {
   const f = fixture(t);
   assert.equal(f.run("apply").status, 0);
   assert.equal(f.run("diff", "--check").status, 0);
@@ -146,13 +145,11 @@ test("diff lists local differences, ignores runtime state and masks secrets", t 
   assert.match(result.stdout, /^ {2}~ env\.MCP_TIMEOUT: \*\*\* -> \*\*\*$/m);
   assert.match(result.stdout, /^ {2}\+ env\.ANTHROPIC_AUTH_TOKEN = \*\*\*$/m);
   assert.match(result.stdout, /^ {2}\+ apiKeyHelper = \*\*\*$/m);
-  assert.doesNotMatch(result.stdout, /private|projects|hooks\.state|s3cr3t|print-key|trusted_hash/);
+  assert.match(result.stdout, /^ {2}\+ projects\."\/private\/project"\.trust_level = "trusted"$/m);
+  assert.match(result.stdout, /^ {2}\+ hooks\.state\.x\.trusted_hash = "abc"$/m);
+  assert.doesNotMatch(result.stdout, /s3cr3t|print-key/);
 
   assert.equal(f.run("diff", "--check").status, 1);
-  const summary = f.run("diff", "--summary");
-  assert.equal(summary.status, 0);
-  assert.match(summary.stdout, /^Local Codex\/Claude settings differ from dotfiles in 6 place\(s\) \(codex\/config\.toml, claude\/settings\.json\); review with /);
-  assert.equal(summary.stdout.trim().split("\n").length, 1);
 });
 
 test("diff points links and missing copies to setup links", t => {
@@ -162,12 +159,12 @@ test("diff points links and missing copies to setup links", t => {
   const result = f.run("diff", "--check");
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /codex\/config\.toml: .* is not a managed copy yet; run setup links/);
-  assert.equal(f.run("diff", "--summary").stdout, "");
 });
 
 test("unknown commands and arguments fail", t => {
   const f = fixture(t);
   assert.equal(f.run().status, 1);
   assert.equal(f.run("diff", "--dry-run").status, 1);
+  assert.equal(f.run("diff", "--summary").status, 1);
   assert.match(f.run("--help").stdout, /^Usage: managed-copy apply/);
 });

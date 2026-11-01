@@ -115,19 +115,19 @@ files stay linked.
 
 Each run merges dotfiles changes into the copies and keeps local edits. A local
 value that conflicts with a dotfiles change is kept with a warning. The version
-last applied is kept in `.dotfiles-managed/` next to each copy. Runtime state
-keys (Codex `projects`, `hooks.state`, `tui.model_availability_nux`,
-`tui.screen_reader_detection_done` and `notice.model_migrations`) are never
-synced or compared. If Node.js is not installed yet, `links` only seeds missing
-copies; rerun it after the `tools` phase.
+last applied is kept in `.dotfiles-managed/` next to each copy. Keys that only
+exist locally, such as runtime state and settings the desktop apps add, are kept
+as they are. If Node.js is not installed yet, `links` only seeds missing copies;
+rerun it after the `tools` phase.
 
-To bring local edits back into dotfiles, review them and edit the tracked files:
+To check for drift or bring local edits back into dotfiles, review them and
+edit the tracked files:
 
 ```bash
 ./setup.sh diff           # + only in the local copy, - only in dotfiles, ~ changed locally
 ./setup.sh diff --check   # exit 1 when they differ
 ```
 
-Values under `env` and keys that look like tokens, keys or secrets are masked.
-Setup and the pre-commit hook print a one-line count when the copies differ;
-neither fails because of it. On Windows, use `.\setup.ps1 diff`.
+`diff` lists every difference, including runtime state. Values under `env` and
+keys that look like tokens, keys or secrets are masked. On Windows, use
+`.\setup.ps1 diff`.

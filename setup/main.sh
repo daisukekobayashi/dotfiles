@@ -73,7 +73,6 @@ claude args:
 
 diff args:
   --check                    Exit 1 when the copies differ from dotfiles
-  --summary                  Print only the number of differences
 
 skills args:
   --scope user|project       Install user or project skills (default: user)
@@ -209,7 +208,6 @@ run_step_subcommand() {
   done < <(list_subcommand_steps "${subcommand}")
   log_info "Running ${subcommand} setup..."
   run_setup_steps "${STEPS_ONLY}" "${STEPS_SKIP}" "${steps[@]}" || return
-  print_managed_copy_summary
 
   if [ "${subcommand}" != "links" ]; then
     maybe_reload_shell

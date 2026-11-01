@@ -41,8 +41,6 @@ try {
       }
       exit 0
     }
-    # The summary after setup is informational only.
-    if ($CopyArgs -contains "--summary") { exit 0 }
     throw "diff requires Node.js and local dependencies: npm --prefix setup ci"
   }
   $Env:SETUP_HOME = $setupContext.HomeDir

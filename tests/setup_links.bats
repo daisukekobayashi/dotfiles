@@ -147,13 +147,13 @@ assert_link_target_is_tracked() {
   [[ "$output" == *"+ env.ANTHROPIC_AUTH_TOKEN = ***"* ]]
   [[ "$output" == *"+ skipWorkflowUsageWarning = true"* ]]
   [[ "$output" != *"s3cr3t"* ]]
-  [[ "$output" != *"/private/project"* ]]
+  [[ "$output" == *'+ projects."/private/project".trust_level = "trusted"'* ]]
   run env SETUP_HOME="${TEST_HOME}" "$(setup_script_path)" diff --check
   [ "$status" -eq 1 ]
 
   run env SETUP_HOME="${TEST_HOME}" SETUP_TMPDIR="${TEST_TMP}" "$(setup_script_path)" links
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Local Codex/Claude settings differ from dotfiles in 2 place(s) (claude/settings.json)"* ]]
+  [[ "$output" != *"Local Codex/Claude settings differ"* ]]
   grep -F '"/private/project"' "${TEST_HOME}/.codex/config.toml"
   grep -F 's3cr3t' "${TEST_HOME}/.claude/settings.json"
 }
