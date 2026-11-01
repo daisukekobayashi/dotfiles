@@ -13,6 +13,14 @@ npm --prefix setup test
 bats tests
 ```
 
+`bats tests` needs Linux. On macOS the tmux, zsh, and skill evaluation suites
+still assume Linux tools and Bash 4 or later, and some of their cases fail.
+CI runs only the setup suites there:
+
+```bash
+bats tests/setup*.bats tests/betterleaks_scan.bats
+```
+
 When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
 `tests/powershell.bats` parses every tracked `.ps1` file and runs
 `tests/setup_windows.ps1`, skipping the cases that need Windows APIs.
