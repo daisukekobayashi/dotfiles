@@ -6,18 +6,14 @@ import { parse, stringify } from "smol-toml";
 
 type Table = Record<string, unknown>;
 type Format = "toml" | "json";
-type Managed = { source: string; home: string; name: string; format: Format; state: string[][] };
+type Managed = { source: string; home: string; name: string; format: Format };
 type Difference = { sign: "+" | "-" | "~"; keys: string[]; repo?: unknown; live?: unknown };
 
 // Codex and Claude rewrite these files while running, so setup installs copies
-// instead of links. State keys hold machine-local runtime records, such as
-// trusted project paths and hook approvals; they are never synced or reported.
+// instead of links. Keys they add locally are kept by the merge below.
 const managed: Managed[] = [
-  {
-    source: "codex/config.toml", home: ".codex", name: "config.toml", format: "toml",
-    state: [["projects"], ["hooks", "state"], ["tui", "model_availability_nux"], ["tui", "screen_reader_detection_done"], ["notice", "model_migrations"]],
-  },
-  { source: "claude/settings.json", home: ".claude", name: "settings.json", format: "json", state: [] },
+  { source: "codex/config.toml", home: ".codex", name: "config.toml", format: "toml" },
+  { source: "claude/settings.json", home: ".claude", name: "settings.json", format: "json" },
 ];
 
 // The dotfiles version last applied to each copy, kept beside it for 3-way merges.
@@ -75,24 +71,6 @@ function own(value: Table, key: string): unknown {
 function copyTables(value: Table): Table {
   const result: Table = {};
   for (const [key, item] of Object.entries(value)) assign(result, key, table(item) ? copyTables(item) : item);
-  return result;
-}
-
-function withoutState(config: Table, state: string[][]): Table {
-  const result = copyTables(config);
-  for (const keys of state) {
-    const parents: Table[] = [result];
-    for (const key of keys.slice(0, -1)) {
-      const next = own(parents[parents.length - 1], key);
-      if (!table(next)) break;
-      parents.push(next);
-    }
-    if (parents.length !== keys.length) continue;
-    delete parents[parents.length - 1][keys[keys.length - 1]];
-    for (let index = parents.length - 1; index > 0 && Object.keys(parents[index]).length === 0; index--) {
-      delete parents[index - 1][keys[index - 1]];
-    }
-  }
   return result;
 }
 
@@ -158,7 +136,7 @@ function differences(repo: unknown, live: unknown, keys: string[], out: Differen
 
 function apply(root: string, home: string, item: Managed, dryRun: boolean): void {
   const sourceText = fs.readFileSync(path.join(root, item.source), "utf8");
-  const desired = withoutState(readConfig(sourceText, item.format, item.source), item.state);
+  const desired = readConfig(sourceText, item.format, item.source);
   const dir = path.join(home, item.home);
   const file = path.join(dir, item.name);
   const baseline = path.join(dir, baselineDir, item.name);
@@ -174,7 +152,7 @@ function apply(root: string, home: string, item: Managed, dryRun: boolean): void
   let after = sourceText;
   if (currentText !== undefined) {
     const current = readConfig(currentText, item.format, file);
-    const previous = previousText === undefined ? undefined : withoutState(readConfig(previousText, item.format, baseline), item.state);
+    const previous = previousText === undefined ? undefined : readConfig(previousText, item.format, baseline);
     const merged = merge(previous, current, desired, [], conflicts) as Table;
     after = isDeepStrictEqual(merged, current) ? currentText : writeConfig(merged, item.format);
   }
@@ -196,18 +174,18 @@ function apply(root: string, home: string, item: Managed, dryRun: boolean): void
   if (writeBaseline) replaceFile(baseline, sourceText, 0o600);
 }
 
-function report(root: string, home: string, item: Managed, summary: boolean): number {
+function report(root: string, home: string, item: Managed): number {
   const file = path.join(home, item.home, item.name);
   const stat = entry(file);
   if (!stat?.isFile()) {
-    if (!summary) console.log(`${item.source}: ${file} is not a managed copy yet; run setup links\n`);
+    console.log(`${item.source}: ${file} is not a managed copy yet; run setup links\n`);
     return 0;
   }
-  const repo = withoutState(readConfig(fs.readFileSync(path.join(root, item.source), "utf8"), item.format, item.source), item.state);
-  const live = withoutState(readConfig(fs.readFileSync(file, "utf8"), item.format, file), item.state);
+  const repo = readConfig(fs.readFileSync(path.join(root, item.source), "utf8"), item.format, item.source);
+  const live = readConfig(fs.readFileSync(file, "utf8"), item.format, file);
   const found: Difference[] = [];
   differences(repo, live, [], found);
-  if (!summary && found.length > 0) {
+  if (found.length > 0) {
     console.log(`${item.source} <- ${file}`);
     for (const diff of found) {
       const value = diff.sign === "+" ? ` = ${show(diff.keys, diff.live)}`
@@ -221,12 +199,12 @@ function report(root: string, home: string, item: Managed, summary: boolean): nu
 }
 
 const usage = "Usage: managed-copy apply [--dry-run]\n" +
-  "       managed-copy diff [--check] [--summary]\n" +
+  "       managed-copy diff [--check]\n" +
   "apply installs or refreshes the local copies of codex/config.toml and claude/settings.json,\n" +
   "merging dotfiles changes with local edits; a conflicting local value is kept with a warning.\n" +
-  "diff lists settings that differ between the local copies and dotfiles, ignoring runtime state:\n" +
+  "diff lists settings that differ between the local copies and dotfiles:\n" +
   "+ only in the local copy, - only in dotfiles, ~ changed locally. Secret-like values are masked.\n" +
-  "--check exits 1 when they differ; --summary prints only a count.";
+  "--check exits 1 when they differ.";
 
 export function main(args = process.argv.slice(2)): void {
   const [command, ...options] = args;
@@ -234,7 +212,7 @@ export function main(args = process.argv.slice(2)): void {
     console.log(usage);
     return;
   }
-  const allowed = command === "apply" ? ["--dry-run"] : command === "diff" ? ["--check", "--summary"] : undefined;
+  const allowed = command === "apply" ? ["--dry-run"] : command === "diff" ? ["--check"] : undefined;
   if (!allowed) throw new Error("Expected apply or diff; see --help");
   const unknown = options.find(option => !allowed.includes(option));
   if (unknown !== undefined) throw new Error(`Unknown ${command} argument: ${unknown}`);
@@ -256,23 +234,14 @@ export function main(args = process.argv.slice(2)): void {
     return;
   }
 
-  const summary = options.includes("--summary");
   let total = 0;
-  const changed: string[] = [];
   for (const item of managed) {
     try {
-      const count = report(root, home, item, summary);
-      if (count > 0) changed.push(item.source);
-      total += count;
+      total += report(root, home, item);
     } catch (error) {
       console.error(`managed-copy: ${error instanceof Error ? error.message : "Comparison failed"}`);
-      changed.push(item.source);
       total += 1;
     }
-  }
-  if (summary && total > 0) {
-    const command = process.platform === "win32" ? ".\\setup.ps1 diff" : "./setup.sh diff";
-    console.log(`Local Codex/Claude settings differ from dotfiles in ${total} place(s) (${changed.join(", ")}); review with ${command}`);
   }
   if (options.includes("--check") && total > 0) process.exitCode = 1;
 }

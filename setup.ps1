@@ -47,7 +47,7 @@ Behavior:
           --auth-token-stdin and --dry-run (requires Node.js).
           Shares all installed user skills and regenerates common settings, preserving local edits.
           Legacy --skill <name> checks availability without limiting shared skills.
-  diff: accepts --check (exit 1 when the copies differ) and --summary (count only); requires Node.js.
+  diff: accepts --check (exit 1 when the copies differ); requires Node.js.
 "@
 }
 
@@ -182,8 +182,6 @@ try {
       $selection = Read-StepArguments -Name $name -Arguments $SubcommandArgs
       Invoke-SetupSteps -Steps (Get-SubcommandSteps -Name $name) -Only $selection.only -Skip $selection.skip `
         -SetupContext $setupContext -CopyArguments $copyArguments
-      # One line when local settings drifted; never fails setup.
-      & $managedCopyScript -HomeDir $setupContext.HomeDir -DotfilesRoot $setupContext.DotfilesRoot diff --summary
     }
     "skills" {
       Invoke-SetupPowerShellScript -ScriptPath $skillsScript -ArgumentList (

@@ -52,10 +52,3 @@ setup_diff() {
   fi
   run_managed_copy diff "$@"
 }
-
-# One line after setup when local settings drifted; never fails setup.
-print_managed_copy_summary() {
-  [ "${SETUP_DRY_RUN}" = "1" ] && return 0
-  managed_copy_runtime_ready || return 0
-  run_managed_copy diff --summary || true
-}
