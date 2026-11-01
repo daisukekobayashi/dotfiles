@@ -4,6 +4,16 @@ load 'helpers/test_helper.bash'
 
 setup() {
   unset TMUX_CLIPBOARD_OSC52_MAX_BYTES TMUX_POPUP_CLIPBOARD_OSC52_MAX_BYTES
+  # Run as CI does: no caller tmux session, and no terminal for popup
+  # scripts' "Press Enter" pauses to wait on.
+  unset TMUX TMUX_PANE
+  exec </dev/null
+}
+
+@test "tmux tests run without the caller's terminal or tmux session" {
+  [ ! -t 0 ]
+  [ -z "${TMUX-}" ]
+  [ -z "${TMUX_PANE-}" ]
 }
 
 @test "tmux does not enable C-b as a global secondary prefix" {
