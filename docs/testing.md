@@ -59,7 +59,7 @@ tests never prompt for elevation.
 | --- | --- |
 | `tests\setup_windows.ps1` | Setup entry points |
 | `tests\claude_pick.ps1` | Claude environment setup, argument forwarding, and process behavior (compiles a small native fixture) |
-| `tests\setup_link_copy.ps1` | Link/copy fallback for privilege and copy failures (not in CI yet; some cases fail) |
+| `tests\setup_link_copy.ps1` | Link/copy fallback for privilege and copy failures |
 
 ## Opt-in E2E checks
 

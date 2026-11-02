@@ -26,7 +26,7 @@ function New-Fixture {
     HomeDir = Join-Path $root "home space's"
     DotfilesRoot = Join-Path $root "dotfiles space's"
   }
-  foreach ($file in @("setup.ps1", "lib/common.ps1", "lib/windows-links.ps1", "setup/links.ps1", "setup/skills.ps1", "setup/skills.js", "setup/shared-links.js")) {
+  foreach ($file in @("setup.ps1", "lib/common.ps1", "lib/windows-links.ps1", "setup/links.ps1", "setup/managed-copy.ps1", "setup/skills.ps1", "setup/skills.js", "setup/shared-links.js")) {
     $destination = Join-Path $fixture.DotfilesRoot $file
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $RepoRoot $file) -Destination $destination
@@ -102,6 +102,10 @@ function Copy-Item {
       Write-FixtureFile -Path $target
     }
   }
+  # Without setup/node_modules, managed-copy.ps1 seeds these copies directly.
+  foreach ($file in @("codex/config.toml", "claude/settings.json")) {
+    Write-FixtureFile -Path (Join-Path $fixture.DotfilesRoot $file)
+  }
   foreach ($file in @("ipython_config.py", "ipython_kernel_config.py", "startup/start.py")) {
     Write-FixtureFile -Path (Join-Path $fixture.DotfilesRoot "ipython/profile_default/$file")
   }
@@ -126,6 +130,9 @@ function Invoke-FixtureSetup {
     SETUP_DOTFILES_ROOT = $Fixture.DotfilesRoot
     SETUP_TMPDIR = Join-Path $Fixture.Root "tmp"
     SETUP_DRY_RUN = "0"
+    # Fail the links step instead of continuing, so expected failures exit
+    # nonzero and unexpected ones are not hidden behind a warning.
+    SETUP_STRICT = "1"
     SETUP_TEST_LINK_ERROR = $LinkError
     SETUP_TEST_COPY_ERROR = $(if ($FailCopy) { "1" } elseif ($FailDirectoryCopy) { "directory" } else { "0" })
     SETUP_TEST_ELEVATION = $Elevation
@@ -221,6 +228,7 @@ Invoke-Test "unrelated process launch errors stop without copying" {
   param($fixture)
   $result = Invoke-FixtureSetup $fixture @("links") -Elevation "launch-error"
   Assert-True ($result.ExitCode -ne 0) "invalid executable was hidden"
+  Assert-True ($result.Output -match "Invalid executable") "launch error was not reported"
   Assert-True (-not (Test-Path (Join-Path $fixture.HomeDir "_vimrc"))) "copied after an unrelated launch error"
 }
 
@@ -389,10 +397,33 @@ Invoke-Test "Vim fallback loader preserves its runtime directory" {
   Assert-True ($content.Contains($source.Replace("'", "''"))) "Vim loader lost the source path"
   if (Get-Command vim -CommandType Application -ErrorAction SilentlyContinue) {
     $probe = Join-Path $fixture.Root "probe.vim"
+    $seen = Join-Path $fixture.Root "probe.out"
     $expected = $fixture.DotfilesRoot.Replace("\", "/").Replace("'", "''")
-    Write-FixtureFile -Path $probe -Content "if substitute(g:copy_test_root, '\\', '/', 'g') !=# '$expected'`n  cquit 1`nendif`nqa!"
-    & vim -N -u $installed -U NONE -i NONE -n --noplugin -es -S $probe
-    Assert-True ($LASTEXITCODE -eq 0) "Vim did not load its source-relative configuration"
+    $seenLiteral = $seen.Replace("'", "''")
+    # resolve() follows symbolic links in the temporary path, such as /var on macOS.
+    # The Unix Vim bundled with Git for Windows sees MSYS paths, not the native
+    # paths the loader is written for. This file uses CRLF, which Unix Vim rejects.
+    Write-FixtureFile -Path $probe -Content (@"
+if has('win32unix')
+  call writefile(['win32unix'], '$seenLiteral')
+  qa!
+endif
+let s:root = substitute(resolve(g:copy_test_root), '\\', '/', 'g')
+call writefile([s:root], '$seenLiteral')
+if s:root !=# substitute(resolve('$expected'), '\\', '/', 'g')
+  cquit 1
+endif
+qa!
+"@).Replace("`r", "")
+    # A Unix Vim halves backslashes in -S, so pass the probe with slashes.
+    & vim -N -u $installed -U NONE -i NONE -n --noplugin -es -S $probe.Replace("\", "/")
+    $exitCode = $LASTEXITCODE
+    $observed = if (Test-Path -LiteralPath $seen) { (Get-Content -LiteralPath $seen) -join "`n" } else { "<nothing>" }
+    if ($observed -eq "win32unix") {
+      Write-Output "  Vim is a Unix build on Windows; checked loader contents only"
+    } else {
+      Assert-True ($exitCode -eq 0) "Vim did not load its source-relative configuration: saw $observed"
+    }
   } else {
     Write-Output "  Vim is unavailable; checked loader contents only"
   }
