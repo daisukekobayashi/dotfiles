@@ -415,7 +415,8 @@ if s:root !=# substitute(resolve('$expected'), '\\', '/', 'g')
 endif
 qa!
 "@).Replace("`r", "")
-    & vim -N -u $installed -U NONE -i NONE -n --noplugin -es -S $probe
+    # A Unix Vim halves backslashes in -S, so pass the probe with slashes.
+    & vim -N -u $installed -U NONE -i NONE -n --noplugin -es -S $probe.Replace("\", "/")
     $exitCode = $LASTEXITCODE
     $observed = if (Test-Path -LiteralPath $seen) { (Get-Content -LiteralPath $seen) -join "`n" } else { "<nothing>" }
     if ($observed -eq "win32unix") {
