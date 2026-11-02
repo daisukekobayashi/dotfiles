@@ -228,6 +228,7 @@ Invoke-Test "unrelated process launch errors stop without copying" {
   param($fixture)
   $result = Invoke-FixtureSetup $fixture @("links") -Elevation "launch-error"
   Assert-True ($result.ExitCode -ne 0) "invalid executable was hidden"
+  Assert-True ($result.Output -match "Invalid executable") "launch error was not reported"
   Assert-True (-not (Test-Path (Join-Path $fixture.HomeDir "_vimrc"))) "copied after an unrelated launch error"
 }
 
@@ -396,11 +397,32 @@ Invoke-Test "Vim fallback loader preserves its runtime directory" {
   Assert-True ($content.Contains($source.Replace("'", "''"))) "Vim loader lost the source path"
   if (Get-Command vim -CommandType Application -ErrorAction SilentlyContinue) {
     $probe = Join-Path $fixture.Root "probe.vim"
+    $seen = Join-Path $fixture.Root "probe.out"
     $expected = $fixture.DotfilesRoot.Replace("\", "/").Replace("'", "''")
+    $seenLiteral = $seen.Replace("'", "''")
     # resolve() follows symbolic links in the temporary path, such as /var on macOS.
-    Write-FixtureFile -Path $probe -Content "if substitute(resolve(g:copy_test_root), '\\', '/', 'g') !=# substitute(resolve('$expected'), '\\', '/', 'g')`n  cquit 1`nendif`nqa!"
+    # The Unix Vim bundled with Git for Windows sees MSYS paths, not the native
+    # paths the loader is written for. This file uses CRLF, which Unix Vim rejects.
+    Write-FixtureFile -Path $probe -Content (@"
+if has('win32unix')
+  call writefile(['win32unix'], '$seenLiteral')
+  qa!
+endif
+let s:root = substitute(resolve(g:copy_test_root), '\\', '/', 'g')
+call writefile([s:root], '$seenLiteral')
+if s:root !=# substitute(resolve('$expected'), '\\', '/', 'g')
+  cquit 1
+endif
+qa!
+"@).Replace("`r", "")
     & vim -N -u $installed -U NONE -i NONE -n --noplugin -es -S $probe
-    Assert-True ($LASTEXITCODE -eq 0) "Vim did not load its source-relative configuration"
+    $exitCode = $LASTEXITCODE
+    $observed = if (Test-Path -LiteralPath $seen) { (Get-Content -LiteralPath $seen) -join "`n" } else { "<nothing>" }
+    if ($observed -eq "win32unix") {
+      Write-Output "  Vim is a Unix build on Windows; checked loader contents only"
+    } else {
+      Assert-True ($exitCode -eq 0) "Vim did not load its source-relative configuration: saw $observed"
+    }
   } else {
     Write-Output "  Vim is unavailable; checked loader contents only"
   }
