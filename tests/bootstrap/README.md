@@ -32,9 +32,28 @@ scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all
 scripts/bootstrap-e2e.sh --image ubuntu:24.04 --suite all
 ```
 
-`--suite all` mirrors normal non-strict bootstrap behavior. A setup step can
-warn or fail internally while the process still exits 0. Read the final
+`--suite all` mirrors normal non-strict bootstrap behavior by default. A setup
+step can warn or fail internally while the process still exits 0. Read the final
 warning/error summary.
+
+## Strict Mode and Repeated Runs
+
+`--strict` runs setup with `SETUP_STRICT=1` and `SETUP_MISE_STRICT=1`, so any
+failed step makes the harness exit non-zero.
+
+`--runs N` (default `1`) runs `./setup.sh all` N times in the same container.
+Each run starts a fresh login shell, so later runs see the shell startup files
+written by earlier runs. The harness stops at the first failed run and exits with
+its status. Use `--runs 2` to check that a second run succeeds.
+
+```bash
+scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all --strict
+scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all --runs 2
+```
+
+A run counts as passing when it exits 0. `[WARN]` and `[ERROR]` lines do not
+fail a run; the warning/error summary labels each line with the run that printed
+it, such as `Run 2/2`, or `prepare` for container preparation output.
 
 ## GitHub Auth
 
@@ -65,10 +84,12 @@ explicitly enabled.
 bats tests/bootstrap/bootstrap-e2e.bats
 BOOTSTRAP_E2E=1 BOOTSTRAP_E2E_IMAGE=debian:bookworm-slim BOOTSTRAP_E2E_SUITE=dry-run bats tests/bootstrap/bootstrap-e2e.bats
 BOOTSTRAP_E2E=1 BOOTSTRAP_E2E_IMAGE=ubuntu:24.04 BOOTSTRAP_E2E_SUITE=all bats tests/bootstrap/bootstrap-e2e.bats
+BOOTSTRAP_E2E=1 BOOTSTRAP_E2E_SUITE=all BOOTSTRAP_E2E_STRICT=1 BOOTSTRAP_E2E_RUNS=2 bats tests/bootstrap/bootstrap-e2e.bats
 ```
 
 Set `BOOTSTRAP_E2E_GITHUB_AUTH=gh` or `none` to override the default `auto`
-credential mode.
+credential mode. Set `BOOTSTRAP_E2E_STRICT=1` to pass `--strict`, and
+`BOOTSTRAP_E2E_RUNS=N` to pass `--runs N`.
 
 ## Container Prerequisites
 
