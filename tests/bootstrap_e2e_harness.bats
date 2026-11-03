@@ -290,5 +290,27 @@ EOF
   grep -F -- 'BOOTSTRAP_E2E_RUNS:-1' "${wrapper}"
   grep -F -- '--runs "${runs}"' "${wrapper}"
   grep -F -- 'BOOTSTRAP_E2E_STRICT:-0' "${wrapper}"
-  grep -F -- 'args+=(--strict)' "${wrapper}"
+  grep -F -- '1) args+=(--strict) ;;' "${wrapper}"
+}
+
+@test "bootstrap E2E wrapper rejects a strict value other than 0 or 1" {
+  local fake_bin="${BATS_TEST_TMPDIR}/bin"
+  local docker_called="${BATS_TEST_TMPDIR}/docker-called"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+touch "${DOCKER_CALLED}"
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  run env PATH="${fake_bin}:${PATH}" \
+    DOCKER_CALLED="${docker_called}" \
+    BOOTSTRAP_E2E=1 \
+    BOOTSTRAP_E2E_STRICT=true \
+    bats "$(bootstrap_repo_root)/tests/bootstrap/bootstrap-e2e.bats"
+
+  [ "$status" -ne 0 ]
+  grep -F -- "BOOTSTRAP_E2E_STRICT must be 0 or 1: true" <<<"${output}"
+  [ ! -e "${docker_called}" ]
 }

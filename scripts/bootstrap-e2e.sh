@@ -284,8 +284,8 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
   sudo_args+=(--preserve-env=GITHUB_TOKEN)
 fi
 
-# Each run starts a new login shell so later runs see files written by
-# earlier runs, as a user would after reopening a terminal.
+# Each run starts a new bash login shell, so it re-reads ~/.profile and picks
+# up directories that earlier runs created, such as ~/.local/bin.
 for run in $(seq 1 "${BOOTSTRAP_E2E_RUNS}"); do
   printf "[bootstrap-e2e] Run %s/%s: starting ./setup.sh all\n" "${run}" "${BOOTSTRAP_E2E_RUNS}"
   run_status=0

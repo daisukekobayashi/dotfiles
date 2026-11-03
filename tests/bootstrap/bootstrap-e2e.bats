@@ -17,9 +17,14 @@ setup() {
   local runs="${BOOTSTRAP_E2E_RUNS:-1}"
   local args=(--image "${image}" --suite "${suite}" --github-auth "${github_auth}" --runs "${runs}")
 
-  if [ "${BOOTSTRAP_E2E_STRICT:-0}" = "1" ]; then
-    args+=(--strict)
-  fi
+  case "${BOOTSTRAP_E2E_STRICT:-0}" in
+    0) ;;
+    1) args+=(--strict) ;;
+    *)
+      printf 'BOOTSTRAP_E2E_STRICT must be 0 or 1: %s\n' "${BOOTSTRAP_E2E_STRICT}" >&3
+      return 1
+      ;;
+  esac
 
   run "$(bootstrap_repo_root)/scripts/bootstrap-e2e.sh" "${args[@]}"
 

@@ -42,13 +42,18 @@ warning/error summary.
 failed step makes the harness exit non-zero.
 
 `--runs N` (default `1`) runs `./setup.sh all` N times in the same container.
-Each run starts a fresh login shell, so later runs see the shell startup files
-written by earlier runs. The harness stops at the first failed run and exits with
-its status. Use `--runs 2` to check that a second run succeeds.
+Each run starts a new bash login shell (`bash -lc`), so it re-reads
+`~/.profile` and picks up directories that earlier runs created, such as
+`~/.local/bin`. The harness does not start zsh, so it does not check the zsh
+startup files. The harness stops at the first failed run and exits with its
+status.
+
+Without `--strict`, a run can exit 0 even when setup steps fail. Use
+`--strict --runs 2` to check that a second run succeeds.
 
 ```bash
 scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all --strict
-scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all --runs 2
+scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all --strict --runs 2
 ```
 
 A run counts as passing when it exits 0. `[WARN]` and `[ERROR]` lines do not
@@ -88,7 +93,8 @@ BOOTSTRAP_E2E=1 BOOTSTRAP_E2E_SUITE=all BOOTSTRAP_E2E_STRICT=1 BOOTSTRAP_E2E_RUN
 ```
 
 Set `BOOTSTRAP_E2E_GITHUB_AUTH=gh` or `none` to override the default `auto`
-credential mode. Set `BOOTSTRAP_E2E_STRICT=1` to pass `--strict`, and
+credential mode. Set `BOOTSTRAP_E2E_STRICT=1` to pass `--strict` (`0` or unset leaves it off;
+other values fail the test), and
 `BOOTSTRAP_E2E_RUNS=N` to pass `--runs N`.
 
 ## Container Prerequisites
