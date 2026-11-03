@@ -32,9 +32,33 @@ scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all
 scripts/bootstrap-e2e.sh --image ubuntu:24.04 --suite all
 ```
 
-`--suite all` mirrors normal non-strict bootstrap behavior. A setup step can
-warn or fail internally while the process still exits 0. Read the final
+`--suite all` mirrors normal non-strict bootstrap behavior by default. A setup
+step can warn or fail internally while the process still exits 0. Read the final
 warning/error summary.
+
+## Strict Mode and Repeated Runs
+
+`--strict` runs setup with `SETUP_STRICT=1` and `SETUP_MISE_STRICT=1`, so any
+failed step makes the harness exit non-zero.
+
+`--runs N` (default `1`) runs `./setup.sh all` N times in the same container.
+Each run starts a new bash login shell (`bash -lc`), so it re-reads
+`~/.profile` and picks up directories that earlier runs created, such as
+`~/.local/bin`. The harness does not start zsh, so it does not check the zsh
+startup files. The harness stops at the first failed run and exits with its
+status.
+
+Without `--strict`, a run can exit 0 even when setup steps fail. Use
+`--strict --runs 2` to check that a second run succeeds.
+
+```bash
+scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all --strict
+scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite all --strict --runs 2
+```
+
+A run counts as passing when it exits 0. `[WARN]` and `[ERROR]` lines do not
+fail a run; the warning/error summary labels each line with the run that printed
+it, such as `Run 2/2`, or `prepare` for container preparation output.
 
 ## GitHub Auth
 
@@ -65,10 +89,13 @@ explicitly enabled.
 bats tests/bootstrap/bootstrap-e2e.bats
 BOOTSTRAP_E2E=1 BOOTSTRAP_E2E_IMAGE=debian:bookworm-slim BOOTSTRAP_E2E_SUITE=dry-run bats tests/bootstrap/bootstrap-e2e.bats
 BOOTSTRAP_E2E=1 BOOTSTRAP_E2E_IMAGE=ubuntu:24.04 BOOTSTRAP_E2E_SUITE=all bats tests/bootstrap/bootstrap-e2e.bats
+BOOTSTRAP_E2E=1 BOOTSTRAP_E2E_SUITE=all BOOTSTRAP_E2E_STRICT=1 BOOTSTRAP_E2E_RUNS=2 bats tests/bootstrap/bootstrap-e2e.bats
 ```
 
 Set `BOOTSTRAP_E2E_GITHUB_AUTH=gh` or `none` to override the default `auto`
-credential mode.
+credential mode. Set `BOOTSTRAP_E2E_STRICT=1` to pass `--strict` (`0` or unset leaves it off;
+other values fail the test), and
+`BOOTSTRAP_E2E_RUNS=N` to pass `--runs N`.
 
 ## Container Prerequisites
 

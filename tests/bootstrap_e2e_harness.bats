@@ -154,10 +154,10 @@ EOF
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"[bootstrap-e2e] Warning/error summary:"* ]]
-  [[ "$output" != *"[bootstrap-e2e]   2:Packages: liberror-perl libgpg-error-dev"* ]]
-  [[ "$output" == *"[bootstrap-e2e]   3:[WARN] package step failed but setup continued"* ]]
-  [[ "$output" == *"[bootstrap-e2e]   4:error: tool install failed"* ]]
-  [[ "$output" == *"[bootstrap-e2e]   5:E185: Cannot find color scheme 'solarized8'"* ]]
+  [[ "$output" != *"[bootstrap-e2e]   prepare: 2:Packages: liberror-perl libgpg-error-dev"* ]]
+  [[ "$output" == *"[bootstrap-e2e]   prepare: 3:[WARN] package step failed but setup continued"* ]]
+  [[ "$output" == *"[bootstrap-e2e]   prepare: 4:error: tool install failed"* ]]
+  [[ "$output" == *"[bootstrap-e2e]   prepare: 5:E185: Cannot find color scheme 'solarized8'"* ]]
   [[ "$output" == *"setup end"* ]]
 }
 
@@ -181,5 +181,136 @@ EOF
 
   [ "$status" -eq 7 ]
   [[ "$output" == *"[bootstrap-e2e] Warning/error summary:"* ]]
-  [[ "$output" == *"[bootstrap-e2e]   2:[ERROR] setup command failed"* ]]
+  [[ "$output" == *"[bootstrap-e2e]   prepare: 2:[ERROR] setup command failed"* ]]
+}
+
+@test "bootstrap E2E harness defaults to one non-strict run" {
+  local fake_bin="${BATS_TEST_TMPDIR}/bin"
+  local docker_args_log="${BATS_TEST_TMPDIR}/docker-args.log"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${DOCKER_ARGS_LOG}"
+cat > /dev/null
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  run env PATH="${fake_bin}:${PATH}" \
+    DOCKER_ARGS_LOG="${docker_args_log}" \
+    "$(bootstrap_repo_root)/scripts/bootstrap-e2e.sh" --suite all --github-auth none
+
+  [ "$status" -eq 0 ]
+  grep -Fx -- "BOOTSTRAP_E2E_STRICT=0" "${docker_args_log}"
+  grep -Fx -- "BOOTSTRAP_E2E_RUNS=1" "${docker_args_log}"
+  grep -F -- 'SETUP_STRICT="${BOOTSTRAP_E2E_STRICT}"' "${docker_args_log}"
+  grep -F -- 'SETUP_MISE_STRICT="${BOOTSTRAP_E2E_STRICT}"' "${docker_args_log}"
+  grep -F -- "[bootstrap-e2e] Strict: 0" <<<"${output}"
+  grep -F -- "[bootstrap-e2e] Runs: 1" <<<"${output}"
+}
+
+@test "bootstrap E2E harness forwards strict mode and run count to the container" {
+  local fake_bin="${BATS_TEST_TMPDIR}/bin"
+  local docker_args_log="${BATS_TEST_TMPDIR}/docker-args.log"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${DOCKER_ARGS_LOG}"
+cat > /dev/null
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  run env PATH="${fake_bin}:${PATH}" \
+    DOCKER_ARGS_LOG="${docker_args_log}" \
+    "$(bootstrap_repo_root)/scripts/bootstrap-e2e.sh" --suite all --github-auth none --strict --runs 3
+
+  [ "$status" -eq 0 ]
+  grep -Fx -- "BOOTSTRAP_E2E_STRICT=1" "${docker_args_log}"
+  grep -Fx -- "BOOTSTRAP_E2E_RUNS=3" "${docker_args_log}"
+  grep -F -- "[bootstrap-e2e] Strict: 1" <<<"${output}"
+  grep -F -- "[bootstrap-e2e] Runs: 3" <<<"${output}"
+}
+
+@test "bootstrap E2E harness rejects a run count that is not a positive integer" {
+  local fake_bin="${BATS_TEST_TMPDIR}/bin"
+  local docker_called="${BATS_TEST_TMPDIR}/docker-called"
+  local value
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+touch "${DOCKER_CALLED}"
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  for value in 0 -1 abc 01 ""; do
+    run env PATH="${fake_bin}:${PATH}" \
+      DOCKER_CALLED="${docker_called}" \
+      "$(bootstrap_repo_root)/scripts/bootstrap-e2e.sh" --github-auth none --runs "${value}"
+
+    [ "$status" -ne 0 ]
+    grep -F -- "--runs must be a positive integer: ${value}" <<<"${output}"
+  done
+  [ ! -e "${docker_called}" ]
+}
+
+@test "bootstrap E2E harness labels summary lines with the run that printed them" {
+  local fake_bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+cat > /dev/null
+printf 'W: apt warning: prepare\n'
+printf '[bootstrap-e2e] Run 1/2: starting ./setup.sh all\n'
+printf '[WARN] first run warning\n'
+printf '[bootstrap-e2e] Run 1/2: exited with status 0\n'
+printf '[bootstrap-e2e] Run 2/2: starting ./setup.sh all\n'
+printf '[ERROR] second run error\n'
+printf '[bootstrap-e2e] Run 2/2: failed with status 7\n'
+exit 7
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  run env PATH="${fake_bin}:${PATH}" \
+    "$(bootstrap_repo_root)/scripts/bootstrap-e2e.sh" --suite all --github-auth none --runs 2
+
+  [ "$status" -eq 7 ]
+  grep -Fx -- "[bootstrap-e2e]   prepare: 1:W: apt warning: prepare" <<<"${output}"
+  grep -Fx -- "[bootstrap-e2e]   Run 1/2: 3:[WARN] first run warning" <<<"${output}"
+  grep -Fx -- "[bootstrap-e2e]   Run 2/2: 6:[ERROR] second run error" <<<"${output}"
+  grep -Fx -- "[bootstrap-e2e]   Run 2/2: 7:[bootstrap-e2e] Run 2/2: failed with status 7" <<<"${output}"
+}
+
+@test "bootstrap E2E wrapper passes strict mode and run count through when explicitly enabled" {
+  local wrapper
+  wrapper="$(bootstrap_repo_root)/tests/bootstrap/bootstrap-e2e.bats"
+
+  grep -F -- 'BOOTSTRAP_E2E_RUNS:-1' "${wrapper}"
+  grep -F -- '--runs "${runs}"' "${wrapper}"
+  grep -F -- 'BOOTSTRAP_E2E_STRICT:-0' "${wrapper}"
+  grep -F -- '1) args+=(--strict) ;;' "${wrapper}"
+}
+
+@test "bootstrap E2E wrapper rejects a strict value other than 0 or 1" {
+  local fake_bin="${BATS_TEST_TMPDIR}/bin"
+  local docker_called="${BATS_TEST_TMPDIR}/docker-called"
+  mkdir -p "${fake_bin}"
+
+  cat > "${fake_bin}/docker" <<'EOF'
+#!/usr/bin/env bash
+touch "${DOCKER_CALLED}"
+EOF
+  chmod +x "${fake_bin}/docker"
+
+  run env PATH="${fake_bin}:${PATH}" \
+    DOCKER_CALLED="${docker_called}" \
+    BOOTSTRAP_E2E=1 \
+    BOOTSTRAP_E2E_STRICT=true \
+    bats "$(bootstrap_repo_root)/tests/bootstrap/bootstrap-e2e.bats"
+
+  [ "$status" -ne 0 ]
+  grep -F -- "BOOTSTRAP_E2E_STRICT must be 0 or 1: true" <<<"${output}"
+  [ ! -e "${docker_called}" ]
 }

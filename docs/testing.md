@@ -91,5 +91,6 @@ These start fresh Docker containers and may download packages. See
 
 ```bash
 scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite dry-run
+scripts/bootstrap-e2e.sh --suite all --strict --runs 2
 bats tests/bootstrap/bootstrap-e2e.bats
 ```

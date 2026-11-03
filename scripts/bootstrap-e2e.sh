@@ -12,11 +12,16 @@ Options:
                       (default: debian:bookworm-slim)
   --suite SUITE       Suite to run: dry-run or all (default: dry-run)
   --github-auth MODE  GitHub auth source: auto, none, or gh (default: auto)
+  --strict            Run setup with SETUP_STRICT=1 and SETUP_MISE_STRICT=1 so
+                      any failed step fails the harness (default: non-strict)
+  --runs N            Run ./setup.sh all N times in the same container, each in
+                      a fresh login shell (default: 1)
   -h, --help          Show this help
 
 Examples:
   scripts/bootstrap-e2e.sh --image debian:bookworm-slim --suite dry-run
   scripts/bootstrap-e2e.sh --image ubuntu:24.04 --suite all
+  scripts/bootstrap-e2e.sh --suite all --strict --runs 2
 EOF
 }
 
@@ -62,12 +67,36 @@ validate_github_auth() {
   esac
 }
 
+validate_runs() {
+  case "$1" in
+    '' | *[!0-9]* | 0*)
+      die "--runs must be a positive integer: $1"
+      ;;
+  esac
+}
+
+# Lines before the first run marker come from container preparation.
 summarize_bootstrap_output() {
   local output_log="$1"
-  local pattern='(^|[^[:alnum:]_])(\[WARN\]|\[ERROR\]|E[0-9]+:|warning:|error:|failed|failure)([^[:alnum:]_]|$)'
+  local pattern='(^|[^[:alnum:]_])(\[warn\]|\[error\]|e[0-9]+:|warning:|error:|failed|failure)([^[:alnum:]_]|$)'
+  local matches
 
   log "Warning/error summary:"
-  if ! LC_ALL=C grep -Eain -- "${pattern}" "${output_log}" | sed 's/^/[bootstrap-e2e]   /'; then
+  matches="$(
+    LC_ALL=C pattern="${pattern}" awk '
+      /^\[bootstrap-e2e\] Run [0-9]+\/[0-9]+: starting / {
+        stage = $2 " " $3
+        sub(/:$/, "", stage)
+        next
+      }
+      tolower($0) ~ ENVIRON["pattern"] {
+        printf "[bootstrap-e2e]   %s: %d:%s\n", (stage == "" ? "prepare" : stage), NR, $0
+      }
+    ' "${output_log}"
+  )"
+  if [ -n "${matches}" ]; then
+    printf '%s\n' "${matches}"
+  else
     log "  none found"
   fi
 }
@@ -75,6 +104,8 @@ summarize_bootstrap_output() {
 image="debian:bookworm-slim"
 suite="dry-run"
 github_auth="auto"
+strict=0
+runs=1
 github_token=""
 github_auth_source="none"
 
@@ -95,6 +126,15 @@ while [ "$#" -gt 0 ]; do
       github_auth="$2"
       shift 2
       ;;
+    --strict)
+      strict=1
+      shift
+      ;;
+    --runs)
+      [ "$#" -ge 2 ] || die "--runs requires a value"
+      runs="$2"
+      shift 2
+      ;;
     -h | --help)
       usage
       exit 0
@@ -108,6 +148,7 @@ done
 validate_image "${image}"
 validate_suite "${suite}"
 validate_github_auth "${github_auth}"
+validate_runs "${runs}"
 require_cmd docker
 require_cmd git
 require_cmd tar
@@ -144,6 +185,19 @@ case "${BOOTSTRAP_E2E_SUITE}" in
   dry-run | all) ;;
   *)
     printf "[bootstrap-e2e] ERROR: Unsupported suite in container: %s\n" "${BOOTSTRAP_E2E_SUITE}" >&2
+    exit 1
+    ;;
+esac
+case "${BOOTSTRAP_E2E_STRICT}" in
+  0 | 1) ;;
+  *)
+    printf "[bootstrap-e2e] ERROR: Unsupported strict value in container: %s\n" "${BOOTSTRAP_E2E_STRICT}" >&2
+    exit 1
+    ;;
+esac
+case "${BOOTSTRAP_E2E_RUNS}" in
+  "" | *[!0-9]* | 0*)
+    printf "[bootstrap-e2e] ERROR: Unsupported run count in container: %s\n" "${BOOTSTRAP_E2E_RUNS}" >&2
     exit 1
     ;;
 esac
@@ -217,7 +271,8 @@ sudo_env=(
   SETUP_TMPDIR=/work/tmp
   SETUP_DOTFILES_ROOT=/work/dotfiles
   SETUP_DRY_RUN="${setup_dry_run}"
-  SETUP_MISE_STRICT=0
+  SETUP_STRICT="${BOOTSTRAP_E2E_STRICT}"
+  SETUP_MISE_STRICT="${BOOTSTRAP_E2E_STRICT}"
   LANG=C.UTF-8
   LC_ALL=C.UTF-8
   GIT_TERMINAL_PROMPT=0
@@ -229,14 +284,27 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
   sudo_args+=(--preserve-env=GITHUB_TOKEN)
 fi
 
-exec sudo "${sudo_args[@]}" env \
-  "${sudo_env[@]}" \
-  bash -lc "cd /work/dotfiles && ./setup.sh all"
+# Each run starts a new bash login shell, so it re-reads ~/.profile and picks
+# up directories that earlier runs created, such as ~/.local/bin.
+for run in $(seq 1 "${BOOTSTRAP_E2E_RUNS}"); do
+  printf "[bootstrap-e2e] Run %s/%s: starting ./setup.sh all\n" "${run}" "${BOOTSTRAP_E2E_RUNS}"
+  run_status=0
+  sudo "${sudo_args[@]}" env \
+    "${sudo_env[@]}" \
+    bash -lc "cd /work/dotfiles && ./setup.sh all" || run_status=$?
+  if [ "${run_status}" -ne 0 ]; then
+    printf "[bootstrap-e2e] Run %s/%s: failed with status %s\n" "${run}" "${BOOTSTRAP_E2E_RUNS}" "${run_status}"
+    exit "${run_status}"
+  fi
+  printf "[bootstrap-e2e] Run %s/%s: exited with status 0\n" "${run}" "${BOOTSTRAP_E2E_RUNS}"
+done
 '
 
 log "Image: ${image}"
 log "Suite: ${suite}"
 log "GitHub auth: ${github_auth} (${github_auth_source})"
+log "Strict: ${strict}"
+log "Runs: ${runs}"
 log "Streaming tracked files into container; the host repo is not mounted."
 
 output_log="$(mktemp "${TMPDIR:-/tmp}/bootstrap-e2e-output.XXXXXX")"
@@ -246,7 +314,11 @@ cleanup() {
 trap cleanup EXIT
 
 run_docker() {
-  local docker_env_args=(--env "BOOTSTRAP_E2E_SUITE=${suite}")
+  local docker_env_args=(
+    --env "BOOTSTRAP_E2E_SUITE=${suite}"
+    --env "BOOTSTRAP_E2E_STRICT=${strict}"
+    --env "BOOTSTRAP_E2E_RUNS=${runs}"
+  )
   if [ -n "${github_token}" ]; then
     docker_env_args+=(--env GITHUB_TOKEN)
     GITHUB_TOKEN="${github_token}" \
