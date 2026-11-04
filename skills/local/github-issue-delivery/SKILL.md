@@ -25,7 +25,7 @@ this file does not select those phases or grant mutation approval. If authorizat
 is missing, prepare the concrete result and request only the approval needed for
 the next operation. Reuse authorization already given for the same scope.
 
-The workflow includes both local review passes and the normal publication,
+The workflow includes the selected local review passes and the normal publication,
 Codex review, and writeback cycle. It requires separate confirmation for the
 specific PR merge and for the exact local cleanup resources. Preserve all
 applicable dependency, history-rewrite, remote-write, and user-change protections.
@@ -117,7 +117,8 @@ findings. Failed, unavailable, empty, or partial review output is not a pass.
 Coordinate publication sequentially across issue targets; workers hand off their
 branch, worktree, issue/spec, recorded base, verification, risk tier, and local
 review evidence. Before publication, show the user the tier, its main reasons,
-and the recommended human review under Risk Tier. Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
+the recommended human review, and any security deferred candidates or
+user-accepted security findings under Risk Tier. Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
 -> confirm remote head -> Writeback ordering, and stop-on-failure behavior.
 Pass the earlier local and hosted dispositions from the progress record, and

@@ -108,8 +108,9 @@ remains open. Failed, unavailable, empty, or partial output is not a pass.
 
 Coordinate publication sequentially across targets. Workers hand off their exact
 branch/worktree, Work Item/spec, base, verification, risk tier, and local review
-evidence. Before publication, show the user the tier, its main reasons, and the
-recommended human review under Risk Tier.
+evidence. Before publication, show the user the tier, its main reasons, the
+recommended human review, and any security deferred candidates or user-accepted
+security findings under Risk Tier.
 Use `azure-devops-pr-publish`, forwarding the full request and existing approvals.
 Honor its stop-on-failure behavior. Supply known Work Item IDs, completion scope,
 and the user's state-transition intent; use structured PR links under the common

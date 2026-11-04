@@ -90,7 +90,8 @@ head, and give the relevant independent reviewers the accepted findings,
 dispositions, and all changes since the preceding reviewed snapshot. Have them
 verify the fixes and check regressions in affected paths, with enough surrounding
 context to trace behavior. Use both reviewers when changes affect both areas of
-coverage, and the security reviewer when Risk Tier requires it. Wait for the required results before the implementation owner edits.
+coverage, and the security reviewer when Risk Tier selects it, with the full
+task diff when it is first selected. Wait for the required results before the implementation owner edits.
 
 Return the reviewed head, scope, confirmed fixes, remaining findings, and coverage
 limits. Earlier review evidence remains valid for unaffected areas; the caller

@@ -513,6 +513,10 @@ test("change review skills are explicit-only and share target selection", async 
   }
   assert.match(riskTier, /Run `change-security-review` as a third local reviewer/);
   assert.match(riskTier, /Keep them\s+out of the PR body/);
+  assert.match(riskTier, /Repository policy adds paths; it never removes a default/);
+  assert.match(riskTier, /Always read policy at the delivery's recorded base/);
+  assert.match(riskTier, /current tier is High/);
+  assert.match(riskTier, /closes only by a\s+verified fix or a recorded explicit user decision/);
   assert.match(localReview, /\[Risk Tier\]\(risk-tier\.md\)/);
   assert.match(localReview, /`change-security-review`/);
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {

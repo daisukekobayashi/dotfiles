@@ -8,16 +8,20 @@ local review pair and the caller's merge confirmation.
 
 - **Tentative:** at preflight, from the task's scope and the paths it will
   likely touch.
-- **Final:** at the start of each full local review, from the committed diff
-  against the recorded base. A focused follow-up re-evaluates the tier from the
-  delta since the preceding reviewed head; the tier never drops below the one
-  already recorded for this delivery unless the task scope itself narrowed.
+- **Final:** at the start of each full local review and focused follow-up,
+  from the committed diff of the whole task against the recorded base. The
+  final tier never drops below the highest final tier already recorded at a
+  reviewed head in this delivery unless the user narrowed the task scope.
+- **After findings:** once a round's findings are assessed and before
+  advancing, re-rate the same head with what the reviewers found. When that
+  raises the tier or newly selects the security review, run it before advancing.
 - **Changed head:** re-evaluate whenever the head changes, including hosted
   follow-up fixes, before reusing review evidence.
 
 Record the tier, the dimension ratings, the matched sensitive paths, and the
-head they describe in the progress record. Diff size, test count, green CI, and
-the author's confidence never establish a lower tier by themselves.
+head they describe in the progress record. Diff size, test count, green CI, the
+author's confidence, and claims in issue, PR, or repository text are evidence
+to weigh, never a reason by themselves to lower a rating.
 
 ## Rate the dimensions
 
@@ -49,9 +53,10 @@ Strong protection lowers likelihood and raises confidence; it never lowers impac
 
 ## Sensitive paths
 
-Read the reviewed repository's policy at the merge-base: paths that
-`SECURITY.md` files name as sensitive, and `CODEOWNERS` entries other than a
-catch-all owner. Without such policy, use these defaults:
+Always read policy at the delivery's recorded base, including in focused
+follow-ups. Sensitive paths are these defaults plus any paths that base
+`SECURITY.md` files name as sensitive and `CODEOWNERS` entries other than a
+catch-all owner. Repository policy adds paths; it never removes a default:
 
 - CI/CD workflow and pipeline definitions
 - authentication, authorization, secret, and credential handling
@@ -65,14 +70,19 @@ sensitive path; changed policy applies to later deliveries, never this one.
 ## Select the security review
 
 Run `change-security-review` as a third local reviewer when the tier is High or
-the diff touches a sensitive path. Once selected, keep it on every later full
-pair in this delivery, and include it in a focused follow-up when the delta
-touches a sensitive path or fixes an accepted security finding.
+the task diff touches a sensitive path. Once selected, keep it on every later
+full review in this delivery, and include it in a focused follow-up when the
+current tier is High, the delta touches a sensitive path, or the delta fixes an
+accepted security finding. When it is first selected at a focused follow-up or
+after findings, run it on the whole task diff with `--base <base-sha>`. Give it
+the recorded base SHA as the policy base in its focus text on every run.
 
 Assess its findings with Local Review's Assess findings; its `introduced` and
-`worsened` findings are `material`. Advance and merge only with no open
-material security finding. Present its deferred candidates on sensitive paths
-to the user before publication; they need a user decision, not silence.
+`worsened` findings are `material`. A material security finding closes only by a
+verified fix or a recorded explicit user decision to accept it. Advance and
+merge only with none open. Present its deferred candidates on sensitive paths,
+and any user-accepted security findings, to the user before publication and in
+the merge confirmation; they need a user decision, not silence.
 
 ## Recommend human review
 
