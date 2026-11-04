@@ -1,0 +1,7 @@
+interface:
+  display_name: "Change Security Review"
+  short_description: "Review repository changes for exploitable vulnerabilities"
+  default_prompt: "Use $change-security-review to review this repository change for security vulnerabilities before shipping."
+
+policy:
+  allow_implicit_invocation: false

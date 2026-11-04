@@ -142,7 +142,12 @@ behavior; the delivery skill owns repetition and final completion checks.
 
 The local `change-review` and `change-adversarial-review` skills started as
 adaptations of the OpenAI plugin's review commands and now carry local review
-rules. Each definition records its upstream sources and the compared commit. Matt Pocock's `code-review` remains available
+rules. Each definition records its upstream sources and the compared commit.
+The explicit-only `change-security-review` skill shares their target selection
+and finding tags and reviews a change for exploitable vulnerabilities, drawing
+on OpenAI's `codex-security` diff review workflow. It reads optional
+`SECURITY.md` files from the reviewed repository as its threat-model policy.
+Delivery workflows do not run it yet. Matt Pocock's `code-review` remains available
 for separate Standards/Spec reviews; it is not the delivery default.
 
 Do not add a separate external skill pool/catalog file. Profiles are the source of truth for curated external skill groups.
@@ -192,7 +197,7 @@ Include:
 - `frontend-design`, `webapp-testing`, and `web-design-guidelines` for UI creation, testing, and review
 - `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
-- `repo-execution-context`, `change-review`, `change-adversarial-review`, and runtime isolation local skills
+- `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
 - `delivery-common` for the shared committed-snapshot local review procedure
 - `git-commit`
 

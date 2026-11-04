@@ -141,7 +141,11 @@ PR サイクルへの委譲も含みます。自動検出だけではこれら�
 
 ローカルの `change-review` と `change-adversarial-review` は、OpenAI plugin の
 レビューコマンドを移植したものが元になっており、現在は独自のレビュー規則を
-含みます。各定義に出典と比較済みコミットを記録します。Matt Pocock 版の `code-review` は規約・仕様の2軸で
+含みます。各定義に出典と比較済みコミットを記録します。
+明示起動限定の `change-security-review` は、両者と同じ対象選択と指摘タグを使い、
+OpenAI の `codex-security` の diff レビュー手順を参考に、変更が持ち込む悪用可能な
+脆弱性を確認します。レビュー対象リポジトリに `SECURITY.md` があれば、脅威モデルの
+ポリシーとして読みます。delivery フローからはまだ実行しません。Matt Pocock 版の `code-review` は規約・仕様の2軸で
 確認したい場面向けに残し、delivery の標準レビューには使いません。
 
 外部 skill 用の pool/catalog ファイルは追加しません。Profile が curated external skill group の正本になります。
@@ -191,7 +195,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - UI 作成・テスト・レビュー用の `frontend-design`、`webapp-testing`、`web-design-guidelines`
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
-- `repo-execution-context`、`change-review`、`change-adversarial-review`、runtime isolation の local skill
+- `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
 - commit 済み snapshot のローカルレビュー手順を共有する `delivery-common`
 - `git-commit`
 

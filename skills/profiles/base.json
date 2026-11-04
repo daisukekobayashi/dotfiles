@@ -63,6 +63,7 @@
   "local": [
     "change-adversarial-review",
     "change-review",
+    "change-security-review",
     "delivery-common",
     "design-preflight",
     "design-preflight-with-docs",
