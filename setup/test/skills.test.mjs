@@ -540,6 +540,7 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(target, /\(\.\.\/delivery-common\/references\/risk-tier\.md#sensitive-paths\)/);
     assert.match(target, /`change-security-review` applies none of its skip paths/);
     assert.match(target, /never\s+policy for this review/);
+    assert.match(target, /state that change in Coverage and Residual Risk even\s+without a finding/);
   }
   assert.match(security, /`introduced`[\s\S]*`worsened`[\s\S]*`pre-existing`/);
   assert.match(security, /^description:.*`github-issue-delivery`.*`azure-devops-work-item-delivery`.*risk tier/m);
