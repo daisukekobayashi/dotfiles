@@ -38,6 +38,7 @@ const azureDevOpsLocalSkills = [
 const baseLocalSkills = [
   "change-adversarial-review",
   "change-review",
+  "change-security-review",
   "delivery-common",
   "design-preflight",
   "design-preflight-with-docs",
@@ -493,6 +494,16 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(runnerSection(skill), /no `--write`/);
     assert.match(runnerSection(skill), new RegExp(`'Use \\$${name} `));
   }
+  const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
+  const security = await readText(path.join(securityRoot, "SKILL.md"));
+  const securityMetadata = await readText(path.join(securityRoot, "agents", "openai.yaml"));
+  assert.match(security, /Use only when explicitly invoked with `\$change-security-review`/);
+  assert.match(securityMetadata, /allow_implicit_invocation:\s*false/);
+  assert.equal(targetSection(security), targetSection(changeReview));
+  assert.equal(runnerSection(security).replaceAll("change-security-review", "NAME"),
+    runnerSection(changeReview).replaceAll("change-review", "NAME"));
+  assert.match(security, /SECURITY\.md/);
+  assert.match(security, /`introduced`[\s\S]*`worsened`[\s\S]*`pre-existing`/);
   assert.match(changeReview, /correctness/i);
   assert.match(changeReview, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
