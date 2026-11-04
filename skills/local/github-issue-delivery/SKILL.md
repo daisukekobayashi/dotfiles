@@ -153,7 +153,7 @@ not cover an intervening material change; reassess before proceeding.
 
 Present the PR URL, issue, head SHA, base, checks, review outcome including any
 security review, the risk tier for that head with its recommended human review,
-and proposed repository-supported merge method. Request confirmation to merge that specific
+any security deferred candidates or user-accepted security findings, and proposed repository-supported merge method. Request confirmation to merge that specific
 PR. After approval, recheck the target and merge through the available GitHub
 tool or CLI without bypassing checks or requesting branch deletion. If the user
 merges separately, verify that outcome instead. Confirm actual merged state and
@@ -181,7 +181,7 @@ than a fully completed issue delivery.
 Default to at most three local review rounds and three hosted Codex review rounds
 per issue across this delivery, including resumes. Count the initial full pair,
 each focused follow-up on a fixed snapshot, and each required new full pair as one
-local round apiece; hosted-fix follow-ups use the same local budget. A hosted round
+local round apiece, including any reviewer Risk Tier adds on the same head; hosted-fix follow-ups use the same local budget. A hosted round
 requires actual output. Advance as soon as the completion criteria are met.
 User-specified lower limits take precedence. If the limit is reached with required
 work remaining, progress repeatedly stalls, a review times out, a required check

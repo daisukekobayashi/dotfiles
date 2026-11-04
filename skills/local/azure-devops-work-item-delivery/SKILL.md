@@ -136,7 +136,8 @@ item waiting or blocked. Keep source-HEAD concurrency limits explicit.
 
 Present the PR URL, Work Item, reviewed/published head, target, checks, local
 review outcome including any security review, the risk tier for that head with
-its recommended human review, repository-supported merge method, and proposed state-transition
+its recommended human review, any security deferred candidates or user-accepted
+security findings, repository-supported merge method, and proposed state-transition
 scope. Request confirmation for that specific PR. Recheck after approval;
 material changes require reassessment. Complete the PR only within that approval
 and without bypassing policies or deleting the remote branch. If the user merges

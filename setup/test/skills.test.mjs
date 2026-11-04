@@ -515,6 +515,7 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(riskTier, /Keep them\s+out of the PR body/);
   assert.match(riskTier, /Repository policy adds paths; it never removes a default/);
   assert.match(riskTier, /Always read policy at the delivery's recorded base/);
+  assert.match(riskTier, /Always run it with `--base <base-sha>`/);
   assert.match(riskTier, /current tier is High/);
   assert.match(riskTier, /closes only by a\s+verified fix or a recorded explicit user decision/);
   assert.match(localReview, /\[Risk Tier\]\(risk-tier\.md\)/);
