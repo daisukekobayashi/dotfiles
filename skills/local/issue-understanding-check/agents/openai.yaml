@@ -1,0 +1,7 @@
+interface:
+  display_name: "Issue Understanding Check"
+  short_description: "Check your understanding of an issue before design"
+  default_prompt: "Use $issue-understanding-check to confirm my understanding of this issue before design."
+
+policy:
+  allow_implicit_invocation: false

@@ -122,7 +122,8 @@ the verified fixes, and invokes its Writeback phase. It does not automatically
 request another review after fixes. Composite skills own ordering and handoffs;
 underlying skills own operation details.
 
-`github-issue-delivery` coordinates the full issue workflow: isolated worktree,
+`github-issue-delivery` coordinates the full issue workflow: an
+`issue-understanding-check` of each issue, isolated worktree,
 `design-preflight-with-docs`, implementation, both local reviews, the PR Codex
 review cycle, confirmed merge, and confirmed local cleanup. Invoke it with issue
 numbers, for example `/github-issue-delivery 12 36` in Claude Code or
@@ -204,6 +205,7 @@ Include:
 - selected published Matt Pocock Engineering and Productivity skills
 - `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
 - `delivery-common` for the shared committed-snapshot local review procedure and risk tier
+- `issue-understanding-check`, which checks the user's own understanding of an issue or Work Item with a before/after example and one prediction before design preflight
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
@@ -376,7 +378,7 @@ branches and worktrees, and proposes deleting the remote source branch when its
 tip still matches the completed PR's merged source.
 
 `azure-devops-work-item-delivery` coordinates the full Work Item workflow for
-Azure Boards and Azure Repos Git on Azure DevOps Services: isolated worktree,
+Azure Boards and Azure Repos Git on Azure DevOps Services: `issue-understanding-check`, isolated worktree,
 `design-preflight-with-docs`, implementation, both local reviews, PR publication,
 confirmed merge, and confirmed local cleanup. Invoke it with Work Item IDs, for
 example `/azure-devops-work-item-delivery 123 456` in Claude Code or

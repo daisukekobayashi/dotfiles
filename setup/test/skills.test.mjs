@@ -44,6 +44,7 @@ const baseLocalSkills = [
   "design-preflight-with-docs",
   "repo-execution-context",
   "find-unknowns",
+  "issue-understanding-check",
   "learning-partner",
   "local-runtime-port-isolation",
   "worktree-runtime-cleanup",
@@ -460,6 +461,35 @@ test("design preflight delegates to the installed grilling primitive", async () 
   assert.match(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grilling`\./);
   assert.match(designPreflight, /\| `\$design-preflight open` \| Raw `grilling`;/);
   assert.doesNotMatch(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grill-me`\./);
+});
+
+test("delivery runs the issue understanding check before start and preflight", async () => {
+  const checkRoot = path.join(repoRoot, "skills", "local", "issue-understanding-check");
+  const check = await readText(path.join(checkRoot, "SKILL.md"));
+  const metadata = await readText(path.join(checkRoot, "agents", "openai.yaml"));
+
+  assert.match(check, /^description: Use only when explicitly requested with `\$issue-understanding-check`.*`github-issue-delivery`.*`azure-devops-work-item-delivery`/m);
+  assert.match(metadata, /allow_implicit_invocation:\s*false/);
+  assert.match(check, /before \/ after/);
+  assert.match(check, /Ask one question/);
+  for (const status of ["confirmed", "corrected", "skipped", "unresolved", "not run"]) {
+    assert.match(check, new RegExp(`\`${status}\``));
+  }
+
+  for (const [delivery, start] of [
+    ["github-issue-delivery", "github-issue-start"],
+    ["azure-devops-work-item-delivery", "azure-devops-work-item-start"],
+  ]) {
+    const deliverySkill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
+    const checkIndex = deliverySkill.indexOf("run `issue-understanding-check`");
+    const startIndex = deliverySkill.indexOf(`Use \`${start}\``);
+    const preflightIndex = deliverySkill.indexOf("Use `design-preflight-with-docs`");
+    assert.ok(checkIndex > 0, `${delivery}: missing understanding check`);
+    assert.ok(checkIndex < startIndex, `${delivery}: check must precede start`);
+    assert.ok(startIndex < preflightIndex, `${delivery}: start must precede preflight`);
+    assert.match(deliverySkill, /`confirmed`, `corrected`, or `skipped`/);
+    assert.match(deliverySkill, /understanding check result: its confirmed examples/);
+  }
 });
 
 test("change review skills are explicit-only and share target selection", async () => {
