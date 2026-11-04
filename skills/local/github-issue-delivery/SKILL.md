@@ -1,6 +1,6 @@
 ---
 name: github-issue-delivery
-description: Coordinate GitHub issues through isolated worktrees, design preflight with docs, implementation, local reviews, PR Codex review and fixes, approved merge, and local cleanup. Use when the user requests this full delivery workflow for one or more issues; resume unfinished deliveries without repeating completed operations.
+description: Coordinate GitHub issues through an understanding check, isolated worktrees, design preflight with docs, implementation, local reviews, PR Codex review and fixes, approved merge, and local cleanup. Use when the user requests this full delivery workflow for one or more issues; resume unfinished deliveries without repeating completed operations.
 ---
 
 # GitHub Issue Delivery
@@ -19,7 +19,8 @@ Codex:       $github-issue-delivery 12 36 56 60
 Use the current repository and explicitly requested issues. Read the component
 skills before their phases and pass the user's full workflow request, exact
 target, and existing authorizations to each. An explicit user request for this
-full workflow selects its delegated preflight, local review, and PR-cycle phases;
+full workflow selects its delegated understanding check, preflight, local review,
+and PR-cycle phases;
 their instructions recognize this caller. Automatic discovery or a reference to
 this file does not select those phases or grant mutation approval. If authorization
 is missing, prepare the concrete result and request only the approval needed for
@@ -39,11 +40,16 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    installation is `base,github`; the GitHub profile alone does not supply the
    preflight and review skills. Report a missing prerequisite rather
    than silently installing it or skipping a required phase.
-2. Use `github-issue-start` with the per-issue workflow below as its implementation
+2. Before `github-issue-start`, run `issue-understanding-check` in the
+   coordinator for each requested issue, one issue at a time, so its questions
+   end before any worker starts. Forward a user's skip. Pass on only issues
+   whose status is `confirmed`, `corrected`, or `skipped`; report the others as
+   waiting for the user.
+3. Use `github-issue-start` with the per-issue workflow below as its implementation
    brief. Have it prepare the worktree and baseline before entering preflight;
    implementation begins only after preflight. Preserve its issue classification,
    dependency checks, and one-issue/one-branch/one-worktree ownership.
-3. Let `github-issue-start` own worker dispatch; do not launch duplicate workers.
+4. Let `github-issue-start` own worker dispatch; do not launch duplicate workers.
    Parallelize only independent issues and within the host's available capacity.
    When delegation is unavailable, report that limitation and handle safe issues
    sequentially, calling `github-issue-start` separately for each single issue
@@ -53,9 +59,10 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    for the user.
    Route workers' material design questions and approval requests through the
    coordinator, with the affected issue clearly identified.
-4. Before writing progress records, classify them as temporary and choose ignored
+5. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Keep a separate record per issue: URL, scope,
-   worktree, branch, base ref and SHA, current phase, accepted design decisions,
+   understanding check result, worktree, branch, base ref and SHA, current phase,
+   accepted design decisions,
    risk tier with its reasons and head, verification, full-review and follow-up head SHAs and coverage, review round
    counts, PR and trigger/thread identifiers, dispositions, follow-up candidates,
    blockers, and next action. Report the resume path.
@@ -65,8 +72,8 @@ On resume, reconcile the record with actual local and GitHub state. Reuse matchi
 worktrees and PRs, preserve successful writebacks, and verify the current head
 before reusing review evidence. Pass the PR/head/trigger record to the cycle and
 resume its earliest incomplete phase. A pending review on the same head resumes
-waiting rather than posting another trigger. A progress file is evidence, not
-authorization.
+waiting rather than posting another trigger. A recorded understanding check
+result carries forward. A progress file is evidence, not authorization.
 
 ## Per-Issue Workflow
 
@@ -74,12 +81,14 @@ authorization.
 
 Use `design-preflight-with-docs` for this issue in its worktree before editing the
 implementation. Forward any requested mode or question limit; otherwise use its
-default. Inherit its completion and documentation criteria without an additional
+default. Give it the issue's understanding check result: its confirmed examples
+and agreed issue changes are settled scope, and its preflight items open the
+design questions. Inherit its completion and documentation criteria without an additional
 interview. Carry forward settled decisions on resume. Leave material unanswered
 decisions pending and continue only work that does not depend on them. Set the
 tentative tier under [Risk Tier](../delivery-common/references/risk-tier.md).
 
-Implement the issue's acceptance criteria, following the resulting design and
+Implement the issue's acceptance criteria and confirmed examples, following the resulting design and
 repository conventions. Run the smallest relevant checks. Record actual results
 and material coverage limits; a successful baseline is not implementation
 verification. Complete this phase only with an implementation and verification

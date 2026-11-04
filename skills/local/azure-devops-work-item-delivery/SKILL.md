@@ -1,6 +1,6 @@
 ---
 name: azure-devops-work-item-delivery
-description: Coordinate Azure DevOps Work Items through isolated worktrees, design preflight with docs, implementation, local reviews, PR publication, approved merge, and local cleanup. Use when the user requests this full delivery workflow for named Work Items; resume unfinished deliveries without repeating completed operations.
+description: Coordinate Azure DevOps Work Items through an understanding check, isolated worktrees, design preflight with docs, implementation, local reviews, PR publication, approved merge, and local cleanup. Use when the user requests this full delivery workflow for named Work Items; resume unfinished deliveries without repeating completed operations.
 ---
 
 # Azure DevOps Work Item Delivery
@@ -24,8 +24,8 @@ Azure Repos target for them.
 
 Read component skills before their phases. Forward the user's actual full
 workflow request, exact Work Item/branch/worktree, and existing authorizations.
-An explicit full delivery request selects the delegated preflight, local review,
-and publication phases. Automatic discovery or a reference to this skill selects
+An explicit full delivery request selects the delegated understanding check,
+preflight, local review, and publication phases. Automatic discovery or a reference to this skill selects
 none of them and grants no mutation approval. Honor the publisher's approval
 model and governing instructions for scoped checkpoint commits, normal pushes,
 and PR creation. Prepare the concrete result before requesting missing approval;
@@ -46,21 +46,27 @@ cycle.
    `change-security-review`, before starting.
    The normal installation is `base,azure-devops`; report missing prerequisites
    rather than installing them or skipping required phases.
-2. Use `azure-devops-work-item-start` with the per-item workflow below as its
+2. Before `azure-devops-work-item-start`, run `issue-understanding-check` in the
+   coordinator for each requested Work Item, one item at a time, so its
+   questions end before any worker starts. Forward a user's skip. Pass on only
+   items whose status is `confirmed`, `corrected`, or `skipped`; report the
+   others as waiting for the user.
+3. Use `azure-devops-work-item-start` with the per-item workflow below as its
    implementation brief. Prepare its worktree and baseline before preflight;
    implement only after preflight. Preserve classification, dependency checks,
    and one-Work-Item/one-branch/one-worktree ownership. Proceed only with directly
    actionable items; report parent trackers, blockers, and ambiguous scope first.
-3. Let the start skill own worker dispatch. Parallelize independent items only
+4. Let the start skill own worker dispatch. Parallelize independent items only
    within available capacity and keep each worker in its assigned worktree.
    When delegation is unavailable, report it and process safe items sequentially
    through separate single-item calls. Local reviews still need their own
    delegation capabilities. For dependent or unsafe groups, honor the start
    skill's stop condition and present an order or independent subset to the user.
    Route material design questions and approvals through the coordinator.
-4. Before writing progress records, classify them as temporary and choose ignored
+5. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Record separately per item: organization,
-   project/repository IDs, Work Item URL and scope, branch/worktree, base ref/SHA,
+   project/repository IDs, Work Item URL and scope, understanding check result,
+   branch/worktree, base ref/SHA,
    phase, accepted design, risk tier with its reasons and head, verification, reviewed head SHAs and local round
    count, PR ID/URL and source/target refs, published head, policy/merge state,
    Work Item state, finding dispositions, follow-up candidates, blockers, and next
@@ -69,21 +75,23 @@ cycle.
 On resume, reconcile the record with actual local and Azure DevOps state. Reuse
 matching worktrees and PRs; a completed PR resumes completion checks rather than
 publication. Recheck the current source ref before reusing review evidence.
-Resume the earliest incomplete phase. A progress record is evidence, not
-authorization.
+Resume the earliest incomplete phase. A recorded understanding check result
+carries forward. A progress record is evidence, not authorization.
 
 ## Per-Work-Item Workflow
 
 ### 1. Preflight, implement, and verify
 
 Use `design-preflight-with-docs` in the assigned worktree before implementation.
-Forward the requested mode/question limit or use its default. Inherit its
+Forward the requested mode/question limit or use its default. Give it the item's
+understanding check result: its confirmed examples and agreed changes are
+settled scope, and its preflight items open the design questions. Inherit its
 completion and documentation criteria without a second interview. Carry forward
 settled decisions on resume. Keep material unanswered decisions pending and
 continue only work that does not depend on them. Set the tentative tier under
 [Risk Tier](../delivery-common/references/risk-tier.md).
 
-Implement the Work Item's acceptance criteria and accepted design. Run focused
+Implement the Work Item's acceptance criteria, confirmed examples, and accepted design. Run focused
 repository checks and record actual results and coverage limits; the baseline
 alone is not implementation verification. Finish with an implementation and
 verification evidence ready for review, or an explicit blocker.
