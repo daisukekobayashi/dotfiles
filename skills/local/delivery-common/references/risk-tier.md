@@ -75,10 +75,10 @@ sensitive path; changed policy applies to later deliveries, never this one.
 Run `change-security-review` as a third local reviewer when the tier is High or
 the task diff touches a sensitive path. Once selected, keep it on every later
 full review in this delivery, and include it in a focused follow-up when the
-current tier is High, the delta touches a sensitive path, or the delta fixes an
-accepted security finding. Always run it with `--base <base-sha>` so its
+current tier is High, the delta touches a sensitive path, or the delta fixes a
+material security finding. Always run it with `--base <base-sha>` so its
 `SECURITY.md` policy comes from the recorded base; in a focused follow-up, name
-the delta and accepted findings in its focus text.
+the delta and the findings it fixes in its focus text.
 
 Assess its findings with Local Review's Assess findings; its `introduced` and
 `worsened` findings are `material`. A material security finding closes only by a

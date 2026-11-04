@@ -520,6 +520,7 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(riskTier, /closes only by a\s+verified fix or an explicit decision to accept it in the user.s own message/);
   assert.match(localReview, /\[Risk Tier\]\(risk-tier\.md\)/);
   assert.match(localReview, /`change-security-review`/);
+  assert.match(localReview, /`change-security-review`\s+with the base Risk Tier sets/);
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const deliverySkill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
     assert.match(deliverySkill, /\[Risk Tier\]\(\.\.\/delivery-common\/references\/risk-tier\.md\)/);

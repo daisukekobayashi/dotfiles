@@ -98,8 +98,9 @@ limits. Earlier review evidence remains valid for unaffected areas; the caller
 decides whether broader changes require another full pair. Keep newly discovered
 material risks visible for that assessment.
 
-Run the relevant skills with `--base <preceding reviewed head> --scope branch`
-and pass the accepted findings and dispositions as focus text. Preserve the
+Run `change-review` and `change-adversarial-review` with
+`--base <preceding reviewed head> --scope branch`, and `change-security-review`
+with the base Risk Tier sets; pass the accepted findings and dispositions as focus text. Preserve the
 route's independence and read-only requirements.
 
 ## Run the pair
