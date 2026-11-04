@@ -42,7 +42,8 @@ cycle.
 
 1. Resolve the requested IDs, organization, project, repository, instructions,
    dirty state, and matching worktrees/PRs. Require at least one actual Work
-   Item. Check component skills and selected local reviewers before starting.
+   Item. Check component skills and the local reviewers, including
+   `change-security-review`, before starting.
    The normal installation is `base,azure-devops`; report missing prerequisites
    rather than installing them or skipping required phases.
 2. Use `azure-devops-work-item-start` with the per-item workflow below as its
@@ -60,7 +61,7 @@ cycle.
 4. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Record separately per item: organization,
    project/repository IDs, Work Item URL and scope, branch/worktree, base ref/SHA,
-   phase, accepted design, verification, reviewed head SHAs and local round
+   phase, accepted design, risk tier with its reasons and head, verification, reviewed head SHAs and local round
    count, PR ID/URL and source/target refs, published head, policy/merge state,
    Work Item state, finding dispositions, follow-up candidates, blockers, and next
    action. Report the resume path. Keep stable definitions and decisions in normal repository docs.
@@ -79,32 +80,36 @@ Use `design-preflight-with-docs` in the assigned worktree before implementation.
 Forward the requested mode/question limit or use its default. Inherit its
 completion and documentation criteria without a second interview. Carry forward
 settled decisions on resume. Keep material unanswered decisions pending and
-continue only work that does not depend on them.
+continue only work that does not depend on them. Set the tentative tier under
+[Risk Tier](../delivery-common/references/risk-tier.md).
 
 Implement the Work Item's acceptance criteria and accepted design. Run focused
 repository checks and record actual results and coverage limits; the baseline
 alone is not implementation verification. Finish with an implementation and
 verification evidence ready for review, or an explicit blocker.
 
-### 2. Run both local reviews, assess, and repeat
+### 2. Run local reviews, assess, and repeat
 
-Follow [Local Review](../delivery-common/references/local-review.md). Give both
-read-only reviewers the same recorded base, Work Item/spec, and committed
-snapshot. Wait for both results before the implementation owner edits.
+Follow [Local Review](../delivery-common/references/local-review.md) to set the
+risk tier and select the reviewers. Give every selected read-only reviewer the
+same recorded base, Work Item/spec, and committed snapshot. Wait for all results
+before the implementation owner edits.
 
 Assess findings against the requirements, code, and evidence, using the Assess
 findings defaults in Local Review. Apply worthwhile fixes; record concise reasons
 for explained, duplicate, stale, pre-existing, or skipped findings. Keep disputed material findings and design decisions open for the user.
-After fixes, verify and repeat both reviews on the new snapshot.
+After fixes, verify and repeat the selected reviews on the new snapshot.
 
-Advance only after both passes completed on the current implementation,
+Advance only after every pass its current tier selects completed on the current implementation,
 verification is current, and no material actionable finding or human decision
 remains open. Failed, unavailable, empty, or partial output is not a pass.
 
 ### 3. Publish the PR
 
 Coordinate publication sequentially across targets. Workers hand off their exact
-branch/worktree, Work Item/spec, base, verification, and local review evidence.
+branch/worktree, Work Item/spec, base, verification, risk tier, and local review
+evidence. Before publication, show the user the tier, its main reasons, and the
+recommended human review under Risk Tier.
 Use `azure-devops-pr-publish`, forwarding the full request and existing approvals.
 Honor its stop-on-failure behavior. Supply known Work Item IDs, completion scope,
 and the user's state-transition intent; use structured PR links under the common
@@ -117,8 +122,8 @@ Record the PR and published head. If publication creates a different commit or
 any later edit changes the implementation, invalidate affected review evidence,
 return to local verification/review, and republish through the existing PR.
 
-Advance when the exact published implementation has both completed local
-reviews, current verification, and the intended Work Item links. An existing PR
+Advance when the exact published implementation has its selected local
+reviews completed, current verification, and the intended Work Item links. An existing PR
 does not need another creation, and an open PR is not a merged PR.
 
 ### 4. Confirm and perform the merge
@@ -129,7 +134,8 @@ and mergeability. Pending, failed, or inaccessible required evidence leaves the
 item waiting or blocked. Keep source-HEAD concurrency limits explicit.
 
 Present the PR URL, Work Item, reviewed/published head, target, checks, local
-review outcome, repository-supported merge method, and proposed state-transition
+review outcome including any security review, the risk tier for that head with
+its recommended human review, repository-supported merge method, and proposed state-transition
 scope. Request confirmation for that specific PR. Recheck after approval;
 material changes require reassessment. Complete the PR only within that approval
 and without bypassing policies or deleting the remote branch. If the user merges
@@ -155,7 +161,7 @@ comment on the Work Item.
 ## Bounds and Handoffs
 
 Allow at most three local review rounds per item across this delivery, including
-resumes; one round includes both reviewers. A clean result may advance
+resumes; one round includes every selected reviewer. A clean result may advance
 immediately. Honor lower user limits. At the limit, repeated non-progress, a
 timeout, failed required check, or material human decision, preserve progress
 and report the next action, including the remaining-findings classification

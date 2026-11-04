@@ -34,7 +34,8 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
 
 1. Resolve issue numbers, repository instructions, dirty state, and existing
    worktrees/PRs. Require at least one actual issue target. Check that the
-   component skills and the selected local reviewers are available. The normal
+   component skills and the local reviewers, including `change-security-review`,
+   are available. The normal
    installation is `base,github`; the GitHub profile alone does not supply the
    preflight and review skills. Report a missing prerequisite rather
    than silently installing it or skipping a required phase.
@@ -55,7 +56,7 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
 4. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Keep a separate record per issue: URL, scope,
    worktree, branch, base ref and SHA, current phase, accepted design decisions,
-   verification, full-review and follow-up head SHAs and coverage, review round
+   risk tier with its reasons and head, verification, full-review and follow-up head SHAs and coverage, review round
    counts, PR and trigger/thread identifiers, dispositions, follow-up candidates,
    blockers, and next action. Report the resume path.
    Keep durable definitions and decisions in the repository's normal docs.
@@ -75,7 +76,8 @@ Use `design-preflight-with-docs` for this issue in its worktree before editing t
 implementation. Forward any requested mode or question limit; otherwise use its
 default. Inherit its completion and documentation criteria without an additional
 interview. Carry forward settled decisions on resume. Leave material unanswered
-decisions pending and continue only work that does not depend on them.
+decisions pending and continue only work that does not depend on them. Set the
+tentative tier under [Risk Tier](../delivery-common/references/risk-tier.md).
 
 Implement the issue's acceptance criteria, following the resulting design and
 repository conventions. Run the smallest relevant checks. Record actual results
@@ -83,12 +85,13 @@ and material coverage limits; a successful baseline is not implementation
 verification. Complete this phase only with an implementation and verification
 evidence ready for review, or an explicit blocker.
 
-### 2. Run both local reviews and verify fixes
+### 2. Run local reviews and verify fixes
 
-Follow [Local Review](../delivery-common/references/local-review.md) to select the host's reviewers
-and run an initial full review with both on the same base, issue, and implementation
-snapshot. Reviewers remain read-only. Wait for both completed results before the
-implementation owner edits.
+Follow [Local Review](../delivery-common/references/local-review.md) to set the
+risk tier, select the host's reviewers, and run an initial full review with every
+selected reviewer on the same base, issue, and implementation snapshot. Reviewers
+remain read-only. Wait for all completed results before the implementation owner
+edits.
 
 Assess each finding against the issue, code, and evidence, using the Assess
 findings defaults in Local Review. Apply worthwhile fixes; record a concise reason
@@ -103,7 +106,8 @@ pair when the design or change scope shifts materially, or new evidence makes
 the earlier full-review coverage insufficient.
 
 Advance when acceptance criteria are met, verification is current, the initial
-pair and completed follow-ups cover the current head, and no material actionable
+full review and completed follow-ups cover the current head with the reviewers its
+current tier selects, and no material actionable
 finding or human decision remains open. Recorded deferrals of minor or
 pre-existing findings do not require another round or a result with zero
 findings. Failed, unavailable, empty, or partial review output is not a pass.
@@ -111,8 +115,9 @@ findings. Failed, unavailable, empty, or partial review output is not a pass.
 ### 3. Publish and complete hosted Codex review
 
 Coordinate publication sequentially across issue targets; workers hand off their
-branch, worktree, issue/spec, recorded base, verification, and local review
-evidence. Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
+branch, worktree, issue/spec, recorded base, verification, risk tier, and local
+review evidence. Before publication, show the user the tier, its main reasons,
+and the recommended human review under Risk Tier. Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
 -> confirm remote head -> Writeback ordering, and stop-on-failure behavior.
 Pass the earlier local and hosted dispositions from the progress record, and
@@ -145,8 +150,9 @@ mergeability, and remaining review threads. Pending, failed, or inaccessible
 required checks leave the issue waiting or blocked. Approval for one head does
 not cover an intervening material change; reassess before proceeding.
 
-Present the PR URL, issue, head SHA, base, checks, review outcome, and proposed
-repository-supported merge method. Request confirmation to merge that specific
+Present the PR URL, issue, head SHA, base, checks, review outcome including any
+security review, the risk tier for that head with its recommended human review,
+and proposed repository-supported merge method. Request confirmation to merge that specific
 PR. After approval, recheck the target and merge through the available GitHub
 tool or CLI without bypassing checks or requesting branch deletion. If the user
 merges separately, verify that outcome instead. Confirm actual merged state and
