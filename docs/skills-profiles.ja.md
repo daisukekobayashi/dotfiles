@@ -145,7 +145,11 @@ PR サイクルへの委譲も含みます。自動検出だけではこれら�
 明示起動限定の `change-security-review` は、両者と同じ対象選択と指摘タグを使い、
 OpenAI の `codex-security` の diff レビュー手順を参考に、変更が持ち込む悪用可能な
 脆弱性を確認します。レビュー対象の base に `SECURITY.md` があれば、脅威モデルの
-ポリシーとして読みます。delivery フローからはまだ実行しません。Matt Pocock 版の `code-review` は規約・仕様の2軸で
+ポリシーとして読みます。delivery フローでは、変更のリスク tier が High のとき、
+または diff が sensitive path に触れるときに3番目のローカルレビューとして実行します。
+`delivery-common` のリスク tier（Low、Medium、High）は作者ではなく変更から決まり、
+推奨する人間レビュー（AI のみ、1名、複数名）を PR 公開前とマージ確認時に提示します。
+PR 本文には書かず、マージ確認は常に必要です。Matt Pocock 版の `code-review` は規約・仕様の2軸で
 確認したい場面向けに残し、delivery の標準レビューには使いません。
 
 外部 skill 用の pool/catalog ファイルは追加しません。Profile が curated external skill group の正本になります。
@@ -196,7 +200,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
-- commit 済み snapshot のローカルレビュー手順を共有する `delivery-common`
+- commit 済み snapshot のローカルレビュー手順とリスク tier を共有する `delivery-common`
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。

@@ -1,6 +1,6 @@
 ---
 name: change-security-review
-description: Use only when explicitly invoked with `$change-security-review` to review a repository change, branch, worktree, commit, pull request, or issue for exploitable security vulnerabilities before shipping.
+description: Use only when explicitly invoked with `$change-security-review` to review a repository change, branch, worktree, commit, pull request, or issue for exploitable security vulnerabilities before shipping, or as the security phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow when its risk tier selects it.
 ---
 
 # Change Security Review
@@ -206,8 +206,11 @@ was proven secure.
 
 ## Guardrails
 
-- Run only when explicitly invoked. A caller must forward the user's request
-  and exact target; a skill reference alone is insufficient.
+- Run only when explicitly invoked, directly or through the user's explicit
+  request for the full `github-issue-delivery` or
+  `azure-devops-work-item-delivery` workflow when its risk tier selects this
+  review. A caller must forward that request and exact target; a skill
+  reference alone is insufficient.
 - Do not edit, stage, commit, push, switch branches, create worktrees, comment,
   submit reviews, resolve threads, or mutate remote state.
 - Do not turn findings into an implementation plan or begin fixing them.

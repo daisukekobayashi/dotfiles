@@ -3,13 +3,14 @@
 Use the caller's GitHub issue or Azure DevOps Work Item as the task context.
 
 On every host, use the `change-review` skill for the first pass and the
-`change-adversarial-review` skill for the second. Each runs in a fresh subagent
-of the current host unless the user's delivery request explicitly names another
-review tool, such as Codex; forward that instruction to both skills and read
-their instructions for how each route runs. Do not infer the host from a
-directory name.
+`change-adversarial-review` skill for the second. When the [Risk Tier](risk-tier.md)
+selects it, add the `change-security-review` skill as a third reviewer. Each runs
+in a fresh subagent of the current host unless the user's delivery request
+explicitly names another review tool, such as Codex; forward that instruction to
+every selected skill and read their instructions for how each route runs. Do not
+infer the host from a directory name.
 
-Report the selected route. If either required reviewer is unavailable or cannot
+Report the selected route. If any required reviewer is unavailable or cannot
 be invoked under its policy, report the missing prerequisite; do not substitute
 the implementation owner's informal inspection for a completed review.
 
@@ -21,7 +22,10 @@ recorded base; do not ask for a fixed point already established by workspace
 preparation. For a full review, cover the entire task diff, not only the last fix
 commit. Use a full pair unless the caller selects focused follow-up below.
 
-For delivery, use `--base <base-sha> --scope branch` with both local skills to
+Before running reviewers on a pinned head, set the tier for that head under
+[Risk Tier](risk-tier.md) and record it with the selected reviewers.
+
+For delivery, use `--base <base-sha> --scope branch` with every selected skill to
 review the committed implementation. Include new code and files in a normal
 scoped checkpoint commit after verification and before these reviews.
 Obtain any required commit approval first, reuse
@@ -36,7 +40,7 @@ before the next review or follow-up. A commit permits local review;
 publication still belongs to the caller's publication phase and its approval rules.
 
 If unrelated dirty files must remain, identify them explicitly and use branch
-scope for both passes. If any intended task changes remain outside the committed
+scope for every pass. If any intended task changes remain outside the committed
 snapshot, report incomplete coverage and do not advance. Keep the snapshot stable
 until the required results arrive; invalidate affected coverage if another writer
 changes it.
@@ -86,30 +90,35 @@ head, and give the relevant independent reviewers the accepted findings,
 dispositions, and all changes since the preceding reviewed snapshot. Have them
 verify the fixes and check regressions in affected paths, with enough surrounding
 context to trace behavior. Use both reviewers when changes affect both areas of
-coverage. Wait for the required results before the implementation owner edits.
+coverage, and the security reviewer when Risk Tier selects it, run as Risk
+Tier directs. Wait for the required results before the implementation owner edits.
 
 Return the reviewed head, scope, confirmed fixes, remaining findings, and coverage
 limits. Earlier review evidence remains valid for unaffected areas; the caller
 decides whether broader changes require another full pair. Keep newly discovered
 material risks visible for that assessment.
 
-Run the relevant skills with `--base <preceding reviewed head> --scope branch`
-and pass the accepted findings and dispositions as focus text. Preserve the
+Run `change-review` and `change-adversarial-review` with
+`--base <preceding reviewed head> --scope branch`, and `change-security-review`
+with the base Risk Tier sets; pass the accepted findings and dispositions as focus text. Preserve the
 route's independence and read-only requirements.
 
 ## Run the pair
 
-For a full pair, run `change-review` and `change-adversarial-review` as separate
-reviewers independent of the implementation owner: a separate fresh subagent of
+For a full pair, run `change-review` and `change-adversarial-review`, plus
+`change-security-review` when selected, as separate reviewers independent of the
+implementation owner: a separate fresh subagent of
 the current host for each, or a separate fresh run of the explicitly named tool
 for each, as the skills define. Report the reduced independence of same-host
-subagents. Give both the same exact
+subagents. Give each the same exact
 worktree, branch, committed head, `--base <base-sha> --scope branch`, task
 criteria, accepted design/docs, and the user's delivery request. Require the
 normal review's findings, test gaps, verdict, and coverage, and the adversarial
-review's verdict, concrete failure paths, coverage, and residual risk. Report
+review's verdict, concrete failure paths, coverage, and residual risk, and the
+security review's verdict, findings, deferred candidates, threat model, and
+coverage. Report
 unavailable delegation instead of claiming independence.
 
-Keep both skill executions read-only; only the parent implementation phase applies
+Keep every review skill execution read-only; only the parent implementation phase applies
 accepted fixes. Wait for required results before editing. Do not substitute or
 add the plugin's `/codex:review` or `/codex:adversarial-review` commands.

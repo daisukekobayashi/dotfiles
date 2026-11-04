@@ -504,6 +504,28 @@ test("change review skills are explicit-only and share target selection", async 
     runnerSection(changeReview).replaceAll("change-review", "NAME"));
   assert.match(security, /SECURITY\.md/);
   assert.match(security, /`introduced`[\s\S]*`worsened`[\s\S]*`pre-existing`/);
+  assert.match(security, /^description:.*`github-issue-delivery`.*`azure-devops-work-item-delivery`.*risk tier/m);
+  const deliveryCommon = path.join(repoRoot, "skills", "local", "delivery-common");
+  const riskTier = await readText(path.join(deliveryCommon, "references", "risk-tier.md"));
+  const localReview = await readText(path.join(deliveryCommon, "references", "local-review.md"));
+  for (const tier of ["Low", "Medium", "High"]) {
+    assert.match(riskTier, new RegExp(`^- \\*\\*${tier}:\\*\\*`, "m"));
+  }
+  assert.match(riskTier, /Run `change-security-review` as a third local reviewer/);
+  assert.match(riskTier, /Keep them\s+out of the PR body/);
+  assert.match(riskTier, /Repository policy adds paths; it never removes a default/);
+  assert.match(riskTier, /Always read policy at the delivery's recorded base/);
+  assert.match(riskTier, /Always run it with `--base <base-sha>`/);
+  assert.match(riskTier, /current tier is High/);
+  assert.match(riskTier, /closes only by a\s+verified fix or an explicit decision to accept it in the user.s own message/);
+  assert.match(localReview, /\[Risk Tier\]\(risk-tier\.md\)/);
+  assert.match(localReview, /`change-security-review`/);
+  assert.match(localReview, /`change-security-review`\s+with the base Risk Tier sets/);
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const deliverySkill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
+    assert.match(deliverySkill, /\[Risk Tier\]\(\.\.\/delivery-common\/references\/risk-tier\.md\)/);
+    assert.match(deliverySkill, /risk tier for that head with\s+(its )?recommended human review/);
+  }
   assert.match(changeReview, /correctness/i);
   assert.match(changeReview, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
