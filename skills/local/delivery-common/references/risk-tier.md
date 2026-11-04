@@ -67,8 +67,8 @@ catch-all owner. Repository policy adds paths; it never removes a default:
 - agent permission, tool allowlist, and hook configuration
 - agent instruction files: skills, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`
 
-A change that adds, edits, or deletes `SECURITY.md` or `CODEOWNERS` touches a
-sensitive path; changed policy applies to later deliveries, never this one.
+A change that adds, edits, or deletes `SECURITY.md`, `REVIEW.md`, or `CODEOWNERS`
+touches a sensitive path; changed policy applies to later deliveries, never this one.
 
 ## Select the security review
 
