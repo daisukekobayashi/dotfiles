@@ -146,7 +146,7 @@ rules. Each definition records its upstream sources and the compared commit.
 The explicit-only `change-security-review` skill shares their target selection
 and finding tags and reviews a change for exploitable vulnerabilities, drawing
 on OpenAI's `codex-security` diff review workflow. It reads optional
-`SECURITY.md` files from the reviewed repository as its threat-model policy.
+`SECURITY.md` files from the reviewed repository's base as its threat-model policy.
 Delivery workflows do not run it yet. Matt Pocock's `code-review` remains available
 for separate Standards/Spec reviews; it is not the delivery default.
 
