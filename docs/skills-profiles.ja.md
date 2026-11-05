@@ -122,7 +122,7 @@ head と一致する場合は、その削除も提案します。
 再レビュー依頼は自動では行いません。複合スキルは順序と引き継ぎを担当し、
 個別の処理手順は基本スキルに集約します。
 
-`github-issue-delivery` は、各 issue の `shared-understanding`、独立 worktree、
+`github-issue-delivery` は、独立 worktree、各 issue の `shared-understanding`、
 `design-preflight-with-docs`、実装、
 2種類のローカルレビュー、PR の Codex レビュー対応、承認後のマージ、承認後の
 ローカル cleanup までをまとめます。Claude Code では
@@ -134,6 +134,12 @@ Claude Code での導入済み Codex plugin の読み取り専用 `task` ラン�
 別のツールはユーザーが明示的に指定した場合だけ使います。
 ユーザーが一括フローを明示依頼した場合は preflight、local review、
 PR サイクルへの委譲も含みます。自動検出だけではこれらを実行しません。
+各 issue の worker が issue とコードを読み、shared understanding と、推奨回答つきの
+preflight の質問を草稿にします。コーディネーターは草稿を検証し、issue ごと、
+論点ごとに1つずつユーザーに質問します。subagent がユーザーに直接質問することは
+ありません。worker が既定値で決めるのは実装上の戦術だけで、契約、境界、互換性、
+セキュリティの判断は質問として返し、選んだ既定値はすべて報告します。delegation
+が使えない場合は、コーディネーター自身が草稿を作って質問します。
 有用な指摘の修正後は上限内で再レビューし、再開用の進捗は追跡対象の文書に
 混ぜません。マージと cleanup はそれぞれ対象を示して確認します。
 ローカルのブランチレビュー前に行う checkpoint commit にも既存の承認条件を
@@ -178,11 +184,12 @@ delivery スキルは、共通のポリシー層と薄いプロバイダー別�
   hosted Codex レビューのラウンド上限や再レビュー条件のように、片方のプロバイダーにしか
   ないポリシーは、そのプロバイダーのスキルに残します。
 
-現在の `delivery-common` は、ローカルレビュー手順（snapshot の固定、follow-up 候補の
+現在の `delivery-common` は、Worker Dialogue（worker が shared understanding と
+design preflight を草稿にし、コーディネーターがユーザーに質問する流れ）、ローカルレビュー手順（snapshot の固定、follow-up 候補の
 記録を含む指摘の評価、focused follow-up、reviewer の選択、ローカルレビューの
 full review への切り替え条件、完了条件、ラウンドの数え方と上限、head と coverage の
 記録）とリスク tier を持ちます。その `SKILL.md` では、hosted レビューのポリシーと
-承認は呼び出し元のワークフローが持つとしています。理解確認の順序、マージ確認で
+承認は呼び出し元のワークフローが持つとしています。マージ確認で
 示す内容、delivery 終了時の follow-up 候補の報告と作成など、その他の共通ポリシーは
 まだ両方のプロバイダー別 delivery スキルに書かれています。
 
@@ -253,7 +260,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
-- commit 済み snapshot のローカルレビュー手順とリスク tier を共有する `delivery-common`
+- worker の草稿とコーディネーターの質問の流れ、commit 済み snapshot のローカルレビュー手順、リスク tier を共有する `delivery-common`
 - design preflight の前に、before/after の具体例を含む概要で issue や Work Item の内容を読み上げ、決めていることと決めていない点をユーザーと合意する `shared-understanding`
 - `git-commit`
 
@@ -421,14 +428,14 @@ Azure DevOps workflow skill:
 リモートの source branch の先頭が完了済み PR のマージ元と一致する場合は、その削除も提案します。
 
 `azure-devops-work-item-delivery` は Azure DevOps Services の Azure Boards と
-Azure Repos Git を対象に、`shared-understanding`、独立 worktree、
+Azure Repos Git を対象に、独立 worktree、`shared-understanding`、
 `design-preflight-with-docs`、実装、
 2種類のローカルレビュー、PR 公開、承認後のマージ、承認後のローカル cleanup
 までをまとめます。Claude Code では `/azure-devops-work-item-delivery 123 456`、
 Codex では `$azure-devops-work-item-delivery 123 456` のように Work Item ID を
 指定します。前提スキルは `base,azure-devops` で揃えます。
-GitHub 版と Azure 版は `delivery-common` のローカルレビュー手順とホスト別の
-reviewer を共有します。一括フローの明示依頼は preflight、adversarial review、
+GitHub 版と Azure 版は、worker が草稿を作りコーディネーターがユーザーに質問する
+`delivery-common` の流れ、ローカルレビュー手順、ホスト別の reviewer を共有します。一括フローの明示依頼は preflight、adversarial review、
 PR 公開への委譲を含み、既存の承認条件に従います。マージと cleanup はそれぞれ
 対象を示して確認します。Work Item の状態遷移には明示的な意図が必要で、
 マージ後の実状態も確認します。再開記録は一時的な agent-work 領域に残します。

@@ -15,8 +15,10 @@ parallelize.
 Read `../azure-devops-common/references/context.md` before fetching Work Items.
 
 When `azure-devops-work-item-delivery` supplies an implementation brief, prepare
-the workspace and baseline first, then follow its preflight/review/publication
-order rather than starting implementation immediately. Pass the user's request,
+the workspace and baseline first, then dispatch one worker per item as in
+Workflow step 6, also for a single item when delegation is available. Follow the
+brief's dialogue/preflight/review/publication order rather than starting
+implementation immediately. Pass the user's request,
 exact target, and existing approvals to the worker; a brief alone grants none.
 
 ## Workflow
@@ -53,7 +55,8 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      it is a safe branch name; otherwise stop and report it before running any
      command with it.
 5. If exactly one Work Item was provided:
-   - Follow **Worktree Preparation** below, then implement in that worktree.
+   - Follow **Worktree Preparation** below, then implement in that worktree, or
+     in its worker when a delivery brief dispatches one.
 6. If multiple Work Items were provided:
    - Stop before creating worktrees unless the set is safe to parallelize.
    - Treat items as safe only when their touched areas do not overlap,
@@ -78,6 +81,12 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      of making it. Decide whether the change conflicts with a sibling before
      letting it continue; when it does, sequence the work or report the
      conflict to the user.
+   - A worker chooses defaults only for implementation tactics. It returns
+     contract, boundary, compatibility, and security decisions to the
+     coordinator as questions with options and a recommendation, even when they
+     look low-risk, and continues only work that does not depend on them. It
+     never asks the user directly, and its report lists open questions and
+     every default it chose.
 7. Report each Work Item summary, branch, worktree path, base commit, baseline
    command/result, worker assignment when applicable, and next implementation step.
 

@@ -122,9 +122,9 @@ the verified fixes, and invokes its Writeback phase. It does not automatically
 request another review after fixes. Composite skills own ordering and handoffs;
 underlying skills own operation details.
 
-`github-issue-delivery` coordinates the full issue workflow: a
-`shared-understanding` of each issue, isolated worktree,
-`design-preflight-with-docs`, implementation, both local reviews, the PR Codex
+`github-issue-delivery` coordinates the full issue workflow: isolated worktree,
+a `shared-understanding` of each issue, `design-preflight-with-docs`,
+implementation, both local reviews, the PR Codex
 review cycle, confirmed merge, and confirmed local cleanup. Invoke it with issue
 numbers, for example `/github-issue-delivery 12 36` in Claude Code or
 `$github-issue-delivery 12 36` in Codex. Use `base,github` for its prerequisites.
@@ -135,6 +135,12 @@ read-only `task` runtime on Claude Code, runs them only when the user explicitly
 names it.
 An explicit full delivery request selects the delegated preflight, local review,
 and PR-cycle phases; automatic discovery alone does not authorize them.
+Each issue's worker reads the issue and code and drafts the shared understanding
+and the preflight questions with recommendations; the coordinator verifies the
+drafts and asks the user one issue and one point at a time, so no subagent asks
+the user. Workers default only implementation tactics, return contract,
+boundary, compatibility, and security decisions as questions, and report every
+default they chose. Without delegation, the coordinator drafts and asks itself.
 It repeats review after worthwhile fixes within bounded rounds, preserves resume
 records outside tracked docs, and requires separate target-specific merge and
 cleanup confirmation. Checkpoint commits before local branch review follow the
@@ -182,12 +188,14 @@ adapters. This is the target layering; the current split is described below.
   Policy that exists for only one provider, such as hosted Codex review round
   limits and re-review conditions, stays in that provider's skill.
 
-`delivery-common` currently holds the Local Review procedure (snapshot pinning,
+`delivery-common` currently holds the Worker Dialogue (workers draft the
+shared understanding and design preflight, and the coordinator asks the user),
+the Local Review procedure (snapshot pinning,
 finding assessment including follow-up candidate recording, focused follow-up,
 reviewer selection, and local review escalation, advancement criteria, round
 counting and limits, and the head and coverage record) and the Risk Tier. Its
 `SKILL.md` says the calling workflow owns hosted review policy and approvals.
-Other shared policy, such as the understanding check order, merge confirmation
+Other shared policy, such as merge confirmation
 contents, and end-of-delivery follow-up candidate reporting and creation, is
 still written in both provider delivery skills.
 
@@ -259,7 +267,7 @@ Include:
 - `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
 - `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
-- `delivery-common` for the shared committed-snapshot local review procedure and risk tier
+- `delivery-common` for the shared worker dialogue, committed-snapshot local review procedure, and risk tier
 - `shared-understanding`, which before design preflight reads an issue or Work Item back to the user with a before/after example and settles with them what it decides and what it leaves undecided
 - `git-commit`
 
@@ -433,13 +441,14 @@ branches and worktrees, and proposes deleting the remote source branch when its
 tip still matches the completed PR's merged source.
 
 `azure-devops-work-item-delivery` coordinates the full Work Item workflow for
-Azure Boards and Azure Repos Git on Azure DevOps Services: `shared-understanding`, isolated worktree,
+Azure Boards and Azure Repos Git on Azure DevOps Services: isolated worktree, `shared-understanding`,
 `design-preflight-with-docs`, implementation, both local reviews, PR publication,
 confirmed merge, and confirmed local cleanup. Invoke it with Work Item IDs, for
 example `/azure-devops-work-item-delivery 123 456` in Claude Code or
 `$azure-devops-work-item-delivery 123 456` in Codex. Use `base,azure-devops` for its
-prerequisites. GitHub and Azure delivery share the `delivery-common` local review
-procedure and the same host-specific reviewers. An explicit full delivery request
+prerequisites. GitHub and Azure delivery share the `delivery-common` worker dialogue, in
+which workers draft and the coordinator asks the user, the local review
+procedure, and the same host-specific reviewers. An explicit full delivery request
 selects delegated preflight, adversarial review, and publication, subject to the
 governing approval rules; merge and cleanup require separate target-specific
 confirmation. Work Item state transitions need explicit intent and actual state

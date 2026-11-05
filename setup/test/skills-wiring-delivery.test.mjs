@@ -9,6 +9,8 @@ import {
   skillsForSource,
 } from "./skills-helpers.mjs";
 
+const flat = (text) => text?.replace(/\s+/g, " ");
+
 test("design preflight delegates to the installed grilling primitive", async () => {
   const base = await readRepoProfile("base");
   const designPreflight = await readText(
@@ -24,7 +26,7 @@ test("design preflight delegates to the installed grilling primitive", async () 
   assert.doesNotMatch(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grill-me`\./);
 });
 
-test("delivery runs the shared understanding before start and preflight", async () => {
+test("delivery starts the worker, then runs the shared understanding before preflight", async () => {
   const checkRoot = path.join(repoRoot, "skills", "local", "shared-understanding");
   const check = await readText(path.join(checkRoot, "SKILL.md"));
   const metadata = await readText(path.join(checkRoot, "agents", "openai.yaml"));
@@ -59,12 +61,13 @@ test("delivery runs the shared understanding before start and preflight", async 
     ["azure-devops-work-item-delivery", "azure-devops-work-item-start"],
   ]) {
     const deliverySkill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
-    const checkIndex = deliverySkill.indexOf("run `shared-understanding`");
+    const checkIndex = deliverySkill.indexOf("worker drafts `shared-understanding`");
     const startIndex = deliverySkill.indexOf(`Use \`${start}\``);
     const preflightIndex = deliverySkill.indexOf("Use `design-preflight-with-docs`");
-    assert.ok(checkIndex > 0, `${delivery}: missing shared understanding`);
-    assert.ok(checkIndex < startIndex, `${delivery}: shared understanding must precede start`);
-    assert.ok(startIndex < preflightIndex, `${delivery}: start must precede preflight`);
+    assert.ok(startIndex > 0, `${delivery}: missing start`);
+    assert.ok(startIndex < checkIndex, `${delivery}: start must dispatch the worker before the shared understanding`);
+    assert.ok(checkIndex < preflightIndex, `${delivery}: shared understanding must precede preflight`);
+    assert.doesNotMatch(deliverySkill, /run `shared-understanding` in the\s+coordinator/, delivery);
     assert.match(deliverySkill, /`confirmed`, `corrected`, or `skipped`/);
     assert.match(deliverySkill, /waiting for the user with their open points/);
     assert.match(deliverySkill, /shared understanding result: its agreed decisions/);
@@ -90,7 +93,7 @@ test("provider delivery skills link the same delivery-common targets", async () 
 
   const github = await commonTargets("github-issue-delivery");
   const azure = await commonTargets("azure-devops-work-item-delivery");
-  for (const target of ["references/local-review.md", "references/risk-tier.md"]) {
+  for (const target of ["references/local-review.md", "references/risk-tier.md", "references/worker-dialogue.md"]) {
     assert.ok(github.includes(target), `github-issue-delivery: missing delivery-common link ${target}`);
   }
   assert.deepEqual(azure, github, [
@@ -233,4 +236,55 @@ test("change review skills are explicit-only and share target selection", async 
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "codex-review", "SKILL.md")), false);
   assert.equal(existsSync(path.join(repoRoot, "skills", "local", "codex-adversarial-review", "SKILL.md")), false);
   assert.doesNotMatch(`${changeReview}\n${adversarial}`, /\$code-review|local-code-review|\$codex-review/);
+});
+
+test("delivery workers draft the understanding and preflight for the coordinator to ask", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = (...parts) => readText(path.join(localRoot, ...parts));
+  const dialogue = flat(await read("delivery-common", "references", "worker-dialogue.md"));
+  const common = await read("delivery-common", "SKILL.md");
+
+  assert.match(dialogue, /the target's worker reads the task and code and drafts, and the coordinator holds every dialogue with the user\. No subagent asks the user a question\./);
+  assert.match(dialogue, /including when the delivery has a single target\. The same worker drafts the shared understanding, drafts the preflight, and implements, keeping its context\./);
+  assert.match(dialogue, /Without delegation, report the limitation and process targets one at a time\. The coordinator runs `shared-understanding` and `design-preflight-with-docs` itself and asks the user directly/);
+  const order = ["runs `shared-understanding` in draft mode", "The coordinator verifies the draft", "Continue only with a status of `confirmed`, `corrected`, or `skipped`", "runs `design-preflight-with-docs` in draft mode", "The coordinator verifies the preflight draft", "implements on the settled decisions"]
+    .map((step) => dialogue.indexOf(step));
+  assert.ok(order.every((index, i) => index >= 0 && (i === 0 || order[i - 1] < index)), `worker-dialogue.md: step order ${order}`);
+  assert.match(dialogue, /workers draft in parallel\. The coordinator holds one target's dialogue at a time/);
+  assert.match(dialogue, /A drafted recommendation is not a decision; only the user's answers settle the points\./);
+  assert.match(dialogue, /checks the listed defaults for a decision that should have been a question/);
+  assert.match(common, /^description: Shared worker dialogue, .*workers draft the shared understanding and design preflight for the coordinator to ask/m);
+  assert.match(common, /\[Worker Dialogue\]\(references\/worker-dialogue\.md\)/);
+
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const skill = flat(await read(delivery, "SKILL.md"));
+    assert.match(skill, /dispatch the (issue|item)'s worker before the shared understanding/, delivery);
+    assert.match(skill, /its worker drafts `shared-understanding`, and the coordinator asks the user one (issue|item) at a time/, delivery);
+    assert.match(skill, /no worker asks the user directly/, delivery);
+    assert.match(skill, /drafted by the worker and asked by the coordinator under Worker Dialogue/, delivery);
+    assert.match(skill, /shared understanding result and the latest worker drafts/, delivery);
+  }
+
+  const rule = /defaults only for implementation tactics[^.]*?; return contract, boundary, compatibility, and security decisions to the coordinator as questions with options and a recommendation, even when they look low-risk/;
+  const githubStart = flat(await read("github-issue-start", "SKILL.md"));
+  assert.match(githubStart, rule);
+  assert.match(githubStart, /never ask the user directly/);
+  assert.match(githubStart, /open questions, every default chosen/);
+  assert.match(githubStart, /also for a single issue when delegation is available/);
+  const azureStart = flat(await read("azure-devops-work-item-start", "SKILL.md"));
+  assert.match(azureStart, /A worker chooses defaults only for implementation tactics\. It returns contract, boundary, compatibility, and security decisions to the coordinator as questions with options and a recommendation, even when they look low-risk/);
+  assert.match(azureStart, /It never asks the user directly, and its report lists open questions and every default it chose\./);
+  assert.match(azureStart, /also for a single item when delegation is available/);
+
+  const check = flat(await read("shared-understanding", "SKILL.md"));
+  assert.match(check, /## Draft for a coordinator .*Ask the user nothing and settle nothing; every decision and point stays open until the coordinator returns the user's answers\./);
+  for (const section of ["Overview", "Decisions to Read Back", "Undecided Points", "Carry to Design Preflight"]) {
+    assert.match(await read("shared-understanding", "SKILL.md"), new RegExp(`^## ${section}$`, "m"));
+  }
+  const preflight = flat(await read("design-preflight", "SKILL.md"));
+  assert.match(preflight, /## Draft for a coordinator .*return the questions instead of asking them\./);
+  assert.match(preflight, /A drafted recommendation is not an accepted decision; do not proceed on it\./);
+  const withDocs = flat(await read("design-preflight-with-docs", "SKILL.md"));
+  assert.match(withDocs, /When a delivery coordinator asks for a draft, forward that request so `design-preflight` returns its questions instead of asking\./);
+  assert.match(withDocs, /write documentation only after the coordinator returns the user's answers\./);
 });

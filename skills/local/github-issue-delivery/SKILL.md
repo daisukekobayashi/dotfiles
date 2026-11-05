@@ -1,6 +1,6 @@
 ---
 name: github-issue-delivery
-description: Coordinate GitHub issues through a shared understanding, isolated worktrees, design preflight with docs, implementation, local reviews, PR Codex review and fixes, approved merge, and local cleanup. Use when the user requests this full delivery workflow for one or more issues; resume unfinished deliveries without repeating completed operations.
+description: Coordinate GitHub issues through isolated worktrees, a shared understanding and design preflight with docs drafted by workers and asked by the coordinator, implementation, local reviews, PR Codex review and fixes, approved merge, and local cleanup. Use when the user requests this full delivery workflow for one or more issues; resume unfinished deliveries without repeating completed operations.
 ---
 
 # GitHub Issue Delivery
@@ -40,16 +40,12 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    installation is `base,github`; the GitHub profile alone does not supply the
    preflight and review skills. Report a missing prerequisite rather
    than silently installing it or skipping a required phase.
-2. Before `github-issue-start`, run `shared-understanding` in the
-   coordinator for each requested issue, one issue at a time, so its questions
-   end before any worker starts. Forward a user's skip. Pass on only issues
-   whose status is `confirmed`, `corrected`, or `skipped`; report the others as
-   waiting for the user with their open points.
-3. Use `github-issue-start` with the per-issue workflow below as its implementation
-   brief. Have it prepare the worktree and baseline before entering preflight;
-   implementation begins only after preflight. Preserve its issue classification,
+2. Use `github-issue-start` with the per-issue workflow below as its implementation
+   brief. Have it prepare the worktree and baseline and dispatch the issue's
+   worker before the shared understanding; implementation begins only after
+   preflight. Preserve its issue classification,
    dependency checks, and one-issue/one-branch/one-worktree ownership.
-4. Let `github-issue-start` own worker dispatch; do not launch duplicate workers.
+3. Let `github-issue-start` own worker dispatch; do not launch duplicate workers.
    Parallelize only independent issues and within the host's available capacity.
    When delegation is unavailable, report that limitation and handle safe issues
    sequentially, calling `github-issue-start` separately for each single issue
@@ -57,11 +53,16 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    own delegation capabilities. For unsafe or dependent groups, honor the start
    skill's stop condition and present a proposed order or independent subset
    for the user.
-   Route workers' material design questions and approval requests through the
-   coordinator, with the affected issue clearly identified.
+4. Follow [Worker Dialogue](../delivery-common/references/worker-dialogue.md)
+   for each issue: its worker drafts `shared-understanding`, and the coordinator
+   asks the user one issue at a time. Forward a user's skip. Pass on only issues
+   whose status is `confirmed`, `corrected`, or `skipped`; report the others as
+   waiting for the user with their open points. Route workers' material design
+   questions and approval requests through the coordinator, with the affected
+   issue clearly identified; no worker asks the user directly.
 5. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Keep a separate record per issue: URL, scope,
-   shared understanding result, worktree, branch, base ref and SHA, current phase,
+   shared understanding result and the latest worker drafts, worktree, branch, base ref and SHA, current phase,
    accepted design decisions,
    risk tier with its reasons and head, verification, the local review record
    under Local Review, hosted review round count, PR and trigger/thread
@@ -81,7 +82,8 @@ result carries forward. A progress file is evidence, not authorization.
 ### 1. Preflight, implement, and verify
 
 Use `design-preflight-with-docs` for this issue in its worktree before editing the
-implementation. Forward any requested mode or question limit; otherwise use its
+implementation, drafted by the worker and asked by the coordinator under Worker
+Dialogue. Forward any requested mode or question limit; otherwise use its
 default. Give it the issue's shared understanding result: its agreed decisions
 and agreed issue changes are settled scope, and its preflight items open the
 design questions. Inherit its completion and documentation criteria without an additional

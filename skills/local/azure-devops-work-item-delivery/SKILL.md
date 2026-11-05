@@ -1,6 +1,6 @@
 ---
 name: azure-devops-work-item-delivery
-description: Coordinate Azure DevOps Work Items through a shared understanding, isolated worktrees, design preflight with docs, implementation, local reviews, PR publication, approved merge, and local cleanup. Use when the user requests this full delivery workflow for named Work Items; resume unfinished deliveries without repeating completed operations.
+description: Coordinate Azure DevOps Work Items through isolated worktrees, a shared understanding and design preflight with docs drafted by workers and asked by the coordinator, implementation, local reviews, PR publication, approved merge, and local cleanup. Use when the user requests this full delivery workflow for named Work Items; resume unfinished deliveries without repeating completed operations.
 ---
 
 # Azure DevOps Work Item Delivery
@@ -46,26 +46,28 @@ cycle.
    `change-security-review`, before starting.
    The normal installation is `base,azure-devops`; report missing prerequisites
    rather than installing them or skipping required phases.
-2. Before `azure-devops-work-item-start`, run `shared-understanding` in the
-   coordinator for each requested Work Item, one item at a time, so its
-   questions end before any worker starts. Forward a user's skip. Pass on only
-   items whose status is `confirmed`, `corrected`, or `skipped`; report the
-   others as waiting for the user with their open points.
-3. Use `azure-devops-work-item-start` with the per-item workflow below as its
-   implementation brief. Prepare its worktree and baseline before preflight;
-   implement only after preflight. Preserve classification, dependency checks,
+2. Use `azure-devops-work-item-start` with the per-item workflow below as its
+   implementation brief. Prepare its worktree and baseline and dispatch the
+   item's worker before the shared understanding; implement only after
+   preflight. Preserve classification, dependency checks,
    and one-Work-Item/one-branch/one-worktree ownership. Proceed only with directly
    actionable items; report parent trackers, blockers, and ambiguous scope first.
-4. Let the start skill own worker dispatch. Parallelize independent items only
+3. Let the start skill own worker dispatch. Parallelize independent items only
    within available capacity and keep each worker in its assigned worktree.
    When delegation is unavailable, report it and process safe items sequentially
    through separate single-item calls. Local reviews still need their own
    delegation capabilities. For dependent or unsafe groups, honor the start
    skill's stop condition and present an order or independent subset to the user.
-   Route material design questions and approvals through the coordinator.
+4. Follow [Worker Dialogue](../delivery-common/references/worker-dialogue.md)
+   for each item: its worker drafts `shared-understanding`, and the coordinator
+   asks the user one item at a time. Forward a user's skip. Pass on only items
+   whose status is `confirmed`, `corrected`, or `skipped`; report the others as
+   waiting for the user with their open points. Route material design questions
+   and approvals through the coordinator; no worker asks the user directly.
 5. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Record separately per item: organization,
-   project/repository IDs, Work Item URL and scope, shared understanding result,
+   project/repository IDs, Work Item URL and scope, shared understanding result
+   and the latest worker drafts,
    branch/worktree, base ref/SHA,
    phase, accepted design, risk tier with its reasons and head, verification,
    the local review record under Local Review, PR ID/URL and source/target refs,
@@ -83,7 +85,8 @@ carries forward. A progress record is evidence, not authorization.
 
 ### 1. Preflight, implement, and verify
 
-Use `design-preflight-with-docs` in the assigned worktree before implementation.
+Use `design-preflight-with-docs` in the assigned worktree before implementation,
+drafted by the worker and asked by the coordinator under Worker Dialogue.
 Forward the requested mode/question limit or use its default. Give it the item's
 shared understanding result: its agreed decisions and agreed changes are
 settled scope, and its preflight items open the design questions. Inherit its
