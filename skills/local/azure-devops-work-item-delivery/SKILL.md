@@ -75,7 +75,9 @@ cycle.
    Work Item state, finding dispositions, follow-up candidates, blockers, and next
    action. Report the resume path. Keep stable definitions and decisions in normal repository docs.
 
-On resume, reconcile the record with actual local and Azure DevOps state. Reuse
+On resume, reconcile the record with actual local and Azure DevOps state. Stop
+and report the recorded branch unless it is a **safe branch name**, using only
+`[A-Za-z0-9/._-]`, before running any command with it. Reuse
 matching worktrees and PRs; a completed PR resumes completion checks rather than
 publication. Recheck the current source ref before reusing review evidence.
 Resume the earliest incomplete phase. A recorded shared understanding result

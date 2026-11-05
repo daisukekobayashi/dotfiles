@@ -70,7 +70,9 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    blockers, and next action. Report the resume path.
    Keep durable definitions and decisions in the repository's normal docs.
 
-On resume, reconcile the record with actual local and GitHub state. Reuse matching
+On resume, reconcile the record with actual local and GitHub state. Stop and
+report the recorded branch unless it is a **safe branch name**, using only
+`[A-Za-z0-9/._-]`, before running any command with it. Reuse matching
 worktrees and PRs, preserve successful writebacks, and verify the current head
 before reusing review evidence. Pass the PR/head/trigger record to the cycle and
 resume its earliest incomplete phase. A pending review on the same head resumes

@@ -20,6 +20,8 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    - Otherwise use the current feature branch.
    - If the current branch is the default branch and no target is specified,
      stop and ask for the branch.
+   - Stop and report the branch unless it is a **safe branch name**, using only
+     `[A-Za-z0-9/._-]`, before running any command with it.
 2. Detect whether the target checkout has an associated git worktree and record
    the path if present.
 3. Verify cleanup safety.
