@@ -13,6 +13,7 @@ import {
   runSkillsWithCrossDeviceBackupRenameError,
   readText,
   createClaudeEnvironment,
+  privateSkillsBase,
 } from "./skills-helpers.mjs";
 
 test("profile validate accepts selected profiles", async () => {
@@ -448,7 +449,8 @@ test("project scope keeps unchanged copies of a removed skill only in the backup
     assert.equal(existsSync(path.join(codexSkills, "local-one")), false);
     assert.equal(existsSync(path.join(codexSkills, ".dotfiles-copy-local-one.json")), false);
     assert.equal(existsSync(path.join(codexSkills, "local-two", "SKILL.md")), true);
-    const backupRoot = path.join(fixture.env.SETUP_TMPDIR, "dotfiles-skills-backup", path.basename(fixture.project));
+    const backupRoot = path.join(await realpath(privateSkillsBase(fixture)), "dotfiles-skills-backup", path.basename(fixture.project));
+    assert.match(result.stderr, new RegExp(`Backed up existing skills path to ${escapeRegExp(backupRoot + path.sep)}`));
     const [codexBackup] = (await readdir(backupRoot)).filter(name => name.startsWith(".agents-skills."));
     assert.ok(codexBackup, "the codex skills directory should be backed up");
     assert.equal(existsSync(path.join(backupRoot, codexBackup, "local-one", "SKILL.md")), true,
@@ -568,6 +570,7 @@ exit 42
     );
 
     assert.notEqual(result.status, 0);
+    assert.equal(existsSync(`${fixture.log}.exdev`), true, "backup moves should take the cross-device path");
     assert.doesNotMatch(result.stderr, /EXDEV/);
     assert.match(await readText(fixture.log), /skills add anthropics\/skills/);
     assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "old-lock\n");
@@ -591,9 +594,9 @@ exit 42
     const codexSkills = path.join(fixture.project, ".agents", "skills");
     const claudeSkills = path.join(fixture.project, ".claude", "skills");
     await mkdir(codexSkills, { recursive: true });
-    await mkdir(path.dirname(claudeSkills), { recursive: true });
+    await mkdir(claudeSkills, { recursive: true });
     await symlink("missing-skill", path.join(codexSkills, "alias"));
-    await symlink("../missing-skills", claudeSkills);
+    await symlink("../missing-skills", path.join(claudeSkills, "relative-alias"));
 
     const result = runSkillsWithCrossDeviceBackupRenameError(
       ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
@@ -602,10 +605,11 @@ exit 42
     );
 
     assert.notEqual(result.status, 0);
+    assert.equal(existsSync(`${fixture.log}.exdev`), true, "backup moves should take the cross-device path");
     assert.doesNotMatch(result.stderr, /ENOENT|EXDEV/);
     assert.match(await readText(fixture.log), /skills add anthropics\/skills/);
     assert.equal(await readlink(path.join(codexSkills, "alias")), "missing-skill");
-    assert.equal(await readlink(claudeSkills), "../missing-skills");
+    assert.equal(await readlink(path.join(claudeSkills, "relative-alias")), "../missing-skills");
   } finally {
     await fixture.cleanup();
   }
@@ -618,6 +622,7 @@ set -euo pipefail
 printf '%s\\n' "\${PWD}" > "\${TEST_SKILLS_LOG}.cwd"
 mode="$(ls -ld "\${PWD}")"
 printf '%s\\n' "\${mode:0:10}" > "\${TEST_SKILLS_LOG}.mode"
+printf '%s\\n' "\${NPM_CONFIG_CACHE}" > "\${TEST_SKILLS_LOG}.cache"
 dir="\${PWD}"
 while :; do
   if [ -x "\${dir}/node_modules/.bin/skills" ]; then
@@ -720,6 +725,10 @@ test("project scope does not stage under SETUP_TMPDIR where a parent node_module
   }
 });
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 const posixOnly = { skip: process.platform === "win32" };
 const linuxOnly = { skip: process.platform === "darwin" || process.platform === "win32" };
 
@@ -819,6 +828,273 @@ test("project scope warns and keeps a successful install when staging cleanup fa
     if (staging && existsSync(path.join(staging, "locked"))) {
       await chmod(path.join(staging, "locked"), 0o700);
     }
+    await fixture.cleanup();
+  }
+});
+
+function runUserInstall(fixture) {
+  return runSkills(["--scope", "user", "--profile", "base", "--agent", "codex"], fixture);
+}
+
+test("user scope stages each source in a private per-run directory outside SETUP_TMPDIR", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  try {
+    await plantSkillsBin(fixture.tmp);
+
+    const result = runUserInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
+    const base = await realpath(privateSkillsBase(fixture));
+    const installDir = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.basename(installDir), "0");
+    const workDir = path.dirname(installDir);
+    assert.equal(path.dirname(workDir), base);
+    assert.match(path.basename(workDir), /^dotfiles-skills-user-.+/);
+    assert.equal((await readText(`${fixture.log}.mode`)).trim(), "drwx------");
+    assert.equal(existsSync(workDir), false);
+    assert.equal(await readText(`${fixture.log}.cache`), `${path.join(base, "dotfiles-skills-npm-cache")}\n`);
+    assert.deepEqual(await readdir(fixture.tmp), ["node_modules"]);
+    assert.equal(await readText(path.join(fixture.dotfiles, ".agents", "user", "skills", "find-skills", "SKILL.md")), "find-skills\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("dry-run user scope shows the private staging directory and npm cache", posixOnly, async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkills(["--scope", "user", "--profile", "base"], { ...fixture, env: { ...fixture.env, SETUP_DRY_RUN: "1" } });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const base = privateSkillsBase(fixture);
+    assert.ok(result.stdout.includes(`DRY-RUN mktemp -d ${path.join(base, "dotfiles-skills-user-XXXXXX")}`), result.stdout);
+    assert.ok(result.stdout.includes(`NPM_CONFIG_CACHE=${path.join(base, "dotfiles-skills-npm-cache")} npx skills add`), result.stdout);
+    assert.equal(result.stdout.includes(fixture.tmp), false);
+    assert.equal(existsSync(path.join(base, "dotfiles-skills-npm-cache")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("user scope refuses a staging base with an ancestor others can write and keeps the user view", linuxOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  const shared = path.join(fixture.root, "shared");
+  fixture.env.XDG_CACHE_HOME = path.join(shared, "cache");
+  try {
+    await mkdir(shared);
+    await chmod(shared, 0o1777);
+    const userRoot = path.join(fixture.dotfiles, ".agents", "user");
+    await mkdir(path.join(userRoot, "skills", "old-user"), { recursive: true });
+    await writeFile(path.join(userRoot, "skills", "old-user", "SKILL.md"), "old-user\n");
+    await writeFile(path.join(userRoot, "skills-profile.json"), "old-profile\n");
+
+    const result = runUserInstall(fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, new RegExp(`cannot keep user skill staging under .*: ${escapeRegExp(shared)} must be owned by you or root and not writable by others`));
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+    assert.deepEqual((await readdir(userRoot)).sort(), ["skills", "skills-profile.json"]);
+    assert.equal(await readText(path.join(userRoot, "skills", "old-user", "SKILL.md")), "old-user\n");
+    assert.equal(await readText(path.join(userRoot, "skills-profile.json")), "old-profile\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+for (const scope of ["user", "project"]) {
+  test(`${scope} scope refuses an npm cache directory that others can write`, posixOnly, async () => {
+    const fixture = await createFixture({ npxBody: stagingNpxBody });
+    try {
+      const cache = path.join(privateSkillsBase(fixture), "dotfiles-skills-npm-cache");
+      await mkdir(cache, { recursive: true });
+      await chmod(cache, 0o777);
+
+      const result = scope === "user" ? runUserInstall(fixture) : runProjectInstall(fixture);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /cannot keep the skills npm cache under .* must be owned by you or root and not writable by others/);
+      assert.equal(existsSync(`${fixture.log}.cwd`), false);
+      assert.deepEqual(await readdir(fixture.project), [".git"]);
+      assert.equal(existsSync(path.join(fixture.dotfiles, ".agents")), false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+test("project scope reuses one npm cache and keeps backups in the private directory, not SETUP_TMPDIR", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  try {
+    let result = runProjectInstall(fixture);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const firstCache = await readText(`${fixture.log}.cache`);
+
+    result = runProjectInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const base = await realpath(privateSkillsBase(fixture));
+    assert.equal(firstCache, `${path.join(base, "dotfiles-skills-npm-cache")}\n`);
+    assert.equal(await readText(`${fixture.log}.cache`), firstCache);
+    assert.equal(existsSync(firstCache.trim()), true);
+    const backupRoot = path.join(base, "dotfiles-skills-backup", path.basename(fixture.project));
+    const backups = await readdir(backupRoot);
+    assert.ok(backups.some(name => name.startsWith(".agents-skills.")), backups.join(","));
+    assert.ok(backups.some(name => name.startsWith("project-skills-lock.json.")), backups.join(","));
+    assert.deepEqual(await readdir(fixture.tmp), []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope refuses a backup directory that others can write before moving anything", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  try {
+    const backups = path.join(privateSkillsBase(fixture), "dotfiles-skills-backup");
+    await mkdir(backups, { recursive: true });
+    await chmod(backups, 0o777);
+    await mkdir(path.join(fixture.project, ".agents", "skills", "old-agent"), { recursive: true });
+    await writeFile(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md"), "old-agent\n");
+
+    const result = runProjectInstall(fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot keep project skill backups under .* must be owned by you or root and not writable by others/);
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+    assert.deepEqual(await readdir(path.join(fixture.project, ".agents")), ["skills"]);
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
+    assert.deepEqual(await readdir(backups), []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+// A checkout controls .agents, .claude, and the managed paths below them.
+// Setup refuses a link at any of them, wherever it points: a link moved into
+// the backup directory resolves again from there.
+const projectLinkCases = [
+  { name: ".claude links outside", agent: "claude-code", link: ".claude", target: root => path.join(root, "outside") },
+  { name: ".agents links outside", agent: "codex", link: ".agents", target: root => path.join(root, "outside") },
+  { name: ".claude/skills links outside", agent: "claude-code", link: path.join(".claude", "skills"), target: root => path.join(root, "outside", "skills") },
+  { name: ".agents/skills links outside", agent: "codex", link: path.join(".agents", "skills"), target: root => path.join(root, "outside", "skills") },
+  { name: "skills-lock.json links outside", agent: "codex", link: "skills-lock.json", target: root => path.join(root, "outside", "skills-lock.json") },
+  { name: ".agents/skills-profile.json links outside", agent: "codex", link: path.join(".agents", "skills-profile.json"), target: root => path.join(root, "outside", "skills-profile.json") },
+  { name: ".claude links to a missing directory outside", agent: "claude-code", link: ".claude", target: root => path.join(root, "missing-outside") },
+  { name: ".agents/skills links to the project root", agent: "codex", link: path.join(".agents", "skills"), target: () => ".." },
+  { name: ".agents/skills links to a directory inside the project", agent: "codex", link: path.join(".agents", "skills"), target: () => path.join("..", "shared-skills") },
+  { name: ".claude/skills links to a missing path inside the project", agent: "claude-code", link: path.join(".claude", "skills"), target: () => path.join("..", "missing-skills") },
+  { name: ".agents/skills-profile.json links to a file inside the project", agent: "codex", link: path.join(".agents", "skills-profile.json"), target: () => path.join("..", "shared-profile.json") },
+  {
+    name: ".claude links to a dangling link that points outside",
+    agent: "claude-code",
+    link: ".claude",
+    target: () => "chained",
+    prepare: async fixture => symlink(path.join(fixture.root, "missing-outside"), path.join(fixture.project, "chained")),
+  },
+];
+
+for (const { name, agent, link, target, prepare } of projectLinkCases) {
+  test(`project scope refuses to change anything when ${name}`, posixOnly, async () => {
+    const fixture = await createFixture({ npxBody: stagingNpxBody });
+    try {
+      const outside = path.join(fixture.root, "outside");
+      await mkdir(path.join(outside, "skills", "precious"), { recursive: true });
+      await writeFile(path.join(outside, "skills", "precious", "SKILL.md"), "precious\n");
+      await writeFile(path.join(outside, "skills-lock.json"), "outside lock\n");
+      await writeFile(path.join(outside, "skills-profile.json"), "outside profile\n");
+      await mkdir(path.join(fixture.project, "shared-skills", "kept"), { recursive: true });
+      await writeFile(path.join(fixture.project, "shared-profile.json"), "shared profile\n");
+      await prepare?.(fixture);
+      const linkPath = path.join(fixture.project, link);
+      const linkText = target(fixture.root);
+      await mkdir(path.dirname(linkPath), { recursive: true });
+      await symlink(linkText, linkPath);
+      const projectBefore = (await readdir(fixture.project)).sort();
+      const linkDirBefore = (await readdir(path.dirname(linkPath))).sort();
+
+      for (const dryRun of [true, false]) {
+        const env = dryRun ? { ...fixture.env, SETUP_DRY_RUN: "1" } : fixture.env;
+        const result = runSkills(["--scope", "project", "--profile", "base", "--agent", agent], { ...fixture, env }, { cwd: fixture.project });
+
+        assert.notEqual(result.status, 0, result.stdout);
+        assert.match(result.stderr, new RegExp(`refusing to set up project skills: ${escapeRegExp(linkPath)} is a symbolic link`));
+        assert.doesNotMatch(result.stdout, /DRY-RUN/);
+      }
+      assert.equal(existsSync(`${fixture.log}.cwd`), false);
+      assert.deepEqual((await readdir(fixture.project)).sort(), projectBefore);
+      assert.deepEqual((await readdir(path.dirname(linkPath))).sort(), linkDirBefore);
+      assert.equal(await readlink(linkPath), linkText);
+      assert.deepEqual(await readdir(path.join(fixture.project, "shared-skills")), ["kept"]);
+      assert.equal(await readText(path.join(fixture.project, "shared-profile.json")), "shared profile\n");
+      assert.deepEqual((await readdir(outside)).sort(), ["skills", "skills-lock.json", "skills-profile.json"]);
+      assert.deepEqual(await readdir(path.join(outside, "skills")), ["precious"]);
+      assert.equal(await readText(path.join(outside, "skills-lock.json")), "outside lock\n");
+      assert.equal(await readText(path.join(outside, "skills-profile.json")), "outside profile\n");
+      assert.equal(existsSync(path.join(privateSkillsBase(fixture), "dotfiles-skills-backup")), false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+async function listTree(root) {
+  const entries = [];
+  for (const entry of await readdir(root, { recursive: true })) {
+    entries.push(entry);
+  }
+  return entries;
+}
+
+// Moved into <base>/dotfiles-skills-backup/<project>/, a `..` link resolves to
+// the backup directory itself, so restoring unmanaged entries through it would
+// copy every project's backups into this checkout.
+test("project scope does not copy other projects' backups through an .agents/skills link to ..", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  try {
+    const otherBackup = path.join(privateSkillsBase(fixture), "dotfiles-skills-backup", "other-project", ".agents-skills.20260101000000.1", "victim-secret");
+    await mkdir(otherBackup, { recursive: true });
+    await writeFile(path.join(otherBackup, "SKILL.md"), "other project's backup\n");
+    await mkdir(path.join(fixture.project, ".agents"));
+    await symlink("..", path.join(fixture.project, ".agents", "skills"));
+
+    const result = runProjectInstall(fixture);
+
+    assert.notEqual(result.status, 0, result.stdout);
+    assert.match(result.stderr, /refusing to set up project skills: .*\.agents.skills is a symbolic link/);
+    const leaked = (await listTree(fixture.project)).filter(entry => entry.includes("victim-secret") || entry.includes("other-project"));
+    assert.deepEqual(leaked, []);
+    assert.equal(await readlink(path.join(fixture.project, ".agents", "skills")), "..");
+    assert.deepEqual(await readdir(path.join(privateSkillsBase(fixture), "dotfiles-skills-backup")), ["other-project"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope without external skills names backups when the private base is refused", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  delete fixture.env.TMPDIR;
+  try {
+    await writeFile(
+      path.join(fixture.dotfiles, "skills", "profiles", "local-only.json"),
+      JSON.stringify({ description: "Local only", external: [], local: ["local-one"] }, null, 2) + "\n",
+    );
+    const launcher = `
+const runtime = process.argv[1];
+Object.defineProperty(process, "platform", { value: "darwin" });
+process.argv = [process.execPath, runtime, ...process.argv.slice(2)];
+require(runtime);
+`;
+    const result = spawnSync(
+      process.execPath,
+      ["-e", launcher, skillsRuntime, "--scope", "project", "--profile", "local-only", "--agent", "codex"],
+      { cwd: fixture.project, env: fixture.env, encoding: "utf8" },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot keep project skill backups under .* must be owned by you or root and not writable by others/);
+    assert.doesNotMatch(result.stderr, /staging/);
+    assert.deepEqual(await readdir(fixture.project), [".git"]);
+  } finally {
     await fixture.cleanup();
   }
 });

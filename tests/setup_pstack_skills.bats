@@ -5,6 +5,7 @@ load 'helpers/mock_env.bash'
 
 setup() {
   setup_test_env
+  setup_private_skills_cache
   TEST_DOTFILES="${TEST_ROOT}/dotfiles"
   TEST_PROJECT="${TEST_ROOT}/project"
   TEST_BIN="${TEST_ROOT}/bin"
@@ -20,6 +21,7 @@ EOF
 }
 
 teardown() {
+  teardown_private_skills_cache
   teardown_test_env
 }
 
@@ -100,6 +102,7 @@ JS
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    XDG_CACHE_HOME="${TEST_SKILLS_CACHE}" \
     PATH="${TEST_BIN}:${PATH}" \
     "$(setup_script_path)" skills --scope project --profile pstack
 

@@ -5,6 +5,7 @@ load 'helpers/mock_env.bash'
 
 setup() {
   setup_test_env
+  setup_private_skills_cache
   TEST_DOTFILES="${TEST_ROOT}/dotfiles"
   TEST_BIN="${TEST_ROOT}/bin"
   TEST_LOG="${TEST_ROOT}/skills.log"
@@ -57,6 +58,7 @@ EOF
 }
 
 teardown() {
+  teardown_private_skills_cache
   teardown_test_env
 }
 
@@ -69,6 +71,7 @@ teardown() {
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    XDG_CACHE_HOME="${TEST_SKILLS_CACHE}" \
     PATH="${TEST_BIN}:${PATH}" \
     TEST_SKILLS_LOG="${TEST_LOG}" \
     "$(setup_script_path)" \
@@ -134,6 +137,7 @@ teardown() {
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    XDG_CACHE_HOME="${TEST_SKILLS_CACHE}" \
     PATH="${TEST_BIN}:${PATH}" \
     TEST_SKILLS_LOG="${TEST_LOG}" \
     "$(setup_script_path)" \

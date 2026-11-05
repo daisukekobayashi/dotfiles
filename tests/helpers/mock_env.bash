@@ -16,6 +16,21 @@ teardown_test_env() {
   rm -rf "${TEST_ROOT}"
 }
 
+# Skills installs keep staging, the npm cache, and project backups in a private
+# per-user directory and refuse one under a world-writable ancestor such as
+# /tmp, where TEST_ROOT may live. Sets TEST_SKILLS_CACHE to a directory in the
+# ignored .cache/ of this checkout; pass it as XDG_CACHE_HOME.
+setup_private_skills_cache() {
+  mkdir -p "$(repo_root)/.cache"
+  TEST_SKILLS_CACHE="$(mktemp -d "$(repo_root)/.cache/bats-skills-cache.XXXXXX")"
+}
+
+teardown_private_skills_cache() {
+  if [ -n "${TEST_SKILLS_CACHE:-}" ]; then
+    rm -rf "${TEST_SKILLS_CACHE}"
+  fi
+}
+
 # Pins the platform to Linux for tests that expect the linux or wsl mise env.
 write_fake_linux_uname() {
   cat > "$1/uname" <<'EOF'
