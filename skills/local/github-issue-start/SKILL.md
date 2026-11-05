@@ -12,6 +12,13 @@ worktrees. A single issue gets one branch/worktree. Multiple issues are treated
 as separate work items: create one branch/worktree per issue and run them in
 parallel only after confirming the issues are independent enough to work safely.
 
+When `github-issue-delivery` supplies an implementation brief, prepare the
+workspace and baseline first, then dispatch one worker per issue under
+**Parallel Worker Rules**, also for a single issue when delegation is available.
+Follow the brief's dialogue, preflight, review, and publication order rather
+than starting implementation immediately. Pass the user's request, exact target,
+and existing approvals to the worker; a brief alone grants none.
+
 ## Workflow
 
 1. Resolve the current repo from local git context and parse every `#<issue>` in the prompt.
@@ -32,7 +39,7 @@ parallel only after confirming the issues are independent enough to work safely.
    - A **safe branch name** uses only `[A-Za-z0-9/._-]`. Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise stop and report it before running any command with it.
 5. If exactly one issue was provided:
    - Prepare the issue workspace using **Worktree Preparation** below.
-   - Continue implementation in that worktree.
+   - Continue implementation in that worktree, or in its worker when a delivery brief dispatches one.
    - Report the issue summary, branch name, worktree path, baseline check result, and next implementation step.
 6. If multiple issues were provided:
    - Decide whether the issues are safe to run in parallel before creating worktrees.
@@ -73,7 +80,8 @@ Give each worker a focused prompt with:
 - clear ownership: work only inside the assigned worktree and only on the assigned issue
 - a stop rule: before editing outside its touched areas, especially in a sibling worker's areas or shared resources, pause and report the needed change instead of making it
 - a reminder that other workers may be active in sibling worktrees, so do not revert or edit outside the assigned scope
-- the expected return format: status, files changed, files changed outside its touched areas, tests run, blockers, and any follow-up needed
+- a decision rule: choose defaults only for implementation tactics; return contract, boundary, compatibility, and security decisions to the coordinator as questions with options and a recommendation, even when they look low-risk, and continue only work that does not depend on them; never ask the user directly
+- the expected return format: status, files changed, files changed outside its touched areas, tests run, open questions, every default chosen, blockers, and any follow-up needed
 
 Do not use one worker for all requested issues. Do not let multiple workers edit
 the same worktree. If a worker reports that its issue depends on another active

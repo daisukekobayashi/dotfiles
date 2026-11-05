@@ -132,6 +132,22 @@ In every mode except `open`:
 - If a hard cap leaves a high-impact decision unresolved, summarize it and its implications. Continue only work that does not depend on it; do not silently choose an answer or treat the cap as approval.
 - Replace `grilling`'s blanket final confirmation with a brief handoff, then proceed within the user's already authorized scope. Still obtain any independently required approval. A request for preflight alone does not authorize implementation.
 
+## Draft for a coordinator
+
+When a delivery coordinator asks for a draft, the drafter cannot ask the user;
+the coordinator holds the dialogue. Apply the selected mode's question bar,
+budget, and recommendation rules as if asking, but return the questions instead
+of asking them. Give each question the one-way door it affects, the cost if the
+default proves wrong, its options, the recommended answer with its reason and
+viewpoints, and the questions whose answers it depends on. Add the direction and
+assumptions for decisions below the bar. A drafted recommendation is not an
+accepted decision; do not proceed on it.
+
+The coordinator asks the questions under the same budget and returns the user's
+answers. When an answer changes a dependent question, revise that question
+before the coordinator asks it. With the answers settled, give the handoff
+under Output and proceed within the authorized scope.
+
 ## Output
 
 In every mode except `open`, briefly summarize the stance, chosen direction, compatibility constraints to preserve, agreed breaking changes or migration work, remaining material assumptions or unresolved decisions, and, in `conservative`, target-design follow-up proposals. Omit empty categories. Keep this in the conversation unless a durable document is requested or required by repo conventions.

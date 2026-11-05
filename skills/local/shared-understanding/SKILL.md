@@ -85,6 +85,33 @@ decide after that explanation stays open.
 The user may skip at any point; close as `skipped`. When interaction is
 unavailable, close as `not run`; the judgments belong to the user alone.
 
+## Draft for a coordinator
+
+When a delivery coordinator asks for a draft, the drafter cannot ask the user;
+the coordinator holds the dialogue. Do step 1, then write steps 2-4 as a draft
+instead of asking: the overview, each decision to read back with its
+consequence and source, and each undecided point with its options,
+recommendation, and viewpoints as step 4 sets them. Ask the user nothing and
+settle nothing; every decision and point stays open until the coordinator
+returns the user's answers. Return:
+
+```markdown
+# Shared Understanding Draft: <issue or Work Item reference>
+
+## Overview
+## Decisions to Read Back
+- <decision> -> <observable consequence> (<source>)
+
+## Undecided Points
+- <situation>: <options>; recommended: <option>, because <reason> (<source>)
+
+## Carry to Design Preflight
+```
+
+The coordinator verifies the draft, runs steps 2-5 with the user from it, and
+returns the user's answers. Answer its follow-up questions and revise the draft
+when it asks; the coordinator closes the check with the Result below.
+
 ## Result
 
 The check is complete when its status is one of:

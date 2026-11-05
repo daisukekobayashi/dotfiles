@@ -13,6 +13,11 @@ Forward `durable`, `conservative`, `quick`, or `open`, along with the user's con
 
 Use `domain-modeling` for terminology, glossary updates, and selective ADRs. In every mode except `open`, its proposed questions must meet the selected preflight question bar and count toward the same session budget. Documentation does not create a separate interview or justify reopening settled decisions. In `open`, retain the underlying `grilling` scope and completion rules.
 
+When a delivery coordinator asks for a draft, forward that request so
+`design-preflight` returns its questions instead of asking. Include
+`domain-modeling`'s proposed questions in the same draft, and write
+documentation only after the coordinator returns the user's answers.
+
 ## Documentation
 
 Read the existing context map, relevant glossary, and ADRs when present; follow the repository's documentation locations and conventions. Missing documents are not a blocker and do not require placeholders.
