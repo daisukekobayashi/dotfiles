@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 
 load 'helpers/test_helper.bash'
+load 'helpers/mock_env.bash'
 
 setup() {
   unset TMUX_CLIPBOARD_OSC52_MAX_BYTES TMUX_POPUP_CLIPBOARD_OSC52_MAX_BYTES
@@ -241,6 +242,8 @@ for (const staleCommand of [
   buffer_text="${BATS_TEST_TMPDIR}/caller-buffer.txt"
   proxy_script="${BATS_TEST_TMPDIR}/popup-proxy"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/xclip" <<'EOF'
 #!/usr/bin/env bash
@@ -296,6 +299,8 @@ EOF
   log_file="${BATS_TEST_TMPDIR}/clipboard.log"
   copied_text="${BATS_TEST_TMPDIR}/clipboard.txt"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/xclip" <<'EOF'
 #!/usr/bin/env bash
@@ -335,6 +340,8 @@ EOF
   log_file="${BATS_TEST_TMPDIR}/clipboard-ssh.log"
   copied_text="${BATS_TEST_TMPDIR}/clipboard-ssh.txt"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -368,6 +375,8 @@ EOF
   log_file="${BATS_TEST_TMPDIR}/clipboard-ssh-opt-in.log"
   copied_text="${BATS_TEST_TMPDIR}/clipboard-ssh-opt-in.txt"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -400,6 +409,8 @@ EOF
   log_file="${BATS_TEST_TMPDIR}/clipboard-large.log"
   copied_text="${BATS_TEST_TMPDIR}/clipboard-large.txt"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -435,6 +446,8 @@ EOF
   caller_text="${BATS_TEST_TMPDIR}/caller-buffer-large.txt"
   proxy_script="${BATS_TEST_TMPDIR}/popup-proxy-large"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -485,6 +498,8 @@ EOF
   caller_text="${BATS_TEST_TMPDIR}/caller-buffer-ssh.txt"
   proxy_script="${BATS_TEST_TMPDIR}/popup-proxy-ssh"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -529,6 +544,8 @@ EOF
   popup_text="${BATS_TEST_TMPDIR}/popup-buffer-mirror-failure.txt"
   proxy_script="${BATS_TEST_TMPDIR}/popup-proxy-fails"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -574,6 +591,8 @@ EOF
   caller_text="${BATS_TEST_TMPDIR}/caller-buffer-env.txt"
   popup_text="${BATS_TEST_TMPDIR}/popup-buffer-env.txt"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -1147,8 +1166,18 @@ printf 'watchexec %s\n' "$*" >> "${LOG_FILE}"
 EOF
   chmod +x "${fake_bin}/watchexec"
 
+  # project-command runs "$SHELL -lc"; a real login shell on macOS runs
+  # path_helper, which moves the real npm ahead of fake_bin.
+  cat > "${fake_bin}/login-shell" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" = -lc ] || exit 64
+exec bash -c "$2"
+EOF
+  chmod +x "${fake_bin}/login-shell"
+
   run env \
     PATH="${fake_bin}:/usr/bin:/bin" \
+    SHELL="${fake_bin}/login-shell" \
     LOG_FILE="${log_file}" \
     FZF_INPUT="${BATS_TEST_TMPDIR}/project-command-items" \
     bash -c "cd '${project_dir}' && printf '\n' | '${root}/tmux/bin/project-command'"
@@ -1642,6 +1671,8 @@ if [ "$1" = "activate" ]; then
 fi
 EOF
   chmod +x "${fake_home}/.local/bin/mise"
+  # Linux runs ~/.local/bin/mise; macOS runs mise from PATH.
+  cp "${fake_home}/.local/bin/mise" "${fake_bin}/mise"
 
   cat > "${fake_bin}/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -1975,6 +2006,8 @@ EOF
   log_file="${BATS_TEST_TMPDIR}/mosh.log"
   copied_text="${BATS_TEST_TMPDIR}/mosh.txt"
   mkdir -p "${fake_bin}"
+  # clipboard-copy prefers pbcopy on macOS; pin Linux so the fakes decide.
+  write_fake_linux_uname "${fake_bin}"
 
   cat > "${fake_bin}/tmux" <<'SCRIPT'
 #!/usr/bin/env bash

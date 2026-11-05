@@ -44,7 +44,8 @@ PY
 }
 
 setup() {
-  setup_test_env
+  # The fallback agent socket lives under TEST_HOME.
+  setup_test_env /tmp
   TEST_BIN="${TEST_ROOT}/bin"
   SSH_ADD_LOG="${TEST_ROOT}/ssh-add.log"
   GIT_LOG="${TEST_ROOT}/git.log"
@@ -89,6 +90,20 @@ printf 'RUN %s\n' "$*" >> "${GIT_LOG}"
 EOF
   chmod +x "${TEST_BIN}/git"
 
+  # Keep .zshrc on its Linux branch: the macOS branch runs Homebrew's
+  # shellenv, which puts the real git and ssh-add ahead of these fakes.
+  write_fake_linux_uname "${TEST_BIN}"
+
+  # util-linux script(1) takes a command string; BSD script(1) takes argv.
+  cat > "${TEST_BIN}/pty-zsh" <<'EOF'
+#!/usr/bin/env bash
+if script --version >/dev/null 2>&1; then
+  exec script -qec "zsh '$1'" /dev/null
+fi
+exec script -q /dev/null zsh "$1"
+EOF
+  chmod +x "${TEST_BIN}/pty-zsh"
+
   : > "${TEST_HOME}/.ssh/id_ed25519"
   FALLBACK_SOCK="${TEST_HOME}/.ssh/ssh_auth_sock"
   FALLBACK_SOCK_PID="$(start_unix_socket "${FALLBACK_SOCK}")"
@@ -128,7 +143,7 @@ EOF
     SSH_ADD_LOG="${SSH_ADD_LOG}" \
     ROOT_ZSHRC="${root}/.zshrc" \
     SSH_SOCK_CAPTURE="${sock_capture}" \
-    script -qec "zsh '${cmd_file}'" /dev/null
+    "${TEST_BIN}/pty-zsh" "${cmd_file}"
 
   [ "$status" -eq 0 ]
   [ "$(cat "${sock_capture}")" = "${FALLBACK_SOCK}" ]
@@ -160,7 +175,7 @@ EOF
     SSH_ADD_LOG="${SSH_ADD_LOG}" \
     ROOT_ZSHRC="${root}/.zshrc" \
     SSH_SOCK_CAPTURE="${sock_capture}" \
-    script -qec "zsh '${cmd_file}'" /dev/null
+    "${TEST_BIN}/pty-zsh" "${cmd_file}"
 
   [ "$status" -eq 0 ]
   [ "$(cat "${sock_capture}")" = "${forwarded_sock}" ]
@@ -191,7 +206,7 @@ EOF
     SSH_ADD_FALLBACK_STATUS="1" \
     SSH_ADD_LOG="${SSH_ADD_LOG}" \
     ROOT_ZSHRC="${root}/.zshrc" \
-    script -qec "zsh '${cmd_file}'" /dev/null
+    "${TEST_BIN}/pty-zsh" "${cmd_file}"
 
   [ "$status" -eq 0 ]
   [ "$(cat "${SSH_ADD_LOG}")" = "ADD ${FALLBACK_SOCK} ${TEST_HOME}/.ssh/id_ed25519" ]
@@ -222,7 +237,7 @@ EOF
     SSH_ADD_LOG="${SSH_ADD_LOG}" \
     GIT_LOG="${GIT_LOG}" \
     ROOT_ZSHRC="${root}/.zshrc" \
-    script -qec "zsh '${cmd_file}'" /dev/null
+    "${TEST_BIN}/pty-zsh" "${cmd_file}"
 
   [ "$status" -eq 0 ]
   [ ! -e "${SSH_ADD_LOG}" ]
