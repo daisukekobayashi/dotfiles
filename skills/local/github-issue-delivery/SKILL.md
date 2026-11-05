@@ -63,8 +63,9 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    agent-work storage or `/tmp`. Keep a separate record per issue: URL, scope,
    shared understanding result, worktree, branch, base ref and SHA, current phase,
    accepted design decisions,
-   risk tier with its reasons and head, verification, full-review and follow-up head SHAs and coverage, review round
-   counts, PR and trigger/thread identifiers, dispositions, follow-up candidates,
+   risk tier with its reasons and head, verification, the local review record
+   under Local Review, hosted review round count, PR and trigger/thread
+   identifiers, dispositions, follow-up candidates,
    blockers, and next action. Report the resume path.
    Keep durable definitions and decisions in the repository's normal docs.
 
@@ -109,17 +110,8 @@ minor, and pre-existing follow Local Review's Triage; minor findings may be
 deferred with a reason. Leave disputed material findings or design decisions
 open for the user. Avoid scope expansion and speculative churn.
 
-After fixes, run relevant checks and use focused follow-up from Local Review to
-confirm accepted fixes and check regressions in affected paths. Repeat the full
-pair when the design or change scope shifts materially, or new evidence makes
-the earlier full-review coverage insufficient.
-
-Advance when acceptance criteria are met, verification is current, the initial
-full review and completed follow-ups cover the current head with the reviewers its
-current tier selects, and no material actionable
-finding or human decision remains open. Recorded deferrals of minor or
-pre-existing findings do not require another round or a result with zero
-findings. Failed, unavailable, empty, or partial review output is not a pass.
+After fixes, follow Local Review's Repeat and advance for focused follow-up,
+escalation to a full pair, and advancement.
 
 ### 3. Publish and complete hosted Codex review
 
@@ -138,7 +130,7 @@ unresolved items. An acknowledgement or an `eyes` reaction is not a completed
 review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
-for focused follow-up or a full pair under its escalation rule. Obtain a fresh
+for focused follow-up or a full pair under Local Review's Repeat and advance. Obtain a fresh
 hosted Codex review when the delta from the last hosted-reviewed head to the
 published head contains a material change under Local Review's Triage, whether
 it came from hosted or local follow-up; when uncertain, request it. Otherwise,
@@ -187,18 +179,17 @@ than a fully completed issue delivery.
 
 ## Bounds and Handoffs
 
-Default to at most three local review rounds and three hosted Codex review rounds
-per issue across this delivery, including resumes. Count the initial full pair,
-each focused follow-up on a fixed snapshot, and each required new full pair as one
-local round apiece, including any reviewer Risk Tier adds on the same head; hosted-fix follow-ups use the same local budget. A hosted round
+Local review rounds follow Local Review's Repeat and advance; hosted-fix
+follow-ups use the same local budget. Default to at most three hosted Codex
+review rounds per issue across this delivery, including resumes. A hosted round
 requires actual output. Advance as soon as the completion criteria are met.
-User-specified lower limits take precedence. If the limit is reached with required
-work remaining, progress repeatedly stalls, a review times out, a required check
-fails, or a material human decision is needed, preserve progress and report the
-next action. At the limit, include the remaining-findings classification from
-Local Review's Assess findings.
-Ask before extending the budget or retrying a timed-out external review; do not
-repeatedly post triggers.
+User-specified lower limits take precedence. If a hosted limit is reached with
+required work remaining, progress repeatedly stalls, a review times out, a
+required check fails, or a material human decision is needed, preserve progress
+and report the next action. At a hosted limit, include the remaining-findings
+classification from Local Review's Assess findings. Ask before extending the
+hosted budget or retrying a timed-out external review; do not repeatedly post
+triggers.
 
 Use the cycle's bounded waiting rules and keep the user informed. Stop further
 publication targets after a cycle failure. Independent local work may continue

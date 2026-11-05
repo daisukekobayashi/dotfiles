@@ -20,7 +20,7 @@ Record the task URL/acceptance criteria, applicable standards, worktree, branch,
 base SHA, merge-base, head SHA, and dirty/untracked state. Use the task workspace's
 recorded base; do not ask for a fixed point already established by workspace
 preparation. For a full review, cover the entire task diff, not only the last fix
-commit. Use a full pair unless the caller selects focused follow-up below.
+commit. Use a full pair unless Repeat and advance selects focused follow-up.
 
 Before running reviewers on a pinned head, set the tier for that head under
 [Risk Tier](risk-tier.md) and record it with the selected reviewers.
@@ -84,7 +84,7 @@ genuinely new material defects (recommend extending the budget).
 
 ## Focused follow-up
 
-When the caller selects focused follow-up after a completed full pair, retain the
+When Repeat and advance selects focused follow-up after a completed full pair, retain the
 full-review base/head and completed follow-up coverage. Pin the new committed
 head, and give the relevant independent reviewers the accepted findings,
 dispositions, and all changes since the preceding reviewed snapshot. Have them
@@ -94,9 +94,9 @@ coverage, and the security reviewer when Risk Tier selects it, run as Risk
 Tier directs. Wait for the required results before the implementation owner edits.
 
 Return the reviewed head, scope, confirmed fixes, remaining findings, and coverage
-limits. Earlier review evidence remains valid for unaffected areas; the caller
-decides whether broader changes require another full pair. Keep newly discovered
-material risks visible for that assessment.
+limits. Earlier review evidence remains valid for unaffected areas; decide
+whether broader changes require another full pair under Repeat and advance. Keep
+newly discovered material risks visible for that assessment.
 
 Run `change-review` and `change-adversarial-review` with
 `--base <preceding reviewed head> --scope branch`, and `change-security-review`
@@ -122,3 +122,29 @@ unavailable delegation instead of claiming independence.
 Keep every review skill execution read-only; only the parent implementation phase applies
 accepted fixes. Wait for required results before editing. Do not substitute or
 add the plugin's `/codex:review` or `/codex:adversarial-review` commands.
+
+## Repeat and advance
+
+Start with a full pair on the task's first committed snapshot. After fixes, run
+relevant checks and use focused follow-up to confirm accepted fixes and check
+regressions in affected paths. Repeat the full pair only when the design or
+change scope shifts materially, or new evidence makes the earlier full-review
+coverage insufficient.
+
+Advance when acceptance criteria are met, verification is current, the initial
+full pair and completed follow-ups cover the current head with the reviewers its
+current tier selects, and no material actionable finding or human decision
+remains open. Recorded deferrals of minor or pre-existing findings do not
+require another round or a result with zero findings. Failed, unavailable,
+empty, or partial review output is not a pass.
+
+Allow at most three local review rounds per target across the delivery,
+including resumes. Count the initial full pair, each focused follow-up on a
+fixed snapshot, and each required new full pair as one round apiece, including
+any reviewer Risk Tier adds on the same head. Lower user limits take precedence.
+Advance as soon as the criteria above are met. At the limit with required work
+remaining, preserve progress, report the remaining-findings classification from
+Assess findings, and ask before extending the budget.
+
+Keep a local review record in the caller's progress record: the full-pair and
+follow-up head SHAs, their coverage, and the local round count.

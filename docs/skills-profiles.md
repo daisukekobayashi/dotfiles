@@ -184,11 +184,12 @@ adapters. This is the target layering; the current split is described below.
 
 `delivery-common` currently holds the Local Review procedure (snapshot pinning,
 finding assessment including follow-up candidate recording, focused follow-up,
-and reviewer selection) and the Risk Tier. Its `SKILL.md` still says the calling
-workflow owns review round limits and approvals. Other shared policy, such as
-the understanding check order, local review advancement criteria and round
-limits, merge confirmation contents, and end-of-delivery follow-up candidate
-reporting and creation, is still written in both provider delivery skills.
+reviewer selection, and local review escalation, advancement criteria, round
+counting and limits, and the head and coverage record) and the Risk Tier. Its
+`SKILL.md` says the calling workflow owns hosted review policy and approvals.
+Other shared policy, such as the understanding check order, merge confirmation
+contents, and end-of-delivery follow-up candidate reporting and creation, is
+still written in both provider delivery skills.
 
 Migrate incrementally rather than in one refactor. When a policy issue would
 edit the same policy in both provider delivery skills, move the part that is
