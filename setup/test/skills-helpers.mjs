@@ -116,7 +116,7 @@ for skill_name in "\${skills[@]}"; do
     esac
   done
 done
-`;
+${options.npxSuffix ?? ""}`;
   await writeExecutable(path.join(bin, options.npxName ?? "npx"), npxBody);
 
   if (options.withWindowsWhere) {
