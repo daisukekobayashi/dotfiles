@@ -28,3 +28,16 @@ fi
 EOF
   chmod +x "$1/uname"
 }
+
+# Pins the platform to macOS for tests that exercise the Darwin branches.
+write_fake_darwin_uname() {
+  cat > "$1/uname" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = "-m" ]; then
+  printf 'arm64\n'
+else
+  printf 'Darwin\n'
+fi
+EOF
+  chmod +x "$1/uname"
+}
