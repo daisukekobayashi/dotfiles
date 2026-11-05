@@ -118,8 +118,10 @@ Rerun `./setup.sh claude --env NAME` after changing common settings or skills.
   `.dotfiles-copy-*.json` records; local-only edits survive, and a changed
   source with a differing local copy conflicts. User-scope `setup skills` also
   adds missing skill links to existing environments when `claude-code` is
-  selected (`SETUP_SKIP_USER_AGENT_SKILL_LINKS=1` skips this). Existing links and
-  local skills are not deleted when a shared source disappears.
+  selected (`SETUP_SKIP_USER_AGENT_SKILL_LINKS=1` skips this). It also removes
+  links into `.agents/user/skills` for skills that are no longer installed, and
+  unchanged managed copies of them; edited copies, other links and skills added
+  only to the environment are kept. `SETUP_DRY_RUN=1` lists the entries it would remove.
 - Local settings, history, MCP configuration and local skills are preserved.
   Unmanaged or incomplete homes are not adopted.
 

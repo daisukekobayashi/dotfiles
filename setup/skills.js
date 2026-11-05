@@ -388,14 +388,14 @@ function copyDirectoryContents(sourceDir, targetDir) {
         });
     }
 }
-function copyMissingDirectoryEntries(sourceDir, targetDir) {
+function copyMissingDirectoryEntries(sourceDir, targetDir, skip = new Set()) {
     if (!fs.existsSync(sourceDir)) {
         return;
     }
     fs.mkdirSync(targetDir, { recursive: true });
     for (const entry of fs.readdirSync(sourceDir)) {
         const targetEntry = path.join(targetDir, entry);
-        if (fs.existsSync(targetEntry) || getLinkTarget(targetEntry)) {
+        if (skip.has(entry) || fs.existsSync(targetEntry) || getLinkTarget(targetEntry)) {
             continue;
         }
         fs.cpSync(path.join(sourceDir, entry), targetEntry, {
@@ -429,6 +429,81 @@ function isManagedLocalSymlink(targetPath, expectedRoot) {
     const resolvedLinked = normalizePath(path.resolve(path.dirname(targetPath), linked));
     const resolvedRoot = normalizePath(expectedRoot);
     return resolvedLinked === resolvedRoot || resolvedLinked.startsWith(`${resolvedRoot}${path.sep}`);
+}
+// A stale managed entry is one setup placed for a skill that `keep` no longer
+// lists or whose source is gone. Setup installs `<name>` only as a link to
+// `<managedRoot>/<name>` or as a copy whose marker names that source, so other
+// links and copies are never treated as managed; a copy is stale only while its
+// content is unchanged. Each result lists the entry name and, for a copy, its
+// marker name. Links resolve from `linkBase`, the directory the entries were
+// installed in. `keptExists` treats kept names as present, for a dry run
+// planned before the managed root is rebuilt.
+function staleManagedEntries(directory, managedRoot, keep, options = {}) {
+    const linkBase = options.linkBase ?? directory;
+    if (!fs.lstatSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
+        return [];
+    }
+    const stale = [];
+    for (const name of fs.readdirSync(directory).sort()) {
+        if (name.startsWith(".") || (options.prunable && !options.prunable(name))) {
+            continue;
+        }
+        const entry = path.join(directory, name);
+        const installed = path.join(linkBase, name);
+        const managedSource = normalizePath(path.join(managedRoot, name));
+        const isStale = (source) => !keep.has(name) || (!options.keptExists && !fs.existsSync(source));
+        const linked = getLinkTarget(entry);
+        if (linked !== null) {
+            const source = path.resolve(linkBase, linked);
+            if (normalizePath(source) === managedSource && isStale(source)) {
+                stale.push([name]);
+            }
+            continue;
+        }
+        const marker = (0, shared_links_1.copyMarker)(name);
+        const markerStat = fs.lstatSync(path.join(directory, marker), { throwIfNoEntry: false });
+        if (!markerStat) {
+            continue;
+        }
+        if (!markerStat.isFile() || markerStat.isSymbolicLink()) {
+            warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
+            continue;
+        }
+        const saved = (0, shared_links_1.parseCopyMarker)(fs.readFileSync(path.join(directory, marker), "utf8"));
+        if (!saved) {
+            warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
+            continue;
+        }
+        if (normalizePath(saved.source) !== managedSource || !isStale(saved.source)) {
+            continue;
+        }
+        let current;
+        try {
+            current = (0, shared_links_1.snapshot)(entry);
+        }
+        catch {
+            current = undefined;
+        }
+        if (!(0, shared_links_1.sameSnapshot)(current, saved.files)) {
+            warn(`Keeping locally edited copy of a removed skill: ${installed}`);
+            continue;
+        }
+        stale.push([name, marker]);
+    }
+    return stale;
+}
+function pruneStaleManagedEntries(directory, stale, dryRun) {
+    for (const [name, ...rest] of stale) {
+        const entry = path.join(directory, name);
+        if (dryRun) {
+            info(`DRY-RUN remove stale skill entry ${entry}`);
+            continue;
+        }
+        for (const item of [name, ...rest]) {
+            removePath(path.join(directory, item));
+        }
+        info(`Removed stale skill entry: ${entry}`);
+    }
 }
 function createSymlinks(links, expectedRoot) {
     const stages = [];
@@ -805,13 +880,16 @@ function claudeEnvironmentSkillDirs(setupHome) {
     }
     return directories;
 }
+function isClaudeEnvironmentSkillName(name) {
+    return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !/^(synced|anthropic-skills)$/i.test(name);
+}
 function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRun) {
     if (directories.length === 0) {
         return;
     }
     const links = [];
     for (const name of names.sort()) {
-        if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) || /^(synced|anthropic-skills)$/i.test(name)) {
+        if (!isClaudeEnvironmentSkillName(name)) {
             continue;
         }
         const source = path.join(restoreSkillsDir, name);
@@ -837,6 +915,11 @@ function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRu
         }
     }
     createSymlinks(links);
+    const keep = new Set(names);
+    for (const directory of directories) {
+        const stale = staleManagedEntries(directory, restoreSkillsDir, keep, { prunable: isClaudeEnvironmentSkillName, keptExists: dryRun });
+        pruneStaleManagedEntries(directory, stale, dryRun);
+    }
 }
 function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agents, dryRun, skipUserLocalSkillLinks, skipUserAgentSkillLinks) {
     const requestedProfiles = csv(profilesCsv || "base");
@@ -965,13 +1048,19 @@ function rollbackProjectTargets(records) {
     }
     warn("Restored previous project skills after failed install");
 }
-function restoreUnmanagedProjectSkills(records, projectRoot, agents) {
+// Entries the previous run installed for skills no longer selected stay in the
+// backup instead of being restored.
+function restoreUnmanagedProjectSkills(records, projectRoot, agents, localRoot, keep) {
     const agentSkillDirs = new Set(agents.map((agent) => agentSkillDir(projectRoot, agent)));
     for (const record of records) {
         if (!record.backupPath || !agentSkillDirs.has(record.targetPath)) {
             continue;
         }
-        copyMissingDirectoryEntries(record.backupPath, record.targetPath);
+        const stale = staleManagedEntries(record.backupPath, localRoot, keep, { linkBase: record.targetPath });
+        copyMissingDirectoryEntries(record.backupPath, record.targetPath, new Set(stale.flat()));
+        for (const [name] of stale) {
+            info(`Removed stale skill entry: ${path.join(record.targetPath, name)}`);
+        }
     }
 }
 function gitProjectRoot(cwd) {
@@ -999,6 +1088,8 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
     const stagingBase = plan.external.length > 0 ? projectStagingBase() : "";
     const npmCacheDir = path.join(setupTmpdir, "skills-npm-cache");
     const backupRoot = path.join(setupTmpdir, "dotfiles-skills-backup", path.basename(projectRoot));
+    const localRoot = path.join(dotfilesRoot, "skills", "local");
+    const localNames = new Set(plan.local.map(skill => skill.name));
     if (dryRun) {
         info(`DRY-RUN mkdir -p ${npmCacheDir}`);
         info(`DRY-RUN mkdir -p ${path.join(projectRoot, ".agents")}`);
@@ -1011,6 +1102,10 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
         }
         logDryRunExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
         logDryRunLinkLocalSkills(plan, "project", projectRoot);
+        for (const agent of agents) {
+            const skillsDir = agentSkillDir(projectRoot, agent);
+            pruneStaleManagedEntries(skillsDir, staleManagedEntries(skillsDir, localRoot, localNames), true);
+        }
         info(`DRY-RUN write skills metadata ${path.join(projectRoot, ".agents", "skills-profile.json")}`);
         info(`Project skills installed for profiles: ${requestedProfiles.join(",")}`);
         info("Consider ignoring generated skill directories: .agents/skills/ .claude/skills/");
@@ -1022,7 +1117,7 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
     try {
         runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
         linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
-        restoreUnmanagedProjectSkills(backups, projectRoot, agents);
+        restoreUnmanagedProjectSkills(backups, projectRoot, agents, localRoot, localNames);
         writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
     }
     catch (error) {
