@@ -74,8 +74,11 @@ Still stop and ask before any action outside that narrow scope, including:
    - Derive the commit message from the implementation diff, issue context, branch name, and current conversation.
    - Never stage secrets or unrelated local files.
 7. Push the branch.
-   - Use a normal push to the repository remote for the current branch.
-   - If no upstream exists, set upstream for the same branch name.
+   - `<remote>` is the repository remote resolved in step 2. The PR base branch is the existing PR's base, otherwise the base `github-pr-create` uses: the default branch unless the user specifies another base.
+   - Read the upstream with `git config --get branch.<branch>.remote` and `git config --get branch.<branch>.merge`; no output means no upstream.
+   - Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, local or remote-tracking. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
+   - Push with `git push -u <remote> <branch>:refs/heads/<branch>`. The explicit refspec keeps a base upstream or `push.default=upstream` from sending the branch to the base. This sets the upstream for the same branch name; report it when it replaced the PR base branch.
+   - Re-read the upstream; stop and report unless the remote is `<remote>` and the merge ref is `refs/heads/<branch>`.
    - Do not force push, delete remote branches, or rewrite history.
 8. Create or resolve the PR.
    - Use the `github-pr-create` skill for the target branch.
