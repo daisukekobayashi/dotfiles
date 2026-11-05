@@ -437,6 +437,113 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+@test "tmux clipboard helper copies through pbcopy on macOS" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/clipboard-pbcopy.log"
+  copied_text="${BATS_TEST_TMPDIR}/clipboard-pbcopy.txt"
+  mkdir -p "${fake_bin}"
+  write_fake_darwin_uname "${fake_bin}"
+
+  # Ahead of /usr/bin on PATH, so the real macOS pbcopy never runs.
+  cat > "${fake_bin}/pbcopy" <<'EOF'
+#!/usr/bin/env bash
+printf 'pbcopy\n' >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/pbcopy"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CLIPBOARD_TEXT="${copied_text}" \
+    bash -c "unset TMUX DISPLAY WAYLAND_DISPLAY SSH_CONNECTION SSH_TTY; printf 'mac copy\n' | '${root}/tmux/bin/clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run cat "${log_file}"
+  [ "$output" = "pbcopy" ]
+  run cat "${copied_text}"
+  [ "$output" = "mac copy" ]
+}
+
+@test "tmux clipboard helper copies through reattach-to-user-namespace on macOS" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/clipboard-reattach.log"
+  copied_text="${BATS_TEST_TMPDIR}/clipboard-reattach.txt"
+  mkdir -p "${fake_bin}"
+  write_fake_darwin_uname "${fake_bin}"
+
+  cat > "${fake_bin}/reattach-to-user-namespace" <<'EOF'
+#!/usr/bin/env bash
+printf 'reattach-to-user-namespace %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+exec "$@"
+EOF
+  chmod +x "${fake_bin}/reattach-to-user-namespace"
+
+  cat > "${fake_bin}/pbcopy" <<'EOF'
+#!/usr/bin/env bash
+printf 'pbcopy\n' >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/pbcopy"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CLIPBOARD_TEXT="${copied_text}" \
+    bash -c "unset TMUX DISPLAY WAYLAND_DISPLAY SSH_CONNECTION SSH_TTY; printf 'mac copy\n' | '${root}/tmux/bin/clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  # pbcopy runs once, through reattach-to-user-namespace, not again directly.
+  run cat "${log_file}"
+  [ "$output" = "reattach-to-user-namespace pbcopy
+pbcopy" ]
+  run cat "${copied_text}"
+  [ "$output" = "mac copy" ]
+}
+
+@test "tmux clipboard helper falls back to the tmux buffer when pbcopy fails on macOS" {
+  local root fake_bin log_file copied_text
+  root="$(repo_root)"
+  fake_bin="${BATS_TEST_TMPDIR}/bin"
+  log_file="${BATS_TEST_TMPDIR}/clipboard-pbcopy-failure.log"
+  copied_text="${BATS_TEST_TMPDIR}/clipboard-pbcopy-failure.txt"
+  mkdir -p "${fake_bin}"
+  write_fake_darwin_uname "${fake_bin}"
+
+  cat > "${fake_bin}/pbcopy" <<'EOF'
+#!/usr/bin/env bash
+printf 'pbcopy\n' >> "${TMUX_CLIPBOARD_LOG}"
+exit 47
+EOF
+  chmod +x "${fake_bin}/pbcopy"
+
+  cat > "${fake_bin}/tmux" <<'EOF'
+#!/usr/bin/env bash
+[ "$1" != display-message ] || exit 1
+printf 'tmux %s\n' "$*" >> "${TMUX_CLIPBOARD_LOG}"
+cat > "${TMUX_CLIPBOARD_TEXT}"
+EOF
+  chmod +x "${fake_bin}/tmux"
+
+  run env \
+    PATH="${fake_bin}:/usr/bin:/bin" \
+    TMUX="/tmp/tmux-test/default,1,0" \
+    TMUX_CLIPBOARD_LOG="${log_file}" \
+    TMUX_CLIPBOARD_TEXT="${copied_text}" \
+    bash -c "unset DISPLAY WAYLAND_DISPLAY SSH_CONNECTION SSH_TTY; printf 'mac copy\n' | '${root}/tmux/bin/clipboard-copy'"
+
+  [ "$status" -eq 0 ]
+  run cat "${log_file}"
+  [ "$output" = "pbcopy
+tmux load-buffer -w -" ]
+  run cat "${copied_text}"
+  [ "$output" = "mac copy" ]
+}
+
 @test "tmux popup clipboard helper keeps oversized caller mirror in the tmux buffer" {
   local root fake_bin log_file popup_text caller_text proxy_script
   root="$(repo_root)"
