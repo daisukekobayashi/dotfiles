@@ -163,6 +163,50 @@ Do not add a separate external skill pool/catalog file. Profiles are the source 
 
 The root `skills-lock.json` should stop acting as a global all-skills catalog after this migration. If the dotfiles repository itself needs project-scoped skills, root `skills-lock.json` can be generated for this repository like any other project.
 
+### Delivery Policy Layering
+
+Delivery skills are layered into a shared policy layer and thin provider
+adapters. This is the target layering; the current split is described below.
+
+- `delivery-common` is the home for delivery policy shared by both providers:
+  what happens, when, and at what depth. This covers the risk tier, review
+  selection, completion and merge gates, and human review recommendations and
+  the points where approval is required.
+- Provider delivery skills (`github-issue-delivery` and
+  `azure-devops-work-item-delivery`) own how each phase is performed on their
+  provider: PR creation and publication, API and CLI calls, hosted review
+  cycles, and provider-specific state such as Work Item links and state
+  transitions. They reference `delivery-common` for shared policy instead of
+  restating it, and forward approvals to the component skills they call, such
+  as `github-pr-publish`, which keep their own approval rules.
+  Policy that exists for only one provider, such as hosted Codex review round
+  limits and re-review conditions, stays in that provider's skill.
+
+`delivery-common` currently holds the Local Review procedure (snapshot pinning,
+finding assessment including follow-up candidate recording, focused follow-up,
+and reviewer selection) and the Risk Tier. Its `SKILL.md` still says the calling
+workflow owns review round limits and approvals. Other shared policy, such as
+the understanding check order, local review advancement criteria and round
+limits, merge confirmation contents, and end-of-delivery follow-up candidate
+reporting and creation, is still written in both provider delivery skills.
+
+Migrate incrementally rather than in one refactor. When a policy issue would
+edit the same policy in both provider delivery skills, move the part that is
+common to both providers into `delivery-common` as part of that issue and have
+both provider skills reference it, instead of editing it twice. Leave
+provider-only policy in the provider skill. Update the ownership statement and
+the frontmatter `description` in `delivery-common/SKILL.md` in the same issue so
+they match what moved. Leave other duplicated policy in place until a policy
+change touches it.
+
+Azure DevOps parity is the default. Policy in `delivery-common` applies to both
+providers automatically. When a change on one provider also requires
+provider-specific changes to the other provider's skills, make them in the same
+issue and PR. Defer the Azure DevOps side only when it needs Azure-specific
+investigation, such as Azure DevOps APIs or policies, and only with a tracked
+follow-up issue. Intentional provider differences, such as the omitted Azure
+DevOps hosted AI review cycle, are not drift.
+
 ## Profile Format
 
 Profiles are JSON so setup can process them with Node without adding a parser dependency.

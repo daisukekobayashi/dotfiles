@@ -161,6 +161,46 @@ PR 本文には書かず、マージ確認は常に必要です。Matt Pocock �
 
 Root の `skills-lock.json` は、この移行後は global な全 skill catalog としては扱いません。dotfiles リポジトリ自身で project-scoped skill が必要な場合は、他の project と同じように root の `skills-lock.json` を生成します。
 
+### Delivery ポリシーの階層
+
+delivery スキルは、共通のポリシー層と薄いプロバイダー別アダプターに分けます。
+これは目標とする階層で、現在の分担は後述します。
+
+- `delivery-common` は、両方のプロバイダーに共通する delivery のポリシー、つまり
+  何を、いつ、どの深さで行うかの置き場所です。リスク tier、レビューの選択、
+  完了とマージのゲート、人間レビューの推奨と承認が必要になる時点が含まれます。
+- プロバイダー別の delivery スキル（`github-issue-delivery` と
+  `azure-devops-work-item-delivery`）は、各フェーズをそのプロバイダーでどう実行するかを
+  担当します。PR の作成と公開、API や CLI の呼び出し、ホスト側のレビューサイクル、
+  Work Item のリンクや状態遷移などのプロバイダー固有の状態が含まれます。共通の
+  ポリシーは書き直さずに `delivery-common` を参照し、承認は `github-pr-publish` など
+  呼び出す各スキルに委ねます。承認ルールはそれぞれのスキルが持ちます。
+  hosted Codex レビューのラウンド上限や再レビュー条件のように、片方のプロバイダーにしか
+  ないポリシーは、そのプロバイダーのスキルに残します。
+
+現在の `delivery-common` は、ローカルレビュー手順（snapshot の固定、follow-up 候補の
+記録を含む指摘の評価、focused follow-up、reviewer の選択）とリスク tier を持ちます。
+その `SKILL.md` には、レビューのラウンド上限と承認は呼び出し元のワークフローが持つと
+まだ書かれています。理解確認の順序、ローカルレビューの完了条件とラウンド上限、
+マージ確認で示す内容、delivery 終了時の follow-up 候補の報告と作成など、その他の
+共通ポリシーはまだ両方のプロバイダー別 delivery スキルに書かれています。
+
+移行は一度のリファクタリングではなく段階的に行います。ポリシー変更の issue が
+両方のプロバイダー別 delivery スキルの同じポリシーを編集することになる場合は、
+2回編集する代わりに、その issue の中で両方のプロバイダーに共通する部分を
+`delivery-common` に移し、両方のスキルから参照させます。片方のプロバイダーにしか
+ないポリシーはプロバイダー別スキルに残します。同じ issue で `delivery-common/SKILL.md`
+の担当範囲の記述と frontmatter の `description` も、移した内容に合わせて更新します。
+それ以外の重複したポリシーは、ポリシー変更が触れるまでそのまま残します。
+
+Azure DevOps 版との同等性を標準とします。`delivery-common` のポリシーは両方の
+プロバイダーに自動的に適用されます。一方のプロバイダーでの変更が、もう一方の
+スキルにもプロバイダー固有の変更を必要とする場合は、同じ issue と PR で行います。
+Azure DevOps 側を後回しにできるのは、Azure DevOps の API やポリシーなど Azure 固有の
+調査が必要な場合だけで、その場合も追跡用の follow-up issue を作成します。
+Azure DevOps のホスト側 AI レビューサイクルを省いているような意図的な
+プロバイダー差分は、ずれとして扱いません。
+
 ## Profile Format
 
 Profile は JSON にします。Bash で無理に parse せず、Node で処理できるようにします。
