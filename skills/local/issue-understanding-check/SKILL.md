@@ -40,15 +40,17 @@ user needs to answer step 3.
 
 Pick a situation that the user can decide from the goal in the overview and
 where a wrong reading would change the implementation: a boundary, an exclusion,
-an interaction, or a non-goal a reader might assume is in scope. Prefer a
-situation the acceptance criteria decide; route a situation that only an open
-question decides to preflight instead.
+an interaction, or a non-goal a reader might assume is in scope. Choose one the
+overview leaves the user to infer by applying the goal, rather than one a line of
+the overview already answers. Prefer a situation the acceptance criteria decide;
+route a situation that only an open question decides to preflight instead.
 
 Show the situation and ask what should happen given the goal. Offer 2-3
-concrete outcomes plus `can't decide`. Ask one question (at most two parts about
-the same situation) and wait for the answer. Write the options with equal detail,
-order them independently of the issue's answer, and keep the issue's answer and
-any hint toward it out of the question message.
+concrete outcomes, one of which is the issue's reading, plus `can't decide`.
+Ask one question (at most two parts about the same situation) and wait for the
+answer. Write the options with equal detail, order them independently of the
+issue's answer, and keep the issue's answer and any hint toward it out of the
+question message.
 
 ### 4. Compare and discuss
 
@@ -63,7 +65,8 @@ Compare the answer with the issue and code, quoting the deciding lines.
   how-to-build questions for preflight.
 - **`can't decide`:** explain the issue's reading with its sources and what it
   leads to, then ask the user to accept or adjust it. Acceptance as written
-  confirms the check; an adjustment is an agreed change and corrects it.
+  confirms the check; an adjustment is an agreed change and corrects it. Mark the
+  resulting confirmed example `accepted after can't decide` in its source.
 - When the agreed behavior differs from the issue text, record it as an agreed
   issue change and propose updating the issue.
 - When the discussion shows that the problem itself is unsettled, recommend
