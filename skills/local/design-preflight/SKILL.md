@@ -98,6 +98,8 @@ Stop early if no question clears the bar.
 Prioritize one-way-door risks: public contracts, data models, architecture boundaries, dependency direction, migration cost, rollout constraints, operational assumptions, security boundaries, and long-term maintenance cost.
 
 Base every recommended answer on the stance's baseline.
+Give each recommended answer a one-line reason. When viewpoints favor different answers, name each viewpoint and the answer it favors, such as short-term smallest change versus long-term maintainability, then give the overall recommendation from the stance's baseline and why.
+When the evidence supports no recommendation, say so in place of one.
 For durable: recommend from the target design and challenge compatibility-preserving defaults; ask whether compatibility is a real constraint or merely an assumed safe choice.
 For conservative: recommend from the current structure and challenge changes that break existing behavior; ask whether a break is truly required.
 ```

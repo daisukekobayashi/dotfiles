@@ -56,6 +56,18 @@ text. Offer 2-3 options with equal detail, each an observable result of that
 situation, plus `can't decide`. Keep scoping, process, and how-to-build choices
 for step 5. When step 1 found no such point, go on to step 5.
 
+Recommend one option with a one-line reason drawn from the sources; the
+recommendation informs the user's choice, and the decision stays theirs. When
+viewpoints favor different options, name each viewpoint and the option it
+favors, then give the overall recommendation and why, for example
+"short-term: A; long-term maintainability: B; recommended: B, because ...". The
+default viewpoints are the short-term smallest change and long-term
+maintainability; add another, such as risk or compatibility, only when the
+sources show it favors a different option. The overall recommendation favors
+long-term maintainability unless the user's request states another stance, such
+as the smallest change or design-preflight's `conservative`. When the sources
+support no recommendation, say so in place of one.
+
 On `can't decide`, explain the readings the sources support and what each leads
 to, then ask the user to choose or adjust one. A point the user still cannot
 decide after that explanation stays open.

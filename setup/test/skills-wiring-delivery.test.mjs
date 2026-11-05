@@ -18,6 +18,9 @@ test("design preflight delegates to the installed grilling primitive", async () 
   assert.equal(skillsForSource(base, "mattpocock/skills").includes("grilling"), true);
   assert.match(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grilling`\./);
   assert.match(designPreflight, /\| `\$design-preflight open` \| Raw `grilling`;/);
+  assert.match(designPreflight, /Give each recommended answer a one-line reason\./);
+  assert.match(designPreflight, /name each viewpoint and the answer it favors, such as short-term smallest change versus long-term maintainability, then give the overall recommendation from the stance's baseline and why\./);
+  assert.match(designPreflight, /When the evidence supports no recommendation, say so in place of one\./);
   assert.doesNotMatch(designPreflight, /\*\*REQUIRED SUB-SKILL:\*\* Use `grill-me`\./);
 });
 
@@ -34,6 +37,12 @@ test("delivery runs the shared understanding before start and preflight", async 
   assert.match(check, /### 3\. Read back the decisions/);
   assert.match(check, /A decision stays open\s+until the user explicitly accepts or adjusts it\./);
   assert.match(check, /each an observable result of that\s+situation, plus `can't decide`/);
+  assert.match(check, /Offer 2-3 options with equal detail/);
+  assert.match(check, /Recommend one option with a one-line reason drawn from the sources;\s+the\s+recommendation informs the user's choice, and the decision stays theirs\./);
+  assert.match(check, /When\s+viewpoints favor different options, name each viewpoint and the option it\s+favors, then give the overall recommendation and why/);
+  assert.match(check, /The\s+default viewpoints are the short-term smallest change and long-term\s+maintainability;/);
+  assert.match(check, /The overall recommendation favors\s+long-term maintainability unless the user's request states another stance/);
+  assert.match(check, /When the sources\s+support no recommendation, say so in place of one\./);
   assert.match(check, /A point the user still cannot\s+decide after that explanation stays open\./);
   assert.match(check, /An open point closes here, never as `confirmed` or\s+`skipped`\./);
   assert.match(check, /`skipped`: the user explicitly skipped the check\./);
