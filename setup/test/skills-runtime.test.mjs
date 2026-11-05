@@ -398,7 +398,9 @@ test("project scope prunes links of a renamed local skill and keeps unmanaged li
     assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
     assert.ok(dryRun.stdout.includes(`DRY-RUN remove stale skill entry ${path.join(skills, "local-one")}`));
     assert.equal(dryRun.stdout.includes(path.join(skills, "user-link")), false);
+    assert.equal(dryRun.stdout.includes(path.join(skills, "alias")), false);
     assert.equal(await readlink(path.join(skills, "local-one")), path.join(local, "local-one"));
+    assert.equal(await readlink(path.join(skills, "alias")), path.join(local, "local-two"));
 
     result = runSkills(args, fixture, { cwd: fixture.project });
 
@@ -407,6 +409,54 @@ test("project scope prunes links of a renamed local skill and keeps unmanaged li
     assert.equal(await readlink(path.join(skills, "local-two")), path.join(local, "local-two"));
     assert.equal(await readlink(path.join(skills, "user-link")), outside);
     assert.ok(result.stdout.includes(`Removed stale skill entry: ${path.join(skills, "local-one")}`));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope keeps unchanged copies of a removed skill only in the backup and restores edited ones", async () => {
+  const fixture = await createFixture();
+  try {
+    const args = ["--scope", "project", "--profile", "base", "--agent", "codex", "--agent", "claude-code"];
+    const codexSkills = path.join(fixture.project, ".agents", "skills");
+    const claudeSkills = path.join(fixture.project, ".claude", "skills");
+    const local = path.join(fixture.dotfiles, "skills", "local");
+    let result = runSkillsWithSymlinkError(args, fixture, { cwd: fixture.project });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    for (const skills of [codexSkills, claudeSkills]) {
+      assert.equal((await lstat(path.join(skills, "local-one"))).isSymbolicLink(), false);
+      assert.equal(existsSync(path.join(skills, ".dotfiles-copy-local-one.json")), true);
+    }
+    await writeFile(path.join(claudeSkills, "local-one", "SKILL.md"), "local edit\n");
+
+    await rename(path.join(local, "local-one"), path.join(local, "local-two"));
+    const profile = path.join(fixture.dotfiles, "skills", "profiles", "base.json");
+    const base = JSON.parse(await readText(profile));
+    base.local = ["local-two"];
+    await writeFile(profile, JSON.stringify(base, null, 2) + "\n");
+
+    const dryRun = runSkillsWithSymlinkError(args, { ...fixture, env: { ...fixture.env, SETUP_DRY_RUN: "1" } }, { cwd: fixture.project });
+    assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
+    assert.ok(dryRun.stdout.includes(`DRY-RUN remove stale skill entry ${path.join(codexSkills, "local-one")}`));
+    assert.equal(dryRun.stdout.includes(path.join(claudeSkills, "local-one")), false);
+    assert.equal(existsSync(path.join(codexSkills, "local-one", "SKILL.md")), true, "dry run should not remove copies");
+
+    result = runSkillsWithSymlinkError(args, fixture, { cwd: fixture.project });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.ok(result.stdout.includes(`Removed stale skill entry: ${path.join(codexSkills, "local-one")}`));
+    assert.equal(existsSync(path.join(codexSkills, "local-one")), false);
+    assert.equal(existsSync(path.join(codexSkills, ".dotfiles-copy-local-one.json")), false);
+    assert.equal(existsSync(path.join(codexSkills, "local-two", "SKILL.md")), true);
+    const backupRoot = path.join(fixture.env.SETUP_TMPDIR, "dotfiles-skills-backup", path.basename(fixture.project));
+    const [codexBackup] = (await readdir(backupRoot)).filter(name => name.startsWith(".agents-skills."));
+    assert.ok(codexBackup, "the codex skills directory should be backed up");
+    assert.equal(existsSync(path.join(backupRoot, codexBackup, "local-one", "SKILL.md")), true,
+      "the unchanged copy should stay in the backup");
+    assert.equal(existsSync(path.join(backupRoot, codexBackup, ".dotfiles-copy-local-one.json")), true);
+    assert.equal(await readText(path.join(claudeSkills, "local-one", "SKILL.md")), "local edit\n");
+    assert.equal(existsSync(path.join(claudeSkills, ".dotfiles-copy-local-one.json")), true);
+    assert.match(result.stderr, /Keeping locally edited copy of a removed skill: .*\.claude.skills.local-one/);
   } finally {
     await fixture.cleanup();
   }
