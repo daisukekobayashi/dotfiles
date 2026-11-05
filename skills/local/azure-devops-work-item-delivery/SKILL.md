@@ -110,7 +110,9 @@ After fixes, verify and repeat the selected reviews on the new snapshot.
 
 Advance only after every pass its current tier selects completed on the current implementation,
 verification is current, and no material actionable finding or human decision
-remains open. Failed, unavailable, empty, or partial output is not a pass.
+remains open. Recorded deferrals of minor or pre-existing findings do not require
+another round or a result with zero findings. Failed, unavailable, empty, or
+partial output is not a pass.
 
 ### 3. Publish the PR
 
@@ -171,8 +173,9 @@ comment on the Work Item.
 ## Bounds and Handoffs
 
 Allow at most three local review rounds per item across this delivery, including
-resumes; one round includes every selected reviewer. A clean result may advance
-immediately. Honor lower user limits. At the limit, repeated non-progress, a
+resumes; one round includes every selected reviewer, including any reviewer Risk
+Tier adds on the same head. Advance as soon as the completion criteria are met.
+Honor lower user limits. At the limit, repeated non-progress, a
 timeout, failed required check, or material human decision, preserve progress
 and report the next action, including the remaining-findings classification
 from Local Review's Assess findings at the limit. Ask before extending the budget.

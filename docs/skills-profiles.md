@@ -204,8 +204,15 @@ providers automatically. When a change on one provider also requires
 provider-specific changes to the other provider's skills, make them in the same
 issue and PR. Defer the Azure DevOps side only when it needs Azure-specific
 investigation, such as Azure DevOps APIs or policies, and only with a tracked
-follow-up issue. Intentional provider differences, such as the omitted Azure
-DevOps hosted AI review cycle, are not drift.
+follow-up issue. Intentional provider differences are not drift. They are:
+
+- Azure DevOps omits the hosted AI review cycle, so its delivery has no hosted
+  review round limit, hosted re-review condition, or return from hosted fixes
+  to local review.
+
+Both provider delivery skills link the same `delivery-common` files;
+`setup/test/skills-wiring-delivery.test.mjs` fails when one provider adds or
+drops such a link.
 
 ## Profile Format
 

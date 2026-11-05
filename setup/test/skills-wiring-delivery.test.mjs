@@ -50,6 +50,35 @@ test("delivery runs the issue understanding check before start and preflight", a
   }
 });
 
+test("provider delivery skills link the same delivery-common targets", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const deliveryCommon = path.join(localRoot, "delivery-common");
+  const commonTargets = async (delivery) => {
+    const skillDir = path.join(localRoot, delivery);
+    const content = await readText(path.join(skillDir, "SKILL.md"));
+    const targets = new Set();
+    for (const [, target] of content.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+      if (/^[a-z][a-z\d+.-]*:/i.test(target)) continue;
+      const relative = path.relative(deliveryCommon, path.resolve(skillDir, target.split("#")[0]));
+      if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+        targets.add(relative.split(path.sep).join("/"));
+      }
+    }
+    return [...targets].sort();
+  };
+
+  const github = await commonTargets("github-issue-delivery");
+  const azure = await commonTargets("azure-devops-work-item-delivery");
+  for (const target of ["references/local-review.md", "references/risk-tier.md"]) {
+    assert.ok(github.includes(target), `github-issue-delivery: missing delivery-common link ${target}`);
+  }
+  assert.deepEqual(azure, github, [
+    "provider delivery skills must link the same delivery-common targets",
+    `only github-issue-delivery: ${github.filter((t) => !azure.includes(t)).join(", ") || "none"}`,
+    `only azure-devops-work-item-delivery: ${azure.filter((t) => !github.includes(t)).join(", ") || "none"}`,
+  ].join("\n"));
+});
+
 test("change review skills are explicit-only and share target selection", async () => {
   const adversarialRoot = path.join(repoRoot, "skills", "local", "change-adversarial-review");
   const changeReviewRoot = path.join(repoRoot, "skills", "local", "change-review");
