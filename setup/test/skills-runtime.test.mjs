@@ -594,9 +594,9 @@ exit 42
     const codexSkills = path.join(fixture.project, ".agents", "skills");
     const claudeSkills = path.join(fixture.project, ".claude", "skills");
     await mkdir(codexSkills, { recursive: true });
-    await mkdir(path.dirname(claudeSkills), { recursive: true });
+    await mkdir(claudeSkills, { recursive: true });
     await symlink("missing-skill", path.join(codexSkills, "alias"));
-    await symlink("../missing-skills", claudeSkills);
+    await symlink("../missing-skills", path.join(claudeSkills, "relative-alias"));
 
     const result = runSkillsWithCrossDeviceBackupRenameError(
       ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
@@ -609,7 +609,7 @@ exit 42
     assert.doesNotMatch(result.stderr, /ENOENT|EXDEV/);
     assert.match(await readText(fixture.log), /skills add anthropics\/skills/);
     assert.equal(await readlink(path.join(codexSkills, "alias")), "missing-skill");
-    assert.equal(await readlink(claudeSkills), "../missing-skills");
+    assert.equal(await readlink(path.join(claudeSkills, "relative-alias")), "../missing-skills");
   } finally {
     await fixture.cleanup();
   }
@@ -970,17 +970,30 @@ test("project scope refuses a backup directory that others can write before movi
 });
 
 // A checkout controls .agents, .claude, and the managed paths below them.
-const outsideLinkCases = [
-  { name: ".claude links outside", agent: "claude-code", link: ".claude", target: "outside" },
-  { name: ".agents links outside", agent: "codex", link: ".agents", target: "outside" },
-  { name: ".claude/skills links outside", agent: "claude-code", link: path.join(".claude", "skills"), target: path.join("outside", "skills") },
-  { name: ".agents/skills links outside", agent: "codex", link: path.join(".agents", "skills"), target: path.join("outside", "skills") },
-  { name: "skills-lock.json links outside", agent: "codex", link: "skills-lock.json", target: path.join("outside", "skills-lock.json") },
-  { name: ".agents/skills-profile.json links outside", agent: "codex", link: path.join(".agents", "skills-profile.json"), target: path.join("outside", "skills-profile.json") },
-  { name: ".claude links to a missing directory outside", agent: "claude-code", link: ".claude", target: "missing-outside" },
+// Setup refuses a link at any of them, wherever it points: a link moved into
+// the backup directory resolves again from there.
+const projectLinkCases = [
+  { name: ".claude links outside", agent: "claude-code", link: ".claude", target: root => path.join(root, "outside") },
+  { name: ".agents links outside", agent: "codex", link: ".agents", target: root => path.join(root, "outside") },
+  { name: ".claude/skills links outside", agent: "claude-code", link: path.join(".claude", "skills"), target: root => path.join(root, "outside", "skills") },
+  { name: ".agents/skills links outside", agent: "codex", link: path.join(".agents", "skills"), target: root => path.join(root, "outside", "skills") },
+  { name: "skills-lock.json links outside", agent: "codex", link: "skills-lock.json", target: root => path.join(root, "outside", "skills-lock.json") },
+  { name: ".agents/skills-profile.json links outside", agent: "codex", link: path.join(".agents", "skills-profile.json"), target: root => path.join(root, "outside", "skills-profile.json") },
+  { name: ".claude links to a missing directory outside", agent: "claude-code", link: ".claude", target: root => path.join(root, "missing-outside") },
+  { name: ".agents/skills links to the project root", agent: "codex", link: path.join(".agents", "skills"), target: () => ".." },
+  { name: ".agents/skills links to a directory inside the project", agent: "codex", link: path.join(".agents", "skills"), target: () => path.join("..", "shared-skills") },
+  { name: ".claude/skills links to a missing path inside the project", agent: "claude-code", link: path.join(".claude", "skills"), target: () => path.join("..", "missing-skills") },
+  { name: ".agents/skills-profile.json links to a file inside the project", agent: "codex", link: path.join(".agents", "skills-profile.json"), target: () => path.join("..", "shared-profile.json") },
+  {
+    name: ".claude links to a dangling link that points outside",
+    agent: "claude-code",
+    link: ".claude",
+    target: () => "chained",
+    prepare: async fixture => symlink(path.join(fixture.root, "missing-outside"), path.join(fixture.project, "chained")),
+  },
 ];
 
-for (const { name, agent, link, target } of outsideLinkCases) {
+for (const { name, agent, link, target, prepare } of projectLinkCases) {
   test(`project scope refuses to change anything when ${name}`, posixOnly, async () => {
     const fixture = await createFixture({ npxBody: stagingNpxBody });
     try {
@@ -989,21 +1002,30 @@ for (const { name, agent, link, target } of outsideLinkCases) {
       await writeFile(path.join(outside, "skills", "precious", "SKILL.md"), "precious\n");
       await writeFile(path.join(outside, "skills-lock.json"), "outside lock\n");
       await writeFile(path.join(outside, "skills-profile.json"), "outside profile\n");
+      await mkdir(path.join(fixture.project, "shared-skills", "kept"), { recursive: true });
+      await writeFile(path.join(fixture.project, "shared-profile.json"), "shared profile\n");
+      await prepare?.(fixture);
       const linkPath = path.join(fixture.project, link);
+      const linkText = target(fixture.root);
       await mkdir(path.dirname(linkPath), { recursive: true });
-      await symlink(path.join(fixture.root, target), linkPath);
+      await symlink(linkText, linkPath);
       const projectBefore = (await readdir(fixture.project)).sort();
+      const linkDirBefore = (await readdir(path.dirname(linkPath))).sort();
 
       for (const dryRun of [true, false]) {
         const env = dryRun ? { ...fixture.env, SETUP_DRY_RUN: "1" } : fixture.env;
         const result = runSkills(["--scope", "project", "--profile", "base", "--agent", agent], { ...fixture, env }, { cwd: fixture.project });
 
         assert.notEqual(result.status, 0, result.stdout);
-        assert.match(result.stderr, new RegExp(`refusing to set up project skills: ${escapeRegExp(linkPath)} links outside the project`));
+        assert.match(result.stderr, new RegExp(`refusing to set up project skills: ${escapeRegExp(linkPath)} is a symbolic link`));
+        assert.doesNotMatch(result.stdout, /DRY-RUN/);
       }
       assert.equal(existsSync(`${fixture.log}.cwd`), false);
       assert.deepEqual((await readdir(fixture.project)).sort(), projectBefore);
-      assert.equal(await readlink(linkPath), path.join(fixture.root, target));
+      assert.deepEqual((await readdir(path.dirname(linkPath))).sort(), linkDirBefore);
+      assert.equal(await readlink(linkPath), linkText);
+      assert.deepEqual(await readdir(path.join(fixture.project, "shared-skills")), ["kept"]);
+      assert.equal(await readText(path.join(fixture.project, "shared-profile.json")), "shared profile\n");
       assert.deepEqual((await readdir(outside)).sort(), ["skills", "skills-lock.json", "skills-profile.json"]);
       assert.deepEqual(await readdir(path.join(outside, "skills")), ["precious"]);
       assert.equal(await readText(path.join(outside, "skills-lock.json")), "outside lock\n");
@@ -1015,17 +1037,63 @@ for (const { name, agent, link, target } of outsideLinkCases) {
   });
 }
 
-test("project scope keeps a skills directory link that stays inside the project", posixOnly, async () => {
+async function listTree(root) {
+  const entries = [];
+  for (const entry of await readdir(root, { recursive: true })) {
+    entries.push(entry);
+  }
+  return entries;
+}
+
+// Moved into <base>/dotfiles-skills-backup/<project>/, a `..` link resolves to
+// the backup directory itself, so restoring unmanaged entries through it would
+// copy every project's backups into this checkout.
+test("project scope does not copy other projects' backups through an .agents/skills link to ..", posixOnly, async () => {
   const fixture = await createFixture({ npxBody: stagingNpxBody });
   try {
-    await mkdir(path.join(fixture.project, "shared-skills"), { recursive: true });
+    const otherBackup = path.join(privateSkillsBase(fixture), "dotfiles-skills-backup", "other-project", ".agents-skills.20260101000000.1", "victim-secret");
+    await mkdir(otherBackup, { recursive: true });
+    await writeFile(path.join(otherBackup, "SKILL.md"), "other project's backup\n");
     await mkdir(path.join(fixture.project, ".agents"));
-    await symlink(path.join("..", "shared-skills"), path.join(fixture.project, ".agents", "skills"));
+    await symlink("..", path.join(fixture.project, ".agents", "skills"));
 
     const result = runProjectInstall(fixture);
 
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "find-skills", "SKILL.md")), "find-skills\n");
+    assert.notEqual(result.status, 0, result.stdout);
+    assert.match(result.stderr, /refusing to set up project skills: .*\.agents.skills is a symbolic link/);
+    const leaked = (await listTree(fixture.project)).filter(entry => entry.includes("victim-secret") || entry.includes("other-project"));
+    assert.deepEqual(leaked, []);
+    assert.equal(await readlink(path.join(fixture.project, ".agents", "skills")), "..");
+    assert.deepEqual(await readdir(path.join(privateSkillsBase(fixture), "dotfiles-skills-backup")), ["other-project"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope without external skills names backups when the private base is refused", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  delete fixture.env.TMPDIR;
+  try {
+    await writeFile(
+      path.join(fixture.dotfiles, "skills", "profiles", "local-only.json"),
+      JSON.stringify({ description: "Local only", external: [], local: ["local-one"] }, null, 2) + "\n",
+    );
+    const launcher = `
+const runtime = process.argv[1];
+Object.defineProperty(process, "platform", { value: "darwin" });
+process.argv = [process.execPath, runtime, ...process.argv.slice(2)];
+require(runtime);
+`;
+    const result = spawnSync(
+      process.execPath,
+      ["-e", launcher, skillsRuntime, "--scope", "project", "--profile", "local-only", "--agent", "codex"],
+      { cwd: fixture.project, env: fixture.env, encoding: "utf8" },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot keep project skill backups under .* must be owned by you or root and not writable by others/);
+    assert.doesNotMatch(result.stderr, /staging/);
+    assert.deepEqual(await readdir(fixture.project), [".git"]);
   } finally {
     await fixture.cleanup();
   }

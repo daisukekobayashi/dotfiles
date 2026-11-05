@@ -1083,33 +1083,23 @@ function projectTargets(projectRoot, agents, includeLockfile) {
     ];
 }
 // A checkout can make a target, or a directory such as .agents or .claude on
-// the way to it, a link to somewhere else. Backups, moves, and writes would
-// then replace files outside the project or copy outside files into it, so
-// refuse before changing anything. Links that stay inside the project are
-// kept as they are.
-function requireProjectTargetsInside(projectRoot, targets) {
-    const root = fs.realpathSync(projectRoot);
+// the way to it, a link. Backups, moves, and writes would then follow it out
+// of the project, and a link moved into the backup directory resolves again
+// from there, so even a link inside the project can copy other projects'
+// backups into this one. Refuse any link, wherever it points and even when it
+// dangles, before changing anything.
+function requireNoProjectTargetLinks(projectRoot, targets) {
     for (const target of targets) {
         let current = projectRoot;
         for (const part of path.relative(projectRoot, target).split(path.sep)) {
             current = path.join(current, part);
-            const linked = getLinkTarget(current);
-            if (linked === null) {
-                if (!fs.lstatSync(current, { throwIfNoEntry: false })) {
-                    break;
-                }
-                continue;
+            const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+            if (!stat) {
+                break;
             }
-            let resolved;
-            try {
-                resolved = fs.realpathSync(current);
-            }
-            catch {
-                resolved = path.resolve(fs.realpathSync(path.dirname(current)), linked);
-            }
-            if (!isInsideOrSame(resolved, root)) {
-                fail(`refusing to set up project skills: ${current} links outside the project to ${linked}; ` +
-                    "replace the link with a directory or file inside the project");
+            if (stat.isSymbolicLink()) {
+                fail(`refusing to set up project skills: ${current} is a symbolic link to ${fs.readlinkSync(current)}; ` +
+                    "replace it with a directory or file in the project");
             }
         }
     }
@@ -1170,7 +1160,7 @@ function setupProjectSkills(dotfilesRoot, profilesCsv, agents, dryRun) {
     const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "project");
     const hasExternal = plan.external.length > 0;
     const targets = projectTargets(projectRoot, agents, hasExternal);
-    requireProjectTargetsInside(projectRoot, targets);
+    requireNoProjectTargetLinks(projectRoot, targets);
     const base = privateSkillsBase();
     const backupName = path.basename(projectRoot);
     const localRoot = path.join(dotfilesRoot, "skills", "local");
@@ -1201,7 +1191,7 @@ function setupProjectSkills(dotfilesRoot, profilesCsv, agents, dryRun) {
         info("Consider ignoring generated skill directories: .agents/skills/ .claude/skills/");
         return;
     }
-    const stagingBase = requirePrivateDir(base, "project skill staging", projectRoot);
+    const stagingBase = requirePrivateDir(base, hasExternal ? "project skill staging" : "project skill backups", projectRoot);
     const npmCacheDir = hasExternal ? requirePrivateDir(path.join(stagingBase, NPM_CACHE_NAME), "the skills npm cache", projectRoot) : "";
     // Check the shared backup directory before creating this project's directory in it.
     const backupBase = requirePrivateDir(path.join(stagingBase, BACKUP_DIR_NAME), "project skill backups", projectRoot);

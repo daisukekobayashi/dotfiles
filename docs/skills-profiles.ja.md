@@ -546,7 +546,7 @@ npx skills add <owner/repo> \
 
 既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、profile 管理版に置き換えます。ただし、選択されなくなった、または存在しなくなった skill を指す `skills/local` へのリンクと、その未編集の管理コピーは戻さず、backup にだけ残します。編集済みのコピーは warning を出して残します。Git の dirty state は warning に留め、実行自体は止めません。
 
-どちらの scope でも、`npx skills add` は project や `/tmp` のような共有 temp directory ではなく、実行ごとに作る private directory で実行します。npm cache と project の backup も同じユーザー専用の場所に置きます。Linux では `$XDG_CACHE_HOME` または `~/.cache`、macOS では `$TMPDIR`、Windows では `%TEMP%` です。Cache は `dotfiles-skills-npm-cache/` で、実行をまたいで再利用します。Backup は `dotfiles-skills-backup/<project directory 名>/` に置き、install が成功しても残します。その場所か上位の directory が他のユーザーの所有か他のユーザーから書き込み可能な場合、または project 内の `.agents`、`.claude`、agent skill directory、`skills-lock.json`、`.agents/skills-profile.json` が project の外を指す link の場合は、何も変更せずに止まります。
+どちらの scope でも、`npx skills add` は project や `/tmp` のような共有 temp directory ではなく、実行ごとに作る private directory で実行します。npm cache と project の backup も同じユーザー専用の場所に置きます。Linux では `$XDG_CACHE_HOME` または `~/.cache`、macOS では `$TMPDIR`、Windows では `%TEMP%` です。Cache は `dotfiles-skills-npm-cache/` で、実行をまたいで再利用します。Backup は `dotfiles-skills-backup/<project directory 名>/` に置き、install が成功しても残します。その場所か上位の directory が他のユーザーの所有か他のユーザーから書き込み可能な場合、または project 内の `.agents`、`.claude`、agent skill directory、`skills-lock.json`、`.agents/skills-profile.json` が symbolic link の場合は、リンク先が project の内外どちらでも、リンク切れでも、何も変更せずに止まります。
 
 外部インストール後は、指定した各スキルの `SKILL.md` が存在することを確認します。欠落時は user view を入れ替えず、project scope では既存のバックアップを復元します。`profile validate` は設定の構造を確認するもので、配布元の存在確認や実行評価は行いません。
 
