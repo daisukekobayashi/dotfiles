@@ -37,6 +37,10 @@ test("Codex review cycle pushes review fixes to the publication remote", async (
   assert.match(push, /`git push <remote> <branch>:refs\/heads\/<branch>`/);
   assert.match(push, /`<remote>` is the push remote captured in step 2/);
   assert.match(push, /`branch\.<branch>\.pushRemote` or `remote\.pushDefault`/);
+  assert.match(push, /Stop and report `<branch>` unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`/, "branch checked before the refspec");
+  assert.match(push, /on resume without it, read `<remote>` with `git config --get-all branch\.<branch>\.remote`[^.]*exactly one value/, "resume reads the upstream remote");
+  assert.match(push, /`gh pr view --json headRepository,headRepositoryOwner`/, "resume checks the PR head repository");
+  assert.doesNotMatch(push, /resolve it as `github-pr-publish` step 2 does/, "URL matching can pick the parent in a fork layout");
   assert.doesNotMatch(push, /normal push/, "a plain push follows pushRemote away from the PR head");
   assert.match(push, /Confirm the fixes are present in the remote PR head/);
 });

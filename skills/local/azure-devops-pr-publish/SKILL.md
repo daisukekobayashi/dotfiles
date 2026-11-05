@@ -45,10 +45,14 @@ Still stop and ask before:
      `[A-Za-z0-9/._-]`, before running any command with it. This also refuses a
      leading `+`, which would make the push refspec a force push.
    - Resolve the push remote. Use the remote the user names. Otherwise
-     `<remote>` is the one remote whose fetch and push URLs (`git remote -v`)
-     both name the resolved organization, project, and repository in one of the
-     accepted remote URL shapes from the common context. If no remote or more
-     than one remote matches, stop and report the candidates before pushing.
+     `<remote>` is the one remote whose fetch URL and every push URL
+     (`git remote -v`) name the resolved organization, project, and repository
+     in one of the accepted remote URL shapes from the common context, after
+     decoding percent-encoding (`My%20Project` is `My Project`) and ignoring
+     letter case, the `user@` part, and a trailing `.git` or `/`. Stop and
+     report the candidates when more than one remote matches. When none
+     matches, as with an SSH host alias, stop and ask the user to name the
+     remote.
 3. Inspect local state:
    - `git status --short --branch`
    - `git diff --stat`

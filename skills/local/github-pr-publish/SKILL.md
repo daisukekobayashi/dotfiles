@@ -50,7 +50,8 @@ Still stop and ask before any action outside that narrow scope, including:
    - Confirm the target is inside a git repository.
    - Resolve the current branch with `git branch --show-current`. Stop and report the branch unless it is a **safe branch name**, using only `[A-Za-z0-9/._-]`, before running any command with it. This also refuses a leading `+`, which would make the push refspec a force push.
    - Resolve the remote repository with `gh repo view --json nameWithOwner,url,defaultBranchRef`.
-   - Resolve the push remote. Use the remote the user names. Otherwise `<remote>` is the one remote whose fetch and push URLs (`git remote -v`) both name the repository's host and `<owner>/<repo>`, ignoring the scheme, user, letter case, and a trailing `.git` or `/`. If no remote or more than one remote matches, stop and report the candidates before pushing.
+   - Resolve the push remote. Use the remote the user names. Otherwise `<remote>` is the one remote whose fetch URL and every push URL (`git remote -v`) name the repository's host and `<owner>/<repo>`, ignoring the scheme, user, letter case, and a trailing `.git` or `/`. Stop and report the candidates when more than one remote matches. When none matches, as with an SSH host alias, stop and ask the user to name the remote.
+   - Without a user-named remote, rule out a fork layout, where `gh repo view` may resolve the parent: when `gh repo set-default --view` shows no default and another remote's repository is in the resolved repository's fork network (one is the other's parent in `gh repo view <owner>/<repo> --json parent`, or both have the same parent), stop and ask the user to name the remote.
    - Stop if the current branch is the default branch.
 3. Inspect local state before changing anything.
    - Run `git status --short --branch`.

@@ -88,12 +88,24 @@ test("publish skills check the branch name and resolve one push remote", async (
     assert.match(context, /Stop and report the branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${publish}: safe branch name`);
     assert.match(context, /leading `\+`[^.]*force push/, `${publish}: + refspec refused`);
     assert.match(context, /Use the remote the user names\./, `${publish}: user-named remote`);
-    assert.match(context, /Otherwise `<remote>` is the one remote whose fetch and push URLs \(`git remote -v`\)/, `${publish}: URL-matched remote`);
-    assert.match(context, /If no remote or more than one remote matches, stop and report the candidates before pushing\./, `${publish}: exactly one match`);
+    assert.match(context, /Otherwise `<remote>` is the one remote whose fetch URL and every push URL \(`git remote -v`\)/, `${publish}: URL-matched remote`);
+    assert.match(context, /Stop and report the candidates when more than one remote matches\./, `${publish}: several matches stop`);
+    assert.match(context, /When none matches, as with an SSH host alias, stop and ask the user to name the remote\./, `${publish}: no match asks for a remote`);
   }
 
   const github = flat(await readText(path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md")));
   assert.match(github, /ignoring the scheme, user, letter case, and a trailing `\.git` or `\/`/, "github: URL normalization");
   const azure = flat(await readText(path.join(repoRoot, "skills", "local", "azure-devops-pr-publish", "SKILL.md")));
   assert.match(azure, /accepted remote URL shapes/, "azure: URL shapes from the common context");
+  assert.match(azure, /decoding percent-encoding \(`My%20Project` is `My Project`\) and ignoring letter case, the `user@` part, and a trailing `\.git` or `\/`/, "azure: URL normalization");
+});
+
+test("github-pr-publish stops in an unresolved fork layout", async () => {
+  const skill = await readText(path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md"));
+  const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+
+  assert.ok(context, "missing step 2");
+  assert.match(context, /`gh repo set-default --view` shows no default/, "unset gh default repo");
+  assert.match(context, /`gh repo view <owner>\/<repo> --json parent`/, "fork network lookup");
+  assert.match(context, /fork network[^.]*stop and ask the user to name the remote\./, "fork layout asks for a remote");
 });
