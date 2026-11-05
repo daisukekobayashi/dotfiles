@@ -105,7 +105,8 @@ test("github-pr-publish stops in an unresolved fork layout", async () => {
   const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
 
   assert.ok(context, "missing step 2");
-  assert.match(context, /`gh repo set-default --view` shows no default/, "unset gh default repo");
+  assert.doesNotMatch(context, /set-default|shows no default/, "gh's default names the PR base, not the push target");
+  assert.match(context, /Check every other remote: stop and ask the user to name the remote when its repository is in the resolved repository's fork network/, "fork layout asks for a remote");
   assert.match(context, /`gh repo view <owner>\/<repo> --json parent`/, "fork network lookup");
-  assert.match(context, /fork network[^.]*stop and ask the user to name the remote\./, "fork layout asks for a remote");
+  assert.match(context, /or when its URL does not name an `<owner>\/<repo>` on the resolved repository's host[^.]*so the check cannot finish\./, "undeterminable remote fails closed");
 });
