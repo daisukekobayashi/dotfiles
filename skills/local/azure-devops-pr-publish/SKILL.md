@@ -59,14 +59,21 @@ Still stop and ask before:
    - Use the `git-commit` skill.
    - Stage only files belonging to the requested work.
 7. Push the branch.
+   - `<remote>` is the Azure DevOps remote resolved in step 2. The PR base
+     branch is the existing PR's target, otherwise the target
+     `azure-devops-pr-create` uses: the default branch unless the user
+     specifies another target.
    - Read the upstream with
      `git for-each-ref --format='%(upstream:short)' refs/heads/<branch>`.
-   - If it is the same branch name on the Azure DevOps remote, use a normal push.
-   - If no upstream exists, set upstream for the same branch name.
-   - If it is the PR base branch, local or remote-tracking, replace it with
-     `git push -u <remote> <branch>` and report the replacement.
-   - Stop and report any other upstream, such as a differently named branch or
-     another remote; it may back an existing PR.
+   - Continue when there is no upstream, the same branch name on `<remote>`, or
+     the PR base branch, local or remote-tracking. Stop and report any other
+     upstream, such as a differently named branch or another remote; it may
+     back an existing PR.
+   - Push with `git push -u <remote> <branch>:refs/heads/<branch>`. The
+     explicit refspec keeps a base upstream or `push.default=upstream` from
+     sending the branch to the base. This sets the upstream for the same branch
+     name; report it when it replaced the PR base branch.
+   - Re-read the upstream; stop and report unless it is `<remote>/<branch>`.
 8. Use `azure-devops-pr-create` to create or resolve the PR.
    - Pass along the actual publication request, exact target, existing approvals,
      known Work Item IDs, completion scope, and the user's state-transition intent.

@@ -79,8 +79,8 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
 
 1. Inspect `git status --short` and `git worktree list --porcelain` before changing
    state. Reuse a worktree only when its branch, changes, and ownership match this
-   Work Item and no other worker is using it. When reusing one, check its
-   upstream as in step 5.
+   Work Item and no other worker is using it. When reusing one, resolve its
+   base as in step 2 and check its upstream as in step 5.
 2. Resolve the base from the user's request or repository convention. Otherwise
    inspect the default branch and local branch state, asking only if the intended
    base remains ambiguous. Do not assume a local ref is current or silently branch
