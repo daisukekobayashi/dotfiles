@@ -175,9 +175,10 @@ adapters. This is the target layering; the current split is described below.
 - Provider delivery skills (`github-issue-delivery` and
   `azure-devops-work-item-delivery`) own how each phase is performed on their
   provider: PR creation and publication, API and CLI calls, hosted review
-  cycles, provider-specific state such as Work Item links and state
-  transitions, and the approval procedures of the component skills they call.
-  They reference `delivery-common` for shared policy instead of restating it.
+  cycles, and provider-specific state such as Work Item links and state
+  transitions. They reference `delivery-common` for shared policy instead of
+  restating it, and forward approvals to the component skills they call, such
+  as `github-pr-publish`, which keep their own approval rules.
   Policy that exists for only one provider, such as hosted Codex review round
   limits and re-review conditions, stays in that provider's skill.
 
@@ -193,9 +194,10 @@ Migrate incrementally rather than in one refactor. When a policy issue would
 edit the same policy in both provider delivery skills, move the part that is
 common to both providers into `delivery-common` as part of that issue and have
 both provider skills reference it, instead of editing it twice. Leave
-provider-only policy in the provider skill. Update the ownership statement in
-`delivery-common/SKILL.md` in the same issue so it matches what moved. Leave
-other duplicated sections in place until a policy change touches them.
+provider-only policy in the provider skill. Update the ownership statement and
+the frontmatter `description` in `delivery-common/SKILL.md` in the same issue so
+they match what moved. Leave other duplicated policy in place until a policy
+change touches it.
 
 Azure DevOps parity is the default. Policy in `delivery-common` applies to both
 providers automatically. When a change on one provider also requires
