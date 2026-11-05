@@ -111,7 +111,7 @@ deferred with a reason. Leave disputed material findings or design decisions
 open for the user. Avoid scope expansion and speculative churn.
 
 After fixes, follow Local Review's Repeat and advance for focused follow-up,
-escalation to a full pair, and advancement.
+escalation to a full review, and advancement.
 
 ### 3. Publish and complete hosted Codex review
 
@@ -130,7 +130,7 @@ unresolved items. An acknowledgement or an `eyes` reaction is not a completed
 review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
-for focused follow-up or a full pair under Local Review's Repeat and advance. Obtain a fresh
+for focused follow-up or a full review under Local Review's Repeat and advance. Obtain a fresh
 hosted Codex review when the delta from the last hosted-reviewed head to the
 published head contains a material change under Local Review's Triage, whether
 it came from hosted or local follow-up; when uncertain, request it. Otherwise,

@@ -2,7 +2,7 @@
 
 The tier describes the change, not its author. It selects the security
 reviewer and the recommended human review; every tier still runs the full
-local review pair and the caller's merge confirmation.
+local review and the caller's merge confirmation.
 
 ## Set and update the tier
 
