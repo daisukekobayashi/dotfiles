@@ -99,10 +99,12 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
    `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path
    and branch; a detached workspace needs a dedicated Work Item branch before
    implementation. Read the upstream with
-   `git for-each-ref --format='%(upstream:short)' refs/heads/<branch>`, which
-   also shows an upstream whose remote ref is missing. Keep no upstream or the
+   `git config --get branch.<branch>.remote` and
+   `git config --get branch.<branch>.merge`, which work without a
+   remote-tracking ref; no output means no upstream. Keep no upstream or the
    same-named branch on the publication remote; publication sets it on first
-   push. If the upstream is the base or its local branch, remove it with
+   push. If the upstream is the base or its local branch (remote `.`), remove
+   it with
    `git branch --unset-upstream <branch>`. Stop and report any other upstream,
    such as a differently named branch or another remote; it may back an
    existing PR.

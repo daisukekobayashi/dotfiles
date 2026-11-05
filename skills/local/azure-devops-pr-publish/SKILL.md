@@ -63,8 +63,8 @@ Still stop and ask before:
      branch is the existing PR's target, otherwise the target
      `azure-devops-pr-create` uses: the default branch unless the user
      specifies another target.
-   - Read the upstream with
-     `git for-each-ref --format='%(upstream:short)' refs/heads/<branch>`.
+   - Read the upstream with `git config --get branch.<branch>.remote` and
+     `git config --get branch.<branch>.merge`; no output means no upstream.
    - Continue when there is no upstream, the same branch name on `<remote>`, or
      the PR base branch, local or remote-tracking. Stop and report any other
      upstream, such as a differently named branch or another remote; it may
@@ -73,7 +73,8 @@ Still stop and ask before:
      explicit refspec keeps a base upstream or `push.default=upstream` from
      sending the branch to the base. This sets the upstream for the same branch
      name; report it when it replaced the PR base branch.
-   - Re-read the upstream; stop and report unless it is `<remote>/<branch>`.
+   - Re-read the upstream; stop and report unless the remote is `<remote>`
+     and the merge ref is `refs/heads/<branch>`.
 8. Use `azure-devops-pr-create` to create or resolve the PR.
    - Pass along the actual publication request, exact target, existing approvals,
      known Work Item IDs, completion scope, and the user's state-transition intent.
