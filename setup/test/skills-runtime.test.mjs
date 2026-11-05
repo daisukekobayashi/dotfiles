@@ -443,14 +443,16 @@ exit 42
 const stagingNpxBody = `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "\${PWD}" > "\${TEST_SKILLS_LOG}.cwd"
-ls -ld "\${PWD}" | cut -c1-10 > "\${TEST_SKILLS_LOG}.mode"
+mode="$(ls -ld "\${PWD}")"
+printf '%s\\n' "\${mode:0:10}" > "\${TEST_SKILLS_LOG}.mode"
 dir="\${PWD}"
 while :; do
   if [ -x "\${dir}/node_modules/.bin/skills" ]; then
     exec "\${dir}/node_modules/.bin/skills" "$@"
   fi
   [ "\${dir}" = / ] && break
-  dir="$(dirname "\${dir}")"
+  dir="\${dir%/*}"
+  dir="\${dir:-/}"
 done
 if [ -n "\${TEST_NPX_EXIT:-}" ]; then
   exit "\${TEST_NPX_EXIT}"

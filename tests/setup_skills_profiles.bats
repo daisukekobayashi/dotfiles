@@ -9,6 +9,10 @@ setup() {
   TEST_BIN="${TEST_ROOT}/bin"
   TEST_LOG="${TEST_ROOT}/skills.log"
   TEST_PROJECT="${TEST_ROOT}/project"
+  # Project installs refuse to stage under a world-writable ancestor such as
+  # /tmp, so stage them in the ignored .cache/ of this checkout.
+  mkdir -p "$(repo_root)/.cache"
+  TEST_STAGING="$(mktemp -d "$(repo_root)/.cache/bats-skills-staging.XXXXXX")"
 
   mkdir -p \
     "${TEST_BIN}" \
@@ -112,6 +116,7 @@ EOF
 }
 
 teardown() {
+  rm -rf "${TEST_STAGING}"
   teardown_test_env
 }
 
@@ -123,6 +128,7 @@ teardown() {
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    XDG_CACHE_HOME="${TEST_STAGING}" \
     PATH="${TEST_BIN}:${PATH}" \
     TEST_SKILLS_LOG="${TEST_LOG}" \
     "$(setup_script_path)" \
@@ -170,12 +176,15 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    XDG_CACHE_HOME="${TEST_STAGING}" \
     PATH="${TEST_BIN}:${PATH}" \
     TEST_SKILLS_LOG="${TEST_LOG}" \
     "$(setup_script_path)" \
     skills --scope project --profile office --agent codex --agent claude-code
 
   [ "$status" -ne 0 ]
+  [[ "$output" != *"cannot stage project skills"* ]]
+  grep -F 'skills add' "${TEST_LOG}"
   [ "$(cat skills-lock.json)" = "old-lock" ]
   [ "$(cat .agents/skills-profile.json)" = "old-profile" ]
   [ "$(cat .agents/skills/old-agent/SKILL.md)" = "old-agent" ]
@@ -203,12 +212,15 @@ EOF
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
+    XDG_CACHE_HOME="${TEST_STAGING}" \
     PATH="${TEST_BIN}:${PATH}" \
     TEST_SKILLS_LOG="${TEST_LOG}" \
     "$(setup_script_path)" \
     skills --scope project --profile base --agent codex --agent claude-code
 
   [ "$status" -ne 0 ]
+  [[ "$output" != *"cannot stage project skills"* ]]
+  grep -F 'skills add' "${TEST_LOG}"
   [ ! -e skills-lock.json ]
   [ ! -e .agents/skills/partial ]
   [ ! -e .claude/skills/partial ]

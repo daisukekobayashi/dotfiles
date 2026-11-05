@@ -288,7 +288,8 @@ set -euo pipefail
 PATH="/bin:\${PATH}"
 printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
 printf '%s\\n' "\${PWD}" > "\${TEST_SKILLS_LOG}.cwd"
-ls -ld "\${PWD}" | cut -c1-10 > "\${TEST_SKILLS_LOG}.mode"
+mode="$(ls -ld "\${PWD}")"
+printf '%s\\n' "\${mode:0:10}" > "\${TEST_SKILLS_LOG}.mode"
 if [ -n "\${TEST_NPX_EXIT:-}" ]; then
   exit "\${TEST_NPX_EXIT}"
 fi
