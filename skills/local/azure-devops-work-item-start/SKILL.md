@@ -32,13 +32,14 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      absent, infer likely areas from the description and repository, and label
      them as inferred.
    - When multiple Work Items were provided, list open PRs with
-     `az repos pr list` and compare changed files with
+     `az repos pr list`. For each PR, check its source and target names as
+     `az repos pr list` returns them before running any command with them.
+     Unless both are a **safe branch name**, using only `[A-Za-z0-9/._-]`, skip
+     that PR's comparison, report the PR and its branch as not compared, and
+     continue. Otherwise compare changed files with
      `git diff --name-only <target>...<source>` when both branches are
      available as local or remote-tracking refs. Do not fetch or check out
-     branches only for this. Before `git diff`, check both the source and
-     target names as `az repos pr list` returns them; when either is not a safe
-     branch name, skip that PR's comparison, report the PR and its branch as not
-     compared, and continue.
+     branches only for this.
 3. Summarize and classify each Work Item:
    - directly actionable implementation work
    - parent/tracking item

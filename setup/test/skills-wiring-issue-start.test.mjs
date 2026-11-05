@@ -138,5 +138,8 @@ test("azure-devops-work-item-start skips comparing an open PR with an unsafe bra
   const step2 = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
 
   assert.ok(step2, "missing step 2");
-  assert.match(step2, /Before `git diff`, check both the source and target names as `az repos pr list` returns them; when either is not a safe branch name, skip that PR's comparison, report the PR and its branch as not compared, and continue\./, "both names checked before git diff");
+  const check = step2.search(/For each PR, check its source and target names as `az repos pr list` returns them before running any command with them\. Unless both are a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, skip that PR's comparison, report the PR and its branch as not compared, and continue\./);
+  assert.ok(check >= 0, "both names checked with the stated charset; an unsafe PR is skipped and reported");
+  assert.ok(check < step2.indexOf("available as local or remote-tracking refs"), "names checked before the ref availability check");
+  assert.ok(check < step2.indexOf("git diff --name-only"), "names checked before git diff");
 });
