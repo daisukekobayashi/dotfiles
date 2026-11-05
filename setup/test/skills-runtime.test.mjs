@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lstat, mkdir, readdir, readlink, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readdir, readlink, realpath, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -434,6 +434,218 @@ exit 42
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
     assert.equal(await readText(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md")), "old-claude\n");
   } finally {
+    await fixture.cleanup();
+  }
+});
+
+// Like npx, run a node_modules/.bin/skills found in any ancestor of the
+// current directory before installing.
+const stagingNpxBody = `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "\${PWD}" > "\${TEST_SKILLS_LOG}.cwd"
+mode="$(ls -ld "\${PWD}")"
+printf '%s\\n' "\${mode:0:10}" > "\${TEST_SKILLS_LOG}.mode"
+dir="\${PWD}"
+while :; do
+  if [ -x "\${dir}/node_modules/.bin/skills" ]; then
+    exec "\${dir}/node_modules/.bin/skills" "$@"
+  fi
+  [ "\${dir}" = / ] && break
+  dir="\${dir%/*}"
+  dir="\${dir:-/}"
+done
+if [ -n "\${TEST_NPX_EXIT:-}" ]; then
+  exit "\${TEST_NPX_EXIT}"
+fi
+if [ -n "\${TEST_LOCK_STAGING:-}" ]; then
+  mkdir -p locked
+  : > locked/file
+  chmod 500 locked
+fi
+mkdir -p .agents/skills/find-skills
+printf 'find-skills\\n' > .agents/skills/find-skills/SKILL.md
+printf 'new lock\\n' > skills-lock.json
+`;
+
+function runProjectInstall(fixture) {
+  return runSkills(["--scope", "project", "--profile", "base", "--agent", "codex"], fixture, { cwd: fixture.project });
+}
+
+test("project scope stages each install in a private directory under XDG_CACHE_HOME", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = path.join(fixture.root, "xdg-cache");
+  try {
+    const result = runProjectInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), fixture.env.XDG_CACHE_HOME);
+    assert.match(path.basename(staging), /^dotfiles-skills-.+/);
+    assert.equal((await readText(`${fixture.log}.mode`)).trim(), "drwx------");
+    assert.equal(existsSync(staging), false);
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "find-skills", "SKILL.md")), "find-skills\n");
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "new lock\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope stages under ~/.cache when XDG_CACHE_HOME is not absolute", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = "relative-cache";
+  try {
+    const result = runProjectInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), path.join(fixture.home, ".cache"));
+    assert.equal(existsSync(staging), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope removes the staging directory after a failed install", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = path.join(fixture.root, "xdg-cache");
+  fixture.env.TEST_NPX_EXIT = "42";
+  try {
+    const result = runProjectInstall(fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /failed with exit 42/);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), fixture.env.XDG_CACHE_HOME);
+    assert.equal(existsSync(staging), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope does not stage under SETUP_TMPDIR where a parent node_modules/.bin could be planted", async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = path.join(fixture.root, "xdg-cache");
+  fixture.env.TMPDIR = path.join(fixture.root, "user-temp");
+  await mkdir(fixture.env.TMPDIR, { recursive: true });
+  try {
+    const plantedBin = path.join(fixture.tmp, "node_modules", ".bin");
+    await mkdir(plantedBin, { recursive: true });
+    await writeFile(
+      path.join(plantedBin, "skills"),
+      `#!/bin/sh\nprintf 'planted\\n' >> "\${TEST_SKILLS_LOG}.planted"\nexit 99\n`,
+      { mode: 0o755 },
+    );
+
+    const result = runProjectInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(staging.startsWith(fixture.tmp + path.sep), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+const posixOnly = { skip: process.platform === "win32" };
+const linuxOnly = { skip: process.platform === "darwin" || process.platform === "win32" };
+
+async function plantSkillsBin(dir) {
+  const bin = path.join(dir, "node_modules", ".bin");
+  await mkdir(bin, { recursive: true });
+  await writeFile(
+    path.join(bin, "skills"),
+    `#!/bin/sh\nprintf 'planted\\n' >> "\${TEST_SKILLS_LOG}.planted"\nexit 99\n`,
+    { mode: 0o755 },
+  );
+}
+
+test("project scope fails closed when SETUP_HOME is relative", linuxOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.SETUP_HOME = "relative-home";
+  try {
+    await plantSkillsBin(fixture.project);
+
+    const result = runProjectInstall(fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /set HOME or XDG_CACHE_HOME to an absolute path/);
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+    assert.equal(existsSync(path.join(fixture.project, "relative-home")), false);
+    assert.equal(existsSync(path.join(fixture.project, ".cache")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope refuses a staging base with an ancestor others can write", linuxOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  const shared = path.join(fixture.root, "shared");
+  fixture.env.XDG_CACHE_HOME = path.join(shared, "cache");
+  try {
+    await mkdir(shared);
+    await chmod(shared, 0o1777);
+
+    const refused = runProjectInstall(fixture);
+
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, new RegExp(`${shared.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} must be owned by you or root and not writable by others`));
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+
+    // A group-writable ancestor is allowed, as with umask 002 and user-private groups.
+    await chmod(shared, 0o775);
+    const allowed = runProjectInstall(fixture);
+
+    assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout);
+    assert.equal(path.dirname((await readText(`${fixture.log}.cwd`)).trim()), await realpath(fixture.env.XDG_CACHE_HOME));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("macOS project scope fails closed when TMPDIR is unset and the temp dir is /tmp", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  delete fixture.env.TMPDIR;
+  try {
+    const launcher = `
+const runtime = process.argv[1];
+Object.defineProperty(process, "platform", { value: "darwin" });
+process.argv = [process.execPath, runtime, ...process.argv.slice(2)];
+require(runtime);
+`;
+    const result = spawnSync(
+      process.execPath,
+      ["-e", launcher, skillsRuntime, "--scope", "project", "--profile", "base", "--agent", "codex"],
+      { cwd: fixture.project, env: fixture.env, encoding: "utf8" },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must be owned by you or root and not writable by others; set XDG_CACHE_HOME \(Linux\) or TMPDIR \(macOS\)/);
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope warns and keeps a successful install when staging cleanup fails", {
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.TEST_LOCK_STAGING = "1";
+  let staging;
+  try {
+    const result = runProjectInstall(fixture);
+    staging = (await readText(`${fixture.log}.cwd`)).trim();
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stderr, /Could not remove staging directory/);
+    assert.doesNotMatch(result.stderr, /Restored previous project skills/);
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "find-skills", "SKILL.md")), "find-skills\n");
+  } finally {
+    if (staging && existsSync(path.join(staging, "locked"))) {
+      await chmod(path.join(staging, "locked"), 0o700);
+    }
     await fixture.cleanup();
   }
 });
