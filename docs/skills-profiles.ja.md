@@ -146,7 +146,11 @@ PR サイクルへの委譲も含みます。自動検出だけではこれら�
 明示起動限定の `change-security-review` は、両者と同じ対象選択と指摘タグを使い、
 OpenAI の `codex-security` の diff レビュー手順を参考に、変更が持ち込む悪用可能な
 脆弱性を確認します。レビュー対象の base に `SECURITY.md` があれば、脅威モデルの
-ポリシーとして読みます。delivery フローでは、変更のリスク tier が High のとき、
+ポリシーとして読みます。
+3つのレビューはいずれも、base のルートに `REVIEW.md` があればレビュー方針として読みます。
+通常レビューと adversarial レビューでは重点の絞り込みや対象外パスの指定に使えますが、
+sensitive path を対象外にしたり、material やセキュリティの基準を下げたりはできません。
+delivery フローでは、変更のリスク tier が High のとき、
 または diff が sensitive path に触れるときに3番目のローカルレビューとして実行します。
 `delivery-common` のリスク tier（Low、Medium、High）は作者ではなく変更から決まり、
 推奨する人間レビュー（AI のみ、1名、複数名）を PR 公開前とマージ確認時に提示します。

@@ -533,6 +533,15 @@ test("change review skills are explicit-only and share target selection", async 
   assert.equal(runnerSection(security).replaceAll("change-security-review", "NAME"),
     runnerSection(changeReview).replaceAll("change-review", "NAME"));
   assert.match(security, /SECURITY\.md/);
+  for (const skill of [changeReview, adversarial, security]) {
+    const target = targetSection(skill);
+    assert.match(target, /root has a `REVIEW\.md` at the merge-base/);
+    assert.match(target, /never lowers material or security\s+criteria, skips a sensitive path/);
+    assert.match(target, /\(\.\.\/delivery-common\/references\/risk-tier\.md#sensitive-paths\)/);
+    assert.match(target, /`change-security-review` applies none of its skip paths/);
+    assert.match(target, /never\s+policy for this review/);
+    assert.match(target, /state that change in Coverage and Residual Risk even\s+without a finding/);
+  }
   assert.match(security, /`introduced`[\s\S]*`worsened`[\s\S]*`pre-existing`/);
   assert.match(security, /^description:.*`github-issue-delivery`.*`azure-devops-work-item-delivery`.*risk tier/m);
   const deliveryCommon = path.join(repoRoot, "skills", "local", "delivery-common");
@@ -544,6 +553,8 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(riskTier, /Run `change-security-review` as a third local reviewer/);
   assert.match(riskTier, /Keep them\s+out of the PR body/);
   assert.match(riskTier, /Repository policy adds paths; it never removes a default/);
+  assert.match(riskTier, /^## Sensitive paths$/m);
+  assert.match(riskTier, /deletes `SECURITY\.md`, `REVIEW\.md`, or `CODEOWNERS`\s+touches a sensitive path/);
   assert.match(riskTier, /Always read policy at the delivery's recorded base/);
   assert.match(riskTier, /Always run it with `--base <base-sha>`/);
   assert.match(riskTier, /current tier is High/);

@@ -148,6 +148,9 @@ The explicit-only `change-security-review` skill shares their target selection
 and finding tags and reviews a change for exploitable vulnerabilities, drawing
 on OpenAI's `codex-security` diff review workflow. It reads optional
 `SECURITY.md` files from the reviewed repository's base as its threat-model policy.
+All three read an optional root `REVIEW.md` at the base as review policy; it can
+narrow focus and skip paths for the normal and adversarial reviews, but never
+skips a sensitive path or lowers material or security criteria.
 Delivery workflows run it as a third local reviewer when the change's risk tier
 is High or the diff touches a sensitive path. The shared `delivery-common` risk
 tier (Low, Medium, High) is set from the change rather than its author, and
