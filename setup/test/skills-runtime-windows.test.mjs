@@ -41,6 +41,10 @@ eval "exec \${command_line}"
 
 async function createFixture(options = {}) {
   const fixture = await createBaseFixture(options);
+  // Under win32, os.tmpdir() reads %TEMP%, the per-user dir that stages project installs.
+  fixture.userTemp = path.join(fixture.root, "user-temp");
+  await mkdir(fixture.userTemp, { recursive: true });
+  fixture.env.TEMP = fixture.userTemp;
   if (options.withWindowsWhere) {
     fixture.env.ComSpec = path.join(fixture.bin, "cmd.exe");
     await writeExecutable(fixture.env.ComSpec, cmdShell);
@@ -283,6 +287,11 @@ exit 127
 set -euo pipefail
 PATH="/bin:\${PATH}"
 printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+printf '%s\\n' "\${PWD}" > "\${TEST_SKILLS_LOG}.cwd"
+ls -ld "\${PWD}" | cut -c1-10 > "\${TEST_SKILLS_LOG}.mode"
+if [ -n "\${TEST_NPX_EXIT:-}" ]; then
+  exit "\${TEST_NPX_EXIT}"
+fi
 printf '{"version":3,"source":"%s"}\\n' "$3" > skills-lock.json
 mkdir -p .agents/skills/find-skills
 printf '%s\\n' "find-skills" > .agents/skills/find-skills/SKILL.md
@@ -369,6 +378,65 @@ test("Windows batch fallback uses SystemRoot cmd.exe when ComSpec is unset", asy
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.equal(await readText(`${fixture.log}.shell`), "trusted shell\n");
     assert.equal(existsSync(`${fixture.log}.planted`), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows project scope stages each install in a private directory under the user temp dir", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  try {
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), fixture.userTemp);
+    assert.match(path.basename(staging), /^dotfiles-skills-.+/);
+    assert.equal((await readText(`${fixture.log}.mode`)).trim(), "drwx------");
+    assert.equal(existsSync(staging), false);
+    assert.equal(existsSync(path.join(fixture.tmp, "dotfiles-skills")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows project scope removes the staging directory after a failed install", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  fixture.env.TEST_NPX_EXIT = "42";
+  try {
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.match(result.stderr, /failed with exit 42/);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), fixture.userTemp);
+    assert.equal(existsSync(staging), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows batch fallback resolves node from the project when PATH lists it explicitly", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  try {
+    await plantProjectBinaries(fixture);
+    fixture.env.PATH = `${fixture.project}${path.delimiter}${fixture.env.PATH}`;
+
+    runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.match(await readText(`${fixture.log}.planted`), /node\.exe/);
   } finally {
     await fixture.cleanup();
   }

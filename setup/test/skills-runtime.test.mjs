@@ -437,3 +437,105 @@ exit 42
     await fixture.cleanup();
   }
 });
+
+// Like npx, run a node_modules/.bin/skills found in any ancestor of the
+// current directory before installing.
+const stagingNpxBody = `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "\${PWD}" > "\${TEST_SKILLS_LOG}.cwd"
+ls -ld "\${PWD}" | cut -c1-10 > "\${TEST_SKILLS_LOG}.mode"
+dir="\${PWD}"
+while :; do
+  if [ -x "\${dir}/node_modules/.bin/skills" ]; then
+    exec "\${dir}/node_modules/.bin/skills" "$@"
+  fi
+  [ "\${dir}" = / ] && break
+  dir="$(dirname "\${dir}")"
+done
+if [ -n "\${TEST_NPX_EXIT:-}" ]; then
+  exit "\${TEST_NPX_EXIT}"
+fi
+mkdir -p .agents/skills/find-skills
+printf 'find-skills\\n' > .agents/skills/find-skills/SKILL.md
+printf 'new lock\\n' > skills-lock.json
+`;
+
+function runProjectInstall(fixture) {
+  return runSkills(["--scope", "project", "--profile", "base", "--agent", "codex"], fixture, { cwd: fixture.project });
+}
+
+test("project scope stages each install in a private directory under XDG_CACHE_HOME", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = path.join(fixture.root, "xdg-cache");
+  try {
+    const result = runProjectInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), fixture.env.XDG_CACHE_HOME);
+    assert.match(path.basename(staging), /^dotfiles-skills-.+/);
+    assert.equal((await readText(`${fixture.log}.mode`)).trim(), "drwx------");
+    assert.equal(existsSync(staging), false);
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "find-skills", "SKILL.md")), "find-skills\n");
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "new lock\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope stages under ~/.cache when XDG_CACHE_HOME is not absolute", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = "relative-cache";
+  try {
+    const result = runProjectInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), path.join(fixture.home, ".cache"));
+    assert.equal(existsSync(staging), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope removes the staging directory after a failed install", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = path.join(fixture.root, "xdg-cache");
+  fixture.env.TEST_NPX_EXIT = "42";
+  try {
+    const result = runProjectInstall(fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /failed with exit 42/);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(path.dirname(staging), fixture.env.XDG_CACHE_HOME);
+    assert.equal(existsSync(staging), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope does not stage under SETUP_TMPDIR where a parent node_modules/.bin could be planted", async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  fixture.env.XDG_CACHE_HOME = path.join(fixture.root, "xdg-cache");
+  fixture.env.TMPDIR = path.join(fixture.root, "user-temp");
+  await mkdir(fixture.env.TMPDIR, { recursive: true });
+  try {
+    const plantedBin = path.join(fixture.tmp, "node_modules", ".bin");
+    await mkdir(plantedBin, { recursive: true });
+    await writeFile(
+      path.join(plantedBin, "skills"),
+      `#!/bin/sh\nprintf 'planted\\n' >> "\${TEST_SKILLS_LOG}.planted"\nexit 99\n`,
+      { mode: 0o755 },
+    );
+
+    const result = runProjectInstall(fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
+    const staging = (await readText(`${fixture.log}.cwd`)).trim();
+    assert.equal(staging.startsWith(fixture.tmp + path.sep), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});

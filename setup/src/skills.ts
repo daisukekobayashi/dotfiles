@@ -640,10 +640,12 @@ function commandPreview(command: string, args: string[]): string {
   return [command, ...args].join(" ");
 }
 
-function logDryRunExternalInstalls(workDir: string, projectRoot: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
+function logDryRunExternalInstalls(stagingBase: string, projectRoot: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
   if (plan.external.length === 0) {
     return;
   }
+  const workDir = path.join(stagingBase, `${PROJECT_STAGING_PREFIX}XXXXXX`);
+  info(`DRY-RUN mktemp -d ${workDir}`);
   for (const entry of plan.external) {
     const args = ["skills", "add", entry.source, "--copy", "--yes"];
     for (const agent of agents) {
@@ -655,6 +657,7 @@ function logDryRunExternalInstalls(workDir: string, projectRoot: string, plan: S
     info(`DRY-RUN cd ${workDir} && NPM_CONFIG_CACHE=${npmCacheDir} ${commandPreview("npx", args)}`);
   }
   info(`DRY-RUN move skills-lock.json and agent skill directories from ${workDir} to ${projectRoot}`);
+  info(`DRY-RUN rm -rf ${workDir}`);
 }
 
 function logDryRunUserExternalInstalls(tempInstallDir: string, plan: SkillsPlan, npmCacheDir: string): void {
@@ -699,19 +702,42 @@ function logDryRunUserAgentSkillDirs(restoreSkillsDir: string, setupHome: string
   }
 }
 
-// Install in a staging directory and move the outputs into the project, so
-// npx and any batch shim never run with the project as their current
-// directory, where an untrusted checkout could plant node.exe, cmd.exe, or
-// npm configuration.
-function runExternalInstalls(workDir: string, projectRoot: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
+const PROJECT_STAGING_PREFIX = "dotfiles-skills-";
+
+// npm and npx look for package.json, node_modules/.bin, and .npmrc in every
+// ancestor of their current directory, so stage project installs under a
+// per-user directory rather than a shared temp directory such as /tmp. Linux
+// uses the XDG cache directory; macOS and Windows use the per-user temp
+// directory. SETUP_TMPDIR may be shared and is not used for staging.
+function projectStagingBase(setupHome: string): string {
+  if (process.platform === "win32" || process.platform === "darwin") {
+    return os.tmpdir();
+  }
+  const cacheHome = process.env.XDG_CACHE_HOME;
+  return cacheHome && path.isAbsolute(cacheHome) ? cacheHome : path.join(setupHome, ".cache");
+}
+
+// Install in a private per-run staging directory and move the outputs into the
+// project, so npx and any batch shim never run with the project as their
+// current directory, where an untrusted checkout could plant node.exe,
+// cmd.exe, or npm configuration.
+function runExternalInstalls(stagingBase: string, projectRoot: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
   if (plan.external.length === 0) {
     return;
   }
   const npx = resolveNpx();
   fs.mkdirSync(npmCacheDir, { recursive: true });
-  removePath(workDir);
-  fs.mkdirSync(workDir, { recursive: true });
+  fs.mkdirSync(stagingBase, { recursive: true, mode: 0o700 });
+  // mkdtemp creates the directory with mode 0700 on POSIX.
+  const workDir = fs.mkdtempSync(path.join(stagingBase, PROJECT_STAGING_PREFIX));
+  try {
+    installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCacheDir);
+  } finally {
+    removePath(workDir);
+  }
+}
 
+function installExternalSkills(workDir: string, projectRoot: string, plan: SkillsPlan, agents: Agent[], npx: NpxInvocation, npmCacheDir: string): void {
   for (const entry of plan.external) {
     const args = ["skills", "add", entry.source, "--copy", "--yes"];
     for (const agent of agents) {
@@ -742,7 +768,6 @@ function runExternalInstalls(workDir: string, projectRoot: string, plan: SkillsP
     removePath(target);
     movePath(staged, target);
   }
-  removePath(workDir);
 }
 
 function requireInstalledSkills(skillsDir: string, entry: ExternalSkillSource): void {
@@ -1048,7 +1073,7 @@ function gitProjectRoot(cwd: string): string {
   return result.stdout.trim();
 }
 
-function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesCsv: string, agents: Agent[], dryRun: boolean): void {
+function setupProjectSkills(dotfilesRoot: string, setupHome: string, setupTmpdir: string, profilesCsv: string, agents: Agent[], dryRun: boolean): void {
   if (!profilesCsv) {
     fail("--profile is required for project scope");
   }
@@ -1062,12 +1087,11 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
   const requestedProfiles = csv(profilesCsv);
   const projectRoot = gitProjectRoot(process.cwd());
   const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "project");
-  const workDir = path.join(setupTmpdir, "dotfiles-skills");
+  const stagingBase = projectStagingBase(setupHome);
   const npmCacheDir = path.join(setupTmpdir, "skills-npm-cache");
   const backupRoot = path.join(setupTmpdir, "dotfiles-skills-backup", path.basename(projectRoot));
 
   if (dryRun) {
-    info(`DRY-RUN mkdir -p ${workDir}`);
     info(`DRY-RUN mkdir -p ${npmCacheDir}`);
     info(`DRY-RUN mkdir -p ${path.join(projectRoot, ".agents")}`);
     if (plan.external.length > 0) {
@@ -1077,7 +1101,7 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
     for (const agent of agents) {
       info(`DRY-RUN backup ${agentSkillDir(projectRoot, agent)} to ${backupRoot}`);
     }
-    logDryRunExternalInstalls(workDir, projectRoot, plan, agents, npmCacheDir);
+    logDryRunExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
     logDryRunLinkLocalSkills(plan, "project", projectRoot);
     info(`DRY-RUN write skills metadata ${path.join(projectRoot, ".agents", "skills-profile.json")}`);
     info(`Project skills installed for profiles: ${requestedProfiles.join(",")}`);
@@ -1085,13 +1109,12 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
     return;
   }
 
-  fs.mkdirSync(workDir, { recursive: true });
   fs.mkdirSync(npmCacheDir, { recursive: true });
   fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
 
   const backups = prepareProjectTargets(projectRoot, agents, backupRoot, plan.external.length > 0);
   try {
-    runExternalInstalls(workDir, projectRoot, plan, agents, npmCacheDir);
+    runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
     linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
     restoreUnmanagedProjectSkills(backups, projectRoot, agents);
     writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
@@ -1139,7 +1162,7 @@ function main(argv: string[]): void {
     return;
   }
 
-  setupProjectSkills(context.dotfilesRoot, context.tmpdir, parsed.profiles, parsed.agents, context.dryRun);
+  setupProjectSkills(context.dotfilesRoot, context.home, context.tmpdir, parsed.profiles, parsed.agents, context.dryRun);
 }
 
 try {
