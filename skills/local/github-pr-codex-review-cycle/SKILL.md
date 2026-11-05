@@ -83,9 +83,24 @@ Still stop and ask before:
 4. Wait for Codex review completion.
    - The exact `@codex review` trigger comment receiving an `eyes` reaction is
      not review completion.
+   - Codex posts a summary comment starting with
+     `<!-- codex-pull-request-review-summary -->` and edits it in place. Read
+     its `<!-- codex-review-state:v1 {...} -->` JSON only when the comment's
+     `updated_at` is later than the trigger comment's `created_at`; an older
+     marker belongs to an earlier request. Track only `code_review`; this cycle
+     requests no security review.
    - Review completion requires actual Codex review output after the trigger:
-     review threads, inline comments, or a review summary/comment that indicates
-     the run finished.
+     a review, review threads, or inline comments; or a marker whose
+     `code_review.status` is `completed` and whose `code_review.commit_sha`
+     equals the full published head SHA.
+   - A marker with `code_review.status` `running`, `null`, or missing, or with
+     another `commit_sha`, is not completion; keep waiting.
+   - A completed marker with `has_any_findings: false` means no actionable
+     feedback: continue at step 8. With findings, wait for the review threads
+     before step 5.
+   - If no summary comment has the marker or its JSON does not parse, fall back
+     to a review summary/comment that indicates the run finished, and report
+     that completion was inferred without the marker.
    - Poll the PR comments/reviews/thread state at reasonable intervals and keep
      the user updated during long waits.
    - If no actual review output appears within a practical bound, report the PR,

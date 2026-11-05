@@ -584,6 +584,24 @@ test("change review skills are explicit-only and share target selection", async 
   assert.doesNotMatch(`${changeReview}\n${adversarial}`, /\$code-review|local-code-review|\$codex-review/);
 });
 
+test("Codex review cycle detects completion from the review-state marker", async () => {
+  const cycle = await readText(
+    path.join(repoRoot, "skills", "local", "github-pr-codex-review-cycle", "SKILL.md"),
+  );
+  const wait = cycle.match(/\n4\. Wait for Codex review completion\.\n[\s\S]*?(?=\n5\. )/)?.[0];
+
+  assert.ok(wait, "missing wait step");
+  assert.match(wait, /`<!-- codex-review-state:v1 \{\.\.\.\} -->`/);
+  assert.match(wait, /`updated_at` is later than the trigger comment's `created_at`/);
+  assert.match(wait, /Track only `code_review`/);
+  assert.match(wait, /`code_review\.status` is `completed` and whose `code_review\.commit_sha`\s+equals the full published head SHA/);
+  assert.match(wait, /`running`, `null`, or missing, or with\s+another `commit_sha`, is not completion; keep waiting/);
+  assert.match(wait, /`has_any_findings: false` means no actionable\s+feedback: continue at step 8/);
+  assert.match(wait, /does not parse, fall back[\s\S]*report\s+that completion was inferred without the marker/);
+  assert.doesNotMatch(wait, /review threads, inline comments, or a review summary\/comment that indicates/);
+  assert.match(cycle, /^8\. Verify final PR state when possible\.\n   - Re-read thread state after writeback\./m);
+});
+
 test("profile validate accepts selected profiles", async () => {
   const fixture = await createFixture();
   try {
