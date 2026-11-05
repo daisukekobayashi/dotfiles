@@ -480,3 +480,22 @@ test("Windows project scope fails closed when TEMP and TMP are unset", async () 
     await fixture.cleanup();
   }
 });
+
+test("Windows project scope refuses a TEMP inside the project in another letter case and creates nothing", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  fixture.env.TEMP = path.join(path.dirname(fixture.project), path.basename(fixture.project).toUpperCase(), "Temp");
+  try {
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot keep project skill staging inside the project/);
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+    assert.deepEqual((await readdir(fixture.project)).sort(), [".git"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});

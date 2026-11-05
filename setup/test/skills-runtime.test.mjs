@@ -167,6 +167,7 @@ test("project install restores prior state when a selected agent is missing a sk
 mkdir -p .agents/skills/find-skills
 printf 'new skill' > .agents/skills/find-skills/SKILL.md
 printf 'new lock' > skills-lock.json
+printf 'ran\\n' > "\${TEST_SKILLS_LOG}.ran"
 exit 0
 ` });
   try {
@@ -184,6 +185,7 @@ exit 0
     );
 
     assert.notEqual(result.status, 0);
+    assert.equal(await readText(`${fixture.log}.ran`), "ran\n");
     assert.match(result.stderr + result.stdout, /Missing installed skill find-skills/);
     assert.equal(await readText(path.join(old, "SKILL.md")), "previous skill\n");
     assert.equal(await readText(metadata), "previous metadata\n");
@@ -775,8 +777,9 @@ test("project scope refuses a staging base with an ancestor others can write", l
     assert.match(refused.stderr, new RegExp(`${shared.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} must be owned by you or root and not writable by others`));
     assert.equal(existsSync(`${fixture.log}.cwd`), false);
 
-    // A group-writable ancestor is allowed, as with umask 002 and user-private groups.
-    await chmod(shared, 0o775);
+    // Whether a group-writable ancestor is allowed depends on the host's
+    // groups; private-base.test.mjs covers that rule.
+    await chmod(shared, 0o755);
     const allowed = runProjectInstall(fixture);
 
     assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout);
@@ -805,6 +808,107 @@ require(runtime);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /must be owned by you or root and not writable by others; set XDG_CACHE_HOME \(Linux\) or TMPDIR \(macOS\)/);
     assert.equal(existsSync(`${fixture.log}.cwd`), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+function runSkillsAsDarwin(args, fixture) {
+  const launcher = `
+const runtime = process.argv[1];
+Object.defineProperty(process, "platform", { value: "darwin" });
+process.argv = [process.execPath, runtime, ...process.argv.slice(2)];
+require(runtime);
+`;
+  return spawnSync(process.execPath, ["-e", launcher, skillsRuntime, ...args], {
+    cwd: fixture.project,
+    env: fixture.env,
+    encoding: "utf8",
+  });
+}
+
+for (const scope of ["project", "user"]) {
+  test(`macOS ${scope} scope fails closed on a relative TMPDIR, even one linking out of the project, and creates nothing`, posixOnly, async () => {
+    const fixture = await createFixture({ npxBody: stagingNpxBody });
+    const outside = path.join(fixture.root, "outside-temp");
+    try {
+      await mkdir(outside, { mode: 0o700 });
+      await symlink(outside, path.join(fixture.project, "linked-temp"));
+      for (const temp of ["relative-temp", "linked-temp"]) {
+        fixture.env.TMPDIR = temp;
+        const args = scope === "project"
+          ? ["--scope", "project", "--profile", "base", "--agent", "codex"]
+          : ["--scope", "user", "--profile", "base"];
+
+        const result = runSkillsAsDarwin(args, fixture);
+
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /set TMPDIR to an absolute per-user directory/);
+        assert.equal(existsSync(`${fixture.log}.cwd`), false);
+        assert.deepEqual((await readdir(fixture.project)).sort(), [".git", "linked-temp"]);
+        assert.deepEqual(await readdir(outside), []);
+      }
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+test("project scope refuses a TMPDIR inside the project that differs only in letter case", posixOnly, async (t) => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  try {
+    const variant = path.join(path.dirname(fixture.project), path.basename(fixture.project).toUpperCase());
+    if (!existsSync(variant)) {
+      t.skip("the file system is case-sensitive");
+      return;
+    }
+    fixture.env.TMPDIR = path.join(variant, "temp");
+
+    const result = runSkillsAsDarwin(["--scope", "project", "--profile", "base", "--agent", "codex"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot keep project skill staging inside the project/);
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+    assert.deepEqual(await readdir(fixture.project), [".git"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope refusing a staging base creates none of its missing directories", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  const shared = path.join(fixture.root, "shared");
+  try {
+    await mkdir(shared);
+    await chmod(shared, 0o1777);
+    fixture.env.TMPDIR = path.join(shared, "new", "temp");
+
+    const result = runSkillsAsDarwin(["--scope", "project", "--profile", "base", "--agent", "codex"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must be owned by you or root and not writable by others/);
+    assert.deepEqual(await readdir(shared), []);
+    assert.deepEqual(await readdir(fixture.project), [".git"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("macOS project scope refuses a group-writable ancestor and creates nothing", posixOnly, async () => {
+  const fixture = await createFixture({ npxBody: stagingNpxBody });
+  const grouped = path.join(fixture.root, "grouped");
+  try {
+    await mkdir(grouped);
+    await chmod(grouped, 0o775);
+    fixture.env.TMPDIR = path.join(grouped, "temp");
+
+    const result = runSkillsAsDarwin(["--scope", "project", "--profile", "base", "--agent", "codex"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, new RegExp(`${escapeRegExp(await realpath(grouped))} is writable by group \\d+, which is not your private group; run chmod g-w`));
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+    assert.deepEqual(await readdir(grouped), []);
+    assert.deepEqual(await readdir(fixture.project), [".git"]);
   } finally {
     await fixture.cleanup();
   }
@@ -964,6 +1068,8 @@ test("project scope refuses a backup directory that others can write before movi
     assert.deepEqual(await readdir(path.join(fixture.project, ".agents")), ["skills"]);
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
     assert.deepEqual(await readdir(backups), []);
+    // The npm cache, checked before the backups, is not created either.
+    assert.deepEqual(await readdir(privateSkillsBase(fixture)), ["dotfiles-skills-backup"]);
   } finally {
     await fixture.cleanup();
   }
