@@ -44,6 +44,14 @@ exact target, and existing approvals to the worker; a brief alone grants none.
    - format: `type/<id>-<slug>`
    - use `fix` for bugs, `feat` for user-facing behavior, and `chore` for
      maintenance or internal cleanup.
+   - Derive `<slug>` from the Work Item title using only lowercase ASCII
+     letters, digits, and hyphens (`[a-z0-9-]`); drop or replace every other
+     character. If no characters remain, write a short English slug from the
+     Work Item content in the same character set.
+   - A **safe branch name** uses only `[A-Za-z0-9/._-]`. Use a branch name
+     supplied by the user or reused from an existing worktree as-is only when
+     it is a safe branch name; otherwise stop and report it before running any
+     command with it.
 5. If exactly one Work Item was provided:
    - Follow **Worktree Preparation** below, then implement in that worktree.
 6. If multiple Work Items were provided:
@@ -80,7 +88,8 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
 1. Inspect `git status --short` and `git worktree list --porcelain` before changing
    state. Reuse a worktree only when its branch, changes, and ownership match this
    Work Item and no other worker is using it. When reusing one, resolve its
-   base as in step 2 and check its upstream as in step 5.
+   base as in step 2 and check its upstream as in step 5. Stop at a reused
+   branch that is not a safe branch name, as in Workflow step 4.
 2. Resolve the base from the user's request or repository convention. Otherwise
    inspect the default branch and local branch state, asking only if the intended
    base remains ambiguous. Do not assume a local ref is current or silently branch

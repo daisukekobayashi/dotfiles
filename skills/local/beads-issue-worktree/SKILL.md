@@ -21,6 +21,8 @@ Start Beads issue work safely from the current repository. A single actionable b
 5. Choose branch/worktree names for actionable beads.
    - Branch format: `<type>/<bead-id>-<slug>`.
    - Use `fix` for bugs, `feat` for features, `chore` for maintenance/internal workflow.
+   - Derive `<slug>` from the bead title using only lowercase ASCII letters, digits, and hyphens (`[a-z0-9-]`); drop or replace every other character. If no characters remain, write a short English slug from the bead content in the same character set.
+   - A **safe branch name** uses only `[A-Za-z0-9/._-]`. Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise stop and report it before running any command with it.
 6. Claim each actionable bead before editing:
    - `bd update <id> --claim`
 7. Prepare the isolated workspace using **Worktree Preparation** below.
@@ -34,7 +36,7 @@ Start Beads issue work safely from the current repository. A single actionable b
 
 Use Beads or Git directly; no separate worktree skill is required.
 
-1. Inspect `git status --short` and `git worktree list --porcelain` before changing workspace state. Reuse a worktree only when its branch, changes, and ownership match this bead and no other worker is using it. When reusing one, resolve its base as in step 2 and check its upstream as in step 5.
+1. Inspect `git status --short` and `git worktree list --porcelain` before changing workspace state. Reuse a worktree only when its branch, changes, and ownership match this bead and no other worker is using it. When reusing one, resolve its base as in step 2 and check its upstream as in step 5. Stop at a reused branch that is not a safe branch name, as in Workflow step 5.
 2. Resolve the base from the user's request or repository convention. Otherwise inspect the default branch and local branch state, asking only if the intended base remains ambiguous. Do not assume a local ref is current or silently branch from another bead's branch. Record the chosen base ref and commit.
 3. Choose the path by user preference, then repository instructions or an established worktree directory, then `.worktrees/<bead-id>-<slug>`. Check path and branch collisions without overwriting or repurposing another bead's workspace.
 4. Before project-local creation, verify the actual target path with `git check-ignore`. Resolve missing ignore configuration under repository change and approval rules before creation; do not automatically commit that change. External locations do not need this check.
