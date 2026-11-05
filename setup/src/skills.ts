@@ -707,14 +707,56 @@ const PROJECT_STAGING_PREFIX = "dotfiles-skills-";
 // npm and npx look for package.json, node_modules/.bin, and .npmrc in every
 // ancestor of their current directory, so stage project installs under a
 // per-user directory rather than a shared temp directory such as /tmp. Linux
-// uses the XDG cache directory; macOS and Windows use the per-user temp
-// directory. SETUP_TMPDIR may be shared and is not used for staging.
-function projectStagingBase(setupHome: string): string {
-  if (process.platform === "win32" || process.platform === "darwin") {
+// uses the XDG cache directory, macOS the per-user temp directory, and
+// Windows %TEMP%. SETUP_TMPDIR may be shared and is not used for staging.
+function projectStagingBase(): string {
+  const env = process.env;
+  if (process.platform === "win32") {
+    const temp = env.TEMP || env.TMP;
+    if (!temp || !path.isAbsolute(temp)) {
+      fail("cannot stage project skills: set TEMP to an absolute per-user directory");
+    }
+    return temp;
+  }
+  if (process.platform === "darwin") {
     return os.tmpdir();
   }
-  const cacheHome = process.env.XDG_CACHE_HOME;
-  return cacheHome && path.isAbsolute(cacheHome) ? cacheHome : path.join(setupHome, ".cache");
+  if (env.XDG_CACHE_HOME && path.isAbsolute(env.XDG_CACHE_HOME)) {
+    return env.XDG_CACHE_HOME;
+  }
+  const home = env.SETUP_HOME || env.HOME || os.homedir();
+  if (!path.isAbsolute(home)) {
+    fail("cannot stage project skills: set HOME or XDG_CACHE_HOME to an absolute path");
+  }
+  return path.join(home, ".cache");
+}
+
+// On POSIX, refuse a staging base whose real path, or any ancestor, is owned
+// by another user or writable by others; a sticky bit does not
+// exempt a directory. The base must also lie outside the project.
+function requirePrivateStagingBase(stagingBase: string, projectRoot: string): string {
+  fs.mkdirSync(stagingBase, { recursive: true, mode: 0o700 });
+  const base = fs.realpathSync(stagingBase);
+  const project = fs.realpathSync(projectRoot);
+  if (base === project || base.startsWith(project + path.sep)) {
+    fail(`cannot stage project skills inside the project: ${base}`);
+  }
+  if (process.platform === "win32" || typeof process.getuid !== "function") {
+    return base;
+  }
+  const uid = process.getuid();
+  for (let current = base; ; current = path.dirname(current)) {
+    const stat = fs.statSync(current);
+    if ((stat.uid !== uid && stat.uid !== 0) || (stat.mode & 0o002) !== 0) {
+      fail(
+        `cannot stage project skills under ${base}: ${current} must be owned by you or root and not writable by others; ` +
+          "set XDG_CACHE_HOME (Linux) or TMPDIR (macOS) to a private directory",
+      );
+    }
+    if (path.dirname(current) === current) {
+      return base;
+    }
+  }
 }
 
 // Install in a private per-run staging directory and move the outputs into the
@@ -727,13 +769,18 @@ function runExternalInstalls(stagingBase: string, projectRoot: string, plan: Ski
   }
   const npx = resolveNpx();
   fs.mkdirSync(npmCacheDir, { recursive: true });
-  fs.mkdirSync(stagingBase, { recursive: true, mode: 0o700 });
   // mkdtemp creates the directory with mode 0700 on POSIX.
-  const workDir = fs.mkdtempSync(path.join(stagingBase, PROJECT_STAGING_PREFIX));
+  const workDir = fs.mkdtempSync(path.join(requirePrivateStagingBase(stagingBase, projectRoot), PROJECT_STAGING_PREFIX));
   try {
     installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCacheDir);
   } finally {
-    removePath(workDir);
+    // A cleanup failure, such as EBUSY on Windows, must not replace the
+    // install's own result.
+    try {
+      fs.rmSync(workDir, { recursive: true, force: true, maxRetries: 3 });
+    } catch (error) {
+      warn(`Could not remove staging directory ${workDir}: ${(error as Error).message}`);
+    }
   }
 }
 
@@ -1073,7 +1120,7 @@ function gitProjectRoot(cwd: string): string {
   return result.stdout.trim();
 }
 
-function setupProjectSkills(dotfilesRoot: string, setupHome: string, setupTmpdir: string, profilesCsv: string, agents: Agent[], dryRun: boolean): void {
+function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesCsv: string, agents: Agent[], dryRun: boolean): void {
   if (!profilesCsv) {
     fail("--profile is required for project scope");
   }
@@ -1087,7 +1134,7 @@ function setupProjectSkills(dotfilesRoot: string, setupHome: string, setupTmpdir
   const requestedProfiles = csv(profilesCsv);
   const projectRoot = gitProjectRoot(process.cwd());
   const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "project");
-  const stagingBase = projectStagingBase(setupHome);
+  const stagingBase = plan.external.length > 0 ? projectStagingBase() : "";
   const npmCacheDir = path.join(setupTmpdir, "skills-npm-cache");
   const backupRoot = path.join(setupTmpdir, "dotfiles-skills-backup", path.basename(projectRoot));
 
@@ -1162,7 +1209,7 @@ function main(argv: string[]): void {
     return;
   }
 
-  setupProjectSkills(context.dotfilesRoot, context.home, context.tmpdir, parsed.profiles, parsed.agents, context.dryRun);
+  setupProjectSkills(context.dotfilesRoot, context.tmpdir, parsed.profiles, parsed.agents, context.dryRun);
 }
 
 try {

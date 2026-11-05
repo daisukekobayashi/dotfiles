@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -437,6 +437,26 @@ test("Windows batch fallback resolves node from the project when PATH lists it e
     );
 
     assert.match(await readText(`${fixture.log}.planted`), /node\.exe/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows project scope fails closed when TEMP and TMP are unset", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  delete fixture.env.TEMP;
+  delete fixture.env.TMP;
+  try {
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /set TEMP to an absolute per-user directory/);
+    assert.equal(existsSync(`${fixture.log}.cwd`), false);
+    assert.deepEqual((await readdir(fixture.project)).sort(), [".git"]);
   } finally {
     await fixture.cleanup();
   }

@@ -1,17 +1,24 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 export const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 export const skillsRuntime = path.join(repoRoot, "setup", "skills.js");
 
+// Project installs refuse a staging directory with an ancestor that others can
+// write, such as /tmp, so keep fixtures in the ignored setup/node_modules.
+const fixtureCache = path.join(repoRoot, "setup", "node_modules", ".cache");
+mkdirSync(fixtureCache, { recursive: true });
+const fixtureBase = mkdtempSync(path.join(fixtureCache, "skills-tests-"));
+process.on("exit", () => rmSync(fixtureBase, { recursive: true, force: true }));
+
 export async function writeExecutable(filePath, content) {
   await writeFile(filePath, content, { mode: 0o755 });
 }
 
 export async function createFixture(options = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "skills-node-test."));
+  const root = await mkdtemp(path.join(fixtureBase, "skills-node-test."));
   const home = path.join(root, "home");
   const tmp = path.join(root, "tmp");
   const dotfiles = path.join(root, "dotfiles");
@@ -19,8 +26,10 @@ export async function createFixture(options = {}) {
   const project = path.join(root, "project");
   const log = path.join(root, "skills.log");
 
-  await mkdir(home, { recursive: true });
+  await mkdir(home, { recursive: true, mode: 0o755 });
   await mkdir(tmp, { recursive: true });
+  const userTemp = path.join(root, "user-temp");
+  await mkdir(userTemp, { recursive: true });
   await mkdir(bin, { recursive: true });
   await mkdir(project, { recursive: true });
   await mkdir(path.join(dotfiles, "skills", "local", "local-one"), { recursive: true });
@@ -175,8 +184,10 @@ eval "exec \${command_line}"
     SETUP_TMPDIR: tmp,
     SETUP_DOTFILES_ROOT: dotfiles,
     PATH: options.isolatedPath ? bin : `${bin}${path.delimiter}${process.env.PATH}`,
+    TMPDIR: userTemp,
     TEST_SKILLS_LOG: log,
   };
+  delete env.XDG_CACHE_HOME;
 
   return {
     root,
