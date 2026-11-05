@@ -41,6 +41,14 @@ Still stop and ask before:
    worktree and branch.
 2. Resolve Azure DevOps organization, project, repository, default branch, and
    current branch for each target.
+   - Stop and report the branch unless it is a **safe branch name**, using only
+     `[A-Za-z0-9/._-]`, before running any command with it. This also refuses a
+     leading `+`, which would make the push refspec a force push.
+   - Resolve the push remote. Use the remote the user names. Otherwise
+     `<remote>` is the one remote whose fetch and push URLs (`git remote -v`)
+     both name the resolved organization, project, and repository in one of the
+     accepted remote URL shapes from the common context. If no remote or more
+     than one remote matches, stop and report the candidates before pushing.
 3. Inspect local state:
    - `git status --short --branch`
    - `git diff --stat`
@@ -59,16 +67,17 @@ Still stop and ask before:
    - Use the `git-commit` skill.
    - Stage only files belonging to the requested work.
 7. Push the branch.
-   - `<remote>` is the Azure DevOps remote resolved in step 2. The PR base
-     branch is the existing PR's target, otherwise the target
+   - `<remote>` is the push remote resolved in step 2. The PR base branch
+     is the existing PR's target, otherwise the target
      `azure-devops-pr-create` uses: the default branch unless the user
      specifies another target.
-   - Read the upstream with `git config --get branch.<branch>.remote` and
-     `git config --get branch.<branch>.merge`; no output means no upstream.
+   - Read the upstream with `git config --get-all branch.<branch>.remote` and
+     `git config --get-all branch.<branch>.merge`; no output means no upstream,
+     and more than one value for either key means stop and report.
    - Continue when there is no upstream, the same branch name on `<remote>`, or
-     the PR base branch, local or remote-tracking. Stop and report any other
-     upstream, such as a differently named branch or another remote; it may
-     back an existing PR.
+     the PR base branch, either local (remote `.`) or remote-tracking. Stop and
+     report any other upstream, such as a differently named branch or another
+     remote; it may back an existing PR.
    - Push with `git push -u <remote> <branch>:refs/heads/<branch>`. The
      explicit refspec keeps a base upstream or `push.default=upstream` from
      sending the branch to the base. This sets the upstream for the same branch

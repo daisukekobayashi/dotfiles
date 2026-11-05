@@ -7,7 +7,7 @@ import {
 } from "./skills-helpers.mjs";
 
 const flat = (text) => text?.replace(/\s+/g, " ");
-const upstreamRead = /`git config --get branch\.<branch>\.remote` and `git config --get branch\.<branch>\.merge`[^.]*?no output means no upstream/;
+const upstreamRead = /`git config --get-all branch\.<branch>\.remote` and `git config --get-all branch\.<branch>\.merge`[^.]*?no output means no upstream[^.]*?more than one value for either key[^.]*?stop and report/;
 
 test("start skills create worktree branches without tracking the base", async () => {
   for (const start of ["github-issue-start", "azure-devops-work-item-start", "beads-issue-worktree"]) {
@@ -29,6 +29,7 @@ test("start skills create worktree branches without tracking the base", async ()
     const check = flat(prep.match(/^5\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
     assert.ok(check, `${start}: missing step 5`);
     assert.match(check, upstreamRead, `${start}: upstream read`);
+    assert.doesNotMatch(skill, /git config --get branch/, `${start}: --get returns the last of several values`);
     assert.match(check, /no upstream or the same-named branch on the publication remote/, `${start}: kept upstreams`);
     assert.match(check, /base or its local branch \(remote `\.`\)[\s\S]*`git branch --unset-upstream <branch>`/, `${start}: unset base upstream`);
     assert.match(check, /Stop and report any other upstream/, `${start}: report other upstream`);
@@ -67,7 +68,8 @@ test("publish skills push with an explicit refspec and recheck the upstream", as
     assert.match(push, /PR base branch is the existing PR's (base|target), otherwise[^.]*default branch unless the user specifies another/, `${publish}: base definition`);
     assert.match(push, upstreamRead, `${publish}: upstream read`);
     assert.doesNotMatch(push, /%\(upstream/, `${publish}: upstream format atoms need a remote-tracking ref`);
-    assert.match(push, /Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, local or remote-tracking\./, `${publish}: accepted upstreams`);
+    assert.doesNotMatch(push, /git config --get branch/, `${publish}: --get returns the last of several values`);
+    assert.match(push, /Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, either local \(remote `\.`\) or remote-tracking\./, `${publish}: accepted upstreams`);
     assert.match(push, /Stop and report any other upstream/, `${publish}: report other upstream`);
     assert.match(push, /`git push -u <remote> <branch>:refs\/heads\/<branch>`/, `${publish}: explicit refspec`);
     assert.doesNotMatch(push, /`git push -u <remote> <branch>`/, `${publish}: bare push follows push.default=upstream to the base`);
@@ -75,4 +77,23 @@ test("publish skills push with an explicit refspec and recheck the upstream", as
     assert.match(push, /sets the upstream for the same branch name/, `${publish}: first-push upstream`);
     assert.match(push, /Re-read the upstream; stop and report unless the remote is `<remote>` and the merge ref is `refs\/heads\/<branch>`\./, `${publish}: post-push recheck`);
   }
+});
+
+test("publish skills check the branch name and resolve one push remote", async () => {
+  for (const publish of ["github-pr-publish", "azure-devops-pr-publish"]) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", publish, "SKILL.md"));
+    const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+
+    assert.ok(context, `${publish}: missing step 2`);
+    assert.match(context, /Stop and report the branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${publish}: safe branch name`);
+    assert.match(context, /leading `\+`[^.]*force push/, `${publish}: + refspec refused`);
+    assert.match(context, /Use the remote the user names\./, `${publish}: user-named remote`);
+    assert.match(context, /Otherwise `<remote>` is the one remote whose fetch and push URLs \(`git remote -v`\)/, `${publish}: URL-matched remote`);
+    assert.match(context, /If no remote or more than one remote matches, stop and report the candidates before pushing\./, `${publish}: exactly one match`);
+  }
+
+  const github = flat(await readText(path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md")));
+  assert.match(github, /ignoring the scheme, user, letter case, and a trailing `\.git` or `\/`/, "github: URL normalization");
+  const azure = flat(await readText(path.join(repoRoot, "skills", "local", "azure-devops-pr-publish", "SKILL.md")));
+  assert.match(azure, /accepted remote URL shapes/, "azure: URL shapes from the common context");
 });

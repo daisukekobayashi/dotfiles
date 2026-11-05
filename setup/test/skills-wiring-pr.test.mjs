@@ -23,3 +23,20 @@ test("Codex review cycle detects completion from the review-state marker", async
   assert.doesNotMatch(wait, /review threads, inline comments, or a review summary\/comment that indicates/);
   assert.match(cycle, /^8\. Verify final PR state when possible\.\n   - Re-read thread state after writeback\./m);
 });
+
+test("Codex review cycle pushes review fixes to the publication remote", async () => {
+  const cycle = await readText(
+    path.join(repoRoot, "skills", "local", "github-pr-codex-review-cycle", "SKILL.md"),
+  );
+  const publish = cycle.match(/\n2\. Use `github-pr-publish`\.\n[\s\S]*?(?=\n3\. )/)?.[0]?.replace(/\s+/g, " ");
+  const push = cycle.match(/\n6\. If review fixes changed files[\s\S]*?(?=\n7\. )/)?.[0]?.replace(/\s+/g, " ");
+
+  assert.ok(publish, "missing publish step");
+  assert.match(publish, /Capture the PR number, PR URL, branch, push remote,/);
+  assert.ok(push, "missing review-fix push step");
+  assert.match(push, /`git push <remote> <branch>:refs\/heads\/<branch>`/);
+  assert.match(push, /`<remote>` is the push remote captured in step 2/);
+  assert.match(push, /`branch\.<branch>\.pushRemote` or `remote\.pushDefault`/);
+  assert.doesNotMatch(push, /normal push/, "a plain push follows pushRemote away from the PR head");
+  assert.match(push, /Confirm the fixes are present in the remote PR head/);
+});
