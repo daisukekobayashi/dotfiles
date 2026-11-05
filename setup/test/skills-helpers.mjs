@@ -236,14 +236,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const runtime = process.argv[1];
 const args = process.argv.slice(2);
-const backupRoot = path.resolve(process.env.SETUP_TMPDIR, "dotfiles-skills-backup");
 const originalRenameSync = fs.renameSync;
 function underBackupRoot(candidate) {
-  const resolved = path.resolve(candidate);
-  return resolved === backupRoot || resolved.startsWith(backupRoot + path.sep);
+  return path.resolve(candidate).split(path.sep).includes("dotfiles-skills-backup");
 }
 fs.renameSync = (oldPath, newPath) => {
   if (underBackupRoot(oldPath) || underBackupRoot(newPath)) {
+    // Lets tests check that the cross-device path ran.
+    fs.appendFileSync(process.env.TEST_SKILLS_LOG + ".exdev", "rename\\n");
     const error = new Error("EXDEV: cross-device link not permitted, rename");
     error.code = "EXDEV";
     throw error;
@@ -273,6 +273,21 @@ require(runtime);
     env: fixture.env,
     encoding: "utf8",
   });
+}
+
+// The per-user directory that the runtime uses for staging, the npm cache,
+// and project backups on this host, as the fixture environment sets it.
+export function privateSkillsBase(fixture) {
+  if (process.platform === "darwin") {
+    return fixture.env.TMPDIR;
+  }
+  if (process.platform === "win32") {
+    return fixture.env.TEMP || fixture.env.TMP;
+  }
+  if (fixture.env.XDG_CACHE_HOME && path.isAbsolute(fixture.env.XDG_CACHE_HOME)) {
+    return fixture.env.XDG_CACHE_HOME;
+  }
+  return path.join(fixture.env.SETUP_HOME, ".cache");
 }
 
 export async function readText(filePath) {

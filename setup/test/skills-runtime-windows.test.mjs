@@ -405,6 +405,24 @@ test("Windows project scope stages each install in a private directory under the
   }
 });
 
+test("Windows user scope stages each source in a private directory under the user temp dir", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  try {
+    const result = runSkillsAsWindows(["--scope", "user", "--profile", "base", "--agent", "codex"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const installDir = (await readText(`${fixture.log}.cwd`)).trim();
+    const workDir = path.dirname(installDir);
+    assert.equal(path.dirname(workDir), fixture.userTemp);
+    assert.match(path.basename(workDir), /^dotfiles-skills-user-.+/);
+    assert.equal(existsSync(workDir), false);
+    assert.equal(existsSync(path.join(fixture.userTemp, "dotfiles-skills-npm-cache")), true);
+    assert.deepEqual(await readdir(fixture.tmp), []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("Windows project scope removes the staging directory after a failed install", async () => {
   const fixture = await createWindowsBatchShimFixture();
   fixture.env.TEST_NPX_EXIT = "42";

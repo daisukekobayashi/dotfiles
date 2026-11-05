@@ -656,16 +656,22 @@ function logDryRunExternalInstalls(stagingBase, projectRoot, plan, agents, npmCa
     info(`DRY-RUN move skills-lock.json and agent skill directories from ${workDir} to ${projectRoot}`);
     info(`DRY-RUN rm -rf ${workDir}`);
 }
-function logDryRunUserExternalInstalls(tempInstallDir, plan, npmCacheDir) {
-    for (const entry of plan.external) {
-        info(`DRY-RUN rm -rf ${tempInstallDir}`);
-        info(`DRY-RUN mkdir -p ${tempInstallDir}`);
+function logDryRunUserExternalInstalls(stagingBase, plan, npmCacheDir) {
+    if (plan.external.length === 0) {
+        return;
+    }
+    const workDir = path.join(stagingBase, `${USER_STAGING_PREFIX}XXXXXX`);
+    info(`DRY-RUN mktemp -d ${workDir}`);
+    plan.external.forEach((entry, index) => {
+        const installDir = path.join(workDir, String(index));
+        info(`DRY-RUN mkdir ${installDir}`);
         const args = ["skills", "add", entry.source, "--copy", "--yes", "--agent", "codex"];
         for (const skill of entry.skills) {
             args.push("--skill", skill);
         }
-        info(`DRY-RUN cd ${tempInstallDir} && NPM_CONFIG_CACHE=${npmCacheDir} ${commandPreview("npx", args)}`);
-    }
+        info(`DRY-RUN cd ${installDir} && NPM_CONFIG_CACHE=${npmCacheDir} ${commandPreview("npx", args)}`);
+    });
+    info(`DRY-RUN rm -rf ${workDir}`);
 }
 function logDryRunLinkLocalSkills(plan, target, rootOrSkillsDir) {
     if (target === "user") {
@@ -695,17 +701,21 @@ function logDryRunUserAgentSkillDirs(restoreSkillsDir, setupHome, agents) {
     }
 }
 const PROJECT_STAGING_PREFIX = "dotfiles-skills-";
+const USER_STAGING_PREFIX = "dotfiles-skills-user-";
+const NPM_CACHE_NAME = "dotfiles-skills-npm-cache";
+const BACKUP_DIR_NAME = "dotfiles-skills-backup";
 // npm and npx look for package.json, node_modules/.bin, and .npmrc in every
-// ancestor of their current directory, so stage project installs under a
-// per-user directory rather than a shared temp directory such as /tmp. Linux
-// uses the XDG cache directory, macOS the per-user temp directory, and
-// Windows %TEMP%. SETUP_TMPDIR may be shared and is not used for staging.
-function projectStagingBase() {
+// ancestor of their current directory, so stage installs, and keep the npm
+// cache and project backups, under a per-user directory rather than a shared
+// temp directory such as /tmp. Linux uses the XDG cache directory, macOS the
+// per-user temp directory, and Windows %TEMP%. SETUP_TMPDIR may be shared and
+// is not used for skills.
+function privateSkillsBase() {
     const env = process.env;
     if (process.platform === "win32") {
         const temp = env.TEMP || env.TMP;
         if (!temp || !path.isAbsolute(temp)) {
-            fail("cannot stage project skills: set TEMP to an absolute per-user directory");
+            fail("cannot find a private skills directory: set TEMP to an absolute per-user directory");
         }
         return temp;
     }
@@ -717,33 +727,46 @@ function projectStagingBase() {
     }
     const home = env.SETUP_HOME || env.HOME || os.homedir();
     if (!path.isAbsolute(home)) {
-        fail("cannot stage project skills: set HOME or XDG_CACHE_HOME to an absolute path");
+        fail("cannot find a private skills directory: set HOME or XDG_CACHE_HOME to an absolute path");
     }
     return path.join(home, ".cache");
 }
-// On POSIX, refuse a staging base whose real path, or any ancestor, is owned
-// by another user or writable by others; a sticky bit does not
-// exempt a directory. The base must also lie outside the project.
-function requirePrivateStagingBase(stagingBase, projectRoot) {
-    fs.mkdirSync(stagingBase, { recursive: true, mode: 0o700 });
-    const base = fs.realpathSync(stagingBase);
-    const project = fs.realpathSync(projectRoot);
-    if (base === project || base.startsWith(project + path.sep)) {
-        fail(`cannot stage project skills inside the project: ${base}`);
+function isInsideOrSame(candidate, root) {
+    return candidate === root || candidate.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+}
+// Creates the directory if needed and returns its real path. On POSIX, refuse
+// a directory whose real path, or any ancestor, is owned by another user or
+// writable by others; a sticky bit does not exempt a directory. The directory
+// must also lie outside the project, when there is one.
+function requirePrivateDir(directory, label, projectRoot) {
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const real = fs.realpathSync(directory);
+    if (projectRoot !== undefined && isInsideOrSame(real, fs.realpathSync(projectRoot))) {
+        fail(`cannot keep ${label} inside the project: ${real}`);
     }
     if (process.platform === "win32" || typeof process.getuid !== "function") {
-        return base;
+        return real;
     }
     const uid = process.getuid();
-    for (let current = base;; current = path.dirname(current)) {
+    for (let current = real;; current = path.dirname(current)) {
         const stat = fs.statSync(current);
         if ((stat.uid !== uid && stat.uid !== 0) || (stat.mode & 0o002) !== 0) {
-            fail(`cannot stage project skills under ${base}: ${current} must be owned by you or root and not writable by others; ` +
+            fail(`cannot keep ${label} under ${real}: ${current} must be owned by you or root and not writable by others; ` +
                 "set XDG_CACHE_HOME (Linux) or TMPDIR (macOS) to a private directory");
         }
         if (path.dirname(current) === current) {
-            return base;
+            return real;
         }
+    }
+}
+function removeStagingDir(workDir) {
+    // A cleanup failure, such as EBUSY on Windows, must not replace the
+    // install's own result.
+    try {
+        fs.rmSync(workDir, { recursive: true, force: true, maxRetries: 3 });
+    }
+    catch (error) {
+        warn(`Could not remove staging directory ${workDir}: ${error.message}`);
     }
 }
 // Install in a private per-run staging directory and move the outputs into the
@@ -755,21 +778,13 @@ function runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir
         return;
     }
     const npx = resolveNpx();
-    fs.mkdirSync(npmCacheDir, { recursive: true });
     // mkdtemp creates the directory with mode 0700 on POSIX.
-    const workDir = fs.mkdtempSync(path.join(requirePrivateStagingBase(stagingBase, projectRoot), PROJECT_STAGING_PREFIX));
+    const workDir = fs.mkdtempSync(path.join(stagingBase, PROJECT_STAGING_PREFIX));
     try {
         installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCacheDir);
     }
     finally {
-        // A cleanup failure, such as EBUSY on Windows, must not replace the
-        // install's own result.
-        try {
-            fs.rmSync(workDir, { recursive: true, force: true, maxRetries: 3 });
-        }
-        catch (error) {
-            warn(`Could not remove staging directory ${workDir}: ${error.message}`);
-        }
+        removeStagingDir(workDir);
     }
 }
 function installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCacheDir) {
@@ -811,26 +826,34 @@ function requireInstalledSkills(skillsDir, entry) {
         }
     }
 }
-function runUserExternalInstalls(tempInstallDir, restoreSkillsDir, plan, npmCacheDir) {
+// Like project installs, run each source in a fresh directory inside a private
+// per-run staging directory so npx never sees a shared parent directory.
+function runUserExternalInstalls(stagingBase, restoreSkillsDir, plan, npmCacheDir) {
     if (plan.external.length === 0) {
         return;
     }
     const npx = resolveNpx();
-    fs.mkdirSync(npmCacheDir, { recursive: true });
-    for (const entry of plan.external) {
-        removePath(tempInstallDir);
-        fs.mkdirSync(tempInstallDir, { recursive: true });
-        const args = ["skills", "add", entry.source, "--copy", "--yes", "--agent", "codex"];
-        for (const skill of entry.skills) {
-            args.push("--skill", skill);
-        }
-        runCommand(npx.command, [...npx.args, ...args], tempInstallDir, {
-            ...process.env,
-            NPM_CONFIG_CACHE: npmCacheDir,
+    // mkdtemp creates the directory with mode 0700 on POSIX.
+    const workDir = fs.mkdtempSync(path.join(stagingBase, USER_STAGING_PREFIX));
+    try {
+        plan.external.forEach((entry, index) => {
+            const installDir = path.join(workDir, String(index));
+            fs.mkdirSync(installDir, { mode: 0o700 });
+            const args = ["skills", "add", entry.source, "--copy", "--yes", "--agent", "codex"];
+            for (const skill of entry.skills) {
+                args.push("--skill", skill);
+            }
+            runCommand(npx.command, [...npx.args, ...args], installDir, {
+                ...process.env,
+                NPM_CONFIG_CACHE: npmCacheDir,
+            });
+            const installedSkillsDir = path.join(installDir, ".agents", "skills");
+            requireInstalledSkills(installedSkillsDir, entry);
+            copyDirectoryContents(installedSkillsDir, restoreSkillsDir);
         });
-        const installedSkillsDir = path.join(tempInstallDir, ".agents", "skills");
-        requireInstalledSkills(installedSkillsDir, entry);
-        copyDirectoryContents(installedSkillsDir, restoreSkillsDir);
+    }
+    finally {
+        removeStagingDir(workDir);
     }
 }
 function swapUserSkillsView(restoreRoot, restoreSkillsDir, stagingSkillsDir, stagingMetadata) {
@@ -941,7 +964,7 @@ function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRu
         pruneStaleManagedEntries(directory, stale, dryRun);
     }
 }
-function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agents, dryRun, skipUserLocalSkillLinks, skipUserAgentSkillLinks) {
+function setupUserSkills(dotfilesRoot, setupHome, profilesCsv, agents, dryRun, skipUserLocalSkillLinks, skipUserAgentSkillLinks) {
     const requestedProfiles = csv(profilesCsv || "base");
     const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "user");
     const restoreRoot = path.join(dotfilesRoot, ".agents", "user");
@@ -949,16 +972,17 @@ function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agen
     const suffix = `${process.pid}`;
     const stagingSkillsDir = path.join(restoreRoot, `skills.next.${suffix}`);
     const stagingMetadata = path.join(restoreRoot, `skills-profile.json.next.${suffix}`);
-    const tempInstallDir = path.join(setupTmpdir, "dotfiles-skills-user-install");
-    const npmCacheDir = path.join(setupTmpdir, "skills-npm-cache");
     if (dryRun) {
         info(`DRY-RUN rm -rf ${stagingSkillsDir}`);
         info(`DRY-RUN rm -rf ${stagingMetadata}`);
-        info(`DRY-RUN rm -rf ${tempInstallDir}`);
         info(`DRY-RUN mkdir -p ${restoreRoot}`);
         info(`DRY-RUN mkdir -p ${stagingSkillsDir}`);
-        info(`DRY-RUN mkdir -p ${tempInstallDir}`);
-        logDryRunUserExternalInstalls(tempInstallDir, plan, npmCacheDir);
+        if (plan.external.length > 0) {
+            const base = privateSkillsBase();
+            const npmCacheDir = path.join(base, NPM_CACHE_NAME);
+            info(`DRY-RUN mkdir -p ${npmCacheDir}`);
+            logDryRunUserExternalInstalls(base, plan, npmCacheDir);
+        }
         info(`DRY-RUN preserve ${path.join(restoreSkillsDir, "synced")} in ${stagingSkillsDir}`);
         if (skipUserLocalSkillLinks) {
             info("DRY-RUN skip user local skill links");
@@ -985,14 +1009,19 @@ function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agen
         info(`User skills installed for profiles: ${requestedProfiles.join(",")}`);
         return;
     }
+    let stagingBase = "";
+    let npmCacheDir = "";
+    if (plan.external.length > 0) {
+        const base = privateSkillsBase();
+        stagingBase = requirePrivateDir(base, "user skill staging");
+        npmCacheDir = requirePrivateDir(path.join(stagingBase, NPM_CACHE_NAME), "the skills npm cache");
+    }
     removePath(stagingSkillsDir);
     removePath(stagingMetadata);
-    removePath(tempInstallDir);
     fs.mkdirSync(restoreRoot, { recursive: true });
     fs.mkdirSync(stagingSkillsDir, { recursive: true });
-    fs.mkdirSync(tempInstallDir, { recursive: true });
     try {
-        runUserExternalInstalls(tempInstallDir, stagingSkillsDir, plan, npmCacheDir);
+        runUserExternalInstalls(stagingBase, stagingSkillsDir, plan, npmCacheDir);
         copyMissingDirectoryEntries(path.join(restoreSkillsDir, "synced"), path.join(stagingSkillsDir, "synced"));
         if (skipUserLocalSkillLinks) {
             info("User local skill links skipped");
@@ -1006,12 +1035,10 @@ function setupUserSkills(dotfilesRoot, setupHome, setupTmpdir, profilesCsv, agen
     catch (error) {
         removePath(stagingSkillsDir);
         removePath(stagingMetadata);
-        removePath(tempInstallDir);
         throw error;
     }
     removePath(stagingSkillsDir);
     removePath(stagingMetadata);
-    removePath(tempInstallDir);
     if (skipUserAgentSkillLinks) {
         info("User agent skill links skipped");
     }
@@ -1047,14 +1074,50 @@ function timestamp() {
         pad(now.getSeconds()),
     ].join("");
 }
-function prepareProjectTargets(projectRoot, agents, backupRoot, includeLockfile) {
-    const records = [];
-    if (includeLockfile) {
-        backupPath(path.join(projectRoot, "skills-lock.json"), backupRoot, records);
+// The project paths that setup backs up, replaces, and writes.
+function projectTargets(projectRoot, agents, includeLockfile) {
+    return [
+        ...(includeLockfile ? [path.join(projectRoot, "skills-lock.json")] : []),
+        path.join(projectRoot, ".agents", "skills-profile.json"),
+        ...agents.map(agent => agentSkillDir(projectRoot, agent)),
+    ];
+}
+// A checkout can make a target, or a directory such as .agents or .claude on
+// the way to it, a link to somewhere else. Backups, moves, and writes would
+// then replace files outside the project or copy outside files into it, so
+// refuse before changing anything. Links that stay inside the project are
+// kept as they are.
+function requireProjectTargetsInside(projectRoot, targets) {
+    const root = fs.realpathSync(projectRoot);
+    for (const target of targets) {
+        let current = projectRoot;
+        for (const part of path.relative(projectRoot, target).split(path.sep)) {
+            current = path.join(current, part);
+            const linked = getLinkTarget(current);
+            if (linked === null) {
+                if (!fs.lstatSync(current, { throwIfNoEntry: false })) {
+                    break;
+                }
+                continue;
+            }
+            let resolved;
+            try {
+                resolved = fs.realpathSync(current);
+            }
+            catch {
+                resolved = path.resolve(fs.realpathSync(path.dirname(current)), linked);
+            }
+            if (!isInsideOrSame(resolved, root)) {
+                fail(`refusing to set up project skills: ${current} links outside the project to ${linked}; ` +
+                    "replace the link with a directory or file inside the project");
+            }
+        }
     }
-    backupPath(path.join(projectRoot, ".agents", "skills-profile.json"), backupRoot, records);
-    for (const agent of agents) {
-        backupPath(agentSkillDir(projectRoot, agent), backupRoot, records);
+}
+function prepareProjectTargets(targets, backupRoot) {
+    const records = [];
+    for (const target of targets) {
+        backupPath(target, backupRoot, records);
     }
     return records;
 }
@@ -1093,7 +1156,7 @@ function gitProjectRoot(cwd) {
     }
     return result.stdout.trim();
 }
-function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryRun) {
+function setupProjectSkills(dotfilesRoot, profilesCsv, agents, dryRun) {
     if (!profilesCsv) {
         fail("--profile is required for project scope");
     }
@@ -1105,13 +1168,20 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
     const requestedProfiles = csv(profilesCsv);
     const projectRoot = gitProjectRoot(process.cwd());
     const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "project");
-    const stagingBase = plan.external.length > 0 ? projectStagingBase() : "";
-    const npmCacheDir = path.join(setupTmpdir, "skills-npm-cache");
-    const backupRoot = path.join(setupTmpdir, "dotfiles-skills-backup", path.basename(projectRoot));
+    const hasExternal = plan.external.length > 0;
+    const targets = projectTargets(projectRoot, agents, hasExternal);
+    requireProjectTargetsInside(projectRoot, targets);
+    const base = privateSkillsBase();
+    const backupName = path.basename(projectRoot);
     const localRoot = path.join(dotfilesRoot, "skills", "local");
     const localNames = new Set(plan.local.map(skill => skill.name));
     if (dryRun) {
-        info(`DRY-RUN mkdir -p ${npmCacheDir}`);
+        const npmCacheDir = path.join(base, NPM_CACHE_NAME);
+        const backupRoot = path.join(base, BACKUP_DIR_NAME, backupName);
+        if (hasExternal) {
+            info(`DRY-RUN mkdir -p ${npmCacheDir}`);
+        }
+        info(`DRY-RUN mkdir -p ${backupRoot}`);
         info(`DRY-RUN mkdir -p ${path.join(projectRoot, ".agents")}`);
         if (plan.external.length > 0) {
             info(`DRY-RUN backup ${path.join(projectRoot, "skills-lock.json")} to ${backupRoot}`);
@@ -1120,7 +1190,7 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
         for (const agent of agents) {
             info(`DRY-RUN backup ${agentSkillDir(projectRoot, agent)} to ${backupRoot}`);
         }
-        logDryRunExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
+        logDryRunExternalInstalls(base, projectRoot, plan, agents, npmCacheDir);
         logDryRunLinkLocalSkills(plan, "project", projectRoot);
         for (const agent of agents) {
             const skillsDir = agentSkillDir(projectRoot, agent);
@@ -1131,9 +1201,13 @@ function setupProjectSkills(dotfilesRoot, setupTmpdir, profilesCsv, agents, dryR
         info("Consider ignoring generated skill directories: .agents/skills/ .claude/skills/");
         return;
     }
-    fs.mkdirSync(npmCacheDir, { recursive: true });
+    const stagingBase = requirePrivateDir(base, "project skill staging", projectRoot);
+    const npmCacheDir = hasExternal ? requirePrivateDir(path.join(stagingBase, NPM_CACHE_NAME), "the skills npm cache", projectRoot) : "";
+    // Check the shared backup directory before creating this project's directory in it.
+    const backupBase = requirePrivateDir(path.join(stagingBase, BACKUP_DIR_NAME), "project skill backups", projectRoot);
+    const backupRoot = requirePrivateDir(path.join(backupBase, backupName), "project skill backups", projectRoot);
     fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
-    const backups = prepareProjectTargets(projectRoot, agents, backupRoot, plan.external.length > 0);
+    const backups = prepareProjectTargets(targets, backupRoot);
     try {
         runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
         linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
@@ -1152,7 +1226,6 @@ function setupContext() {
     return {
         dotfilesRoot: path.resolve(process.env.SETUP_DOTFILES_ROOT || defaultDotfilesRoot),
         home: path.resolve(process.env.SETUP_HOME || process.env.HOME || os.homedir()),
-        tmpdir: path.resolve(process.env.SETUP_TMPDIR || os.tmpdir()),
         dryRun: envFlag("SETUP_DRY_RUN"),
         skipUserLocalSkillLinks: envFlag("SETUP_SKIP_USER_LOCAL_SKILL_LINKS"),
         skipUserAgentSkillLinks: envFlag("SETUP_SKIP_USER_AGENT_SKILL_LINKS"),
@@ -1166,10 +1239,10 @@ function main(argv) {
         return;
     }
     if (parsed.scope === "user") {
-        setupUserSkills(context.dotfilesRoot, context.home, context.tmpdir, parsed.profiles, parsed.agents, context.dryRun, context.skipUserLocalSkillLinks, context.skipUserAgentSkillLinks);
+        setupUserSkills(context.dotfilesRoot, context.home, parsed.profiles, parsed.agents, context.dryRun, context.skipUserLocalSkillLinks, context.skipUserAgentSkillLinks);
         return;
     }
-    setupProjectSkills(context.dotfilesRoot, context.tmpdir, parsed.profiles, parsed.agents, context.dryRun);
+    setupProjectSkills(context.dotfilesRoot, parsed.profiles, parsed.agents, context.dryRun);
 }
 try {
     main(process.argv.slice(2));
