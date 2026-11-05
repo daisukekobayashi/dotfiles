@@ -132,9 +132,9 @@ and republish through the existing PR.
 
 Advance when the exact published implementation is covered by the most recent
 full review and the follow-ups completed since it under Local Review's Repeat
-and advance, has
-current verification, and has the intended Work Item links. An existing PR
-does not need another creation, and an open PR is not a merged PR.
+and advance, has current verification, and has the intended Work Item links.
+An existing PR does not need another creation, and an open PR is not a merged
+PR.
 
 ### 4. Confirm and perform the merge
 

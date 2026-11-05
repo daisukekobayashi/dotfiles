@@ -140,8 +140,8 @@ round. To request another review,
 reuse the existing PR and call the cycle again for that target; it does not
 request another review automatically. If any other edit or new commit changes
 the head, refresh the affected review coverage. Advance only when the current
-published head is covered by the full local reviews and completed follow-ups,
-has completed hosted review or the recorded non-material delta above,
+published head is covered by the most recent full review and the follow-ups
+completed since it under Local Review's Repeat and advance, has completed hosted review or the recorded non-material delta above,
 worthwhile fixes are verified and published, and remaining thread dispositions
 clearly close them.
 

@@ -125,6 +125,10 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   assert.match(providers["github-issue-delivery"], /at most three hosted Codex\s+review rounds per issue/);
   assert.match(providers["github-issue-delivery"], /hosted-fix\s+follow-ups use the same local budget/);
   assert.match(providers["azure-devops-work-item-delivery"], /Advance when the exact published implementation is covered by the most recent\s+full review and the follow-ups completed since it under Local Review's Repeat\s+and advance/);
+  assert.match(providers["github-issue-delivery"], /Advance only when the current\s+published head is covered by the most recent full review and the follow-ups\s+completed since it under Local Review's Repeat and advance/);
+  for (const [name, text] of Object.entries(providers)) {
+    assert.doesNotMatch(text, /full local reviews and completed follow-ups|initial full\s+review and completed follow-ups/, name);
+  }
   for (const [name, text] of Object.entries({ "local-review.md": localReview, ...providers })) {
     assert.doesNotMatch(text, /full\s+pair/, name);
   }
