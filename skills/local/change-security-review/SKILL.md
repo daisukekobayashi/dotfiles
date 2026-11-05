@@ -24,12 +24,15 @@ as "review with Codex"; callers forward that instruction with the target. For
 Codex on Claude Code, resolve the installed `codex` plugin root from host
 metadata, then run its companion `task` in the foreground with `--fresh`,
 `--cwd <target worktree>`, and no `--write`, so the Codex sandbox stays
-read-only. Pass the prompt with `--prompt-file` or in single quotes so the shell
-does not expand `$change-security-review`:
+read-only. With the host's file-writing tool, not a shell command, write the
+prompt to a temporary file outside the target worktree so no caller text enters
+a shell string. Start it with `Use $change-security-review`, followed by the arguments,
+target, focus, and caller context. Pass the file's absolute path with
+`--prompt-file`, and delete the file after the run:
 
 ```text
 node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
-  'Use $change-security-review <arguments, target, focus, and caller context>'
+  --prompt-file <prompt-file>
 ```
 
 Return the named tool's completed output. A launched background job is not a

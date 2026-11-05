@@ -522,7 +522,11 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(runnerSection(skill), /do\s+not fall back/);
     assert.match(runnerSection(skill), /codex-companion\.mjs" task --fresh --cwd/);
     assert.match(runnerSection(skill), /no `--write`/);
-    assert.match(runnerSection(skill), new RegExp(`'Use \\$${name} `));
+    assert.match(runnerSection(skill), /--cwd <worktree> \\\n  --prompt-file <prompt-file>\n```/);
+    assert.match(runnerSection(skill), /host's file-writing tool, not a shell command/);
+    assert.match(runnerSection(skill), /outside the target worktree/);
+    assert.match(runnerSection(skill), new RegExp(`Start it with \`Use \\$${name}\``));
+    assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
   }
   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
   const security = await readText(path.join(securityRoot, "SKILL.md"));
