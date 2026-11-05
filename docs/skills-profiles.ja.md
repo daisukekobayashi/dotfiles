@@ -543,7 +543,7 @@ npx skills add <owner/repo> \
 
 これはリポジトリ root で実行し、`skills-lock.json` と agent ごとの project output path は CLI に管理させます。
 
-既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、profile 管理版に置き換えます。Git の dirty state は warning に留め、実行自体は止めません。
+既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、profile 管理版に置き換えます。ただし、選択されなくなった、または存在しなくなった skill を指す `skills/local` へのリンクと、その未編集の管理コピーは戻さず、backup にだけ残します。編集済みのコピーは warning を出して残します。Git の dirty state は warning に留め、実行自体は止めません。
 
 外部インストール後は、指定した各スキルの `SKILL.md` が存在することを確認します。欠落時は user view を入れ替えず、project scope では既存のバックアップを復元します。`profile validate` は設定の構造を確認するもので、配布元の存在確認や実行評価は行いません。
 

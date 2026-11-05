@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lstat, mkdir, readdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readlink, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,6 +8,7 @@ import {
   repoRoot,
   createFixture,
   runSkills,
+  runSkillsWithSymlinkError,
   readText,
   createClaudeEnvironment,
 } from "./skills-helpers.mjs";
@@ -46,7 +47,10 @@ test("user install refreshes shared skills in existing Claude environments", asy
     result = runSkills(["--profile", "base"], fixture);
     assert.equal(result.status, 0, result.stderr || result.stdout);
     for (const environment of environments) {
-      assert.equal(await readlink(path.join(environment, "skills/pdf")), path.join(view, "pdf"));
+      assert.equal(existsSync(path.join(environment, "skills/pdf")), false,
+        "deselected skills should not leave links behind in Claude environments");
+      assert.ok(result.stdout.includes(`Removed stale skill entry: ${path.join(environment, "skills", "pdf")}`));
+      assert.equal(await readlink(path.join(environment, "skills/find-skills")), path.join(view, "find-skills"));
     }
   } finally {
     await fixture.cleanup();
@@ -148,6 +152,86 @@ test("Codex-only and project installs do not add skills to Claude environments",
       assert.equal(result.status, 0, result.stderr || result.stdout);
       assert.deepEqual(await readdir(path.join(environment, "skills")), []);
     }
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+async function renameLocalSkill(fixture, from, to) {
+  const local = path.join(fixture.dotfiles, "skills", "local");
+  await rename(path.join(local, from), path.join(local, to));
+  await writeFile(path.join(local, to, "SKILL.md"), `---\nname: ${to}\ndescription: Renamed\n---\n`);
+  const profile = path.join(fixture.dotfiles, "skills", "profiles", "base.json");
+  const base = JSON.parse(await readText(profile));
+  base.local = base.local.map(name => (name === from ? to : name));
+  await writeFile(profile, JSON.stringify(base, null, 2) + "\n");
+}
+
+test("Claude skill refresh prunes links of a renamed local skill and keeps unmanaged links", async () => {
+  const fixture = await createFixture();
+  try {
+    const environment = await createClaudeEnvironment(fixture);
+    const skills = path.join(environment, "skills");
+    const view = path.join(fixture.dotfiles, ".agents", "user", "skills");
+    const outside = path.join(fixture.root, "outside-skill");
+    await mkdir(outside);
+    await writeFile(path.join(outside, "SKILL.md"), "outside\n");
+
+    let result = runSkills(["--profile", "base"], fixture);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readlink(path.join(skills, "local-one")), path.join(view, "local-one"));
+    await symlink(outside, path.join(skills, "user-link"), "dir");
+    await symlink(path.join(fixture.root, "missing"), path.join(skills, "user-dangling"), "dir");
+    await symlink(path.join(view, "synced"), path.join(skills, "synced"), "dir");
+
+    await renameLocalSkill(fixture, "local-one", "local-two");
+    const dryRun = runSkills(["--profile", "base"], { ...fixture, env: { ...fixture.env, SETUP_DRY_RUN: "1" } });
+    assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
+    assert.ok(dryRun.stdout.includes(`DRY-RUN remove stale skill entry ${path.join(skills, "local-one")}`));
+    assert.equal(dryRun.stdout.includes(path.join(skills, "user-link")), false);
+    assert.equal(await readlink(path.join(skills, "local-one")), path.join(view, "local-one"),
+      "dry run should not remove stale links");
+
+    result = runSkills(["--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await lstat(path.join(skills, "local-one")).catch(() => null), null,
+      "the renamed skill's dangling link should be pruned");
+    assert.equal(await readlink(path.join(skills, "local-two")), path.join(view, "local-two"));
+    assert.equal(await readlink(path.join(skills, "user-link")), outside);
+    assert.equal(await readlink(path.join(skills, "user-dangling")), path.join(fixture.root, "missing"));
+    assert.equal(await readlink(path.join(skills, "synced")), path.join(view, "synced"));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Claude skill refresh prunes unchanged copies of a removed skill and keeps edited ones", async () => {
+  const fixture = await createFixture();
+  try {
+    const [clean, edited] = await Promise.all(["clean", "edited"].map(name => createClaudeEnvironment(fixture, name)));
+    let result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "base"], fixture);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    for (const environment of [clean, edited]) {
+      assert.equal((await lstat(path.join(environment, "skills/local-one"))).isSymbolicLink(), false);
+      assert.equal(existsSync(path.join(environment, "skills/.dotfiles-copy-local-one.json")), true);
+    }
+    await writeFile(path.join(edited, "skills/local-one/SKILL.md"), "local edit\n");
+    await mkdir(path.join(clean, "skills/broken"));
+    await writeFile(path.join(clean, "skills/.dotfiles-copy-broken.json"), "not json\n");
+
+    await renameLocalSkill(fixture, "local-one", "local-two");
+    result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(path.join(clean, "skills/local-one")), false);
+    assert.equal(existsSync(path.join(clean, "skills/.dotfiles-copy-local-one.json")), false);
+    assert.equal(existsSync(path.join(clean, "skills/local-two/SKILL.md")), true);
+    assert.equal(await readText(path.join(edited, "skills/local-one/SKILL.md")), "local edit\n");
+    assert.equal(existsSync(path.join(edited, "skills/.dotfiles-copy-local-one.json")), true);
+    assert.match(result.stderr, /Keeping locally edited copy of a removed skill: .*edited.skills.local-one/);
+    assert.equal(existsSync(path.join(clean, "skills/broken")), true);
+    assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.broken/);
   } finally {
     await fixture.cleanup();
   }

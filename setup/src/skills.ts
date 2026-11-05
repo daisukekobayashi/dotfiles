@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { copyMarker, copyMetadata, planSharedLink, snapshot, stageSharedLinks } from "./shared-links";
+import { copyMarker, copyMetadata, planSharedLink, sameSnapshot, snapshot, stageSharedLinks } from "./shared-links";
 
 type Scope = "user" | "project";
 type Agent = "codex" | "claude-code";
@@ -476,14 +476,14 @@ function copyDirectoryContents(sourceDir: string, targetDir: string): void {
   }
 }
 
-function copyMissingDirectoryEntries(sourceDir: string, targetDir: string): void {
+function copyMissingDirectoryEntries(sourceDir: string, targetDir: string, skip: ReadonlySet<string> = new Set()): void {
   if (!fs.existsSync(sourceDir)) {
     return;
   }
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(sourceDir)) {
     const targetEntry = path.join(targetDir, entry);
-    if (fs.existsSync(targetEntry) || getLinkTarget(targetEntry)) {
+    if (skip.has(entry) || fs.existsSync(targetEntry) || getLinkTarget(targetEntry)) {
       continue;
     }
     fs.cpSync(path.join(sourceDir, entry), targetEntry, {
@@ -519,6 +519,87 @@ function isManagedLocalSymlink(targetPath: string, expectedRoot: string): boolea
   const resolvedLinked = normalizePath(path.resolve(path.dirname(targetPath), linked));
   const resolvedRoot = normalizePath(expectedRoot);
   return resolvedLinked === resolvedRoot || resolvedLinked.startsWith(`${resolvedRoot}${path.sep}`);
+}
+
+function isInsideRoot(candidate: string, root: string): boolean {
+  return normalizePath(candidate).startsWith(`${normalizePath(root)}${path.sep}`);
+}
+
+// A stale managed entry is one setup placed for a skill that `keep` no longer
+// lists or whose source is gone: a link resolving inside `managedRoot`, or a
+// copy whose marker names a source there and whose content is unchanged. Each
+// result lists the entry name and, for a copy, its marker name. Links resolve
+// from `linkBase`, the directory the entries were installed in.
+function staleManagedEntries(
+  directory: string,
+  managedRoot: string,
+  keep: ReadonlySet<string>,
+  linkBase = directory,
+  prunable: (name: string) => boolean = () => true,
+): string[][] {
+  if (!fs.lstatSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
+    return [];
+  }
+  const stale: string[][] = [];
+  for (const name of fs.readdirSync(directory).sort()) {
+    if (name.startsWith(".") || !prunable(name)) {
+      continue;
+    }
+    const entry = path.join(directory, name);
+    const installed = path.join(linkBase, name);
+    const linked = getLinkTarget(entry);
+    if (linked !== null) {
+      const source = path.resolve(linkBase, linked);
+      if (isInsideRoot(source, managedRoot) && (!keep.has(name) || !fs.existsSync(source))) {
+        stale.push([name]);
+      }
+      continue;
+    }
+    const marker = copyMarker(name);
+    if (!fs.lstatSync(path.join(directory, marker), { throwIfNoEntry: false })) {
+      continue;
+    }
+    let saved: { source?: unknown; files?: unknown };
+    try {
+      saved = JSON.parse(fs.readFileSync(path.join(directory, marker), "utf8"));
+    } catch {
+      warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
+      continue;
+    }
+    if (typeof saved?.source !== "string" || !saved.files || typeof saved.files !== "object" || Array.isArray(saved.files)) {
+      warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
+      continue;
+    }
+    if (!isInsideRoot(saved.source, managedRoot) || (keep.has(name) && fs.existsSync(saved.source))) {
+      continue;
+    }
+    let current: ReturnType<typeof snapshot>;
+    try {
+      current = snapshot(entry);
+    } catch {
+      current = undefined;
+    }
+    if (!sameSnapshot(current, saved.files as Record<string, string>)) {
+      warn(`Keeping locally edited copy of a removed skill: ${installed}`);
+      continue;
+    }
+    stale.push([name, marker]);
+  }
+  return stale;
+}
+
+function pruneStaleManagedEntries(directory: string, stale: string[][], dryRun: boolean): void {
+  for (const [name, ...rest] of stale) {
+    const entry = path.join(directory, name);
+    if (dryRun) {
+      info(`DRY-RUN remove stale skill entry ${entry}`);
+      continue;
+    }
+    for (const item of [name, ...rest]) {
+      removePath(path.join(directory, item));
+    }
+    info(`Removed stale skill entry: ${entry}`);
+  }
 }
 
 function createSymlinks(links: { source: string; target: string }[], expectedRoot?: string): void {
@@ -924,13 +1005,17 @@ function claudeEnvironmentSkillDirs(setupHome: string): string[] {
   return directories;
 }
 
+function isClaudeEnvironmentSkillName(name: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !/^(synced|anthropic-skills)$/i.test(name);
+}
+
 function linkClaudeEnvironmentSkills(restoreSkillsDir: string, directories: string[], names: string[], dryRun: boolean): void {
   if (directories.length === 0) {
     return;
   }
   const links: { source: string; target: string }[] = [];
   for (const name of names.sort()) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) || /^(synced|anthropic-skills)$/i.test(name)) {
+    if (!isClaudeEnvironmentSkillName(name)) {
       continue;
     }
     const source = path.join(restoreSkillsDir, name);
@@ -955,6 +1040,11 @@ function linkClaudeEnvironmentSkills(restoreSkillsDir: string, directories: stri
     }
   }
   createSymlinks(links);
+  const keep = new Set(names);
+  for (const directory of directories) {
+    const stale = staleManagedEntries(directory, restoreSkillsDir, keep, directory, isClaudeEnvironmentSkillName);
+    pruneStaleManagedEntries(directory, stale, dryRun);
+  }
 }
 
 function setupUserSkills(
@@ -1099,13 +1189,19 @@ function rollbackProjectTargets(records: BackupRecord[]): void {
   warn("Restored previous project skills after failed install");
 }
 
-function restoreUnmanagedProjectSkills(records: BackupRecord[], projectRoot: string, agents: Agent[]): void {
+// Entries the previous run installed for skills no longer selected stay in the
+// backup instead of being restored.
+function restoreUnmanagedProjectSkills(records: BackupRecord[], projectRoot: string, agents: Agent[], localRoot: string, keep: ReadonlySet<string>): void {
   const agentSkillDirs = new Set(agents.map((agent) => agentSkillDir(projectRoot, agent)));
   for (const record of records) {
     if (!record.backupPath || !agentSkillDirs.has(record.targetPath)) {
       continue;
     }
-    copyMissingDirectoryEntries(record.backupPath, record.targetPath);
+    const stale = staleManagedEntries(record.backupPath, localRoot, keep, record.targetPath);
+    copyMissingDirectoryEntries(record.backupPath, record.targetPath, new Set(stale.flat()));
+    for (const [name] of stale) {
+      info(`Removed stale skill entry: ${path.join(record.targetPath, name)}`);
+    }
   }
 }
 
@@ -1137,6 +1233,8 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
   const stagingBase = plan.external.length > 0 ? projectStagingBase() : "";
   const npmCacheDir = path.join(setupTmpdir, "skills-npm-cache");
   const backupRoot = path.join(setupTmpdir, "dotfiles-skills-backup", path.basename(projectRoot));
+  const localRoot = path.join(dotfilesRoot, "skills", "local");
+  const localNames = new Set(plan.local.map(skill => skill.name));
 
   if (dryRun) {
     info(`DRY-RUN mkdir -p ${npmCacheDir}`);
@@ -1150,6 +1248,10 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
     }
     logDryRunExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
     logDryRunLinkLocalSkills(plan, "project", projectRoot);
+    for (const agent of agents) {
+      const skillsDir = agentSkillDir(projectRoot, agent);
+      pruneStaleManagedEntries(skillsDir, staleManagedEntries(skillsDir, localRoot, localNames), true);
+    }
     info(`DRY-RUN write skills metadata ${path.join(projectRoot, ".agents", "skills-profile.json")}`);
     info(`Project skills installed for profiles: ${requestedProfiles.join(",")}`);
     info("Consider ignoring generated skill directories: .agents/skills/ .claude/skills/");
@@ -1163,7 +1265,7 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
   try {
     runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
     linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
-    restoreUnmanagedProjectSkills(backups, projectRoot, agents);
+    restoreUnmanagedProjectSkills(backups, projectRoot, agents, localRoot, localNames);
     writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
   } catch (error) {
     rollbackProjectTargets(backups);
