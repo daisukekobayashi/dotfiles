@@ -183,28 +183,43 @@ function parseArgs(argv: string[]): ParsedArgs {
   };
 }
 
-const WINDOWS_EXECUTABLE_EXTENSIONS = [".exe", ".cmd", ".bat", ".com"];
+const WINDOWS_EXECUTABLE_EXTENSIONS = [".com", ".exe", ".bat", ".cmd"];
 
-function hasWindowsExecutableExtension(commandPath: string): boolean {
-  return WINDOWS_EXECUTABLE_EXTENSIONS.includes(path.extname(commandPath).toLowerCase());
+function windowsExecutableExtensions(env: NodeJS.ProcessEnv): string[] {
+  const pathext = (env.PATHEXT ?? "")
+    .split(";")
+    .map((extension) => extension.trim().toLowerCase())
+    .filter((extension) => WINDOWS_EXECUTABLE_EXTENSIONS.includes(extension));
+  return pathext.length > 0 ? [...new Set(pathext)] : WINDOWS_EXECUTABLE_EXTENSIONS;
 }
 
-function resolveWindowsCommand(command: string, env: NodeJS.ProcessEnv = process.env): string {
-  const result = spawnSync("where", [command], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-  if (result.status !== 0) {
-    fail(`Required command not found: ${command}`);
+function isFile(candidate: string): boolean {
+  try {
+    return fs.statSync(candidate).isFile();
+  } catch {
+    return false;
   }
+}
 
-  const candidates = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  for (const candidate of candidates) {
-    if (hasWindowsExecutableExtension(candidate)) {
-      return candidate;
-    }
+// Walk PATH and PATHEXT directly instead of running `where`, which searches the
+// current directory before PATH. The current directory is used only when PATH
+// lists it explicitly.
+function resolveWindowsCommand(command: string, env: NodeJS.ProcessEnv = process.env): string {
+  const extensions = windowsExecutableExtensions(env);
+  const commandExtension = path.extname(command).toLowerCase();
+  const names = extensions.includes(commandExtension)
+    ? [command]
+    : extensions.map((extension) => `${command}${extension}`);
+  const pathEntries = (env.PATH ?? env.Path ?? "")
+    .split(path.delimiter)
+    .map((entry) => entry.trim().replace(/^"(.*)"$/, "$1"))
+    .filter(Boolean);
 
-    for (const extension of WINDOWS_EXECUTABLE_EXTENSIONS) {
-      const executableCandidate = `${candidate}${extension}`;
-      if (fs.existsSync(executableCandidate)) {
-        return executableCandidate;
+  for (const entry of pathEntries) {
+    for (const name of names) {
+      const candidate = path.resolve(entry, name);
+      if (isFile(candidate)) {
+        return candidate;
       }
     }
   }

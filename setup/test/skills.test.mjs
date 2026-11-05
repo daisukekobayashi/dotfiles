@@ -168,7 +168,8 @@ done
 set -euo pipefail
 command_name="$1"
 found=0
-IFS=':' read -ra path_entries <<< "\${PATH}"
+# Like where.exe, search the current directory before PATH.
+IFS=':' read -ra path_entries <<< "\${PWD}:\${PATH}"
 for path_entry in "\${path_entries[@]}"; do
   if [ -x "\${path_entry}/\${command_name}" ]; then
     printf '%s\\n' "\${path_entry}/\${command_name}"
@@ -1094,6 +1095,49 @@ test("Windows project scope runs npx-cli.js next to npx.cmd with node", async ()
     ]);
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "find-skills", "SKILL.md")), "find-skills\n");
     assert.equal(await readText(path.join(fixture.project, ".claude", "skills", "find-skills", "SKILL.md")), "find-skills\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows project scope ignores git.exe and npx.cmd planted in the current directory", async () => {
+  const fixture = await createWindowsNodeInstallFixture();
+  const planted = `#!/bin/sh\nprintf 'planted %s\\n' "$0" >> "\${TEST_SKILLS_LOG}.planted"\nexit 99\n`;
+  try {
+    await writeExecutable(path.join(fixture.project, "git.exe"), planted);
+    await writeExecutable(path.join(fixture.project, "npx.cmd"), planted);
+
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
+    assert.match(await readText(fixture.log), /"skills","add","vercel-labs\/skills"/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows project scope uses the current directory when PATH lists it explicitly", async () => {
+  const fixture = await createWindowsNodeInstallFixture();
+  try {
+    await writeExecutable(
+      path.join(fixture.project, "npx.cmd"),
+      `#!/bin/sh\nprintf 'explicit %s\\n' "$*" >> "\${TEST_SKILLS_LOG}.explicit"\nexit 0\n`,
+    );
+    fixture.env.PATH = `${fixture.project}${path.delimiter}${fixture.env.PATH}`;
+
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.match(await readText(`${fixture.log}.explicit`), /skills add vercel-labs\/skills/);
+    assert.equal(existsSync(fixture.log), false, result.stderr || result.stdout);
   } finally {
     await fixture.cleanup();
   }

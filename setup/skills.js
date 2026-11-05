@@ -124,24 +124,40 @@ function parseArgs(argv) {
         agents,
     };
 }
-const WINDOWS_EXECUTABLE_EXTENSIONS = [".exe", ".cmd", ".bat", ".com"];
-function hasWindowsExecutableExtension(commandPath) {
-    return WINDOWS_EXECUTABLE_EXTENSIONS.includes(path.extname(commandPath).toLowerCase());
+const WINDOWS_EXECUTABLE_EXTENSIONS = [".com", ".exe", ".bat", ".cmd"];
+function windowsExecutableExtensions(env) {
+    const pathext = (env.PATHEXT ?? "")
+        .split(";")
+        .map((extension) => extension.trim().toLowerCase())
+        .filter((extension) => WINDOWS_EXECUTABLE_EXTENSIONS.includes(extension));
+    return pathext.length > 0 ? [...new Set(pathext)] : WINDOWS_EXECUTABLE_EXTENSIONS;
 }
-function resolveWindowsCommand(command, env = process.env) {
-    const result = (0, node_child_process_1.spawnSync)("where", [command], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    if (result.status !== 0) {
-        fail(`Required command not found: ${command}`);
+function isFile(candidate) {
+    try {
+        return fs.statSync(candidate).isFile();
     }
-    const candidates = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    for (const candidate of candidates) {
-        if (hasWindowsExecutableExtension(candidate)) {
-            return candidate;
-        }
-        for (const extension of WINDOWS_EXECUTABLE_EXTENSIONS) {
-            const executableCandidate = `${candidate}${extension}`;
-            if (fs.existsSync(executableCandidate)) {
-                return executableCandidate;
+    catch {
+        return false;
+    }
+}
+// Walk PATH and PATHEXT directly instead of running `where`, which searches the
+// current directory before PATH. The current directory is used only when PATH
+// lists it explicitly.
+function resolveWindowsCommand(command, env = process.env) {
+    const extensions = windowsExecutableExtensions(env);
+    const commandExtension = path.extname(command).toLowerCase();
+    const names = extensions.includes(commandExtension)
+        ? [command]
+        : extensions.map((extension) => `${command}${extension}`);
+    const pathEntries = (env.PATH ?? env.Path ?? "")
+        .split(path.delimiter)
+        .map((entry) => entry.trim().replace(/^"(.*)"$/, "$1"))
+        .filter(Boolean);
+    for (const entry of pathEntries) {
+        for (const name of names) {
+            const candidate = path.resolve(entry, name);
+            if (isFile(candidate)) {
+                return candidate;
             }
         }
     }
