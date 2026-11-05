@@ -116,3 +116,26 @@ CODEX_HOME="$HOME/.codex-azure" claude-pick --env account-b
 
 Close Claude Code sessions using the plugin in that repository before switching
 Codex homes: an existing broker can retain its original home.
+
+## Linux sandbox prerequisite
+
+On Ubuntu with `kernel.apparmor_restrict_unprivileged_userns = 1` and no
+AppArmor profile for `/usr/bin/bwrap`, the Codex sandbox cannot start shell
+commands and reports `bwrap: loopback: Failed RTM_NEWADDR: Operation not
+permitted`. Codex-routed local reviews then return incomplete results.
+`./setup.sh` does not change AppArmor.
+
+Check the host without changing it:
+
+```sh
+sysctl kernel.apparmor_restrict_unprivileged_userns  # 1 means the restriction is active
+bwrap --unshare-net --ro-bind / / true               # Succeeds silently with exit status 0
+codex sandbox -- git log -1                          # Prints the latest commit in a repository
+```
+
+If either sandbox command fails while the restriction is active, follow the
+official [sandboxing prerequisites](https://learn.chatgpt.com/docs/sandboxing)
+to load the `bwrap-userns-restrict` AppArmor profile. The fix requires `sudo`
+and relaxes a host hardening setting: the profile exempts `/usr/bin/bwrap` from
+the restriction, and the manual's last-resort `sysctl` change disables it
+system-wide.
