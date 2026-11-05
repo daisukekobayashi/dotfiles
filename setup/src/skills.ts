@@ -585,14 +585,28 @@ function isWindowsBatchFile(command: string): boolean {
   return process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
 }
 
+// Node runs a bare `cmd.exe` when ComSpec is unset, which Windows may resolve
+// from the current directory, so pass cmd.exe by absolute path.
+function windowsCommandShell(env: NodeJS.ProcessEnv = process.env): string {
+  const comspec = env.ComSpec ?? env.COMSPEC;
+  if (comspec && path.isAbsolute(comspec)) {
+    return path.normalize(comspec);
+  }
+  const systemRoot = env.SystemRoot ?? env.SYSTEMROOT;
+  if (systemRoot && path.isAbsolute(systemRoot)) {
+    return path.join(systemRoot, "System32", "cmd.exe");
+  }
+  fail("cannot locate cmd.exe: set ComSpec or SystemRoot to an absolute path");
+}
+
 function runCommand(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env): void {
-  // cmd.exe receives the command line unquoted under shell: true, so quote the
+  // cmd.exe receives the command line unquoted under a shell, so quote the
   // batch file path to keep paths such as C:\Program Files intact.
-  const shell = isWindowsBatchFile(command);
-  const result = spawnSync(shell ? `"${command}"` : command, args, {
+  const batch = isWindowsBatchFile(command);
+  const result = spawnSync(batch ? `"${command}"` : command, args, {
     cwd,
     env,
-    shell,
+    shell: batch ? windowsCommandShell() : false,
     stdio: ["ignore", "inherit", "inherit"],
   });
   if (result.error) {
@@ -626,7 +640,10 @@ function commandPreview(command: string, args: string[]): string {
   return [command, ...args].join(" ");
 }
 
-function logDryRunExternalInstalls(workDir: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
+function logDryRunExternalInstalls(workDir: string, projectRoot: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
+  if (plan.external.length === 0) {
+    return;
+  }
   for (const entry of plan.external) {
     const args = ["skills", "add", entry.source, "--copy", "--yes"];
     for (const agent of agents) {
@@ -637,6 +654,7 @@ function logDryRunExternalInstalls(workDir: string, plan: SkillsPlan, agents: Ag
     }
     info(`DRY-RUN cd ${workDir} && NPM_CONFIG_CACHE=${npmCacheDir} ${commandPreview("npx", args)}`);
   }
+  info(`DRY-RUN move skills-lock.json and agent skill directories from ${workDir} to ${projectRoot}`);
 }
 
 function logDryRunUserExternalInstalls(tempInstallDir: string, plan: SkillsPlan, npmCacheDir: string): void {
@@ -681,12 +699,18 @@ function logDryRunUserAgentSkillDirs(restoreSkillsDir: string, setupHome: string
   }
 }
 
-function runExternalInstalls(workDir: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
+// Install in a staging directory and move the outputs into the project, so
+// npx and any batch shim never run with the project as their current
+// directory, where an untrusted checkout could plant node.exe, cmd.exe, or
+// npm configuration.
+function runExternalInstalls(workDir: string, projectRoot: string, plan: SkillsPlan, agents: Agent[], npmCacheDir: string): void {
   if (plan.external.length === 0) {
     return;
   }
   const npx = resolveNpx();
   fs.mkdirSync(npmCacheDir, { recursive: true });
+  removePath(workDir);
+  fs.mkdirSync(workDir, { recursive: true });
 
   for (const entry of plan.external) {
     const args = ["skills", "add", entry.source, "--copy", "--yes"];
@@ -704,6 +728,21 @@ function runExternalInstalls(workDir: string, plan: SkillsPlan, agents: Agent[],
       requireInstalledSkills(agentSkillDir(workDir, agent), entry);
     }
   }
+
+  const outputs = [
+    "skills-lock.json",
+    ...agents.map((agent) => path.relative(workDir, agentSkillDir(workDir, agent))),
+  ];
+  for (const output of outputs) {
+    const staged = path.join(workDir, output);
+    if (!fs.existsSync(staged) && !getLinkTarget(staged)) {
+      continue;
+    }
+    const target = path.join(projectRoot, output);
+    removePath(target);
+    movePath(staged, target);
+  }
+  removePath(workDir);
 }
 
 function requireInstalledSkills(skillsDir: string, entry: ExternalSkillSource): void {
@@ -1038,7 +1077,7 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
     for (const agent of agents) {
       info(`DRY-RUN backup ${agentSkillDir(projectRoot, agent)} to ${backupRoot}`);
     }
-    logDryRunExternalInstalls(projectRoot, plan, agents, npmCacheDir);
+    logDryRunExternalInstalls(workDir, projectRoot, plan, agents, npmCacheDir);
     logDryRunLinkLocalSkills(plan, "project", projectRoot);
     info(`DRY-RUN write skills metadata ${path.join(projectRoot, ".agents", "skills-profile.json")}`);
     info(`Project skills installed for profiles: ${requestedProfiles.join(",")}`);
@@ -1052,7 +1091,7 @@ function setupProjectSkills(dotfilesRoot: string, setupTmpdir: string, profilesC
 
   const backups = prepareProjectTargets(projectRoot, agents, backupRoot, plan.external.length > 0);
   try {
-    runExternalInstalls(projectRoot, plan, agents, npmCacheDir);
+    runExternalInstalls(workDir, projectRoot, plan, agents, npmCacheDir);
     linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
     restoreUnmanagedProjectSkills(backups, projectRoot, agents);
     writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));

@@ -6,10 +6,47 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import {
   writeExecutable,
-  createFixture,
+  createFixture as createBaseFixture,
   runSkillsAsWindows,
   readText,
 } from "./skills-helpers.mjs";
+
+// The runtime passes cmd.exe by absolute path. Node gives it /d /s /c when the
+// path ends in \cmd.exe and -c otherwise, which is what a POSIX path gets here.
+const cmdShell = `#!/bin/bash
+set -euo pipefail
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    /d|/D|/s|/S)
+      shift
+      ;;
+    /c|/C|-c)
+      shift
+      break
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+if [ "$#" -eq 0 ]; then
+  exit 0
+fi
+command_line="$*"
+if [[ "\${command_line}" == \\"*\\" ]]; then
+  command_line="\${command_line:1:\${#command_line}-2}"
+fi
+eval "exec \${command_line}"
+`;
+
+async function createFixture(options = {}) {
+  const fixture = await createBaseFixture(options);
+  if (options.withWindowsWhere) {
+    fixture.env.ComSpec = path.join(fixture.bin, "cmd.exe");
+    await writeExecutable(fixture.env.ComSpec, cmdShell);
+  }
+  return fixture;
+}
 
 test("Windows user scope runs npx.cmd when npx resolves through PATHEXT", async () => {
   const fixture = await createFixture({
@@ -216,6 +253,122 @@ test("Windows project scope restores existing outputs when npx-cli.js fails", as
     assert.match(result.stderr, /npx-cli\.js skills add vercel-labs\/skills .* failed with exit 42/);
     assert.match(result.stderr, /Restored previous project skills after failed install/);
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+// A batch shim without npx-cli.js next to it (for example a mise shim) runs a
+// bare `node`. Like cmd.exe, the stub searches the current directory before PATH.
+async function createWindowsBatchShimFixture() {
+  const fixture = await createFixture({
+    npxName: "npx.cmd",
+    npxBody: `#!/bin/bash
+set -euo pipefail
+IFS=':' read -ra search_dirs <<< "\${PWD}:\${PATH}"
+for dir in "\${search_dirs[@]}"; do
+  if [ -x "\${dir}/node.exe" ]; then
+    exec "\${dir}/node.exe" "$@"
+  fi
+done
+printf 'node not found\\n' >&2
+exit 127
+`,
+    isolatedPath: true,
+    withWindowsWhere: true,
+  });
+  await writeExecutable(
+    path.join(fixture.bin, "node.exe"),
+    `#!/bin/bash
+set -euo pipefail
+PATH="/bin:\${PATH}"
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+printf '{"version":3,"source":"%s"}\\n' "$3" > skills-lock.json
+mkdir -p .agents/skills/find-skills
+printf '%s\\n' "find-skills" > .agents/skills/find-skills/SKILL.md
+`,
+  );
+  const gitPath = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+  await writeExecutable(path.join(fixture.bin, "git.exe"), `#!/bin/sh\nexec ${gitPath} "$@"\n`);
+  return fixture;
+}
+
+async function plantProjectBinaries(fixture) {
+  const planted = `#!/bin/sh\nprintf 'planted %s\\n' "$0" >> "\${TEST_SKILLS_LOG}.planted"\nexit 99\n`;
+  await writeExecutable(path.join(fixture.project, "node.exe"), planted);
+  await writeExecutable(path.join(fixture.project, "cmd.exe"), planted);
+}
+
+async function writeTrustedShell(filePath, fixture) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeExecutable(
+    filePath,
+    `#!/bin/bash\nprintf 'trusted shell\\n' >> "\${TEST_SKILLS_LOG}.shell"\nexec "${path.join(fixture.bin, "cmd.exe")}" "$@"\n`,
+  );
+}
+
+test("Windows project scope batch fallback ignores node.exe and cmd.exe planted in the project", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  try {
+    await plantProjectBinaries(fixture);
+    await writeFile(path.join(fixture.project, "skills-lock.json"), "previous lock\n");
+
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
+    assert.match(await readText(fixture.log), /skills add vercel-labs\/skills/);
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "find-skills", "SKILL.md")), "find-skills\n");
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), '{"version":3,"source":"vercel-labs/skills"}\n');
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows batch fallback runs the absolute ComSpec shell", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  try {
+    await plantProjectBinaries(fixture);
+    fixture.env.ComSpec = path.join(fixture.root, "comspec", "cmd.exe");
+    await writeTrustedShell(fixture.env.ComSpec, fixture);
+
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readText(`${fixture.log}.shell`), "trusted shell\n");
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Windows batch fallback uses SystemRoot cmd.exe when ComSpec is unset", async () => {
+  const fixture = await createWindowsBatchShimFixture();
+  try {
+    await plantProjectBinaries(fixture);
+    delete fixture.env.ComSpec;
+    delete fixture.env.COMSPEC;
+    delete fixture.env.comspec;
+    fixture.env.SystemRoot = path.join(fixture.root, "Windows");
+    await writeTrustedShell(path.join(fixture.env.SystemRoot, "System32", "cmd.exe"), fixture);
+
+    const result = runSkillsAsWindows(
+      ["--scope", "project", "--profile", "base", "--agent", "codex"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readText(`${fixture.log}.shell`), "trusted shell\n");
+    assert.equal(existsSync(`${fixture.log}.planted`), false);
   } finally {
     await fixture.cleanup();
   }
