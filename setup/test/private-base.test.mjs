@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
@@ -147,4 +148,45 @@ test("Windows refuses a TEMP whose real path is not on a local drive", () => {
     );
   }
   assert.equal(localRealPath("/srv/share", () => "/srv/share", path.posix, "linux"), "/srv/share");
+});
+
+// Keep these directories under the ignored setup/node_modules, like the runtime
+// fixtures: a shared temp directory such as /tmp is refused.
+function privateScratch(t) {
+  const cache = path.join(import.meta.dirname, "..", "node_modules", ".cache");
+  fs.mkdirSync(cache, { recursive: true });
+  const root = fs.mkdtempSync(path.join(cache, "private-base-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return fs.realpathSync.native(root);
+}
+
+test("a directory another run creates between plan and creation is kept as existing", { skip: process.platform === "win32" }, (t) => {
+  const { createPrivateDirs, planPrivateDir } = require("../private-base.js");
+  const root = privateScratch(t);
+  const shared = path.join(root, "base", "dotfiles-skills-npm-cache");
+  const ours = path.join(root, "ours");
+  const elsewhere = path.join(root, "elsewhere");
+  const swapped = path.join(root, "swapped");
+  fs.mkdirSync(elsewhere, { mode: 0o700 });
+  const plans = [planPrivateDir(shared, "the skills npm cache"), planPrivateDir(ours, "ours"), planPrivateDir(swapped, "swapped")];
+  const racing = (directory) => {
+    // Another run wins the race for the shared directories, and swaps one for a link.
+    if (directory === path.dirname(shared) || directory === shared) {
+      fs.mkdirSync(directory, { mode: 0o700 });
+    }
+    if (directory === swapped) {
+      fs.symlinkSync(elsewhere, directory);
+    }
+    fs.mkdirSync(directory, { mode: 0o700 });
+  };
+
+  createPrivateDirs(plans.slice(0, 2), undefined, racing);
+  assert.equal(fs.statSync(shared).isDirectory(), true);
+  assert.equal(fs.statSync(ours).isDirectory(), true);
+
+  fs.rmdirSync(ours);
+  assert.throws(() => createPrivateDirs(plans, undefined, racing), /swapped .*changed while it was created/);
+  // The refusal removes only what this call created, not what the other run created.
+  assert.equal(fs.statSync(shared).isDirectory(), true);
+  assert.equal(fs.existsSync(ours), false);
 });

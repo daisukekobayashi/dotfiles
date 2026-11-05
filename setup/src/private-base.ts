@@ -265,7 +265,9 @@ export function planPrivateDir(directory: string, label: string, projectRoot?: s
 // Creates planned directories, mode 0700 on POSIX, then checks each again.
 // When a check fails, removes the directories this call created, so a refusal
 // leaves no new directory behind.
-export function createPrivateDirs(plans: PrivateDirPlan[], projectRoot?: string): void {
+// mkdir is injectable so tests can simulate another run creating a directory
+// between the plan and its creation.
+export function createPrivateDirs(plans: PrivateDirPlan[], projectRoot?: string, mkdir: (directory: string) => void = (directory) => fs.mkdirSync(directory, { mode: 0o700 })): void {
   const created: string[] = [];
   try {
     for (const plan of plans) {
@@ -274,7 +276,16 @@ export function createPrivateDirs(plans: PrivateDirPlan[], projectRoot?: string)
         pending.unshift(current);
       }
       for (const directory of pending) {
-        fs.mkdirSync(directory, { mode: 0o700 });
+        try {
+          mkdir(directory);
+        } catch (error) {
+          // Another run, such as one in a parallel worktree, created it first.
+          // It is not ours to remove; the checks below still decide.
+          if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+            continue;
+          }
+          throw error;
+        }
         created.push(directory);
       }
     }
