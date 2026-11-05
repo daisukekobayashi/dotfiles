@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+# Pass a parent directory, such as /tmp, when a test binds Unix sockets under
+# TEST_ROOT: macOS limits socket paths to 104 bytes and its default TMPDIR
+# under /var/folders leaves too little room.
 setup_test_env() {
-  TEST_ROOT="$(mktemp -d "${BATS_TEST_TMPDIR:-/tmp}/setup-test.XXXXXX")"
+  TEST_ROOT="$(mktemp -d "${1:-${BATS_TEST_TMPDIR:-/tmp}}/setup-test.XXXXXX")"
   # Tools report resolved paths, such as /private/var for /var on macOS.
   TEST_ROOT="$(cd "${TEST_ROOT}" && pwd -P)"
   TEST_HOME="${TEST_ROOT}/home"

@@ -4,7 +4,8 @@ load 'helpers/test_helper.bash'
 load 'helpers/mock_env.bash'
 
 setup() {
-  setup_test_env
+  # tl -a starts real tmux servers whose sockets live under TEST_ROOT.
+  setup_test_env /tmp
   TEST_BIN="${TEST_ROOT}/bin"
   TMUX_LOG="${TEST_ROOT}/tmux.log"
   TMUX_SCRIPT="$(repo_root)/zsh/tmux.zsh"

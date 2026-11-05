@@ -46,7 +46,8 @@ class SkillEvaluationTests(unittest.TestCase):
                 for variant in ("with-skill", "without-skill"):
                     with self.subTest(case=case, agent=agent, variant=variant):
                         result = self.prepare(case, agent, variant)
-                        workspace = Path(result["workspace"])
+                        # macOS temp paths under /var resolve to /private/var.
+                        workspace = Path(result["workspace"]).resolve()
                         self.assertEqual(result["status"], "prepared")
                         self.assertIsNone(result["total_tokens"])
                         if baseline is None:

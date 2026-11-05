@@ -13,13 +13,11 @@ npm --prefix setup test
 bats tests
 ```
 
-`bats tests` needs Linux. On macOS the tmux, zsh, and skill evaluation suites
-still assume Linux tools and Bash 4 or later, and some of their cases fail.
-CI runs only the setup suites there:
-
-```bash
-bats tests/setup*.bats tests/betterleaks_scan.bats
-```
+`bats tests` runs the full suite on Linux and macOS, and CI runs it on both.
+It needs Bash 4.1 or later: older Bash does not fail a test on a non-final
+`[[ ]]` assertion, so `tests/setup_suite.bash` stops the run early instead. On
+macOS, install Homebrew bash (`brew install bash`) and put it ahead of the
+system `/bin/bash` 3.2 on `PATH`.
 
 When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
 `tests/powershell.bats` parses every tracked `.ps1` file and runs
@@ -28,8 +26,8 @@ When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
 Static checks:
 
 ```bash
-shellcheck -S warning setup.sh lib/common.sh setup/*.sh tests/helpers/*.bash tests/*.bats
-bash -n setup.sh lib/common.sh setup/*.sh tests/helpers/*.bash
+shellcheck -S warning setup.sh lib/common.sh setup/*.sh tests/setup_suite.bash tests/helpers/*.bash tests/*.bats
+bash -n setup.sh lib/common.sh setup/*.sh tests/setup_suite.bash tests/helpers/*.bash
 ```
 
 ## Focused checks

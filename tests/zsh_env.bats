@@ -94,6 +94,10 @@ assert_selected_editor() {
 
 @test "editor selection sees Neovim in the legacy local install path" {
   make_editor_commands vim vi
+  # Only the Linux shell setup adds the legacy install path.
+  rm "${TEST_ROOT}/bin/uname"
+  printf '#!/bin/sh\necho Linux\n' > "${TEST_ROOT}/bin/uname"
+  chmod +x "${TEST_ROOT}/bin/uname"
   mkdir -p "${TEST_HOME}/.local/bin/nvim/bin"
   ln -s "${TEST_ROOT}/bin/vi" "${TEST_HOME}/.local/bin/nvim/bin/nvim"
   assert_selected_editor nvim
@@ -108,6 +112,8 @@ assert_selected_editor() {
 printf 'export PATH="%s:$PATH"\n' "$MISE_TEST_RUNTIME"
 EOF
   chmod +x "${TEST_HOME}/.local/bin/mise"
+  # Linux runs ~/.local/bin/mise; macOS runs mise from PATH.
+  cp "${TEST_HOME}/.local/bin/mise" "${TEST_ROOT}/bin/mise"
 
   # The child zsh resolves the repository path and exported editor variables.
   # shellcheck disable=SC2016
