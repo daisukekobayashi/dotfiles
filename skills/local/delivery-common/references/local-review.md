@@ -94,9 +94,9 @@ coverage, and the security reviewer when Risk Tier selects it, run as Risk
 Tier directs. Wait for the required results before the implementation owner edits.
 
 Return the reviewed head, scope, confirmed fixes, remaining findings, and coverage
-limits. Earlier review evidence remains valid for unaffected areas; the caller
-decides whether broader changes require another full pair. Keep newly discovered
-material risks visible for that assessment.
+limits. Earlier review evidence remains valid for unaffected areas; decide
+whether broader changes require another full pair under Repeat and advance. Keep
+newly discovered material risks visible for that assessment.
 
 Run `change-review` and `change-adversarial-review` with
 `--base <preceding reviewed head> --scope branch`, and `change-security-review`
@@ -122,3 +122,29 @@ unavailable delegation instead of claiming independence.
 Keep every review skill execution read-only; only the parent implementation phase applies
 accepted fixes. Wait for required results before editing. Do not substitute or
 add the plugin's `/codex:review` or `/codex:adversarial-review` commands.
+
+## Repeat and advance
+
+Start with a full pair on the task's first committed snapshot. After fixes, run
+relevant checks and use focused follow-up to confirm accepted fixes and check
+regressions in affected paths. Repeat the full pair only when the design or
+change scope shifts materially, or new evidence makes the earlier full-review
+coverage insufficient.
+
+Advance when acceptance criteria are met, verification is current, the initial
+full pair and completed follow-ups cover the current head with the reviewers its
+current tier selects, and no material actionable finding or human decision
+remains open. Recorded deferrals of minor or pre-existing findings do not
+require another round or a result with zero findings. Failed, unavailable,
+empty, or partial review output is not a pass.
+
+Allow at most three local review rounds per target across the delivery,
+including resumes. Count the initial full pair, each focused follow-up on a
+fixed snapshot, and each required new full pair as one round apiece, including
+any reviewer Risk Tier adds on the same head. Lower user limits take precedence.
+Advance as soon as the criteria above are met. At the limit with required work
+remaining, preserve progress, report the remaining-findings classification from
+Assess findings, and ask before extending the budget.
+
+Keep a local review record in the caller's progress record: the full-pair and
+follow-up head SHAs, their coverage, and the local round count.

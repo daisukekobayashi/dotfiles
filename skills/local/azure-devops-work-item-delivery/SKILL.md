@@ -67,8 +67,9 @@ cycle.
    agent-work storage or `/tmp`. Record separately per item: organization,
    project/repository IDs, Work Item URL and scope, shared understanding result,
    branch/worktree, base ref/SHA,
-   phase, accepted design, risk tier with its reasons and head, verification, reviewed head SHAs and local round
-   count, PR ID/URL and source/target refs, published head, policy/merge state,
+   phase, accepted design, risk tier with its reasons and head, verification,
+   the local review record under Local Review, PR ID/URL and source/target refs,
+   published head, policy/merge state,
    Work Item state, finding dispositions, follow-up candidates, blockers, and next
    action. Report the resume path. Keep stable definitions and decisions in normal repository docs.
 
@@ -99,20 +100,15 @@ verification evidence ready for review, or an explicit blocker.
 ### 2. Run local reviews, assess, and repeat
 
 Follow [Local Review](../delivery-common/references/local-review.md) to set the
-risk tier and select the reviewers. Give every selected read-only reviewer the
-same recorded base, Work Item/spec, and committed snapshot. Wait for all results
-before the implementation owner edits.
+risk tier, select the reviewers, and run an initial full pair with every
+selected read-only reviewer on the same recorded base, Work Item/spec, and
+committed snapshot. Wait for all results before the implementation owner edits.
 
 Assess findings against the requirements, code, and evidence, using the Assess
 findings defaults in Local Review. Apply worthwhile fixes; record concise reasons
 for explained, duplicate, stale, pre-existing, or skipped findings. Keep disputed material findings and design decisions open for the user.
-After fixes, verify and repeat the selected reviews on the new snapshot.
-
-Advance only after every pass its current tier selects completed on the current implementation,
-verification is current, and no material actionable finding or human decision
-remains open. Recorded deferrals of minor or pre-existing findings do not require
-another round or a result with zero findings. Failed, unavailable, empty, or
-partial output is not a pass.
+After fixes, follow Local Review's Repeat and advance for focused follow-up,
+escalation to a full pair, and advancement.
 
 ### 3. Publish the PR
 
@@ -172,13 +168,10 @@ comment on the Work Item.
 
 ## Bounds and Handoffs
 
-Allow at most three local review rounds per item across this delivery, including
-resumes; one round includes every selected reviewer, including any reviewer Risk
-Tier adds on the same head. Advance as soon as the completion criteria are met.
-Honor lower user limits. At the limit, repeated non-progress, a
-timeout, failed required check, or material human decision, preserve progress
-and report the next action, including the remaining-findings classification
-from Local Review's Assess findings at the limit. Ask before extending the budget.
+Local review rounds follow Local Review's Repeat and advance. Advance as soon
+as the completion criteria are met. At repeated non-progress, a timeout, failed
+required check, or material human decision, preserve progress and report the
+next action.
 
 Check policies when reaching merge or resuming; avoid indefinite polling. If the
 user asks to wait, use a bounded window and report its limit; otherwise report

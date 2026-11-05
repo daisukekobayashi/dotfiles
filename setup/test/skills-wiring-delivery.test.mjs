@@ -91,6 +91,38 @@ test("provider delivery skills link the same delivery-common targets", async () 
   ].join("\n"));
 });
 
+test("delivery-common owns local review repetition, advancement, and rounds", async () => {
+  const deliveryCommon = path.join(repoRoot, "skills", "local", "delivery-common");
+  const common = await readText(path.join(deliveryCommon, "SKILL.md"));
+  const localReview = await readText(path.join(deliveryCommon, "references", "local-review.md"));
+  const repeat = localReview.match(/## Repeat and advance\n[\s\S]*?(?=\n## |$)/)?.[0];
+
+  assert.ok(repeat, "local-review.md: missing Repeat and advance");
+  assert.match(repeat, /After fixes, run\s+relevant checks and use focused follow-up/);
+  assert.match(repeat, /Repeat the full pair only when the design or\s+change scope shifts materially, or new evidence makes the earlier full-review\s+coverage insufficient/);
+  assert.match(repeat, /the initial\s+full pair and completed follow-ups cover the current head with the reviewers its\s+current tier selects/);
+  assert.match(repeat, /at most three local review rounds per target across the delivery,\s+including resumes/);
+  assert.match(repeat, /Count the initial full pair, each focused follow-up on a\s+fixed snapshot, and each required new full pair as one round apiece/);
+  assert.match(repeat, /full-pair and\s+follow-up head SHAs, their coverage, and the local round count/);
+  assert.doesNotMatch(common, /owns[^.]*review round\s+limits/);
+  assert.match(common, /^description: .*repeat or advance/m);
+
+  const providers = {};
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
+    providers[delivery] = skill;
+    assert.match(skill, /After fixes, follow Local Review's Repeat and advance for focused follow-up,\s+escalation to a full pair, and advancement\./, delivery);
+    assert.match(skill, /Local review rounds follow Local Review's Repeat and advance/, delivery);
+    assert.match(skill, /the local review record\s+under Local Review/, delivery);
+    assert.doesNotMatch(skill, /repeat the selected reviews on the new snapshot/, delivery);
+    assert.doesNotMatch(skill, /three local review rounds/, delivery);
+    assert.doesNotMatch(skill, /Count the initial full pair/, delivery);
+    assert.doesNotMatch(skill, /completed follow-ups cover the current head with the reviewers/, delivery);
+  }
+  assert.match(providers["github-issue-delivery"], /at most three hosted Codex\s+review rounds per issue/);
+  assert.match(providers["github-issue-delivery"], /hosted-fix\s+follow-ups use the same local budget/);
+});
+
 test("change review skills are explicit-only and share target selection", async () => {
   const adversarialRoot = path.join(repoRoot, "skills", "local", "change-adversarial-review");
   const changeReviewRoot = path.join(repoRoot, "skills", "local", "change-review");
