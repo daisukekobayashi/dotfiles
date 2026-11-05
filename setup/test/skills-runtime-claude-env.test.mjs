@@ -183,24 +183,33 @@ test("Claude skill refresh prunes links of a renamed local skill and keeps unman
     await symlink(outside, path.join(skills, "user-link"), "dir");
     await symlink(path.join(fixture.root, "missing"), path.join(skills, "user-dangling"), "dir");
     await symlink(path.join(view, "synced"), path.join(skills, "synced"), "dir");
+    await symlink(path.join(view, "synced", "account"), path.join(skills, "account"), "dir");
+    await symlink(path.join(view, "find-skills"), path.join(skills, "finder"), "dir");
+    await symlink(path.join(view, "pdf"), path.join(skills, "pdf"), "dir");
 
     await renameLocalSkill(fixture, "local-one", "local-two");
-    const dryRun = runSkills(["--profile", "base"], { ...fixture, env: { ...fixture.env, SETUP_DRY_RUN: "1" } });
+    const dryRun = runSkills(["--profile", "office"], { ...fixture, env: { ...fixture.env, SETUP_DRY_RUN: "1" } });
     assert.equal(dryRun.status, 0, dryRun.stderr || dryRun.stdout);
     assert.ok(dryRun.stdout.includes(`DRY-RUN remove stale skill entry ${path.join(skills, "local-one")}`));
     assert.equal(dryRun.stdout.includes(path.join(skills, "user-link")), false);
+    assert.equal(dryRun.stdout.includes(`remove stale skill entry ${path.join(skills, "pdf")}`), false,
+      "dry run should not report a link to a skill the planned install provides");
     assert.equal(await readlink(path.join(skills, "local-one")), path.join(view, "local-one"),
       "dry run should not remove stale links");
 
-    result = runSkills(["--profile", "base"], fixture);
+    result = runSkills(["--profile", "office"], fixture);
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readlink(path.join(skills, "pdf")), path.join(view, "pdf"));
     assert.equal(await lstat(path.join(skills, "local-one")).catch(() => null), null,
       "the renamed skill's dangling link should be pruned");
     assert.equal(await readlink(path.join(skills, "local-two")), path.join(view, "local-two"));
     assert.equal(await readlink(path.join(skills, "user-link")), outside);
     assert.equal(await readlink(path.join(skills, "user-dangling")), path.join(fixture.root, "missing"));
     assert.equal(await readlink(path.join(skills, "synced")), path.join(view, "synced"));
+    assert.equal(await readlink(path.join(skills, "account")), path.join(view, "synced", "account"),
+      "links that setup does not create are not managed");
+    assert.equal(await readlink(path.join(skills, "finder")), path.join(view, "find-skills"));
   } finally {
     await fixture.cleanup();
   }
@@ -219,6 +228,8 @@ test("Claude skill refresh prunes unchanged copies of a removed skill and keeps 
     await writeFile(path.join(edited, "skills/local-one/SKILL.md"), "local edit\n");
     await mkdir(path.join(clean, "skills/broken"));
     await writeFile(path.join(clean, "skills/.dotfiles-copy-broken.json"), "not json\n");
+    await mkdir(path.join(clean, "skills/linked-marker"));
+    await symlink(path.join(clean, "skills/.dotfiles-copy-local-one.json"), path.join(clean, "skills/.dotfiles-copy-linked-marker.json"));
 
     await renameLocalSkill(fixture, "local-one", "local-two");
     result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "base"], fixture);
@@ -232,6 +243,8 @@ test("Claude skill refresh prunes unchanged copies of a removed skill and keeps 
     assert.match(result.stderr, /Keeping locally edited copy of a removed skill: .*edited.skills.local-one/);
     assert.equal(existsSync(path.join(clean, "skills/broken")), true);
     assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.broken/);
+    assert.equal(existsSync(path.join(clean, "skills/linked-marker")), true);
+    assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.linked-marker/);
   } finally {
     await fixture.cleanup();
   }

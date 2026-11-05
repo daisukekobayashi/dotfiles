@@ -370,6 +370,7 @@ test("project scope prunes links of a renamed local skill and keeps unmanaged li
     await symlink(outside, path.join(skills, "user-link"), "dir");
 
     await rename(path.join(local, "local-one"), path.join(local, "local-two"));
+    await symlink(path.join(local, "local-two"), path.join(skills, "alias"), "dir");
     const profile = path.join(fixture.dotfiles, "skills", "profiles", "base.json");
     const base = JSON.parse(await readText(profile));
     base.local = ["local-two"];
@@ -384,7 +385,7 @@ test("project scope prunes links of a renamed local skill and keeps unmanaged li
     result = runSkills(args, fixture, { cwd: fixture.project });
 
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.deepEqual((await readdir(skills)).sort(), ["find-skills", "local-two", "user-link"]);
+    assert.deepEqual((await readdir(skills)).sort(), ["alias", "find-skills", "local-two", "user-link"]);
     assert.equal(await readlink(path.join(skills, "local-two")), path.join(local, "local-two"));
     assert.equal(await readlink(path.join(skills, "user-link")), outside);
     assert.ok(result.stdout.includes(`Removed stale skill entry: ${path.join(skills, "local-one")}`));

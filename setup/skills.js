@@ -430,35 +430,43 @@ function isManagedLocalSymlink(targetPath, expectedRoot) {
     const resolvedRoot = normalizePath(expectedRoot);
     return resolvedLinked === resolvedRoot || resolvedLinked.startsWith(`${resolvedRoot}${path.sep}`);
 }
-function isInsideRoot(candidate, root) {
-    return normalizePath(candidate).startsWith(`${normalizePath(root)}${path.sep}`);
-}
 // A stale managed entry is one setup placed for a skill that `keep` no longer
-// lists or whose source is gone: a link resolving inside `managedRoot`, or a
-// copy whose marker names a source there and whose content is unchanged. Each
-// result lists the entry name and, for a copy, its marker name. Links resolve
-// from `linkBase`, the directory the entries were installed in.
-function staleManagedEntries(directory, managedRoot, keep, linkBase = directory, prunable = () => true) {
+// lists or whose source is gone. Setup installs `<name>` only as a link to
+// `<managedRoot>/<name>` or as a copy whose marker names that source, so other
+// links and copies are never treated as managed; a copy is stale only while its
+// content is unchanged. Each result lists the entry name and, for a copy, its
+// marker name. Links resolve from `linkBase`, the directory the entries were
+// installed in. `keptExists` treats kept names as present, for a dry run
+// planned before the managed root is rebuilt.
+function staleManagedEntries(directory, managedRoot, keep, options = {}) {
+    const linkBase = options.linkBase ?? directory;
     if (!fs.lstatSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
         return [];
     }
     const stale = [];
     for (const name of fs.readdirSync(directory).sort()) {
-        if (name.startsWith(".") || !prunable(name)) {
+        if (name.startsWith(".") || (options.prunable && !options.prunable(name))) {
             continue;
         }
         const entry = path.join(directory, name);
         const installed = path.join(linkBase, name);
+        const managedSource = normalizePath(path.join(managedRoot, name));
+        const isStale = (source) => !keep.has(name) || (!options.keptExists && !fs.existsSync(source));
         const linked = getLinkTarget(entry);
         if (linked !== null) {
             const source = path.resolve(linkBase, linked);
-            if (isInsideRoot(source, managedRoot) && (!keep.has(name) || !fs.existsSync(source))) {
+            if (normalizePath(source) === managedSource && isStale(source)) {
                 stale.push([name]);
             }
             continue;
         }
         const marker = (0, shared_links_1.copyMarker)(name);
-        if (!fs.lstatSync(path.join(directory, marker), { throwIfNoEntry: false })) {
+        const markerStat = fs.lstatSync(path.join(directory, marker), { throwIfNoEntry: false });
+        if (!markerStat) {
+            continue;
+        }
+        if (!markerStat.isFile() || markerStat.isSymbolicLink()) {
+            warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
             continue;
         }
         let saved;
@@ -473,7 +481,7 @@ function staleManagedEntries(directory, managedRoot, keep, linkBase = directory,
             warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
             continue;
         }
-        if (!isInsideRoot(saved.source, managedRoot) || (keep.has(name) && fs.existsSync(saved.source))) {
+        if (normalizePath(saved.source) !== managedSource || !isStale(saved.source)) {
             continue;
         }
         let current;
@@ -916,7 +924,7 @@ function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRu
     createSymlinks(links);
     const keep = new Set(names);
     for (const directory of directories) {
-        const stale = staleManagedEntries(directory, restoreSkillsDir, keep, directory, isClaudeEnvironmentSkillName);
+        const stale = staleManagedEntries(directory, restoreSkillsDir, keep, { prunable: isClaudeEnvironmentSkillName, keptExists: dryRun });
         pruneStaleManagedEntries(directory, stale, dryRun);
     }
 }
@@ -1055,7 +1063,7 @@ function restoreUnmanagedProjectSkills(records, projectRoot, agents, localRoot, 
         if (!record.backupPath || !agentSkillDirs.has(record.targetPath)) {
             continue;
         }
-        const stale = staleManagedEntries(record.backupPath, localRoot, keep, record.targetPath);
+        const stale = staleManagedEntries(record.backupPath, localRoot, keep, { linkBase: record.targetPath });
         copyMissingDirectoryEntries(record.backupPath, record.targetPath, new Set(stale.flat()));
         for (const [name] of stale) {
             info(`Removed stale skill entry: ${path.join(record.targetPath, name)}`);
