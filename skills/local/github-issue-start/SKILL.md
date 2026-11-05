@@ -28,6 +28,8 @@ parallel only after confirming the issues are independent enough to work safely.
    - format: `type/<id>-<slug>`
    - use a conventional-commit-style branch prefix such as `fix`, `feat`, or `chore`
    - use `fix` for bug fixes, `feat` for new user-facing behavior, and `chore` for maintenance or internal cleanup
+   - Derive `<slug>` from the issue title using only lowercase ASCII letters, digits, and hyphens (`[a-z0-9-]`); drop or replace every other character. If no characters remain, write a short English slug from the issue content in the same character set.
+   - A **safe branch name** uses only `[A-Za-z0-9/._-]`. Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise stop and report it before running any command with it.
 5. If exactly one issue was provided:
    - Prepare the issue workspace using **Worktree Preparation** below.
    - Continue implementation in that worktree.
@@ -47,7 +49,7 @@ parallel only after confirming the issues are independent enough to work safely.
 Use the available worktree tools or ordinary Git commands directly; no separate
 worktree skill is required.
 
-1. Inspect `git status --short` and `git worktree list --porcelain` before changing state. Reuse an existing worktree only when its branch, changes, and ownership match this issue and no other worker is using it. Being in a linked worktree alone does not establish that it belongs to this issue. When reusing one, resolve its base as in step 2 and check its upstream as in step 5.
+1. Inspect `git status --short` and `git worktree list --porcelain` before changing state. Reuse an existing worktree only when its branch, changes, and ownership match this issue and no other worker is using it. Being in a linked worktree alone does not establish that it belongs to this issue. When reusing one, resolve its base as in step 2 and check its upstream as in step 5. Stop at a reused branch that is not a safe branch name, as in Workflow step 4.
 2. Resolve the base, and for a new workspace its starting commit, from the user's requested base or the repository's documented convention. If neither identifies a base, inspect the default branch and local branch state; ask only if the intended base remains ambiguous. Do not silently branch from another issue's branch or assume a local ref is current. Record the chosen base ref and commit.
 3. Prefer an available native worktree tool when it supports the required base and dedicated issue branch; otherwise plan to use Git directly. For manual creation, choose the location by explicit user preference, then repository instructions or an established worktree directory, then `.worktrees/` at the repository root. Check for path and branch collisions; do not overwrite, force checkout, or repurpose another issue's workspace.
 4. Before creating a project-local worktree, verify the actual target path is ignored with `git check-ignore`. If it is not, resolve the ignore configuration under the repository's change and approval rules before creation. Do not automatically commit an ignore change. External worktree locations do not need this check.

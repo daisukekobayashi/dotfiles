@@ -38,6 +38,25 @@ test("start skills create worktree branches without tracking the base", async ()
   assert.match(beads, /`bd worktree create`[\s\S]*?Verify[^\n]*on either path/, "beads: bd path checked too");
 });
 
+test("start skills restrict branch names to shell-safe characters", async () => {
+  for (const start of ["github-issue-start", "azure-devops-work-item-start", "beads-issue-worktree"]) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", start, "SKILL.md"));
+    const workflow = flat(skill.match(/\n## Workflow\n[\s\S]*?(?=\n## )/)?.[0]);
+    const prep = skill.match(/\n## Worktree Preparation\n[\s\S]*?(?=\n## )/)?.[0];
+
+    assert.ok(workflow, `${start}: missing Workflow`);
+    assert.match(workflow, /Derive `<slug>` from the [^.]*title using only lowercase ASCII letters, digits, and hyphens \(`\[a-z0-9-\]`\); drop or replace every other character\./, `${start}: slug charset`);
+    assert.match(workflow, /If no characters remain, write a short English slug from the [^.]* content in the same character set\./, `${start}: empty slug`);
+    assert.match(workflow, /A \*\*safe branch name\*\* uses only `\[A-Za-z0-9\/._-\]`\./, `${start}: safe branch charset`);
+    assert.match(workflow, /Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise stop and report it before running any command with it\./, `${start}: unsafe branch stops`);
+
+    assert.ok(prep, `${start}: missing Worktree Preparation`);
+    const reuse = flat(prep.match(/^1\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+    assert.match(reuse, /reused branch[^.]*safe branch name/, `${start}: reused branch checked`);
+    assert.doesNotMatch(skill, /["']<branch>["']/, `${start}: the charset rule replaces quoting <branch>`);
+  }
+});
+
 test("publish skills push with an explicit refspec and recheck the upstream", async () => {
   for (const publish of ["github-pr-publish", "azure-devops-pr-publish"]) {
     const skill = await readText(path.join(repoRoot, "skills", "local", publish, "SKILL.md"));
