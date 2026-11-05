@@ -75,7 +75,8 @@ Still stop and ask before:
      for an older head does not satisfy a review of the current head.
 2. Use `github-pr-publish`.
    - Preserve that skill's verification, staging, commit, push, and PR rules.
-   - Capture the PR number, PR URL, branch, commit, and verification result.
+   - Capture the PR number, PR URL, branch, push remote, commit, and
+     verification result.
 3. Use `github-pr-review-request` with provider `codex` for the resolved PR.
    - Treat `Codex acknowledged` as acknowledgement only.
    - Treat `Codex request posted but not acknowledged` as a blocker unless the
@@ -116,7 +117,20 @@ Still stop and ask before:
    - Reuse Prepare's successful verification if no relevant files changed after
      it; otherwise run the smallest relevant verification for the changed files.
    - Stage only review-follow-up changes.
-   - Use a normal commit and normal push of the same feature branch.
+   - Stop and report `<branch>` unless it is a **safe branch name**, using only
+     `[A-Za-z0-9/._-]`.
+   - Use a normal commit, then push with
+     `git push <remote> <branch>:refs/heads/<branch>`. `<remote>` is the push
+     remote captured in step 2, used as is. On resume without it, read
+     `<remote>` with `git config --get-all branch.<branch>.remote`, which
+     publication set with `-u`, and continue only on exactly one value. Use it
+     only when its URLs name the PR's head repository
+     (`gh pr view --json headRepository,headRepositoryOwner`), compared as in
+     `github-pr-publish` step 2. Otherwise, as with an SSH host alias, stop
+     before the push and ask the user to confirm or name the remote; use a
+     remote the user names as given. The explicit remote and refspec keep
+     `branch.<branch>.pushRemote` or `remote.pushDefault` from sending the
+     fixes away from the PR head.
    - If verification is unsuccessful or unavailable, stop before commit or push.
      If verification, commit, or push fails, stop before reply or resolution.
    - Confirm the fixes are present in the remote PR head and add the published

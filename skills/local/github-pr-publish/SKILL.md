@@ -48,8 +48,10 @@ Still stop and ask before any action outside that narrow scope, including:
    - For multiple targets, process them sequentially and stop on the first failure.
 2. Resolve repository context for each target.
    - Confirm the target is inside a git repository.
-   - Resolve the current branch with `git branch --show-current`.
+   - Resolve the current branch with `git branch --show-current`. Stop and report the branch unless it is a **safe branch name**, using only `[A-Za-z0-9/._-]`, before running any command with it. This also refuses a leading `+`, which would make the push refspec a force push.
    - Resolve the remote repository with `gh repo view --json nameWithOwner,url,defaultBranchRef`.
+   - Resolve the push remote. Use the remote the user names. Otherwise `<remote>` is the one remote whose fetch URL and every push URL (`git remote -v`) name the repository's host and `<owner>/<repo>`, ignoring the scheme, user, letter case, and a trailing `.git` or `/`. Stop and report the candidates when more than one remote matches. When none matches, as with an SSH host alias, stop and ask the user to name the remote.
+   - Without a user-named remote, rule out a fork layout, where `gh repo view` and gh's default repository can name the parent rather than the push target. Look up the parent of the resolved repository and of each other remote's repository with `gh repo view <owner>/<repo> --json parent`. Check every other remote: stop and ask the user to name the remote when its repository is in the resolved repository's fork network (one is the other's parent, or both are forks with the same parent), or when the check cannot finish: any of its fetch or push URLs does not name an `<owner>/<repo>` on the resolved repository's host, such as an SSH host alias or a non-GitHub mirror, or a parent lookup fails, such as for an inaccessible or deleted repository or a network or auth error; a failed lookup is not "no parent".
    - Stop if the current branch is the default branch.
 3. Inspect local state before changing anything.
    - Run `git status --short --branch`.
@@ -74,9 +76,9 @@ Still stop and ask before any action outside that narrow scope, including:
    - Derive the commit message from the implementation diff, issue context, branch name, and current conversation.
    - Never stage secrets or unrelated local files.
 7. Push the branch.
-   - `<remote>` is the repository remote resolved in step 2. The PR base branch is the existing PR's base, otherwise the base `github-pr-create` uses: the default branch unless the user specifies another base.
-   - Read the upstream with `git config --get branch.<branch>.remote` and `git config --get branch.<branch>.merge`; no output means no upstream.
-   - Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, local or remote-tracking. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
+   - `<remote>` is the push remote resolved in step 2. The PR base branch is the existing PR's base, otherwise the base `github-pr-create` uses: the default branch unless the user specifies another base.
+   - Read the upstream with `git config --get-all branch.<branch>.remote` and `git config --get-all branch.<branch>.merge`; no output means no upstream, and more than one value for either key means stop and report.
+   - Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, either local (remote `.`) or remote-tracking. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
    - Push with `git push -u <remote> <branch>:refs/heads/<branch>`. The explicit refspec keeps a base upstream or `push.default=upstream` from sending the branch to the base. This sets the upstream for the same branch name; report it when it replaced the PR base branch.
    - Re-read the upstream; stop and report unless the remote is `<remote>` and the merge ref is `refs/heads/<branch>`.
    - Do not force push, delete remote branches, or rewrite history.
