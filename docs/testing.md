@@ -30,6 +30,27 @@ shellcheck -S warning setup.sh lib/common.sh setup/*.sh tests/setup_suite.bash t
 bash -n setup.sh lib/common.sh setup/*.sh tests/setup_suite.bash tests/helpers/*.bash
 ```
 
+## Where to add setup tests
+
+`npm --prefix setup test` runs `setup/test/*.test.mjs` without recursing, so
+keep test files flat in `setup/test/`. Skills tests are split by concern; add a
+new test to the file for its concern instead of a catch-all file:
+
+| File | Concern |
+| --- | --- |
+| `skills-wiring-profiles.test.mjs` | Repository profile contents and references between skills copied from a profile |
+| `skills-wiring-delivery.test.mjs` | Delivery workflow, design preflight, understanding check, change review, and risk tier skill content |
+| `skills-wiring-issue-start.test.mjs` | Issue start, worktree branch, and first-push upstream skill content |
+| `skills-wiring-pr.test.mjs` | PR review and Codex review cycle skill content |
+| `skills-runtime.test.mjs` | `setup/skills.js` profile validation, user and project scope installs, dry run, and rollback |
+| `skills-runtime-claude-env.test.mjs` | `setup/skills.js` refresh of skills in Claude environments |
+| `skills-runtime-windows.test.mjs` | `setup/skills.js` Windows command resolution |
+
+Shared fixtures and runners (`createFixture`, `runSkills*`, `readRepoProfile`)
+live in `setup/test/skills-helpers.mjs`, which the test glob does not run.
+When a new skill family outgrows these files, add a new
+`skills-wiring-<family>.test.mjs` file.
+
 ## Focused checks
 
 Claude setup and picker checks use temporary homes and fake Claude executables;
