@@ -288,3 +288,13 @@ test("delivery workers draft the understanding and preflight for the coordinator
   assert.match(withDocs, /When a delivery coordinator asks for a draft, forward that request so `design-preflight` returns its questions instead of asking\./);
   assert.match(withDocs, /write documentation only after the coordinator returns the user's answers\./);
 });
+
+test("delivery resume checks the recorded branch name", async () => {
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
+    const resume = flat(skill.match(/\nOn resume, [\s\S]*?(?=\n\n)/)?.[0]);
+
+    assert.ok(resume, `${delivery}: missing resume paragraph`);
+    assert.match(resume, /Stop and report the recorded branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${delivery}: recorded branch checked`);
+  }
+});

@@ -14,6 +14,7 @@ Complete a Beads-backed development branch with evidence: verify, commit, merge 
 1. Identify the bead and branch.
    - Prefer an explicit bead ID from the user.
    - Otherwise infer from the current branch/worktree and confirm if unclear.
+   - Stop and report the branch unless it is a **safe branch name**, using only `[A-Za-z0-9/._-]`, before running any command with it.
    - Run `bd show <id>`.
 2. Inspect git state in the feature worktree.
    - `git status --short --branch`

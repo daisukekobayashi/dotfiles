@@ -113,3 +113,33 @@ test("github-pr-publish stops in an unresolved fork layout", async () => {
   assert.match(context, /any of its fetch or push URLs does not name an `<owner>\/<repo>` on the resolved repository's host/, "every remote URL checked");
   assert.match(context, /or a parent lookup fails[^.]*a failed lookup is not "no parent"/, "failed lookup fails closed");
 });
+
+const safeBranchCheck = (name) => new RegExp(`Stop and report ${name} unless it is a \\*\\*safe branch name\\*\\*, using only \`\\[A-Za-z0-9\\/._-\\]\`, before running any command with it\\.`);
+
+test("PR create and cleanup skills check the branch name in step 1", async () => {
+  for (const name of [
+    "github-pr-create",
+    "azure-devops-pr-create",
+    "github-worktree-cleanup",
+    "azure-devops-worktree-cleanup",
+    "beads-merge-cleanup",
+  ]) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", name, "SKILL.md"));
+    const step1 = flat(skill.match(/^1\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+
+    assert.ok(step1, `${name}: missing step 1`);
+    assert.match(step1, safeBranchCheck("the branch"), `${name}: branch checked in step 1`);
+    assert.doesNotMatch(skill, /["']<(?:feature-)?branch>["']/, `${name}: the charset rule replaces quoting <branch>`);
+  }
+});
+
+test("azure-devops-work-item-start skips comparing an open PR with an unsafe branch name", async () => {
+  const skill = await readText(path.join(repoRoot, "skills", "local", "azure-devops-work-item-start", "SKILL.md"));
+  const step2 = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+
+  assert.ok(step2, "missing step 2");
+  const check = step2.search(/For each PR, check its source and target names as `az repos pr list` returns them before running any command with them\. Unless both are a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, skip that PR's comparison, report the PR and its branch as not compared, and continue\./);
+  assert.ok(check >= 0, "both names checked with the stated charset; an unsafe PR is skipped and reported");
+  assert.ok(check < step2.indexOf("available as local or remote-tracking refs"), "names checked before the ref availability check");
+  assert.ok(check < step2.indexOf("git diff --name-only"), "names checked before git diff");
+});

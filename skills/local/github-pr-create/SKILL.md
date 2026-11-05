@@ -29,6 +29,7 @@ This skill is not for:
 1. Resolve repository context.
    - Confirm the working directory is inside a git repository.
    - Resolve the current branch with `git branch --show-current`.
+   - Stop and report the branch unless it is a **safe branch name**, using only `[A-Za-z0-9/._-]`, before running any command with it.
    - Resolve the remote repository with `gh repo view --json nameWithOwner,defaultBranchRef`.
    - Stop if the current branch is the default branch.
 2. Find an optional pull request template.
