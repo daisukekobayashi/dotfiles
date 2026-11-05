@@ -100,7 +100,7 @@ verification evidence ready for review, or an explicit blocker.
 ### 2. Run local reviews, assess, and repeat
 
 Follow [Local Review](../delivery-common/references/local-review.md) to set the
-risk tier, select the reviewers, and run an initial full pair with every
+risk tier, select the reviewers, and run an initial full review with every
 selected read-only reviewer on the same recorded base, Work Item/spec, and
 committed snapshot. Wait for all results before the implementation owner edits.
 
@@ -108,7 +108,7 @@ Assess findings against the requirements, code, and evidence, using the Assess
 findings defaults in Local Review. Apply worthwhile fixes; record concise reasons
 for explained, duplicate, stale, pre-existing, or skipped findings. Keep disputed material findings and design decisions open for the user.
 After fixes, follow Local Review's Repeat and advance for focused follow-up,
-escalation to a full pair, and advancement.
+escalation to a full review, and advancement.
 
 ### 3. Publish the PR
 
@@ -130,10 +130,11 @@ any later edit changes the implementation, invalidate affected review evidence,
 return to local verification and review under Local Review's Repeat and advance,
 and republish through the existing PR.
 
-Advance when the exact published implementation is covered by the initial full
-pair and completed follow-ups under Local Review's Repeat and advance, has
-current verification, and has the intended Work Item links. An existing PR
-does not need another creation, and an open PR is not a merged PR.
+Advance when the exact published implementation is covered by the most recent
+full review and the follow-ups completed since it under Local Review's Repeat
+and advance, has current verification, and has the intended Work Item links.
+An existing PR does not need another creation, and an open PR is not a merged
+PR.
 
 ### 4. Confirm and perform the merge
 

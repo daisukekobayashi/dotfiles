@@ -180,7 +180,7 @@ delivery スキルは、共通のポリシー層と薄いプロバイダー別�
 
 現在の `delivery-common` は、ローカルレビュー手順（snapshot の固定、follow-up 候補の
 記録を含む指摘の評価、focused follow-up、reviewer の選択、ローカルレビューの
-full pair への切り替え条件、完了条件、ラウンドの数え方と上限、head と coverage の
+full review への切り替え条件、完了条件、ラウンドの数え方と上限、head と coverage の
 記録）とリスク tier を持ちます。その `SKILL.md` では、hosted レビューのポリシーと
 承認は呼び出し元のワークフローが持つとしています。理解確認の順序、マージ確認で
 示す内容、delivery 終了時の follow-up 候補の報告と作成など、その他の共通ポリシーは

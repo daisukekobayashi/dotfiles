@@ -99,11 +99,11 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
 
   assert.ok(repeat, "local-review.md: missing Repeat and advance");
   assert.match(repeat, /After fixes, run\s+relevant checks and use focused follow-up/);
-  assert.match(repeat, /Repeat the full pair only when the design or\s+change scope shifts materially, or new evidence makes the earlier full-review\s+coverage insufficient/);
-  assert.match(repeat, /the initial\s+full pair and completed follow-ups cover the current head with the reviewers its\s+current tier selects/);
+  assert.match(repeat, /Repeat the full review only when the design or\s+change scope shifts materially, or new evidence makes the earlier full-review\s+coverage insufficient/);
+  assert.match(repeat, /the most\s+recent full review, whether the initial one or a required new one, and the\s+follow-ups completed since it cover the current head with the reviewers its\s+current tier selects/);
   assert.match(repeat, /at most three local review rounds per target across the delivery,\s+including resumes/);
-  assert.match(repeat, /Count the initial full pair, each focused follow-up on a\s+fixed snapshot, and each required new full pair as one round apiece/);
-  assert.match(repeat, /full-pair and\s+follow-up head SHAs, their coverage, and the local round count/);
+  assert.match(repeat, /Count the initial full review, each focused follow-up on a\s+fixed snapshot, and each required new full review as one round apiece/);
+  assert.match(repeat, /full-review and\s+follow-up head SHAs, their coverage, and the local round count/);
   assert.doesNotMatch(common, /owns[^.]*review round\s+limits/);
   assert.match(common, /^description: .*repeat or advance/m);
   assert.doesNotMatch(localReview, /the caller selects focused follow-up/);
@@ -112,19 +112,26 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const skill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
     providers[delivery] = skill;
-    assert.match(skill, /After fixes, follow Local Review's Repeat and advance for focused follow-up,\s+escalation to a full pair, and advancement\./, delivery);
+    assert.match(skill, /After fixes, follow Local Review's Repeat and advance for focused follow-up,\s+escalation to a full review, and advancement\./, delivery);
     assert.match(skill, /Local review rounds follow Local Review's Repeat and advance/, delivery);
     assert.match(skill, /the local review record\s+under Local Review/, delivery);
     assert.doesNotMatch(skill, /repeat the selected reviews on the new snapshot/, delivery);
     assert.doesNotMatch(skill, /three local review rounds/, delivery);
-    assert.doesNotMatch(skill, /Count the initial full pair/, delivery);
+    assert.doesNotMatch(skill, /Count the initial full review/, delivery);
     assert.doesNotMatch(skill, /completed follow-ups cover the current head with the reviewers/, delivery);
     assert.doesNotMatch(skill, /selected local\s+reviews completed/, delivery);
     assert.doesNotMatch(skill, /Local Review's escalation rule/, delivery);
   }
   assert.match(providers["github-issue-delivery"], /at most three hosted Codex\s+review rounds per issue/);
   assert.match(providers["github-issue-delivery"], /hosted-fix\s+follow-ups use the same local budget/);
-  assert.match(providers["azure-devops-work-item-delivery"], /Advance when the exact published implementation is covered by the initial full\s+pair and completed follow-ups under Local Review's Repeat and advance/);
+  assert.match(providers["azure-devops-work-item-delivery"], /Advance when the exact published implementation is covered by the most recent\s+full review and the follow-ups completed since it under Local Review's Repeat\s+and advance/);
+  assert.match(providers["github-issue-delivery"], /Advance only when the current\s+published head is covered by the most recent full review and the follow-ups\s+completed since it under Local Review's Repeat and advance/);
+  for (const [name, text] of Object.entries(providers)) {
+    assert.doesNotMatch(text, /full local reviews and completed follow-ups|initial full\s+review and completed follow-ups/, name);
+  }
+  for (const [name, text] of Object.entries({ "local-review.md": localReview, ...providers })) {
+    assert.doesNotMatch(text, /full\s+pair/, name);
+  }
 });
 
 test("change review skills are explicit-only and share target selection", async () => {
