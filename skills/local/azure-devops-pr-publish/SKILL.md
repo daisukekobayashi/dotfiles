@@ -59,6 +59,7 @@ Still stop and ask before:
    - Use the `git-commit` skill.
    - Stage only files belonging to the requested work.
 7. Push normally to the Azure DevOps remote for the current branch.
+   If no upstream exists, set upstream for the same branch name.
 8. Use `azure-devops-pr-create` to create or resolve the PR.
    - Pass along the actual publication request, exact target, existing approvals,
      known Work Item IDs, completion scope, and the user's state-transition intent.
