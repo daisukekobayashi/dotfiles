@@ -198,8 +198,15 @@ Azure DevOps 版との同等性を標準とします。`delivery-common` のポ�
 スキルにもプロバイダー固有の変更を必要とする場合は、同じ issue と PR で行います。
 Azure DevOps 側を後回しにできるのは、Azure DevOps の API やポリシーなど Azure 固有の
 調査が必要な場合だけで、その場合も追跡用の follow-up issue を作成します。
-Azure DevOps のホスト側 AI レビューサイクルを省いているような意図的な
-プロバイダー差分は、ずれとして扱いません。
+意図的なプロバイダー差分は、ずれとして扱いません。意図的な差分は次のとおりです。
+
+- Azure DevOps 版はホスト側 AI レビューサイクルを省いています。そのため、hosted
+  レビューのラウンド上限、hosted 再レビューの条件、hosted 側の修正からローカル
+  レビューへ戻る手順はありません。
+
+両方のプロバイダー別 delivery スキルは同じ `delivery-common` のファイルにリンク
+します。片方だけがリンクを追加または削除すると
+`setup/test/skills-wiring-delivery.test.mjs` が失敗します。
 
 ## Profile Format
 
