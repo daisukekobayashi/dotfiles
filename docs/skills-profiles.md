@@ -208,7 +208,7 @@ Include:
 - selected published Matt Pocock Engineering and Productivity skills
 - `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
 - `delivery-common` for the shared committed-snapshot local review procedure and risk tier
-- `issue-understanding-check`, which checks the user's own understanding of an issue or Work Item with a before/after example and one prediction before design preflight
+- `issue-understanding-check`, which checks before design preflight that an issue or Work Item matches the user's intent, using an overview with a before/after example and one intent question answerable without rereading the issue
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.

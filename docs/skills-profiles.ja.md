@@ -206,7 +206,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
 - commit 済み snapshot のローカルレビュー手順とリスク tier を共有する `delivery-common`
-- design preflight の前に、before/after の具体例と1問の予測で issue や Work Item に対するユーザー自身の理解を確かめる `issue-understanding-check`
+- design preflight の前に、before/after の具体例を含む概要と、issue を読み返さなくても意図から答えられる1問で、issue や Work Item がユーザーの意図と合っているかを確かめる `issue-understanding-check`
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
