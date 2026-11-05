@@ -38,8 +38,12 @@ test("Codex review cycle pushes review fixes to the publication remote", async (
   assert.match(push, /`<remote>` is the push remote captured in step 2/);
   assert.match(push, /`branch\.<branch>\.pushRemote` or `remote\.pushDefault`/);
   assert.match(push, /Stop and report `<branch>` unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`/, "branch checked before the refspec");
-  assert.match(push, /on resume without it, read `<remote>` with `git config --get-all branch\.<branch>\.remote`[^.]*exactly one value/, "resume reads the upstream remote");
+  assert.match(push, /On resume without it, read `<remote>` with `git config --get-all branch\.<branch>\.remote`[^.]*exactly one value/, "resume reads the upstream remote");
   assert.match(push, /`gh pr view --json headRepository,headRepositoryOwner`/, "resume checks the PR head repository");
+  assert.match(push, /`<remote>` is the push remote captured in step 2, used as is\./, "captured remote skips the URL check");
+  assert.match(push, /exactly one value\. Use it only when its URLs name the PR's head repository/, "URL check only on resume");
+  assert.match(push, /Otherwise, as with an SSH host alias, stop before the push and ask the user to confirm or name the remote; use a remote the user names as given\./, "unconfirmed resume remote asks the user");
+  assert.doesNotMatch(push, /Then stop unless that remote's URLs/, "ambiguous check could reject the captured remote");
   assert.doesNotMatch(push, /resolve it as `github-pr-publish` step 2 does/, "URL matching can pick the parent in a fork layout");
   assert.doesNotMatch(push, /normal push/, "a plain push follows pushRemote away from the PR head");
   assert.match(push, /Confirm the fixes are present in the remote PR head/);

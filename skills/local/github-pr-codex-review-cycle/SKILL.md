@@ -121,12 +121,14 @@ Still stop and ask before:
      `[A-Za-z0-9/._-]`.
    - Use a normal commit, then push with
      `git push <remote> <branch>:refs/heads/<branch>`. `<remote>` is the push
-     remote captured in step 2; on resume without it, read `<remote>` with
-     `git config --get-all branch.<branch>.remote`, which publication set with
-     `-u`, and continue only on exactly one value. Then stop unless that
-     remote's URLs name the PR's head repository
+     remote captured in step 2, used as is. On resume without it, read
+     `<remote>` with `git config --get-all branch.<branch>.remote`, which
+     publication set with `-u`, and continue only on exactly one value. Use it
+     only when its URLs name the PR's head repository
      (`gh pr view --json headRepository,headRepositoryOwner`), compared as in
-     `github-pr-publish` step 2. The explicit remote and refspec keep
+     `github-pr-publish` step 2. Otherwise, as with an SSH host alias, stop
+     before the push and ask the user to confirm or name the remote; use a
+     remote the user names as given. The explicit remote and refspec keep
      `branch.<branch>.pushRemote` or `remote.pushDefault` from sending the
      fixes away from the PR head.
    - If verification is unsuccessful or unavailable, stop before commit or push.
