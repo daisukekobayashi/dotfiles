@@ -108,5 +108,8 @@ test("github-pr-publish stops in an unresolved fork layout", async () => {
   assert.doesNotMatch(context, /set-default|shows no default/, "gh's default names the PR base, not the push target");
   assert.match(context, /Check every other remote: stop and ask the user to name the remote when its repository is in the resolved repository's fork network/, "fork layout asks for a remote");
   assert.match(context, /`gh repo view <owner>\/<repo> --json parent`/, "fork network lookup");
-  assert.match(context, /or when its URL does not name an `<owner>\/<repo>` on the resolved repository's host[^.]*so the check cannot finish\./, "undeterminable remote fails closed");
+  assert.match(context, /Look up the parent of the resolved repository and of each other remote's repository with `gh repo view <owner>\/<repo> --json parent`\./, "both parents looked up");
+  assert.match(context, /one is the other's parent, or both are forks with the same parent/, "shared parent means both are forks");
+  assert.match(context, /any of its fetch or push URLs does not name an `<owner>\/<repo>` on the resolved repository's host/, "every remote URL checked");
+  assert.match(context, /or a parent lookup fails[^.]*a failed lookup is not "no parent"/, "failed lookup fails closed");
 });
