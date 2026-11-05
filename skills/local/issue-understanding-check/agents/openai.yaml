@@ -1,7 +1,0 @@
-interface:
-  display_name: "Issue Understanding Check"
-  short_description: "Check an issue matches your intent before design"
-  default_prompt: "Use $issue-understanding-check to check this issue matches my intent before design."
-
-policy:
-  allow_implicit_invocation: false

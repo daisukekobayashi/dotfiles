@@ -49,7 +49,7 @@ const baseLocalSkills = [
   "design-preflight-with-docs",
   "repo-execution-context",
   "find-unknowns",
-  "issue-understanding-check",
+  "shared-understanding",
   "learning-partner",
   "local-runtime-port-isolation",
   "worktree-runtime-cleanup",
