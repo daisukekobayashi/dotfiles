@@ -28,6 +28,7 @@ test("delivery runs the shared understanding before start and preflight", async 
 
   assert.match(check, /^name: shared-understanding$/m);
   assert.match(check, /^description: Use only when explicitly requested with `\$shared-understanding`.*`github-issue-delivery`.*`azure-devops-work-item-delivery`/m);
+  assert.match(check, /^description: .*Frame an unsettled problem with `find-unknowns`; decide how to build in `design-preflight`\.$/m);
   assert.match(metadata, /allow_implicit_invocation:\s*false/);
   assert.match(check, /before \/ after/);
   assert.match(check, /### 3\. Read back the decisions/);

@@ -1,6 +1,6 @@
 ---
 name: shared-understanding
-description: Use only when explicitly requested with `$shared-understanding`, or through the full `github-issue-delivery` or `azure-devops-work-item-delivery` workflow before design preflight, to build a shared understanding of an existing written request, GitHub issue, or Azure DevOps Work Item with the user by reading back what it decides and settling what it leaves undecided.
+description: Use only when explicitly requested with `$shared-understanding`, or through the full `github-issue-delivery` or `azure-devops-work-item-delivery` workflow before design preflight, to build a shared understanding of an existing written request, GitHub issue, or Azure DevOps Work Item with the user by reading back what it decides and settling what it leaves undecided. Frame an unsettled problem with `find-unknowns`; decide how to build in `design-preflight`.
 ---
 
 # Shared Understanding
