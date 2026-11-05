@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lstat, mkdir, readdir, readlink, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, readlink, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -228,6 +228,10 @@ test("Claude skill refresh prunes unchanged copies of a removed skill and keeps 
     await writeFile(path.join(edited, "skills/local-one/SKILL.md"), "local edit\n");
     await mkdir(path.join(clean, "skills/broken"));
     await writeFile(path.join(clean, "skills/.dotfiles-copy-broken.json"), "not json\n");
+    await cp(path.join(clean, "skills/local-one"), path.join(clean, "skills/old-version"), { recursive: true });
+    const marker = JSON.parse(await readText(path.join(clean, "skills/.dotfiles-copy-local-one.json")));
+    await writeFile(path.join(clean, "skills/.dotfiles-copy-old-version.json"),
+      JSON.stringify({ ...marker, version: 99, source: marker.source.replace(/local-one$/, "old-version") }));
     await mkdir(path.join(clean, "skills/linked-marker"));
     await symlink(path.join(clean, "skills/.dotfiles-copy-local-one.json"), path.join(clean, "skills/.dotfiles-copy-linked-marker.json"));
 
@@ -243,6 +247,9 @@ test("Claude skill refresh prunes unchanged copies of a removed skill and keeps 
     assert.match(result.stderr, /Keeping locally edited copy of a removed skill: .*edited.skills.local-one/);
     assert.equal(existsSync(path.join(clean, "skills/broken")), true);
     assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.broken/);
+    assert.equal(existsSync(path.join(clean, "skills/old-version/SKILL.md")), true,
+      "a copy with an unsupported marker version is not removed");
+    assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.old-version/);
     assert.equal(existsSync(path.join(clean, "skills/linked-marker")), true);
     assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.linked-marker/);
   } finally {

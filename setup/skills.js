@@ -469,15 +469,8 @@ function staleManagedEntries(directory, managedRoot, keep, options = {}) {
             warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
             continue;
         }
-        let saved;
-        try {
-            saved = JSON.parse(fs.readFileSync(path.join(directory, marker), "utf8"));
-        }
-        catch {
-            warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
-            continue;
-        }
-        if (typeof saved?.source !== "string" || !saved.files || typeof saved.files !== "object" || Array.isArray(saved.files)) {
+        const saved = (0, shared_links_1.parseCopyMarker)(fs.readFileSync(path.join(directory, marker), "utf8"));
+        if (!saved) {
             warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
             continue;
         }

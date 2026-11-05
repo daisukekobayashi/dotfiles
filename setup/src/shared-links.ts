@@ -40,6 +40,18 @@ export function sameSnapshot(a: Snapshot | undefined, b: Snapshot | undefined): 
   return keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key]);
 }
 
+// Returns undefined unless the marker is a version 1 record of a copy's source
+// and content snapshot; callers treat that as an invalid marker.
+export function parseCopyMarker(text: string): { source: string; files: Snapshot } | undefined {
+  let saved: { version?: unknown; source?: unknown; files?: unknown } | null;
+  try { saved = JSON.parse(text); } catch { return undefined; }
+  if (!saved || saved.version !== 1 || typeof saved.source !== "string" || !saved.files || typeof saved.files !== "object" || Array.isArray(saved.files) ||
+      !Object.hasOwn(saved.files, ".") || Object.values(saved.files).some(value => value !== "directory" && (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)))) {
+    return undefined;
+  }
+  return { source: saved.source, files: saved.files as Snapshot };
+}
+
 export function planSharedLink(destination: string, link: SharedLink): SharedChange | undefined {
   const target = path.join(destination, link.name);
   const stat = fs.lstatSync(target, { throwIfNoEntry: false });
@@ -50,12 +62,8 @@ export function planSharedLink(destination: string, link: SharedLink): SharedCha
   if (!stat && !markerBefore) return { ...link };
   if (stat?.isSymbolicLink() && path.resolve(path.dirname(target), fs.readlinkSync(target)) === link.source) return undefined;
   if (stat?.isSymbolicLink() || !markerBefore) throw new Error(`Refusing to replace an existing entry: ${link.name}`);
-  let saved: { version: number; source: string; files: Snapshot };
-  try { saved = JSON.parse(markerBefore); } catch { throw new Error(`Invalid copy marker: ${link.name}`); }
-  if (!saved || saved.version !== 1 || saved.source !== link.source || !saved.files || typeof saved.files !== "object" || Array.isArray(saved.files) ||
-      !Object.hasOwn(saved.files, ".") || Object.values(saved.files).some(value => value !== "directory" && (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)))) {
-    throw new Error(`Invalid copy marker: ${link.name}`);
-  }
+  const saved = parseCopyMarker(markerBefore);
+  if (!saved || saved.source !== link.source) throw new Error(`Invalid copy marker: ${link.name}`);
   if (!stat) return { ...link, markerBefore, copy: true };
   const before = snapshot(target)!;
   const desired = snapshot(link.source, true)!;

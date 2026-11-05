@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { copyMarker, copyMetadata, planSharedLink, sameSnapshot, snapshot, stageSharedLinks } from "./shared-links";
+import { copyMarker, copyMetadata, parseCopyMarker, planSharedLink, sameSnapshot, snapshot, stageSharedLinks } from "./shared-links";
 
 type Scope = "user" | "project";
 type Agent = "codex" | "claude-code";
@@ -566,14 +566,8 @@ function staleManagedEntries(
       warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
       continue;
     }
-    let saved: { source?: unknown; files?: unknown };
-    try {
-      saved = JSON.parse(fs.readFileSync(path.join(directory, marker), "utf8"));
-    } catch {
-      warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
-      continue;
-    }
-    if (typeof saved?.source !== "string" || !saved.files || typeof saved.files !== "object" || Array.isArray(saved.files)) {
+    const saved = parseCopyMarker(fs.readFileSync(path.join(directory, marker), "utf8"));
+    if (!saved) {
       warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
       continue;
     }
@@ -586,7 +580,7 @@ function staleManagedEntries(
     } catch {
       current = undefined;
     }
-    if (!sameSnapshot(current, saved.files as Record<string, string>)) {
+    if (!sameSnapshot(current, saved.files)) {
       warn(`Keeping locally edited copy of a removed skill: ${installed}`);
       continue;
     }

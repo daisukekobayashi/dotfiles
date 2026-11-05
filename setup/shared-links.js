@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.copyMarker = copyMarker;
 exports.snapshot = snapshot;
 exports.sameSnapshot = sameSnapshot;
+exports.parseCopyMarker = parseCopyMarker;
 exports.planSharedLink = planSharedLink;
 exports.copyMetadata = copyMetadata;
 exports.stageSharedLinks = stageSharedLinks;
@@ -48,6 +49,22 @@ function sameSnapshot(a, b) {
     const keys = Object.keys(a);
     return keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key]);
 }
+// Returns undefined unless the marker is a version 1 record of a copy's source
+// and content snapshot; callers treat that as an invalid marker.
+function parseCopyMarker(text) {
+    let saved;
+    try {
+        saved = JSON.parse(text);
+    }
+    catch {
+        return undefined;
+    }
+    if (!saved || saved.version !== 1 || typeof saved.source !== "string" || !saved.files || typeof saved.files !== "object" || Array.isArray(saved.files) ||
+        !Object.hasOwn(saved.files, ".") || Object.values(saved.files).some(value => value !== "directory" && (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)))) {
+        return undefined;
+    }
+    return { source: saved.source, files: saved.files };
+}
 function planSharedLink(destination, link) {
     const target = path.join(destination, link.name);
     const stat = fs.lstatSync(target, { throwIfNoEntry: false });
@@ -62,17 +79,9 @@ function planSharedLink(destination, link) {
         return undefined;
     if (stat?.isSymbolicLink() || !markerBefore)
         throw new Error(`Refusing to replace an existing entry: ${link.name}`);
-    let saved;
-    try {
-        saved = JSON.parse(markerBefore);
-    }
-    catch {
+    const saved = parseCopyMarker(markerBefore);
+    if (!saved || saved.source !== link.source)
         throw new Error(`Invalid copy marker: ${link.name}`);
-    }
-    if (!saved || saved.version !== 1 || saved.source !== link.source || !saved.files || typeof saved.files !== "object" || Array.isArray(saved.files) ||
-        !Object.hasOwn(saved.files, ".") || Object.values(saved.files).some(value => value !== "directory" && (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)))) {
-        throw new Error(`Invalid copy marker: ${link.name}`);
-    }
     if (!stat)
         return { ...link, markerBefore, copy: true };
     const before = snapshot(target);
