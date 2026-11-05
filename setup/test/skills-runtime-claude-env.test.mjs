@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, lstat, mkdir, readdir, readlink, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, readdir, readlink, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -252,6 +252,108 @@ test("Claude skill refresh prunes unchanged copies of a removed skill and keeps 
     assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.old-version/);
     assert.equal(existsSync(path.join(clean, "skills/linked-marker")), true);
     assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*clean.skills.linked-marker/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("Claude skill refresh keeps copies whose marker is unreadable, incomplete or names another source", async () => {
+  const fixture = await createFixture();
+  try {
+    const environment = await createClaudeEnvironment(fixture);
+    const skills = path.join(environment, "skills");
+    let result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "base"], fixture);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const marker = JSON.parse(await readText(path.join(skills, ".dotfiles-copy-local-one.json")));
+    const variants = {
+      "no-root": { ...marker, files: Object.fromEntries(Object.entries(marker.files).filter(([key]) => key !== ".")) },
+      "bad-hash": { ...marker, files: Object.fromEntries(Object.entries(marker.files).map(([key, value]) => [key, value === "directory" ? value : "abc"])) },
+      "trailing-separator": { ...marker, source: marker.source.replace(/local-one$/, `trailing-separator${path.sep}`) },
+      "dotted-source": { ...marker, source: [path.dirname(marker.source), "..", path.basename(path.dirname(marker.source)), "dotted-source"].join(path.sep) },
+    };
+    for (const [name, saved] of Object.entries(variants)) {
+      await cp(path.join(skills, "local-one"), path.join(skills, name), { recursive: true });
+      await writeFile(path.join(skills, `.dotfiles-copy-${name}.json`), JSON.stringify(saved));
+    }
+    const unreadable = process.platform !== "win32" && process.getuid?.() !== 0;
+    if (unreadable) {
+      await cp(path.join(skills, "local-one"), path.join(skills, "unreadable"), { recursive: true });
+      await writeFile(path.join(skills, ".dotfiles-copy-unreadable.json"),
+        JSON.stringify({ ...marker, source: marker.source.replace(/local-one$/, "unreadable") }));
+      await chmod(path.join(skills, ".dotfiles-copy-unreadable.json"), 0o000);
+    }
+
+    result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    for (const name of ["no-root", "bad-hash"]) {
+      assert.equal(existsSync(path.join(skills, name, "SKILL.md")), true, `${name} copy should be kept`);
+      assert.match(result.stderr, new RegExp(`Keeping skill copy with an invalid copy marker: .*skills.${name}`));
+    }
+    for (const name of ["trailing-separator", "dotted-source"]) {
+      assert.equal(existsSync(path.join(skills, name, "SKILL.md")), true,
+        `${name} copy should be kept: its marker does not name the managed source exactly`);
+      assert.equal(`${result.stdout}${result.stderr}`.includes(path.join(skills, name)), false);
+    }
+    if (unreadable) {
+      assert.equal(existsSync(path.join(skills, "unreadable", "SKILL.md")), true);
+      assert.match(result.stderr, /Keeping skill copy with an invalid copy marker: .*skills.unreadable/);
+      await chmod(path.join(skills, ".dotfiles-copy-unreadable.json"), 0o644);
+    }
+    assert.match(result.stdout, /User skills installed for profiles: base/, "the refresh should continue past the kept copies");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("dry-run Claude skill refresh reports stale copies and keeps copies of planned skills", async () => {
+  const fixture = await createFixture();
+  try {
+    const environment = await createClaudeEnvironment(fixture);
+    const skills = path.join(environment, "skills");
+    let result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "base"], fixture);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const marker = JSON.parse(await readText(path.join(skills, ".dotfiles-copy-local-one.json")));
+    await cp(path.join(skills, "local-one"), path.join(skills, "pdf"), { recursive: true });
+    await writeFile(path.join(skills, ".dotfiles-copy-pdf.json"),
+      JSON.stringify({ ...marker, source: marker.source.replace(/local-one$/, "pdf") }));
+    assert.equal(existsSync(marker.source.replace(/local-one$/, "pdf")), false);
+
+    await renameLocalSkill(fixture, "local-one", "local-two");
+    result = runSkillsWithSymlinkError(["--scope", "user", "--profile", "office"],
+      { ...fixture, env: { ...fixture.env, SETUP_DRY_RUN: "1" } });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.ok(result.stdout.includes(`DRY-RUN remove stale skill entry ${path.join(skills, "local-one")}`));
+    assert.equal(result.stdout.includes(`remove stale skill entry ${path.join(skills, "pdf")}`), false,
+      "dry run should not report a copy of a skill the planned install provides");
+    assert.equal(existsSync(path.join(skills, "local-one", "SKILL.md")), true, "dry run should not remove copies");
+    assert.equal(existsSync(path.join(skills, ".dotfiles-copy-local-one.json")), true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("skipping user agent skill links does not prune Claude environments", async () => {
+  const fixture = await createFixture();
+  try {
+    const environment = await createClaudeEnvironment(fixture);
+    const skills = path.join(environment, "skills");
+    const view = path.join(fixture.dotfiles, ".agents", "user", "skills");
+    let result = runSkills(["--profile", "base"], fixture);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readlink(path.join(skills, "local-one")), path.join(view, "local-one"));
+
+    await renameLocalSkill(fixture, "local-one", "local-two");
+    for (const env of [{ SETUP_DRY_RUN: "1" }, {}]) {
+      result = runSkills(["--profile", "base"],
+        { ...fixture, env: { ...fixture.env, ...env, SETUP_SKIP_USER_AGENT_SKILL_LINKS: "1" } });
+
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.equal(result.stdout.includes(path.join(skills, "local-one")), false);
+      assert.equal(await readlink(path.join(skills, "local-one")), path.join(view, "local-one"));
+      assert.equal(existsSync(path.join(skills, "local-two")), false);
+    }
   } finally {
     await fixture.cleanup();
   }

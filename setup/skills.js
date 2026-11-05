@@ -482,12 +482,19 @@ function staleManagedEntries(directory, managedRoot, keep, options = {}) {
             warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
             continue;
         }
-        const saved = (0, shared_links_1.parseCopyMarker)(fs.readFileSync(path.join(directory, marker), "utf8"));
+        let saved;
+        try {
+            saved = (0, shared_links_1.parseCopyMarker)(fs.readFileSync(path.join(directory, marker), "utf8"));
+        }
+        catch {
+            saved = undefined;
+        }
         if (!saved) {
             warn(`Keeping skill copy with an invalid copy marker: ${installed}`);
             continue;
         }
-        if (normalizePath(saved.source) !== managedSource || !isStale(saved.source)) {
+        // Match planSharedLink: a marker is managed only when it names the source exactly.
+        if (saved.source !== managedSource || !isStale(saved.source)) {
             continue;
         }
         let current;
