@@ -10,7 +10,9 @@ setup() {
   TEST_LOG="${TEST_ROOT}/skills.log"
   TEST_PROJECT="${TEST_ROOT}/project"
   # Skills installs refuse to stage under a world-writable ancestor such as
-  # /tmp, so stage them in the ignored .cache/ of this checkout.
+  # /tmp. Linux stages under XDG_CACHE_HOME, so point it at the ignored .cache/
+  # of this checkout; macOS ignores XDG_CACHE_HOME and stages under the
+  # inherited per-user TMPDIR.
   mkdir -p "$(repo_root)/.cache"
   TEST_STAGING="$(mktemp -d "$(repo_root)/.cache/bats-skills-staging.XXXXXX")"
 

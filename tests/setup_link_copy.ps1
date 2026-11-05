@@ -26,7 +26,7 @@ function New-Fixture {
     HomeDir = Join-Path $root "home space's"
     DotfilesRoot = Join-Path $root "dotfiles space's"
   }
-  foreach ($file in @("setup.ps1", "lib/common.ps1", "lib/windows-links.ps1", "setup/links.ps1", "setup/managed-copy.ps1", "setup/skills.ps1", "setup/skills.js", "setup/shared-links.js")) {
+  foreach ($file in @("setup.ps1", "lib/common.ps1", "lib/windows-links.ps1", "setup/links.ps1", "setup/managed-copy.ps1", "setup/skills.ps1", "setup/skills.js", "setup/shared-links.js", "setup/private-base.js")) {
     $destination = Join-Path $fixture.DotfilesRoot $file
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $RepoRoot $file) -Destination $destination

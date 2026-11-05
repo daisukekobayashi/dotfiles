@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const shared_links_1 = require("./shared-links");
+const private_base_1 = require("./private-base");
 const SUPPORTED_AGENTS = new Set(["codex", "claude-code"]);
 function fail(message) {
     throw new Error(message);
@@ -709,55 +710,10 @@ const BACKUP_DIR_NAME = "dotfiles-skills-backup";
 // cache and project backups, under a per-user directory rather than a shared
 // temp directory such as /tmp. Linux uses the XDG cache directory, macOS the
 // per-user temp directory, and Windows %TEMP%. SETUP_TMPDIR may be shared and
-// is not used for skills.
+// is not used for skills. See private-base.ts for the checks: every directory
+// is checked before any is created, so a refusal creates nothing.
 function privateSkillsBase() {
-    const env = process.env;
-    if (process.platform === "win32") {
-        const temp = env.TEMP || env.TMP;
-        if (!temp || !path.isAbsolute(temp)) {
-            fail("cannot find a private skills directory: set TEMP to an absolute per-user directory");
-        }
-        return temp;
-    }
-    if (process.platform === "darwin") {
-        return os.tmpdir();
-    }
-    if (env.XDG_CACHE_HOME && path.isAbsolute(env.XDG_CACHE_HOME)) {
-        return env.XDG_CACHE_HOME;
-    }
-    const home = env.SETUP_HOME || env.HOME || os.homedir();
-    if (!path.isAbsolute(home)) {
-        fail("cannot find a private skills directory: set HOME or XDG_CACHE_HOME to an absolute path");
-    }
-    return path.join(home, ".cache");
-}
-function isInsideOrSame(candidate, root) {
-    return candidate === root || candidate.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
-}
-// Creates the directory if needed and returns its real path. On POSIX, refuse
-// a directory whose real path, or any ancestor, is owned by another user or
-// writable by others; a sticky bit does not exempt a directory. The directory
-// must also lie outside the project, when there is one.
-function requirePrivateDir(directory, label, projectRoot) {
-    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-    const real = fs.realpathSync(directory);
-    if (projectRoot !== undefined && isInsideOrSame(real, fs.realpathSync(projectRoot))) {
-        fail(`cannot keep ${label} inside the project: ${real}`);
-    }
-    if (process.platform === "win32" || typeof process.getuid !== "function") {
-        return real;
-    }
-    const uid = process.getuid();
-    for (let current = real;; current = path.dirname(current)) {
-        const stat = fs.statSync(current);
-        if ((stat.uid !== uid && stat.uid !== 0) || (stat.mode & 0o002) !== 0) {
-            fail(`cannot keep ${label} under ${real}: ${current} must be owned by you or root and not writable by others; ` +
-                "set XDG_CACHE_HOME (Linux) or TMPDIR (macOS) to a private directory");
-        }
-        if (path.dirname(current) === current) {
-            return real;
-        }
-    }
+    return (0, private_base_1.privateSkillsBase)(process.env, process.platform, path, os.tmpdir, os.homedir);
 }
 function removeStagingDir(workDir) {
     // A cleanup failure, such as EBUSY on Windows, must not replace the
@@ -1013,8 +969,11 @@ function setupUserSkills(dotfilesRoot, setupHome, profilesCsv, agents, dryRun, s
     let npmCacheDir = "";
     if (plan.external.length > 0) {
         const base = privateSkillsBase();
-        stagingBase = requirePrivateDir(base, "user skill staging");
-        npmCacheDir = requirePrivateDir(path.join(stagingBase, NPM_CACHE_NAME), "the skills npm cache");
+        const staging = (0, private_base_1.planPrivateDir)(base, "user skill staging");
+        const npmCache = (0, private_base_1.planPrivateDir)(path.join(staging.real, NPM_CACHE_NAME), "the skills npm cache");
+        (0, private_base_1.createPrivateDirs)([staging, npmCache]);
+        stagingBase = staging.real;
+        npmCacheDir = npmCache.real;
     }
     removePath(stagingSkillsDir);
     removePath(stagingMetadata);
@@ -1191,11 +1150,16 @@ function setupProjectSkills(dotfilesRoot, profilesCsv, agents, dryRun) {
         info("Consider ignoring generated skill directories: .agents/skills/ .claude/skills/");
         return;
     }
-    const stagingBase = requirePrivateDir(base, hasExternal ? "project skill staging" : "project skill backups", projectRoot);
-    const npmCacheDir = hasExternal ? requirePrivateDir(path.join(stagingBase, NPM_CACHE_NAME), "the skills npm cache", projectRoot) : "";
-    // Check the shared backup directory before creating this project's directory in it.
-    const backupBase = requirePrivateDir(path.join(stagingBase, BACKUP_DIR_NAME), "project skill backups", projectRoot);
-    const backupRoot = requirePrivateDir(path.join(backupBase, backupName), "project skill backups", projectRoot);
+    // Check every directory, including the shared backup directory, before
+    // creating any of them or this project's directory in it.
+    const staging = (0, private_base_1.planPrivateDir)(base, hasExternal ? "project skill staging" : "project skill backups", projectRoot);
+    const npmCache = hasExternal ? (0, private_base_1.planPrivateDir)(path.join(staging.real, NPM_CACHE_NAME), "the skills npm cache", projectRoot) : undefined;
+    const backupBase = (0, private_base_1.planPrivateDir)(path.join(staging.real, BACKUP_DIR_NAME), "project skill backups", projectRoot);
+    const backupDir = (0, private_base_1.planPrivateDir)(path.join(backupBase.real, backupName), "project skill backups", projectRoot);
+    (0, private_base_1.createPrivateDirs)([staging, ...(npmCache ? [npmCache] : []), backupBase, backupDir], projectRoot);
+    const stagingBase = staging.real;
+    const npmCacheDir = npmCache ? npmCache.real : "";
+    const backupRoot = backupDir.real;
     fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
     const backups = prepareProjectTargets(targets, backupRoot);
     try {
