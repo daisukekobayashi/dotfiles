@@ -452,13 +452,37 @@ function movePath(sourcePath: string, targetPath: string): void {
   }
 
   removePath(targetPath);
-  fs.cpSync(sourcePath, targetPath, {
-    recursive: true,
-    dereference: false,
-    force: true,
-    verbatimSymlinks: true,
-  });
+  copyEntry(sourcePath, targetPath, true);
   removePath(sourcePath);
+}
+
+// Copies one entry without following links. A link is recreated with its
+// original target text, even when that target no longer exists; fs.cpSync
+// rejects a dangling link given as its source. Links nested in directories are
+// copied by fs.cpSync, which keeps them as they are.
+function copyEntry(sourcePath: string, targetPath: string, force: boolean): void {
+  const linkTarget = getLinkTarget(sourcePath);
+  if (linkTarget === null) {
+    fs.cpSync(sourcePath, targetPath, { recursive: true, dereference: false, force, verbatimSymlinks: true });
+    return;
+  }
+  if (fs.existsSync(targetPath) || getLinkTarget(targetPath) !== null) {
+    if (!force) {
+      return;
+    }
+    removePath(targetPath);
+  }
+  fs.symlinkSync(linkTarget, targetPath, windowsLinkType(sourcePath));
+}
+
+// Windows needs the link type up front. Skill entries are directories, so a
+// link whose target is gone is recreated as a directory link.
+function windowsLinkType(linkPath: string): "dir" | "file" {
+  try {
+    return fs.statSync(linkPath).isDirectory() ? "dir" : "file";
+  } catch {
+    return "dir";
+  }
 }
 
 function copyDirectoryContents(sourceDir: string, targetDir: string): void {
@@ -467,12 +491,7 @@ function copyDirectoryContents(sourceDir: string, targetDir: string): void {
   }
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(sourceDir)) {
-    fs.cpSync(path.join(sourceDir, entry), path.join(targetDir, entry), {
-      recursive: true,
-      dereference: false,
-      force: true,
-      verbatimSymlinks: true,
-    });
+    copyEntry(path.join(sourceDir, entry), path.join(targetDir, entry), true);
   }
 }
 
@@ -486,12 +505,7 @@ function copyMissingDirectoryEntries(sourceDir: string, targetDir: string, skip:
     if (skip.has(entry) || fs.existsSync(targetEntry) || getLinkTarget(targetEntry)) {
       continue;
     }
-    fs.cpSync(path.join(sourceDir, entry), targetEntry, {
-      recursive: true,
-      dereference: false,
-      force: false,
-      verbatimSymlinks: true,
-    });
+    copyEntry(path.join(sourceDir, entry), targetEntry, false);
   }
 }
 

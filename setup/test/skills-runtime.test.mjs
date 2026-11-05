@@ -97,6 +97,24 @@ test("user scope copies skill directories when symlinks are denied", async () =>
   }
 });
 
+test("user refresh keeps dangling links from installs and synced skills", async () => {
+  const fixture = await createFixture({ npxSuffix: "ln -s missing-target .agents/skills/installed-alias\n" });
+  try {
+    const view = path.join(fixture.dotfiles, ".agents", "user", "skills");
+    await mkdir(path.join(view, "synced"), { recursive: true });
+    await symlink("../missing-synced", path.join(view, "synced", "alias"));
+
+    const result = runSkills(["--scope", "user", "--profile", "base"], fixture);
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readlink(path.join(view, "installed-alias")), "missing-target");
+    assert.equal(await readlink(path.join(view, "synced", "alias")), "../missing-synced");
+    assert.equal(existsSync(path.join(view, "find-skills", "SKILL.md")), true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("user refresh preserves synced skills but removes deselected managed skills", async () => {
   const fixture = await createFixture();
   try {
@@ -394,6 +412,41 @@ test("project scope prunes links of a renamed local skill and keeps unmanaged li
   }
 });
 
+test("project scope restores dangling unmanaged links unchanged", async () => {
+  const fixture = await createFixture();
+  try {
+    const codexSkills = path.join(fixture.project, ".agents", "skills");
+    const claudeSkills = path.join(fixture.project, ".claude", "skills");
+    const outside = path.join(fixture.root, "outside-skill");
+    const removed = path.join(fixture.root, "removed-skill");
+    await mkdir(outside);
+    await mkdir(path.join(codexSkills, "kept"), { recursive: true });
+    await mkdir(claudeSkills, { recursive: true });
+    await writeFile(path.join(codexSkills, "kept", "SKILL.md"), "kept\n");
+    await symlink("missing.md", path.join(codexSkills, "kept", "nested-link"));
+    await symlink("../renamed-skill", path.join(codexSkills, "relative-alias"));
+    await symlink(removed, path.join(claudeSkills, "absolute-alias"));
+    await symlink(outside, path.join(codexSkills, "valid-link"), "dir");
+
+    const result = runSkills(
+      ["--scope", "project", "--profile", "base", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readlink(path.join(codexSkills, "relative-alias")), "../renamed-skill");
+    assert.equal(await readlink(path.join(claudeSkills, "absolute-alias")), removed);
+    assert.equal(await readlink(path.join(codexSkills, "kept", "nested-link")), "missing.md");
+    assert.equal(await readText(path.join(codexSkills, "kept", "SKILL.md")), "kept\n");
+    assert.equal(await readlink(path.join(codexSkills, "valid-link")), outside);
+    assert.equal(existsSync(path.join(codexSkills, "find-skills", "SKILL.md")), true);
+    assert.equal(existsSync(path.join(claudeSkills, "find-skills", "SKILL.md")), true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("project scope requires an explicit profile", async () => {
   const fixture = await createFixture();
   try {
@@ -471,6 +524,38 @@ exit 42
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), "old-profile\n");
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
     assert.equal(await readText(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md")), "old-claude\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope rollback keeps dangling links when backups move cross devices", async () => {
+  const fixture = await createFixture({
+    npxBody: `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "\${TEST_SKILLS_LOG}"
+exit 42
+`,
+  });
+  try {
+    const codexSkills = path.join(fixture.project, ".agents", "skills");
+    const claudeSkills = path.join(fixture.project, ".claude", "skills");
+    await mkdir(codexSkills, { recursive: true });
+    await mkdir(path.dirname(claudeSkills), { recursive: true });
+    await symlink("missing-skill", path.join(codexSkills, "alias"));
+    await symlink("../missing-skills", claudeSkills);
+
+    const result = runSkillsWithCrossDeviceBackupRenameError(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.stderr, /ENOENT|EXDEV/);
+    assert.match(await readText(fixture.log), /skills add anthropics\/skills/);
+    assert.equal(await readlink(path.join(codexSkills, "alias")), "missing-skill");
+    assert.equal(await readlink(claudeSkills), "../missing-skills");
   } finally {
     await fixture.cleanup();
   }
