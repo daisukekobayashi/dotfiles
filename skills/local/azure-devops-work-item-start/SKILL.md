@@ -79,7 +79,8 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
 
 1. Inspect `git status --short` and `git worktree list --porcelain` before changing
    state. Reuse a worktree only when its branch, changes, and ownership match this
-   Work Item and no other worker is using it.
+   Work Item and no other worker is using it. When reusing one, check its
+   upstream as in step 5.
 2. Resolve the base from the user's request or repository convention. Otherwise
    inspect the default branch and local branch state, asking only if the intended
    base remains ambiguous. Do not assume a local ref is current or silently branch
@@ -97,10 +98,14 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
    Work Item's worktree, then use the selected tool or
    `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path
    and branch; a detached workspace needs a dedicated Work Item branch before
-   implementation. Verify that `git rev-parse --abbrev-ref <branch>@{upstream}`
-   reports no upstream; if a tool set the base as upstream, remove it with
-   `git branch --unset-upstream <branch>`. Publication sets the upstream to the
-   same-named remote branch on first push.
+   implementation. Read the upstream with
+   `git for-each-ref --format='%(upstream:short)' refs/heads/<branch>`, which
+   also shows an upstream whose remote ref is missing. Keep no upstream or the
+   same-named branch on the publication remote; publication sets it on first
+   push. If the upstream is the base or its local branch, remove it with
+   `git branch --unset-upstream <branch>`. Stop and report any other upstream,
+   such as a differently named branch or another remote; it may back an
+   existing PR.
 6. Read instructions in the selected worktree and use documented setup commands.
    Use `repo-execution-context` when commands are unclear. Do not
    infer install commands solely from manifest filenames. Restore dependencies

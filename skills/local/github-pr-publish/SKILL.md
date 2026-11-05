@@ -74,8 +74,11 @@ Still stop and ask before any action outside that narrow scope, including:
    - Derive the commit message from the implementation diff, issue context, branch name, and current conversation.
    - Never stage secrets or unrelated local files.
 7. Push the branch.
-   - Use a normal push to the repository remote for the current branch.
+   - Read the upstream with `git for-each-ref --format='%(upstream:short)' refs/heads/<branch>`.
+   - If it is the same branch name on the repository remote, use a normal push.
    - If no upstream exists, set upstream for the same branch name.
+   - If it is the PR base branch, local or remote-tracking, replace it with `git push -u <remote> <branch>` and report the replacement.
+   - Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
    - Do not force push, delete remote branches, or rewrite history.
 8. Create or resolve the PR.
    - Use the `github-pr-create` skill for the target branch.
