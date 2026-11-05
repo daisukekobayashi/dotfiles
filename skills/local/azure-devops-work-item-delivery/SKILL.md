@@ -127,10 +127,12 @@ Read the current remote source ref and compare its commit with the local reviewe
 HEAD; a successful push or PR creation alone does not establish this match.
 Record the PR and published head. If publication creates a different commit or
 any later edit changes the implementation, invalidate affected review evidence,
-return to local verification/review, and republish through the existing PR.
+return to local verification and review under Local Review's Repeat and advance,
+and republish through the existing PR.
 
-Advance when the exact published implementation has its selected local
-reviews completed, current verification, and the intended Work Item links. An existing PR
+Advance when the exact published implementation is covered by the initial full
+pair and completed follow-ups under Local Review's Repeat and advance, has
+current verification, and has the intended Work Item links. An existing PR
 does not need another creation, and an open PR is not a merged PR.
 
 ### 4. Confirm and perform the merge

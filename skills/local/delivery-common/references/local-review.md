@@ -20,7 +20,7 @@ Record the task URL/acceptance criteria, applicable standards, worktree, branch,
 base SHA, merge-base, head SHA, and dirty/untracked state. Use the task workspace's
 recorded base; do not ask for a fixed point already established by workspace
 preparation. For a full review, cover the entire task diff, not only the last fix
-commit. Use a full pair unless the caller selects focused follow-up below.
+commit. Use a full pair unless Repeat and advance selects focused follow-up.
 
 Before running reviewers on a pinned head, set the tier for that head under
 [Risk Tier](risk-tier.md) and record it with the selected reviewers.
@@ -84,7 +84,7 @@ genuinely new material defects (recommend extending the budget).
 
 ## Focused follow-up
 
-When the caller selects focused follow-up after a completed full pair, retain the
+When Repeat and advance selects focused follow-up after a completed full pair, retain the
 full-review base/head and completed follow-up coverage. Pin the new committed
 head, and give the relevant independent reviewers the accepted findings,
 dispositions, and all changes since the preceding reviewed snapshot. Have them

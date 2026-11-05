@@ -106,6 +106,7 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   assert.match(repeat, /full-pair and\s+follow-up head SHAs, their coverage, and the local round count/);
   assert.doesNotMatch(common, /owns[^.]*review round\s+limits/);
   assert.match(common, /^description: .*repeat or advance/m);
+  assert.doesNotMatch(localReview, /the caller selects focused follow-up/);
 
   const providers = {};
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
@@ -118,9 +119,12 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
     assert.doesNotMatch(skill, /three local review rounds/, delivery);
     assert.doesNotMatch(skill, /Count the initial full pair/, delivery);
     assert.doesNotMatch(skill, /completed follow-ups cover the current head with the reviewers/, delivery);
+    assert.doesNotMatch(skill, /selected local\s+reviews completed/, delivery);
+    assert.doesNotMatch(skill, /Local Review's escalation rule/, delivery);
   }
   assert.match(providers["github-issue-delivery"], /at most three hosted Codex\s+review rounds per issue/);
   assert.match(providers["github-issue-delivery"], /hosted-fix\s+follow-ups use the same local budget/);
+  assert.match(providers["azure-devops-work-item-delivery"], /Advance when the exact published implementation is covered by the initial full\s+pair and completed follow-ups under Local Review's Repeat and advance/);
 });
 
 test("change review skills are explicit-only and share target selection", async () => {
