@@ -95,8 +95,12 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
    External locations do not need this check.
 5. Follow applicable approval rules, honoring existing authorization for this
    Work Item's worktree, then use the selected tool or
-   `git worktree add -b <branch> <path> <base>`. Verify the resulting path and branch;
-   a detached workspace needs a dedicated Work Item branch before implementation.
+   `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path
+   and branch; a detached workspace needs a dedicated Work Item branch before
+   implementation. Verify that `git rev-parse --abbrev-ref <branch>@{upstream}`
+   reports no upstream; if a tool set the base as upstream, remove it with
+   `git branch --unset-upstream <branch>`. Publication sets the upstream to the
+   same-named remote branch on first push.
 6. Read instructions in the selected worktree and use documented setup commands.
    Use `repo-execution-context` when commands are unclear. Do not
    infer install commands solely from manifest filenames. Restore dependencies
