@@ -122,7 +122,7 @@ head と一致する場合は、その削除も提案します。
 再レビュー依頼は自動では行いません。複合スキルは順序と引き継ぎを担当し、
 個別の処理手順は基本スキルに集約します。
 
-`github-issue-delivery` は、各 issue の `issue-understanding-check`、独立 worktree、
+`github-issue-delivery` は、各 issue の `shared-understanding`、独立 worktree、
 `design-preflight-with-docs`、実装、
 2種類のローカルレビュー、PR の Codex レビュー対応、承認後のマージ、承認後の
 ローカル cleanup までをまとめます。Claude Code では
@@ -253,7 +253,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
 - commit 済み snapshot のローカルレビュー手順とリスク tier を共有する `delivery-common`
-- design preflight の前に、before/after の具体例を含む概要と、issue を読み返さなくても意図から答えられる1問で、issue や Work Item がユーザーの意図と合っているかを確かめる `issue-understanding-check`
+- design preflight の前に、before/after の具体例を含む概要で issue や Work Item の内容を読み上げ、決めていることと決めていない点をユーザーと合意する `shared-understanding`
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
@@ -420,7 +420,7 @@ Azure DevOps workflow skill:
 リモートの source branch の先頭が完了済み PR のマージ元と一致する場合は、その削除も提案します。
 
 `azure-devops-work-item-delivery` は Azure DevOps Services の Azure Boards と
-Azure Repos Git を対象に、`issue-understanding-check`、独立 worktree、
+Azure Repos Git を対象に、`shared-understanding`、独立 worktree、
 `design-preflight-with-docs`、実装、
 2種類のローカルレビュー、PR 公開、承認後のマージ、承認後のローカル cleanup
 までをまとめます。Claude Code では `/azure-devops-work-item-delivery 123 456`、

@@ -1,6 +1,6 @@
 ---
 name: azure-devops-work-item-delivery
-description: Coordinate Azure DevOps Work Items through an understanding check, isolated worktrees, design preflight with docs, implementation, local reviews, PR publication, approved merge, and local cleanup. Use when the user requests this full delivery workflow for named Work Items; resume unfinished deliveries without repeating completed operations.
+description: Coordinate Azure DevOps Work Items through a shared understanding, isolated worktrees, design preflight with docs, implementation, local reviews, PR publication, approved merge, and local cleanup. Use when the user requests this full delivery workflow for named Work Items; resume unfinished deliveries without repeating completed operations.
 ---
 
 # Azure DevOps Work Item Delivery
@@ -24,7 +24,7 @@ Azure Repos target for them.
 
 Read component skills before their phases. Forward the user's actual full
 workflow request, exact Work Item/branch/worktree, and existing authorizations.
-An explicit full delivery request selects the delegated understanding check,
+An explicit full delivery request selects the delegated shared understanding,
 preflight, local review, and publication phases. Automatic discovery or a reference to this skill selects
 none of them and grants no mutation approval. Honor the publisher's approval
 model and governing instructions for scoped checkpoint commits, normal pushes,
@@ -46,11 +46,11 @@ cycle.
    `change-security-review`, before starting.
    The normal installation is `base,azure-devops`; report missing prerequisites
    rather than installing them or skipping required phases.
-2. Before `azure-devops-work-item-start`, run `issue-understanding-check` in the
+2. Before `azure-devops-work-item-start`, run `shared-understanding` in the
    coordinator for each requested Work Item, one item at a time, so its
    questions end before any worker starts. Forward a user's skip. Pass on only
    items whose status is `confirmed`, `corrected`, or `skipped`; report the
-   others as waiting for the user.
+   others as waiting for the user with their open points.
 3. Use `azure-devops-work-item-start` with the per-item workflow below as its
    implementation brief. Prepare its worktree and baseline before preflight;
    implement only after preflight. Preserve classification, dependency checks,
@@ -65,7 +65,7 @@ cycle.
    Route material design questions and approvals through the coordinator.
 5. Before writing progress records, classify them as temporary and choose ignored
    agent-work storage or `/tmp`. Record separately per item: organization,
-   project/repository IDs, Work Item URL and scope, understanding check result,
+   project/repository IDs, Work Item URL and scope, shared understanding result,
    branch/worktree, base ref/SHA,
    phase, accepted design, risk tier with its reasons and head, verification, reviewed head SHAs and local round
    count, PR ID/URL and source/target refs, published head, policy/merge state,
@@ -75,7 +75,7 @@ cycle.
 On resume, reconcile the record with actual local and Azure DevOps state. Reuse
 matching worktrees and PRs; a completed PR resumes completion checks rather than
 publication. Recheck the current source ref before reusing review evidence.
-Resume the earliest incomplete phase. A recorded understanding check result
+Resume the earliest incomplete phase. A recorded shared understanding result
 carries forward. A progress record is evidence, not authorization.
 
 ## Per-Work-Item Workflow
@@ -84,7 +84,7 @@ carries forward. A progress record is evidence, not authorization.
 
 Use `design-preflight-with-docs` in the assigned worktree before implementation.
 Forward the requested mode/question limit or use its default. Give it the item's
-understanding check result: its confirmed examples and agreed changes are
+shared understanding result: its agreed decisions and agreed changes are
 settled scope, and its preflight items open the design questions. Inherit its
 completion and documentation criteria without a second interview. Carry forward
 settled decisions on resume. Keep material unanswered decisions pending and

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Shared Understanding"
+  short_description: "Agree on what an issue decides before design"
+  default_prompt: "Use $shared-understanding to agree on what this issue decides and leaves open before design."
+
+policy:
+  allow_implicit_invocation: false
