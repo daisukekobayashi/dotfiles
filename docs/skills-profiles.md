@@ -163,6 +163,40 @@ Do not add a separate external skill pool/catalog file. Profiles are the source 
 
 The root `skills-lock.json` should stop acting as a global all-skills catalog after this migration. If the dotfiles repository itself needs project-scoped skills, root `skills-lock.json` can be generated for this repository like any other project.
 
+### Delivery Policy Layering
+
+Delivery skills split into a shared policy layer and thin provider adapters:
+
+- `delivery-common` owns delivery policy: what happens, when, and at what depth.
+  This covers the risk tier, review selection, completion and merge gates, and
+  approval and human review recommendations.
+- Provider delivery skills (`github-issue-delivery` and
+  `azure-devops-work-item-delivery`) own how each phase is performed on their
+  provider: PR creation and publication, API and CLI calls, hosted review
+  cycles, and provider-specific state such as Work Item links and state
+  transitions. They reference `delivery-common` for policy instead of restating
+  it.
+
+`delivery-common` currently holds the Local Review procedure (snapshot pinning,
+finding assessment, focused follow-up, and reviewer selection) and the Risk
+Tier. Other shared policy, such as the understanding check order, local review
+advancement criteria and round limits, merge confirmation contents, and
+follow-up candidate handling, is still written in both provider delivery skills.
+
+Migrate incrementally rather than in one refactor. When a policy issue would
+edit the same section in both provider delivery skills, move that section into
+`delivery-common` as part of that issue and have both provider skills reference
+it, instead of editing it twice. Leave other duplicated sections in place until
+a policy change touches them.
+
+Azure DevOps parity is the default. Policy in `delivery-common` applies to both
+providers automatically. When a GitHub-side change also requires
+provider-specific changes to the Azure DevOps skills, make them in the same
+issue and PR. Defer the Azure DevOps side only when it needs Azure-specific
+investigation, such as Azure DevOps APIs or policies, and only with a tracked
+follow-up issue. Intentional provider differences, such as the omitted Azure
+DevOps hosted AI review cycle, are not drift.
+
 ## Profile Format
 
 Profiles are JSON so setup can process them with Node without adding a parser dependency.
