@@ -378,8 +378,10 @@ test("Codex review runs stop only the broker tree they started", async () => {
   assert.ok(brokers, "worktree-runtime-cleanup: missing Brokers Started by a Codex Review");
   assert.match(brokers, /stopping them needs no confirmation/);
   assert.match(brokers, /Before the run, record `scripts\/list-processes\.sh <worktree>`/);
-  assert.match(brokers, /absent from the first list, by PID and start time, is a broker this run started/);
-  assert.match(brokers, /Report a broker present in the first list and leave it running\./);
+  assert.match(brokers, /is a broker this run started only when it is absent from the first list, by PID and start time, and/);
+  assert.match(brokers, /its `--cwd` argument, or its cwd when it has none, resolves to exactly the target worktree root/);
+  assert.match(brokers, /prefix matching never establishes ownership here/);
+  assert.match(brokers, /Report any other listed broker, whether pre-existing or under the target without equaling it, and leave it running\./);
   assert.match(brokers, /every listed process descending from it by `ppid`, with PID and start time/);
   assert.match(brokers, /Immediately before signaling, recheck each broker's PID and start time/);
   assert.match(brokers, /Never signal a process outside the recorded tree, and never use SIGKILL\./);

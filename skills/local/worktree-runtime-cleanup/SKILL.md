@@ -70,9 +70,13 @@ covers only the processes recorded below and sends only SIGTERM.
 1. Before the run, record `scripts/list-processes.sh <worktree>` in this
    skill's directory.
 2. After the run, whether it succeeded or failed, list again. A process running
-   `app-server-broker.mjs` that is absent from the first list, by PID and start
-   time, is a broker this run started. Report a broker present in the first list
-   and leave it running. If the run started none, report that and stop here.
+   `app-server-broker.mjs` is a broker this run started only when it is absent
+   from the first list, by PID and start time, and its `--cwd` argument, or its
+   cwd when it has none, resolves to exactly the target worktree root. The list
+   also matches paths below the target, such as a nested worktree; prefix
+   matching never establishes ownership here. Report any other listed broker,
+   whether pre-existing or under the target without equaling it, and leave it
+   running. If the run started none, report that and stop here.
 3. Record each started broker's tree from the second list: the broker and every
    listed process descending from it by `ppid`, with PID and start time.
 4. Immediately before signaling, recheck each broker's PID and start time; if
