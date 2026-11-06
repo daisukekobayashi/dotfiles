@@ -70,7 +70,10 @@ test("PR create opens a fork PR with the head owner and reuses only its own head
   assert.ok(resolve && handoff && report, "missing publish steps");
 
   assert.match(context, /the push remote and `<owner>\/<repo>` that `github-pr-publish` passes, as given/, "publish handoff used as given");
-  assert.match(context, /When invoked directly, read `<remote>` with `git config --get-all branch\.<branch>\.remote` and continue only on exactly one value/, "direct call derives from the upstream");
+  assert.match(context, /`gh repo view --json nameWithOwner,url,defaultBranchRef`\. This is the PR \*\*base repository\*\*; `<base host>` is the host of its `url`\./, "base host comes from the base url");
+  assert.match(context, /Otherwise, when neither is given and the skill is invoked directly:/, "derivation and stop only without a user-named head");
+  assert.match(context, /Then read `<remote>` with `git config --get-all branch\.<branch>\.remote` and continue only on exactly one value/, "direct call derives from the upstream");
+  assert.match(context, /every push URL \(`git remote -v`\) name on `<base host>`/, "URL matching uses the base host");
   assert.match(context, /normalized as in `github-pr-publish` step 2/);
   assert.match(context, /When the head repository cannot be determined[^.]*stop and ask the user to name the head `<owner>\/<repo>` or the remote; do not fall back to a bare `--head <branch>`/);
   assert.match(context, /\*\*safe owner name\*\*, using only `\[A-Za-z0-9-\]` and not starting with `-`/);
@@ -78,7 +81,7 @@ test("PR create opens a fork PR with the head owner and reuses only its own head
   assert.match(context, /\*\*cross-repository\*\* when the head repository differs from the base repository, compared case-insensitively/);
   assert.match(context, /Stop and report when the owners match but the repository names differ/, "same-owner fork stops");
   assert.match(context, /`gh api --hostname <base host> users\/<owner> --jq \.type`[^.]*stop and report when it is `Organization`/, "org-owned head stops; lookup on the base host");
-  assert.match(context, /When invoked directly and `branch\.<branch>\.pushRemote` or `remote\.pushDefault` is set and names a different remote than `branch\.<branch>\.remote`, stop and ask the user to name the head `<owner>\/<repo>` or the remote/, "divergent push remote stops");
+  assert.match(context, /the effective push remote is `branch\.<branch>\.pushRemote`, or `remote\.pushDefault` when that is unset; when it is set and names a different remote than `branch\.<branch>\.remote`, stop and ask the user to name the head `<owner>\/<repo>` or the remote/, "divergent effective push remote stops");
   assert.match(context, /`git remote set-url`[^.]*renamed or transferred repository/, "stop suggests updating a stale remote URL");
 
   assert.match(reuse, /`gh pr view --json number,url,state,headRefName,baseRefName,headRepository,headRepositoryOwner`/);
