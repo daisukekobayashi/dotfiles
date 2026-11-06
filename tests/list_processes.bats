@@ -193,6 +193,59 @@ check_mixed_caret_lsof() {
   [ "$(row_for "${sibling_pid}" | cut -f6)" = "cwd ambiguous" ]
 }
 
+# lsof prints a literal "^" before an escaped backslash as "^\\", which also
+# reads as caret notation "^\" followed by "\". Such a cwd is listed as
+# ambiguous both for itself and for its parent, and never as the target.
+check_caret_before_backslash_lsof() {
+  local lister name dir dir_pid row
+  lister="$(lsof_script)"
+  for name in 'w^\b' 'w^\z' 'w^\nq'; do
+    dir="${target}/${name}"
+    mkdir -p "${dir}"
+    start_in "${dir}"
+    dir_pid="${started_pid}"
+    sleep 0.3
+
+    run -0 "${lister}" "${target}"
+    assert_no_forged_row ""
+    [[ "${output}" != *$'\tcwd under target\t'* ]]
+    [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd ambiguous" ] || {
+      echo "not listed under the parent: ${name}: ${output}"
+      return 1
+    }
+
+    run -0 "${lister}" "${dir}"
+    row="$(row_for "${dir_pid}")"
+    [ "$(cut -f6 <<<"${row}")" = "cwd ambiguous" ] || {
+      echo "not listed under itself: ${name}: ${output}"
+      return 1
+    }
+    [[ "$(cut -f5 <<<"${row}")" != "${dir}" ]]
+    [[ "$(cut -f5 <<<"${row}")" == *\\* ]]
+  done
+  [ "$(row_for "${dir_pid}" | cut -f5)" = "${target}/w\\x1c\\nq" ]
+}
+
+# "x^\\z" can only be a literal "x^\z": lsof escapes every backslash, so
+# "^\" followed by a lone "\z" is no reading. A target "x<0x1c>\z", which lsof
+# prints as "x^\\\z", lists its own process but not one in "x^\z".
+check_lone_backslash_lsof() {
+  local lister control literal control_pid literal_pid
+  lister="$(lsof_script)"
+  control="${target}/x"$'\x1c''\z'
+  literal="${target}/x^\z"
+  mkdir -p "${control}" "${literal}"
+  start_in "${control}"
+  control_pid="${started_pid}"
+  start_in "${literal}"
+  literal_pid="${started_pid}"
+  sleep 0.3
+
+  run -0 "${lister}" "${control}"
+  [ "$(row_for "${control_pid}" | cut -f6)" = "cwd ambiguous" ]
+  [ -z "$(row_for "${literal_pid}")" ]
+}
+
 @test "list-processes exits 0 when no process matches" {
   run -0 "${script}" "${target}"
   [ -z "${output}" ]
@@ -276,4 +329,14 @@ check_mixed_caret_lsof() {
 @test "list-processes lsof path never resolves mixed carets to the target" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
   check_mixed_caret_lsof
+}
+
+@test "list-processes lsof path lists a ^ before an escaped backslash as ambiguous" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  check_caret_before_backslash_lsof
+}
+
+@test "list-processes lsof path never reads a lone backslash after caret notation" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  check_lone_backslash_lsof
 }
