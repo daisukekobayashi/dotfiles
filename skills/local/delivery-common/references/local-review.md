@@ -87,19 +87,22 @@ evidence, applying these defaults:
     report.
   - Marked `downgraded`, a finding triaged `minor` whose reviewer label is
     `unknown` or at the blocking level: High from `change-review` or
-    `change-adversarial-review`, Critical or High from `change-security-review`,
-    P0 or P1 from a hosted reviewer.
+    `change-adversarial-review`, P0 or P1 from a hosted reviewer.
   - Marked `reclassified`, a finding triaged `pre-existing` that its reviewer
     tagged `introduced` or `worsened`.
 
   Give each entry the finding, its source reviewer and round or thread, the
   reviewer's label and tag, the disposition, and the reason. Add the source of a
   later `duplicate` to the existing entry for the same finding. Drop an entry
-  once a later reviewer round verifies the fix or re-triage leaves the finding
-  open for the user. A material `change-security-review` finding closes only
-  under [Risk Tier](risk-tier.md), so it never enters this list. The list
-  informs the user; publication and merge approval cover it, and a finding the
-  user reopens is open again.
+  once a later reviewer round checks the fix against this finding and confirms
+  it, or re-triage leaves the finding open for the user; a hosted review with no
+  findings does not count as that check. The list informs the user; publication
+  and merge approval cover it, and a finding the user reopens is open again.
+
+  A `change-security-review` finding that is `material`, tagged `introduced` or
+  `worsened`, or labelled Critical or High stays under
+  [Risk Tier](risk-tier.md) whatever its triage here: it never enters this list,
+  and publication or merge approval never covers it.
 
 Apply worthwhile fixes and record a concise reason for each explained, duplicate,
 stale, pre-existing, or skipped finding. Leave disputed material findings and
