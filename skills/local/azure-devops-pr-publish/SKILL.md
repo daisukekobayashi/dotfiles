@@ -41,9 +41,20 @@ Still stop and ask before:
    worktree and branch.
 2. Resolve Azure DevOps organization, project, repository, default branch, and
    current branch for each target.
-   - Stop and report the branch unless it is a **safe branch name**, using only
-     `[A-Za-z0-9/._-]`, before running any command with it. This also refuses a
-     leading `+`, which would make the push refspec a force push.
+   - Stop and report the branch unless it is a **safe branch name** before
+     running any command with it: run `node <script> -- '<branch>'`, where
+     `<script>` is
+     [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
+     resolved from this skill's directory, and continue only on exit 0. A name
+     containing `'` or a newline is not safe; do not write it into any
+     command. The check also refuses a leading `+`, which would make the push
+     refspec a force push.
+   - Stop and report the default branch, and a target the user specifies,
+     unless each is a **safe branch name** before running any command with
+     it: run `node <script> -- '<default branch>'`, adding `'<target>'` when
+     the user specifies one, with the script above, and continue only on exit
+     0. A name containing `'` or a newline is not safe; do not write it into
+     any command.
    - Resolve the push remote. Use the remote the user names. Otherwise
      `<remote>` is the one remote whose fetch URL and every push URL
      (`git remote -v`) name the resolved organization, project, and repository

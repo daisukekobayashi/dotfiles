@@ -72,10 +72,14 @@ cycle.
    refs, the policy and merge state, and the Work Item state.
 
 On resume, reconcile the record with actual local and Azure DevOps state. Stop
-and report the recorded branch unless it is a **safe branch name**, using only
-`[A-Za-z0-9/._-]`, before running any command with it. Reuse
-matching worktrees and PRs; a completed PR resumes completion checks rather than
-publication. Recheck the current source ref before reusing review evidence.
+and report the recorded branch unless it is a **safe branch name** before
+running any command with it: run `node <script> -- '<branch>'`, where
+`<script>` is
+[`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
+resolved from this skill's directory, and continue only on exit 0. A name
+containing `'` or a newline is not safe; do not write it into any command.
+Reuse matching worktrees and PRs; a completed PR resumes completion checks
+rather than publication. Recheck the current source ref before reusing review evidence.
 Resume the earliest incomplete phase. A recorded shared understanding result
 carries forward. A progress record is evidence, not authorization.
 

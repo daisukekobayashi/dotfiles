@@ -226,8 +226,9 @@ delivery skill is drift. A policy change that applies to both providers edits
 in the provider skill. Both provider skills deliberately keep these short
 restatements as local guards that tests pin:
 
-- the resume paragraph, including the safe branch name check before any command
-  uses the recorded branch
+- the resume paragraph, including the one-line run of the shared safe branch
+  name check (see [Shared Scripts](#shared-scripts)) before any command uses
+  the recorded branch
 - the shared understanding status gate (`confirmed`, `corrected`, or `skipped`)
   in each provider's coordination steps
 
@@ -245,6 +246,37 @@ follow-up issue. Intentional provider differences are not drift. They are:
 Both provider delivery skills link the same `delivery-common` files;
 `setup/test/skills-wiring-delivery.test.mjs` fails when one provider adds or
 drops such a link.
+
+### Shared Scripts
+
+Checks that several workflow skills repeat live once as scripts in
+`skills/local/delivery-common/scripts/`, and each calling step states the rule
+in one line that runs the script. This location is in `base` and also serves
+skills outside delivery, such as the PR, cleanup, and Beads skills, so every
+profile whose skills call a script needs `base`: use `base,github`,
+`base,azure-devops`, or `base,beads`.
+
+- Scripts are Node `.mjs` files, so they run on macOS, Linux, and Windows,
+  where setup already requires `node`.
+- A calling skill links the script relative to its own directory
+  (`../delivery-common/scripts/<name>.mjs`), which resolves in linked and
+  copied installs because skills are installed side by side.
+- A missing script, a missing `node`, or any unexpected exit stops the calling
+  step; it never falls back to an unchecked path.
+
+`check-branch-name.mjs` defines a **safe branch name**: non-empty, only
+`[A-Za-z0-9/._-]`, and not starting with `-`. A caller runs
+`node <script> -- '<name>' ...` with each name single-quoted, and never writes a
+name containing `'` or a newline into a command; such a name is unsafe. Exit 0
+means every name is safe, 1 means at least one is unsafe (each reported on
+stderr), and 2 is a usage error. The start, delivery, PR, Codex review cycle,
+and cleanup skills of both providers and the Beads worktree and merge cleanup
+skills check their branch; the PR create and publish skills also check their
+base or target branch. `azure-devops-work-item-start` skips comparing an open PR
+only on exit 1 and stops on any other failure. Worktree paths, bead ids, the
+head owner (which `github-pr-create` checks with its own rule), and base
+branches outside the PR create and publish skills are not checked by it.
+`tests/check_branch_name.bats` covers the script.
 
 ## Profile Format
 

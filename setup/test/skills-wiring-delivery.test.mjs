@@ -10,6 +10,13 @@ import {
 } from "./skills-helpers.mjs";
 
 const flat = (text) => text?.replace(/\s+/g, " ");
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
+const quoteRule = "A name containing `'` or a newline is not safe; do not write it into any command.";
+// The one-line run of the shared safe branch name check, as each calling step states it.
+const safeBranchRun = (subject, args) => new RegExp(escapeRegExp(
+  `Stop and report ${subject} unless it is a **safe branch name** before running any command with it: run \`node <script> -- ${args}\`, ${scriptClause}, and continue only on exit 0. ${quoteRule}`,
+));
 
 test("design preflight delegates to the installed grilling primitive", async () => {
   const base = await readRepoProfile("base");
@@ -444,7 +451,7 @@ test("delivery resume checks the recorded branch name", async () => {
     const resume = flat(skill.match(/\nOn resume, [\s\S]*?(?=\n\n)/)?.[0]);
 
     assert.ok(resume, `${delivery}: missing resume paragraph`);
-    assert.match(resume, /Stop and report the recorded branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${delivery}: recorded branch checked`);
+    assert.match(resume, safeBranchRun("the recorded branch", "'<branch>'"), `${delivery}: recorded branch checked`);
   }
 });
 

@@ -121,8 +121,11 @@ Still stop and ask before:
    - Reuse Prepare's successful verification if no relevant files changed after
      it; otherwise run the smallest relevant verification for the changed files.
    - Stage only review-follow-up changes.
-   - Stop and report `<branch>` unless it is a **safe branch name**, using only
-     `[A-Za-z0-9/._-]`.
+   - Stop and report `<branch>` unless it is a **safe branch name**: run
+     `node <script> -- '<branch>'`, where `<script>` is
+     [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
+     resolved from this skill's directory, and continue only on exit 0. A name
+     containing `'` or a newline is not safe; do not write it into any command.
    - Use a normal commit, then push with
      `git push <remote> <branch>:refs/heads/<branch>`. `<remote>` is the push
      remote captured in step 2, used as is. On resume without it, read

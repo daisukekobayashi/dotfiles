@@ -23,3 +23,8 @@ review runs, publication, and approvals. Where shared text names the calling
 workflow's additions, the calling workflow lists its provider-specific items
 next to its link. Return the completed results, review scope, reviewed
 snapshot, and tier to that caller.
+
+[`scripts/check-branch-name.mjs`](scripts/check-branch-name.mjs) is the shared
+**safe branch name** check. The start, delivery, PR, and cleanup skills of every
+provider, including Beads, run it from their own step; its header gives the
+usage and exit codes.

@@ -6,6 +6,10 @@ import {
   readText,
 } from "./skills-helpers.mjs";
 
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
+const quoteRule = "A name containing `'` or a newline is not safe; do not write it into any command.";
+
 test("Codex review cycle detects completion from the review-state marker", async () => {
   const cycle = await readText(
     path.join(repoRoot, "skills", "local", "github-pr-codex-review-cycle", "SKILL.md"),
@@ -37,7 +41,12 @@ test("Codex review cycle pushes review fixes to the publication remote", async (
   assert.match(push, /`git push <remote> <branch>:refs\/heads\/<branch>`/);
   assert.match(push, /`<remote>` is the push remote captured in step 2/);
   assert.match(push, /`branch\.<branch>\.pushRemote` or `remote\.pushDefault`/);
-  assert.match(push, /Stop and report `<branch>` unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`/, "branch checked before the refspec");
+  assert.match(
+    push,
+    new RegExp(escapeRegExp(`Stop and report \`<branch>\` unless it is a **safe branch name**: run \`node <script> -- '<branch>'\`, ${scriptClause}, and continue only on exit 0. ${quoteRule}`)),
+    "branch checked before the refspec",
+  );
+  assert.ok(push.indexOf("check-branch-name.mjs") < push.indexOf("git push <remote>"), "branch checked before the push");
   assert.match(push, /On resume without it, read `<remote>` with `git config --get-all branch\.<branch>\.remote`[^.]*exactly one value/, "resume reads the upstream remote");
   assert.match(push, /`gh pr view --json headRepository,headRepositoryOwner`/, "resume checks the PR head repository");
   assert.match(push, /`<remote>` is the push remote captured in step 2, used as is\./, "captured remote skips the URL check");

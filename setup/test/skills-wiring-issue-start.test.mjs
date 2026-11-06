@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -7,6 +9,15 @@ import {
 } from "./skills-helpers.mjs";
 
 const flat = (text) => text?.replace(/\s+/g, " ");
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
+const quoteRule = "A name containing `'` or a newline is not safe; do not write it into any command.";
+// The one-line run of the shared safe branch name check, as each calling step states it.
+const safeBranchRun = (subject, args) => new RegExp(escapeRegExp(
+  `Stop and report ${subject} unless it is a **safe branch name** before running any command with it: run \`node <script> -- ${args}\`, ${scriptClause}, and continue only on exit 0. ${quoteRule}`,
+));
+// Drops the check's own command, which single-quotes names on purpose.
+const withoutCheckRuns = (text) => text.replace(/`node <script> -- [^`]*`/g, "");
 const upstreamRead = /`git config --get-all branch\.<branch>\.remote` and `git config --get-all branch\.<branch>\.merge`[^.]*?no output means no upstream[^.]*?more than one value for either key[^.]*?stop and report/;
 
 test("start skills create worktree branches without tracking the base", async () => {
@@ -48,13 +59,13 @@ test("start skills restrict branch names to shell-safe characters", async () => 
     assert.ok(workflow, `${start}: missing Workflow`);
     assert.match(workflow, /Derive `<slug>` from the [^.]*title using only lowercase ASCII letters, digits, and hyphens \(`\[a-z0-9-\]`\); drop or replace every other character\./, `${start}: slug charset`);
     assert.match(workflow, /If no characters remain, write a short English slug from the [^.]* content in the same character set\./, `${start}: empty slug`);
-    assert.match(workflow, /A \*\*safe branch name\*\* uses only `\[A-Za-z0-9\/._-\]`\./, `${start}: safe branch charset`);
-    assert.match(workflow, /Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise stop and report it before running any command with it\./, `${start}: unsafe branch stops`);
+    assert.match(workflow, new RegExp(escapeRegExp(`A **safe branch name** passes \`node <script> -- '<name>'\` with exit 0, ${scriptClause}. ${quoteRule}`)), `${start}: safe branch check`);
+    assert.match(workflow, /Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise, including when the check cannot run, stop and report it before running any command with it\./, `${start}: unsafe branch stops`);
 
     assert.ok(prep, `${start}: missing Worktree Preparation`);
     const reuse = flat(prep.match(/^1\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
     assert.match(reuse, /reused branch[^.]*safe branch name/, `${start}: reused branch checked`);
-    assert.doesNotMatch(skill, /["']<branch>["']/, `${start}: the charset rule replaces quoting <branch>`);
+    assert.doesNotMatch(withoutCheckRuns(skill), /["']<branch>["']/, `${start}: the charset rule replaces quoting <branch>`);
   }
 });
 
@@ -85,7 +96,7 @@ test("publish skills check the branch name and resolve one push remote", async (
     const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
 
     assert.ok(context, `${publish}: missing step 2`);
-    assert.match(context, /Stop and report the branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${publish}: safe branch name`);
+    assert.match(context, safeBranchRun("the branch", "'<branch>'"), `${publish}: safe branch name`);
     assert.match(context, /leading `\+`[^.]*force push/, `${publish}: + refspec refused`);
     assert.match(context, /Use the remote the user names\./, `${publish}: user-named remote`);
     assert.match(context, /Otherwise `<remote>` is the one remote whose fetch URL and every push URL \(`git remote -v`\)/, `${publish}: URL-matched remote`);
@@ -118,8 +129,6 @@ test("github-pr-publish stops in an unresolved fork layout", async () => {
   assert.match(context, /or a parent lookup fails[^.]*a failed lookup is not "no parent"/, "failed lookup fails closed");
 });
 
-const safeBranchCheck = (name) => new RegExp(`Stop and report ${name} unless it is a \\*\\*safe branch name\\*\\*, using only \`\\[A-Za-z0-9\\/._-\\]\`, before running any command with it\\.`);
-
 test("PR create and cleanup skills check the branch name in step 1", async () => {
   for (const name of [
     "github-pr-create",
@@ -132,8 +141,8 @@ test("PR create and cleanup skills check the branch name in step 1", async () =>
     const step1 = flat(skill.match(/^1\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
 
     assert.ok(step1, `${name}: missing step 1`);
-    assert.match(step1, safeBranchCheck("the branch"), `${name}: branch checked in step 1`);
-    assert.doesNotMatch(skill, /["']<(?:feature-)?branch>["']/, `${name}: the charset rule replaces quoting <branch>`);
+    assert.match(step1, safeBranchRun("the branch", "'<branch>'"), `${name}: branch checked in step 1`);
+    assert.doesNotMatch(withoutCheckRuns(skill), /["']<(?:feature-)?branch>["']/, `${name}: the charset rule replaces quoting <branch>`);
   }
 });
 
@@ -142,8 +151,72 @@ test("azure-devops-work-item-start skips comparing an open PR with an unsafe bra
   const step2 = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
 
   assert.ok(step2, "missing step 2");
-  const check = step2.search(/For each PR, check its source and target names as `az repos pr list` returns them before running any command with them\. Unless both are a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, skip that PR's comparison, report the PR and its branch as not compared, and continue\./);
-  assert.ok(check >= 0, "both names checked with the stated charset; an unsafe PR is skipped and reported");
+  const check = step2.search(new RegExp(escapeRegExp(
+    `For each PR, check its source and target names as \`az repos pr list\` returns them before running any command with them: run \`node <script> -- '<target>' '<source>'\`, ${scriptClause}. When either name contains \`'\` or a newline, or the check exits 1, they are not both a **safe branch name**: skip that PR's comparison without writing the names into any command, report the PR and its branch as not compared, and continue. On any other non-zero exit, including when the check cannot run, stop and report it. On exit 0, compare`,
+  )));
+  assert.ok(check >= 0, "both names checked by the script; only exit 1 or an unquotable name skips the PR, and other failures stop");
   assert.ok(check < step2.indexOf("available as local or remote-tracking refs"), "names checked before the ref availability check");
   assert.ok(check < step2.indexOf("git diff --name-only"), "names checked before git diff");
+});
+
+test("PR create and publish skills check base and target names with the same script", async () => {
+  for (const [name, subject, arg] of [
+    ["github-pr-create", "the base branch, the default branch unless the user specifies another base,", "base"],
+    ["azure-devops-pr-create", "the target branch, the default branch unless the user specifies another target,", "target"],
+  ]) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", name, "SKILL.md"));
+    const step1 = flat(skill.match(/^1\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+
+    assert.ok(step1, `${name}: missing step 1`);
+    assert.match(
+      step1,
+      new RegExp(escapeRegExp(
+        `Stop and report ${subject} unless it is a **safe branch name** before running any command with it: run \`node <script> -- '<${arg}>'\` with the script above, and continue only on exit 0. ${quoteRule}`,
+      )),
+      `${name}: ${arg} checked in step 1`,
+    );
+  }
+
+  for (const [name, target] of [["github-pr-publish", "base"], ["azure-devops-pr-publish", "target"]]) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", name, "SKILL.md"));
+    const step2 = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+
+    assert.ok(step2, `${name}: missing step 2`);
+    assert.match(
+      step2,
+      new RegExp(escapeRegExp(
+        `Stop and report the default branch, and a ${target} the user specifies, unless each is a **safe branch name** before running any command with it: run \`node <script> -- '<default branch>'\`, adding \`'<${target}>'\` when the user specifies one, with the script above, and continue only on exit 0. ${quoteRule}`,
+      )),
+      `${name}: default branch and ${target} checked in step 2`,
+    );
+  }
+});
+
+test("skills state the safe branch name rule only through the shared script", async () => {
+  const skillsDir = path.join(repoRoot, "skills", "local");
+  const callers = [];
+  for (const name of await readdir(skillsDir)) {
+    const file = path.join(skillsDir, name, "SKILL.md");
+    if (!existsSync(file)) continue;
+    const skill = await readText(file);
+    assert.doesNotMatch(skill, /\[A-Za-z0-9\/\._-\]/, `${name}: restates the safe branch name charset`);
+    if (skill.includes("../delivery-common/scripts/check-branch-name.mjs")) callers.push(name);
+  }
+
+  assert.deepEqual(callers.sort(), [
+    "azure-devops-pr-create",
+    "azure-devops-pr-publish",
+    "azure-devops-work-item-delivery",
+    "azure-devops-work-item-start",
+    "azure-devops-worktree-cleanup",
+    "beads-issue-worktree",
+    "beads-merge-cleanup",
+    "github-issue-delivery",
+    "github-issue-start",
+    "github-pr-codex-review-cycle",
+    "github-pr-create",
+    "github-pr-publish",
+    "github-worktree-cleanup",
+  ]);
+  assert.equal(existsSync(path.join(skillsDir, "delivery-common", "scripts", "check-branch-name.mjs")), true);
 });
