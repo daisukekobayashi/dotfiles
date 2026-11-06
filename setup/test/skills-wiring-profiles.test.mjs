@@ -178,3 +178,38 @@ test("delivery references resolve in copied profiles without the other provider"
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("the shared safe branch name check resolves and runs in copied base and provider profiles", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "branch-check-profile-test."));
+  const link = "../delivery-common/scripts/check-branch-name.mjs";
+  try {
+    const base = await readRepoProfile("base");
+    for (const provider of ["github", "azure-devops", "beads"]) {
+      const profile = await readRepoProfile(provider);
+      const skillsDir = path.join(root, provider, "skills");
+      await mkdir(skillsDir, { recursive: true });
+      for (const name of new Set([...base.local, ...profile.local])) {
+        await cp(path.join(repoRoot, "skills", "local", name), path.join(skillsDir, name), {
+          recursive: true,
+        });
+      }
+
+      const callers = [];
+      for (const name of profile.local) {
+        const content = await readText(path.join(skillsDir, name, "SKILL.md"));
+        if (!content.includes(`](${link})`)) continue;
+        callers.push(name);
+        const script = path.resolve(skillsDir, name, link);
+        assert.equal(existsSync(script), true, `${provider}/${name}: missing ${link}`);
+        const safe = spawnSync(process.execPath, [script, "--", "main", "feat/1-x"], { encoding: "utf8" });
+        assert.equal(safe.status, 0, `${provider}/${name}: ${safe.stderr}`);
+        const unsafe = spawnSync(process.execPath, [script, "--", "main", "-x"], { encoding: "utf8" });
+        assert.equal(unsafe.status, 3, `${provider}/${name}: leading - accepted`);
+        assert.equal(unsafe.stderr, 'unsafe branch name: "-x"\n');
+      }
+      assert.notEqual(callers.length, 0, `${provider}: no skill runs the shared check`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

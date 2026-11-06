@@ -36,7 +36,7 @@ and existing approvals to the worker; a brief alone grants none.
    - use a conventional-commit-style branch prefix such as `fix`, `feat`, or `chore`
    - use `fix` for bug fixes, `feat` for new user-facing behavior, and `chore` for maintenance or internal cleanup
    - Derive `<slug>` from the issue title using only lowercase ASCII letters, digits, and hyphens (`[a-z0-9-]`); drop or replace every other character. If no characters remain, write a short English slug from the issue content in the same character set.
-   - A **safe branch name** uses only `[A-Za-z0-9/._-]`. Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise stop and report it before running any command with it.
+   - A **safe branch name** passes `node <script> -- '<name>'` with exit 0, where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory. Write a name into this or any command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running the check. Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise, including when the check cannot run, stop and report it before running any command with it.
 5. If exactly one issue was provided:
    - Prepare the issue workspace using **Worktree Preparation** below.
    - Continue implementation in that worktree, or in its worker when a delivery brief dispatches one.

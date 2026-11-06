@@ -22,8 +22,20 @@ authorize PR creation or updates.
 1. Resolve repository context.
    - Confirm `git status --short --branch`.
    - Resolve the current branch and default branch.
-   - Stop and report the branch unless it is a **safe branch name**, using only
-     `[A-Za-z0-9/._-]`, before running any command with it.
+   - Stop and report the branch unless it is a **safe branch name** before
+     running any command with it: run `node <script> -- '<branch>'`, where
+     `<script>` is
+     [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
+     resolved from this skill's directory, and continue only on exit 0. Write a
+     name into this or any command only when it uses solely ASCII letters,
+     digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running
+     the check.
+   - Stop and report the target branch, the default branch unless the user
+     specifies another target, unless it is a **safe branch name** before
+     running any command with it: run `node <script> -- '<target>'` with the
+     script above, and continue only on exit 0. Write a name into this or any
+     command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and
+     `-`; any other name is not safe, without running the check.
    - Resolve Azure DevOps organization, project, and repository.
    - Stop if the current branch is the default branch.
 2. Find an optional PR template:
