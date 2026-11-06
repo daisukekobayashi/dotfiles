@@ -116,6 +116,23 @@ check_literal_notation() {
   [ "$(row_for "${literal_pid}" | cut -f5)" = "${target}/a^@b\\\\x41" ]
 }
 
+# lsof prints a literal "^A" like a control byte; the existing directory decides.
+check_literal_caret() {
+  local lister="$1" dir dir_pid
+  dir="${target}/w^A"
+  mkdir -p "${dir}"
+  start_in "${dir}"
+  dir_pid="${started_pid}"
+  sleep 0.3
+
+  run "${lister}" "${target}"
+  [ "$(row_for "${dir_pid}" | cut -f5)" = "${dir}" ]
+  [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd under target" ]
+
+  run "${lister}" --stale
+  [ -z "$(row_for "${dir_pid}")" ]
+}
+
 @test "list-processes escapes a crafted cwd instead of forging a row" {
   check_crafted_cwd "${script}"
 }
@@ -155,4 +172,14 @@ check_literal_notation() {
   sleep 0.3
   run lsof -w -a -p "${started_pid}" -d cwd -Fn
   [[ "${output}" == *"/b\\\\xc3"* ]]
+}
+
+@test "list-processes matches a literal ^A cwd and does not call it stale" {
+  check_literal_caret "${script}"
+}
+
+@test "list-processes lsof path matches a literal ^A cwd and does not call it stale" {
+  [[ -d /proc/self ]] || skip "the default run already uses lsof"
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  check_literal_caret "$(lsof_script)"
 }

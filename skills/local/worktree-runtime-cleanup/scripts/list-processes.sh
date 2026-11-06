@@ -44,10 +44,11 @@ case "${1:-}" in
     ;;
 esac
 
-# pid<TAB>cwd for every process of the current user, each record ending in NUL
-# so a cwd may contain any byte but NUL.
+# pid<TAB>cwd<NUL>alt<NUL> for every process of the current user, so a cwd may
+# contain any byte but NUL. alt is the other reading of an ambiguous lsof name,
+# or empty.
 list_cwds() {
-  local dir pid cwd field decoded
+  local dir pid cwd field decoded literal
   if [[ -d /proc/self ]]; then
     for dir in /proc/[0-9]*; do
       [[ -O "${dir}" ]] || continue
@@ -55,7 +56,7 @@ list_cwds() {
       # The sentinel keeps trailing newlines of the name through $(...).
       cwd="$(readlink "${dir}/cwd" 2>/dev/null && printf x)" || continue
       cwd="${cwd%$'\n'x}"
-      printf '%s\t%s\0' "${pid}" "${cwd}"
+      printf '%s\t%s\0\0' "${pid}" "${cwd}"
     done
   elif command -v lsof >/dev/null 2>&1; then
     lsof -w -a -u "$(id -u)" -d cwd -F0pn 2>/dev/null |
@@ -65,7 +66,12 @@ list_cwds() {
           p*) pid="${field#p}" ;;
           n*)
             lsof_name "${field#n}"
-            printf '%s\t%s\0' "${pid}" "${decoded}"
+            # Prefer the literal reading of "^X" only when it alone exists.
+            if [[ -n "${literal}" && -d "${literal}" && ! -d "${decoded}" ]]; then
+              printf '%s\t%s\0%s\0' "${pid}" "${literal}" "${decoded}"
+            else
+              printf '%s\t%s\0%s\0' "${pid}" "${decoded}" "${literal}"
+            fi
             ;;
         esac
       done
@@ -77,12 +83,14 @@ list_cwds() {
 
 # Sets "decoded" to lsof's escaped name with its escapes of non-printable bytes
 # (\n, \t, \r, \b, \f, \\, \xHH, ^A to ^_) turned back into those bytes. lsof
-# leaves "^" unescaped, so "^X" is ambiguous; it is read as a control byte that
-# the output escapes again. Any other sequence, such as "^@" or "\x41", stays
-# as it is, so no character is dropped and NUL is never produced.
+# leaves "^" unescaped, so "^X" is ambiguous: "decoded" reads it as a control
+# byte, and "literal" keeps it as written; "literal" is empty when the name has
+# no "^X". Any other sequence, such as "^@" or "\x41", stays as it is, so no
+# character is dropped and NUL is never produced.
 lsof_name() {
-  local LC_ALL=C name="$1" c next hex byte
+  local LC_ALL=C name="$1" c next hex byte ambiguous=""
   decoded=""
+  literal=""
   if [[ "${name}" != *[\\^]* ]]; then
     decoded="${name}"
     return
@@ -109,16 +117,24 @@ lsof_name() {
       ^[A-Z\[\\\]^_])
         printf -v byte '\\x%02x' "$(($(printf '%d' "'${next}") - 64))"
         printf -v byte '%b' "${byte}"
+        literal+="${c}${next}"
+        decoded+="${byte}"
+        name="${name:2}"
+        ambiguous=1
+        continue
         ;;
     esac
     if [[ -n "${byte}" ]]; then
+      literal+="${byte}"
       decoded+="${byte}"
       name="${name:2}"
     else
+      literal+="${c}"
       decoded+="${c}"
       name="${name:1}"
     fi
   done
+  [[ -n "${ambiguous}" ]] || literal=""
 }
 
 # Escapes a cwd for the one-line output; see the header.
@@ -189,20 +205,21 @@ done
 while IFS= read -r -d '' record; do
   pid="${record%%$'\t'*}"
   cwd="${record#*$'\t'}"
+  IFS= read -r -d '' alt || break
   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
   # A process that exits mid-listing is skipped rather than ending the list.
   arg_cwd="$(cwd_argument "${pid}")" || continue
   reason=""
   case "${mode}" in
     path)
-      if under_target "${cwd}"; then
+      if under_target "${cwd}" || { [[ -n "${alt}" ]] && under_target "${alt}"; }; then
         reason="cwd under target"
       elif [[ -n "${arg_cwd}" ]] && under_target "${arg_cwd}"; then
         reason="--cwd under target"
       fi
       ;;
     stale)
-      if is_missing "${cwd}"; then
+      if is_missing "${cwd}" && { [[ -z "${alt}" ]] || is_missing "${alt}"; }; then
         reason="cwd missing"
       elif [[ -n "${arg_cwd}" ]] && is_missing "${arg_cwd}"; then
         reason="--cwd missing"
