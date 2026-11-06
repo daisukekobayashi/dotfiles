@@ -485,13 +485,26 @@ function windowsLinkType(linkPath: string): "dir" | "file" {
   }
 }
 
-function copyDirectoryContents(sourceDir: string, targetDir: string): void {
+// Copies every entry an install produced into the user staging view, failing
+// when an earlier install already produced an entry with the same name. The
+// check uses the target path, so it also catches a dangling link and a name
+// that differs only in letter case on a case-insensitive file system. owners
+// maps each copied entry name to the source that produced it.
+function copyDirectoryContents(sourceDir: string, targetDir: string, source: string, owners: Map<string, string>): void {
   if (!fs.existsSync(sourceDir)) {
     return;
   }
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(sourceDir)) {
-    copyEntry(path.join(sourceDir, entry), path.join(targetDir, entry), true);
+    const targetEntry = path.join(targetDir, entry);
+    if (fs.lstatSync(targetEntry, { throwIfNoEntry: false })) {
+      const earlier = owners.get(entry)
+        ?? Array.from(owners).find(([name]) => name.toLowerCase() === entry.toLowerCase())?.[1]
+        ?? "an earlier install";
+      fail(`skill entry collision in user staging: ${entry} (${earlier}, ${source})`);
+    }
+    copyEntry(path.join(sourceDir, entry), targetEntry, false);
+    owners.set(entry, source);
   }
 }
 
@@ -905,6 +918,7 @@ function runUserExternalInstalls(stagingBase: string, restoreSkillsDir: string, 
   const npx = resolveNpx();
   // mkdtemp creates the directory with mode 0700 on POSIX.
   const workDir = fs.mkdtempSync(path.join(stagingBase, USER_STAGING_PREFIX));
+  const owners = new Map<string, string>();
   try {
     plan.external.forEach((entry, index) => {
       const installDir = path.join(workDir, String(index));
@@ -920,7 +934,7 @@ function runUserExternalInstalls(stagingBase: string, restoreSkillsDir: string, 
       });
       const installedSkillsDir = path.join(installDir, ".agents", "skills");
       requireInstalledSkills(installedSkillsDir, entry);
-      copyDirectoryContents(installedSkillsDir, restoreSkillsDir);
+      copyDirectoryContents(installedSkillsDir, restoreSkillsDir, entry.source, owners);
     });
   } finally {
     removeStagingDir(workDir);

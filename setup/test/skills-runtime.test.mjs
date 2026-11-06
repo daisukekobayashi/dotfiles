@@ -1204,3 +1204,53 @@ require(runtime);
     await fixture.cleanup();
   }
 });
+
+// Each source's install also emits an undeclared "shared-helper" entry, in the
+// form given for that source, so two installs collide in the user staging view.
+const helperEntryForms = {
+  "dir-with-links": 'mkdir -p "$1" && printf helper > "$1/SKILL.md" && ln -s SKILL.md "$1/link"',
+  dir: 'mkdir -p "$1" && printf "%s" "${source_name}" > "$1/${source_name%%/*}.txt"',
+  file: 'printf "%s" "${source_name}" > "$1"',
+  link: 'ln -s missing-target "$1"',
+};
+
+const collisionCases = [
+  ["a directory with links onto a directory with links", "dir-with-links", "dir-with-links"],
+  ["a link onto a non-link", "dir", "link"],
+  ["a directory onto a directory", "dir", "dir"],
+  ["a file onto a file", "file", "file"],
+  ["a non-link onto a link", "link", "dir"],
+];
+
+for (const [label, first, second] of collisionCases) {
+  test(`user scope fails on a same-name entry collision of ${label} and keeps the user view`, posixOnly, async () => {
+    const fixture = await createFixture({
+      npxSuffix: `emit_helper() {
+  case "\${source_name}" in
+    anthropics/skills) ${helperEntryForms[first]} ;;
+    vercel-labs/skills) ${helperEntryForms[second]} ;;
+  esac
+}
+emit_helper .agents/skills/shared-helper
+`,
+    });
+    try {
+      const userRoot = path.join(fixture.dotfiles, ".agents", "user");
+      await mkdir(path.join(userRoot, "skills", "old-user"), { recursive: true });
+      await writeFile(path.join(userRoot, "skills", "old-user", "SKILL.md"), "old-user\n");
+      await writeFile(path.join(userRoot, "skills-profile.json"), "old-profile\n");
+
+      const result = runSkills(["--scope", "user", "--profile", "office", "--agent", "codex"], fixture);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /skill entry collision in user staging: shared-helper \(anthropics\/skills, vercel-labs\/skills\)/);
+      assert.doesNotMatch(result.stderr, /EEXIST|ERR_FS_CP_/);
+      assert.deepEqual((await readdir(userRoot)).sort(), ["skills", "skills-profile.json"]);
+      assert.deepEqual(await readdir(path.join(userRoot, "skills")), ["old-user"]);
+      assert.equal(await readText(path.join(userRoot, "skills", "old-user", "SKILL.md")), "old-user\n");
+      assert.equal(await readText(path.join(userRoot, "skills-profile.json")), "old-profile\n");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}

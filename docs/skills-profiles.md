@@ -571,6 +571,8 @@ Setup runs each `npx skills add` in a new private directory, not in the project 
 
 After each external install, setup checks that every requested skill has a `SKILL.md`. Missing skills prevent the user view from being replaced and trigger backup restoration in project scope. `profile validate` checks configuration structure, not upstream availability or runtime behavior.
 
+In user scope, setup copies every entry each install produces, including entries that were not requested, into one staged view. When two installs produce an entry with the same name, setup fails with `skill entry collision in user staging: <entry> (<earlier source>, <later source>)` and does not replace the user view.
+
 ## Local Skills
 
 Local skills live under `skills/local/<name>` and are dotfiles-owned.

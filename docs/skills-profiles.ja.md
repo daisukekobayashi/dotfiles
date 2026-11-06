@@ -557,6 +557,8 @@ npx skills add <owner/repo> \
 
 外部インストール後は、指定した各スキルの `SKILL.md` が存在することを確認します。欠落時は user view を入れ替えず、project scope では既存のバックアップを復元します。`profile validate` は設定の構造を確認するもので、配布元の存在確認や実行評価は行いません。
 
+user scope では、各インストールが生成したエントリを、指定していないものも含めてすべて1つのステージング view にコピーします。2つのインストールが同じ名前のエントリを生成した場合は `skill entry collision in user staging: <entry> (<earlier source>, <later source>)` で失敗し、user view を入れ替えません。
+
 ## Local Skills
 
 Local skill は `skills/local/<name>` に置き、dotfiles が正本です。
