@@ -81,6 +81,10 @@ test("PR create opens a fork PR with the head owner and reuses only its own head
   assert.match(context, /\*\*cross-repository\*\* when the head repository differs from the base repository, compared case-insensitively/);
   assert.match(context, /Stop and report when the owners match but the repository names differ/, "same-owner fork stops");
   assert.match(context, /`gh api --hostname <base host> users\/<owner> --jq \.type`[^.]*stop and report when it is `Organization`/, "org-owned head stops; lookup on the base host");
+  assert.match(context, /continue only on exactly one value\. Confirm that `<remote>` holds this branch at local `HEAD`:/, "upstream check follows the remote read, before head derivation");
+  assert.match(context, /`git config --get-all branch\.<branch>\.merge` prints exactly one value, `refs\/heads\/<branch>`/, "merge ref must be the same branch");
+  assert.match(context, /`git ls-remote <remote> refs\/heads\/<branch>` prints exactly one line whose ref is exactly `refs\/heads\/<branch>` and whose SHA equals `git rev-parse HEAD`/, "head remote must hold local HEAD");
+  assert.match(context, /Otherwise, including when `git ls-remote` fails, stop and ask the user to name the head `<owner>\/<repo>` or the remote/, "stale or unverifiable head stops");
   assert.match(context, /the effective push remote is `branch\.<branch>\.pushRemote`, or `remote\.pushDefault` when that is unset; when it is set and names a different remote than `branch\.<branch>\.remote`, stop and ask the user to name the head `<owner>\/<repo>` or the remote/, "divergent effective push remote stops");
   assert.match(context, /`git remote set-url`[^.]*renamed or transferred repository/, "stop suggests updating a stale remote URL");
 
