@@ -72,10 +72,10 @@ The base root `AGENTS.md` may have a `## Delivery sensitive paths` section of
 `add <pattern>` and `exclude <pattern> from <default>` entries, where
 `<default>` is a label above, the text before any colon, matched
 case-insensitively, and patterns are gitignore-style globs from the repository
-root. An exclusion narrows only that default; it never removes a path another
-source adds, or any `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `SECURITY.md`,
-`REVIEW.md`, or `CODEOWNERS` file. Ignore an invalid entry, apply the rest, and
-report the ignored one.
+root. An exclusion narrows only that default; it never removes a path that an
+`add` entry or another source adds, or any `AGENTS.md`, `CLAUDE.md`,
+`GEMINI.md`, `SECURITY.md`, `REVIEW.md`, or `CODEOWNERS` file. Ignore an
+invalid entry, apply the rest, and report the ignored one.
 
 A change that adds, edits, or deletes `SECURITY.md`, `REVIEW.md`, or `CODEOWNERS`
 touches a sensitive path; changed policy applies to later deliveries, never this one.

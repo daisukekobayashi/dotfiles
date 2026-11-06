@@ -225,12 +225,14 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(riskTier, /`add <pattern>` and `exclude <pattern> from <default>` entries/);
   assert.match(riskTier, /the text before any colon, matched\s+case-insensitively/);
   assert.match(riskTier, /gitignore-style globs from the repository\s+root/);
-  assert.match(riskTier, /An exclusion narrows only that default; it never removes a path another\s+source adds, or any `AGENTS\.md`, `CLAUDE\.md`, `GEMINI\.md`, `SECURITY\.md`,\s+`REVIEW\.md`, or `CODEOWNERS` file/);
-  assert.match(riskTier, /Ignore an invalid entry, apply the rest, and\s+report the ignored one/);
+  assert.match(riskTier, /An exclusion narrows only that default; it never removes a path that an\s+`add` entry or another source adds, or any `AGENTS\.md`, `CLAUDE\.md`,\s+`GEMINI\.md`, `SECURITY\.md`, `REVIEW\.md`, or `CODEOWNERS` file/);
+  assert.match(riskTier, /Ignore an\s+invalid entry, apply the rest, and report the ignored one/);
   assert.match(riskTier, /`AGENTS\.md` entries ignored as invalid/);
   const agents = await readText(path.join(repoRoot, "AGENTS.md"));
   assert.match(agents, /^## Delivery sensitive paths$/m);
   assert.match(agents, /^- exclude `skills\/\*\*\/\*\.md` from agent instruction files$/m);
+  assert.match(agents, /^- add `skills\/local\/delivery-common\/\*\*`$/m);
+  assert.match(agents, /^- add `skills\/local\/change-\*review\/\*\*`$/m);
   assert.match(riskTier, /^## Sensitive paths$/m);
   assert.match(riskTier, /deletes `SECURITY\.md`, `REVIEW\.md`, or `CODEOWNERS`\s+touches a sensitive path/);
   assert.match(riskTier, /Always read policy at the delivery's recorded base/);

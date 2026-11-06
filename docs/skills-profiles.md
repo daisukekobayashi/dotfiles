@@ -160,8 +160,9 @@ skips a sensitive path or lowers material or security criteria.
 Delivery workflows run it as a third local reviewer when the change's risk tier
 is High or the diff touches a sensitive path. A repository can add or exclude
 default sensitive paths in a `## Delivery sensitive paths` section of its root
-`AGENTS.md`; this repository excludes Markdown under `skills/`. The shared
-`delivery-common` risk tier (Low, Medium, High) is set from the change rather than its author, and
+`AGENTS.md`; this repository excludes Markdown under `skills/` except in
+`delivery-common` and the `change-*review` skills. The shared `delivery-common`
+risk tier (Low, Medium, High) is set from the change rather than its author, and
 selects the recommended human review (AI only, one human, or multiple humans)
 shown before publication and at merge confirmation; it is not written into PR
 bodies, and merge confirmation is always required. Matt Pocock's `code-review` remains available
