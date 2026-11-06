@@ -664,6 +664,22 @@ test("new shared skills appear on refresh and definitions update across isolated
   }
 });
 
+// Claude reserves anthropic-skills and the user view reserves synced, in any
+// letter case, so a dotfiles skill with either name is never shared.
+for (const name of ["anthropic-skills", "Anthropic-Skills", "SYNCED"]) {
+  test(`a shared skill named ${name} is not linked and cannot be required`, t => {
+    const f = fixture(t);
+    f.write(path.join(f.dotfiles, ".agents/user/skills", name, "SKILL.md"), "reserved\n");
+    const required = f.initialize(["--skill", name]);
+    assert.equal(required.status, 2);
+    assert.match(required.stderr, new RegExp(`Invalid or reserved skill name: ${name}`));
+    assert.equal(fs.existsSync(f.envs), false);
+    success(f.initialize());
+    const skills = path.join(f.destination, "skills");
+    assert.deepEqual(fs.readdirSync(skills).sort(), ["one", "two"]);
+  });
+}
+
 test("an existing local skill with a shared name is not replaced", t => {
   const f = fixture(t);
   success(f.initialize());

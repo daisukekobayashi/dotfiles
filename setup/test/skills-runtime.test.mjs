@@ -1603,3 +1603,74 @@ test("project scope keeps entries a later install leaves untouched", posixOnly, 
     await fixture.cleanup();
   }
 });
+
+// A later install deletes an entry an earlier install produced and copies
+// nothing back, so the entry has no identity after the install.
+test("project scope fails when a later install deletes an earlier entry and restores the project", posixOnly, async () => {
+  const fixture = await createFixture({
+    npxSuffix: `if [ "\${source_name}" = vercel-labs/skills ]; then
+  rm -rf .agents/skills/docx .claude/skills/docx
+fi
+`,
+  });
+  try {
+    const previous = path.join(fixture.project, ".agents", "skills", "previous");
+    await mkdir(previous, { recursive: true });
+    await writeFile(path.join(previous, "SKILL.md"), "previous skill\n");
+
+    const result = runSkills(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skill entry collision in project install: docx \(anthropics\/skills, vercel-labs\/skills\)/);
+    assert.deepEqual(await readdir(path.join(fixture.project, ".agents", "skills")), ["previous"]);
+    assert.equal(existsSync(path.join(fixture.project, ".claude", "skills")), false);
+    assert.equal(existsSync(path.join(fixture.project, "skills-lock.json")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+// Dot entries are not skills, so a later install may replace or delete one an
+// earlier install produced.
+const dotEntryChanges = {
+  replaces: { command: 'rm -rf "${dir}/.cli-state" && printf later > "${dir}/.cli-state"', entries: [".cli-state"] },
+  deletes: { command: 'rm -rf "${dir}/.cli-state"', entries: [] },
+};
+
+for (const [label, { command, entries }] of Object.entries(dotEntryChanges)) {
+  test(`project scope succeeds when a later install ${label} an earlier dot entry`, posixOnly, async () => {
+    const fixture = await createFixture({
+      npxSuffix: `for dir in .agents/skills .claude/skills; do
+  if [ "\${source_name}" = anthropics/skills ]; then
+    printf earlier > "\${dir}/.cli-state"
+  else
+    ${command}
+  fi
+done
+`,
+    });
+    try {
+      const result = runSkills(
+        ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+        fixture,
+        { cwd: fixture.project },
+      );
+
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.deepEqual(
+        (await readdir(path.join(fixture.project, ".agents", "skills"))).sort(),
+        [...entries, "docx", "find-skills", "local-one", "pdf"],
+      );
+      assert.deepEqual(
+        (await readdir(path.join(fixture.project, ".claude", "skills"))).sort(),
+        [...entries, "docx", "find-skills", "local-one", "pdf"],
+      );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
