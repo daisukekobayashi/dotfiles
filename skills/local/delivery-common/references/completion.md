@@ -26,7 +26,8 @@ tier, and local review evidence.
 Before publication, show the user the tier, its main reasons, the recommended
 human review, and any security deferred candidates or user-accepted security
 findings under [Risk Tier](risk-tier.md). Beside them, show the self-closure
-list under [Local Review](local-review.md), or `none` when it is empty.
+list under [Local Review](local-review.md), or `none` when it is empty, and any
+pre-existing Critical or High security findings.
 
 ## Merge confirmation
 
@@ -39,9 +40,10 @@ material change; reassess before proceeding.
 Present the PR URL, task, reviewed and published head, base, checks, review
 outcome including any security review, the risk tier for that head with its
 recommended human review, any security deferred candidates or user-accepted
-security findings, the self-closure list or `none`, and the proposed
-repository-supported merge method, plus the calling workflow's additions.
-Request confirmation to merge that specific PR.
+security findings, the self-closure list or `none`, any pre-existing Critical
+or High security findings, and the proposed repository-supported merge method,
+plus the calling workflow's additions. Request confirmation to merge that
+specific PR.
 
 After approval, recheck the target and merge within that approval, keeping
 checks and policies in force and the source branch in place. If the user merges

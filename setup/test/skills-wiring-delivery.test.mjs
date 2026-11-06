@@ -389,17 +389,18 @@ test("delivery shows material self-closures before publication and at merge", as
     /Add the source of a later `duplicate` to the existing entry for the same finding\./,
     /Drop an entry once a later reviewer round checks the fix against this finding and confirms it, or re-triage leaves the finding open for the user; a hosted review with no findings does not count as that check\./,
     /publication and merge approval cover it, and a finding the user reopens is open again\./,
-    /A `change-security-review` finding that is `material`, tagged `introduced` or `worsened`, or labelled Critical or High stays under \[Risk Tier\]\(risk-tier\.md\) whatever its triage here: it never enters this list, and publication or merge approval never covers it\./,
+    /A `material` `change-security-review` finding, including any its reviewer tagged `introduced` or `worsened` whatever its triage here, stays under \[Risk Tier\]\(risk-tier\.md\): it never enters this list, and publication or merge approval never covers it\./,
+    /A `pre-existing` Critical or High `change-security-review` finding is a follow-up candidate that the user also sees with this list\./,
   ]) {
     assert.match(selfClosures, rule, `local-review.md: ${rule}`);
   }
   assert.doesNotMatch(selfClosures, /Critical or High from `change-security-review`/, "security findings are never downgraded");
 
   assert.match(completion, /finding dispositions, the self-closure list under Local Review, follow-up candidates/);
-  assert.match(completion, /Beside them, show the self-closure list under \[Local Review\]\(local-review\.md\), or `none` when it is empty\./);
-  assert.match(completion, /user-accepted security findings, the self-closure list or `none`, and the proposed repository-supported merge method/);
+  assert.match(completion, /Beside them, show the self-closure list under \[Local Review\]\(local-review\.md\), or `none` when it is empty, and any pre-existing Critical or High security findings\./);
+  assert.match(completion, /user-accepted security findings, the self-closure list or `none`, any pre-existing Critical or High security findings, and the proposed repository-supported merge method/);
 
-  assert.match(github, /Pass the progress record location to the cycle so that, before its Writeback, it persists the prepared record's items not `applied` \(thread, finding, reviewer label, triage class, disposition, and reason\) there\. Add their self-closures to the list under Local Review's Assess findings; on resume, use the persisted items\./);
+  assert.match(github, /Pass the progress record location to the cycle so that, before its Writeback, it persists the prepared record's items not `applied` \(the head Codex reviewed, thread, finding, reviewer label, triage class, disposition, and reason\) there\. When the cycle returns the items instead, record them there and confirm to the cycle\. Add their self-closures to the list under Local Review's Assess findings; on resume, use the persisted items for the current hosted-reviewed head\./);
   for (const [delivery, skill] of [["github-issue-delivery", github], ["azure-devops-work-item-delivery", azure]]) {
     assert.doesNotMatch(skill, /`none` when it is empty|`downgraded`|`reclassified`/, `${delivery} restates the self-closure policy`);
   }

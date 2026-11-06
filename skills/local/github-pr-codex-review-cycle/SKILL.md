@@ -114,9 +114,9 @@ Still stop and ask before:
      proposed replies, and pending publication. Do not reply or resolve yet,
      even though this cycle authorizes later writeback.
    - When the caller supplies a progress record location, write the record's
-     items not `applied` there (thread, finding, reviewer label, triage class,
-     disposition, and reason), or return them to the caller and wait until it
-     confirms they are persisted.
+     items not `applied` there (the head Codex reviewed, thread, finding,
+     reviewer label, triage class, disposition, and reason), or return them to
+     the caller and wait until it confirms they are persisted.
 6. If review fixes changed files, commit and push the verified fixes.
    - Reuse Prepare's successful verification if no relevant files changed after
      it; otherwise run the smallest relevant verification for the changed files.
@@ -141,8 +141,10 @@ Still stop and ask before:
      commit to the prepared record.
 7. Use only the **Writeback** phase of `github-pr-ai-review-followup`.
    - With a caller's progress record location, enter only after step 5's items
-     are persisted there. When they are missing, as on a resume that reaches a
-     pending Writeback, rerun step 5 to re-triage first.
+     are persisted there. When they are missing for the head Codex reviewed, as
+     on a resume that reaches a pending Writeback, re-triage only the prepared
+     record's items not `applied` against that head, keep step 6's publication
+     evidence, and persist them before continuing; Prepare does not run again.
    - Pass the prepared record, publication evidence, and existing authorization
      for clearly closed latest AI review items under the Approval Model.
    - Delegate target revalidation, replies, resolutions, and writeback verification

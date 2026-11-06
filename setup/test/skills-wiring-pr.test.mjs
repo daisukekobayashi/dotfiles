@@ -59,10 +59,11 @@ test("AI review follow-up and Codex cycle return per-item triage for items not a
 
   assert.match(followup, /Also give every item a triage class, whatever its disposition: `pre-existing` under step 5, which takes precedence; otherwise `material` when it describes a concrete failure under step 6's criterion, whatever its label; otherwise `minor`\./);
   assert.match(followup, /per-item disposition, triage class \(step 8\), reviewer label \(`none` when the reviewer gives none, `unknown` when it cannot be read\), and supporting evidence/);
-  assert.match(cycle, /- When the caller supplies a progress record location, write the record's items not `applied` there \(thread, finding, reviewer label, triage class, disposition, and reason\), or return them to the caller and wait until it confirms they are persisted\./);
+  assert.match(cycle, /- When the caller supplies a progress record location, write the record's items not `applied` there \(the head Codex reviewed, thread, finding, reviewer label, triage class, disposition, and reason\), or return them to the caller and wait until it confirms they are persisted\./);
   const writeback = cycle.match(/7\. Use only the \*\*Writeback\*\* phase.*?(?= 8\. )/)?.[0];
   assert.ok(writeback, "missing Writeback step");
-  assert.match(writeback, /- With a caller's progress record location, enter only after step 5's items are persisted there\. When they are missing, as on a resume that reaches a pending Writeback, rerun step 5 to re-triage first\./);
+  assert.match(writeback, /- With a caller's progress record location, enter only after step 5's items are persisted there\. When they are missing for the head Codex reviewed, as on a resume that reaches a pending Writeback, re-triage only the prepared record's items not `applied` against that head, keep step 6's publication evidence, and persist them before continuing; Prepare does not run again\./);
+  assert.doesNotMatch(writeback, /rerun step 5/, "resume re-triage keeps step 6's publication evidence");
   const report = cycle.match(/## Final Report.*/)?.[0];
   assert.ok(report, "missing final report");
   assert.match(report, /- Not applied: one line per item not `applied`, from the prepared record: `<thread>`: <finding> - `<reviewer label>` - `<triage class>` - `<disposition>`: <reason>; or "None"/);

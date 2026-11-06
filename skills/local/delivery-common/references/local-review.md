@@ -99,10 +99,12 @@ evidence, applying these defaults:
   findings does not count as that check. The list informs the user; publication
   and merge approval cover it, and a finding the user reopens is open again.
 
-  A `change-security-review` finding that is `material`, tagged `introduced` or
-  `worsened`, or labelled Critical or High stays under
-  [Risk Tier](risk-tier.md) whatever its triage here: it never enters this list,
-  and publication or merge approval never covers it.
+  A `material` `change-security-review` finding, including any its reviewer
+  tagged `introduced` or `worsened` whatever its triage here, stays under
+  [Risk Tier](risk-tier.md): it never enters this list, and publication or
+  merge approval never covers it. A `pre-existing` Critical or High
+  `change-security-review` finding is a follow-up candidate that the user also
+  sees with this list.
 
 Apply worthwhile fixes and record a concise reason for each explained, duplicate,
 stale, pre-existing, or skipped finding. Leave disputed material findings and
