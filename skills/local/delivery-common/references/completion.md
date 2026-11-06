@@ -19,6 +19,10 @@ the repository's normal docs.
 
 ## Before publication
 
+Coordinate publication sequentially across targets. Workers hand off their
+exact branch and worktree, task and spec, recorded base, verification, risk
+tier, and local review evidence.
+
 Before publication, show the user the tier, its main reasons, the recommended
 human review, and any security deferred candidates or user-accepted security
 findings under [Risk Tier](risk-tier.md).

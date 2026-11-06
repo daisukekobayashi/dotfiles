@@ -310,6 +310,7 @@ test("delivery-common owns the shared completion policy", async () => {
     /classify them as temporary and choose ignored agent-work storage or `\/tmp`/,
     /the shared understanding result and the latest worker drafts/,
     /the local review record under \[Local Review\]\(local-review\.md\)/,
+    /Coordinate publication sequentially across targets\. Workers hand off their exact branch and worktree, task and spec, recorded base, verification, risk tier, and local review evidence\./,
     /Before publication, show the user the tier, its main reasons, the recommended human review/,
     /Pending, failed, or inaccessible required evidence leaves the task waiting or blocked\./,
     /Request confirmation to merge that specific PR\./,
@@ -346,9 +347,12 @@ test("delivery-common owns the shared completion policy", async () => {
   for (const [delivery, rules] of Object.entries(additions)) {
     const skill = flat(await read(delivery, "SKILL.md"));
     for (const rule of rules) assert.match(skill, rule, `${delivery}: ${rule}`);
+    assert.match(skill, /Coordinate publication and show the tier under Delivery Completion's Before publication\./, `${delivery}: references Before publication`);
     for (const moved of [
       /classify them as temporary/,
       /Apply worthwhile fixes/,
+      /Coordinate publication sequentially/,
+      /hand off their (exact )?branch/,
       /Before publication, show the user the tier/,
       /Request confirmation (to merge|for) that specific PR/,
       /queued (or scheduled )?merge remains pending/,
