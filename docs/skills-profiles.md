@@ -580,7 +580,7 @@ After each external install, setup checks that every requested skill has a `SKIL
 
 In user scope, setup copies every entry each install produces, including entries that were not requested, into one staged view. When two installs produce an entry with the same name, setup fails with `skill entry collision in user staging: <entry> (<earlier source>, <later source>)` and does not replace the user view.
 
-In project scope, the installs run in sequence in one private directory, and the CLI replaces a same-name skill there by removing and copying it again. When an install removes or replaces an entry that an earlier install produced, even with the same content, setup fails with `skill entry collision in project install: <entry> (<earlier source>, <later source>)` and restores the project from the backup.
+In project scope, the installs run in sequence in one private directory, and the CLI replaces a same-name skill there by removing and copying it again. When an install removes or replaces an entry that an earlier install produced, even with the same content, setup fails with `skill entry collision in project install: <entry> (<earlier source>, <later source>)` and restores the project from the backup. When an install leaves `.agents/skills`, `.claude/skills`, `.agents`, or `.claude` in that directory as a symbolic link, or as anything other than a directory, setup fails with `skill entry collision in project install: <path> (<source>, symbolic link)` or `skill entry collision in project install: <path> (<source>, not a directory)` and restores the project from the backup.
 
 ## Local Skills
 
