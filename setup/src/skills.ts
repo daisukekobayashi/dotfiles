@@ -512,15 +512,26 @@ function requireNoEntry(directory: string, entry: string, owners: ReadonlyMap<st
   }
 }
 
+// Fails when an install produced an entry with a reserved name in any letter
+// case, such as synced, which the user view keeps for externally synchronized
+// skills.
+function requireUnreservedEntry(entry: string, source: string, place: string): void {
+  if (isReservedSkillName(entry)) {
+    fail(`skill entry collision in ${place}: ${entry} (${source}, reserved name)`);
+  }
+}
+
 // Copies every entry an install produced into the user staging view, failing
-// when an earlier install already produced an entry with the same name. owners
-// maps each copied entry name to the source that produced it.
+// when the entry has a reserved name or an earlier install already produced an
+// entry with the same name. owners maps each copied entry name to the source
+// that produced it.
 function copyDirectoryContents(sourceDir: string, targetDir: string, source: string, owners: Map<string, string>): void {
   if (!fs.existsSync(sourceDir)) {
     return;
   }
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(sourceDir)) {
+    requireUnreservedEntry(entry, source, "user staging");
     requireNoEntry(targetDir, entry, owners, source, "user staging");
     copyEntry(path.join(sourceDir, entry), path.join(targetDir, entry), false);
     owners.set(entry, source);
@@ -953,6 +964,7 @@ function installExternalSkills(workDir: string, projectRoot: string, plan: Skill
       }
       for (const name of entryIdentities(skillsDir).keys()) {
         if (!agentOwners.has(name)) {
+          requireUnreservedEntry(name, entry.source, "project install");
           agentOwners.set(name, entry.source);
         }
       }
@@ -1205,9 +1217,12 @@ function setupUserSkills(
   try {
     const owners = new Map<string, string>();
     runUserExternalInstalls(stagingBase, stagingSkillsDir, plan, npmCacheDir, owners);
-    // synced/ is reserved for externally synchronized skills; an install that
-    // produced it would be merged with them, or written through as a link.
-    requireNoEntry(stagingSkillsDir, "synced", owners, "synced skills", "user staging");
+    // synced/ is reserved for externally synchronized skills; an install entry
+    // that the file system resolves to it would be merged with them, or
+    // written through as a link. copyDirectoryContents rejects reserved names,
+    // but a case-insensitive file system can also fold a name the check does
+    // not match, such as one spelled with U+017F, so check the path as well.
+    requireNoEntry(stagingSkillsDir, "synced", owners, "reserved name", "user staging");
     copyMissingDirectoryEntries(path.join(restoreSkillsDir, "synced"), path.join(stagingSkillsDir, "synced"));
     if (skipUserLocalSkillLinks) {
       info("User local skill links skipped");
