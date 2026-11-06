@@ -1217,9 +1217,12 @@ function setupUserSkills(
   try {
     const owners = new Map<string, string>();
     runUserExternalInstalls(stagingBase, stagingSkillsDir, plan, npmCacheDir, owners);
-    // copyDirectoryContents has rejected any install entry named synced, so
-    // externally synchronized skills are never merged with one or written
-    // through a link.
+    // synced/ is reserved for externally synchronized skills; an install entry
+    // that the file system resolves to it would be merged with them, or
+    // written through as a link. copyDirectoryContents rejects reserved names,
+    // but a case-insensitive file system can also fold a name the check does
+    // not match, such as one spelled with U+017F, so check the path as well.
+    requireNoEntry(stagingSkillsDir, "synced", owners, "reserved name", "user staging");
     copyMissingDirectoryEntries(path.join(restoreSkillsDir, "synced"), path.join(stagingSkillsDir, "synced"));
     if (skipUserLocalSkillLinks) {
       info("User local skill links skipped");

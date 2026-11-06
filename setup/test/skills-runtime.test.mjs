@@ -1386,6 +1386,28 @@ fi
   });
 }
 
+// Only entries an install produces fail on a reserved name; an existing project
+// entry with one is copied back like any other unmanaged entry.
+test("project scope keeps an existing anthropic-skills entry that no install produced", posixOnly, async () => {
+  const fixture = await createFixture();
+  try {
+    const existing = path.join(fixture.project, ".claude", "skills", "anthropic-skills");
+    await mkdir(existing, { recursive: true });
+    await writeFile(path.join(existing, "SKILL.md"), "existing reserved\n");
+
+    const result = runSkills(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readText(path.join(existing, "SKILL.md")), "existing reserved\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 // An install emits an undeclared entry named like the local skill local-one.
 const localNameSuffix = `if [ "\${source_name}" = anthropics/skills ]; then
   for dir in .agents/skills .claude/skills; do
