@@ -8,7 +8,8 @@ selects it, add the `change-security-review` skill as a third reviewer. Each run
 in a fresh subagent of the current host unless the user's delivery request
 explicitly names another review tool, such as Codex; forward that instruction to
 every selected skill and read their instructions for how each route runs. Do not
-infer the host from a directory name.
+infer the host from a directory name. Run Codex-routed reviewers for one
+worktree one at a time; each stops the broker it starts.
 
 Report the selected route. If any required reviewer is unavailable or cannot
 be invoked under its policy, report the missing prerequisite; do not substitute

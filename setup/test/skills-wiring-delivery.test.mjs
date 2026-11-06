@@ -189,6 +189,8 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(runnerSection(skill), /outside the target worktree/);
     assert.match(runnerSection(skill), new RegExp(`Start it with \`Use \\$${name}\``));
     assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
+    assert.match(runnerSection(skill), /Run one Codex run at a time per target worktree/);
+    assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Brokers Started by a Codex Review"/);
   }
   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
   const security = await readText(path.join(securityRoot, "SKILL.md"));
@@ -364,5 +366,34 @@ test("delivery resume checks the recorded branch name", async () => {
 
     assert.ok(resume, `${delivery}: missing resume paragraph`);
     assert.match(resume, /Stop and report the recorded branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${delivery}: recorded branch checked`);
+  }
+});
+
+test("Codex review runs stop only the broker tree they started", async () => {
+  const runtime = await readText(
+    path.join(repoRoot, "skills", "local", "worktree-runtime-cleanup", "SKILL.md"),
+  );
+  const brokers = flat(runtime.match(/## Brokers Started by a Codex Review\n[\s\S]*?(?=\n## )/)?.[0]);
+
+  assert.ok(brokers, "worktree-runtime-cleanup: missing Brokers Started by a Codex Review");
+  assert.match(brokers, /stopping them needs no confirmation/);
+  assert.match(brokers, /Before the run, record `scripts\/list-processes\.sh <worktree>`/);
+  assert.match(brokers, /absent from the first list, by PID and start time, is a broker this run started/);
+  assert.match(brokers, /Report a broker present in the first list and leave it running\./);
+  assert.match(brokers, /every listed process descending from it by `ppid`, with PID and start time/);
+  assert.match(brokers, /Immediately before signaling, recheck each broker's PID and start time/);
+  assert.match(brokers, /Never signal a process outside the recorded tree, and never use SIGKILL\./);
+  assert.match(brokers, /Leftovers do not change the review result/);
+  assert.match(brokers, /report the teardown as unverified and leave it to cleanup/);
+  assert.match(flat(runtime), /Review skills that run Codex follow only \[Brokers Started by a Codex Review\]\(#brokers-started-by-a-codex-review\)/);
+
+  const localReview = flat(await readText(
+    path.join(repoRoot, "skills", "local", "delivery-common", "references", "local-review.md"),
+  ));
+  assert.match(localReview, /Run Codex-routed reviewers for one worktree one at a time; each stops the broker it starts\./);
+
+  for (const cleanup of ["github-worktree-cleanup", "azure-devops-worktree-cleanup"]) {
+    const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
+    assert.match(skill, /Before removal, follow `\.\.\/worktree-runtime-cleanup\/SKILL\.md` for the/, cleanup);
   }
 });
