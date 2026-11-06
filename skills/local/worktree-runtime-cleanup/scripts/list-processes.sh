@@ -230,14 +230,15 @@ lsof_tokens() {
         [A-Z\[\\\]^_])
           printf -v code '%d' "'${next}"
           tok_lens+=(2)
-          tok_codes+=($((code - 64)))
+          tok_codes+=($(((code & 255) - 64)))
           ;;
       esac
       ;;
     *)
       printf -v code '%d' "'${c}"
       tok_lens=(1)
-      tok_codes=("${code}")
+      # Bash 3.2 may print a byte >= 0x80 as negative; codes are 0 to 255.
+      tok_codes=($((code & 255)))
       ;;
   esac
 }
@@ -263,6 +264,8 @@ maybe_under_target() {
   done
   for ((j = 0; j < ${#target}; j++)); do
     printf -v code '%d' "'${target:j:1}"
+    # Bash 3.2 may print a byte >= 0x80 as negative; codes are 0 to 255.
+    code=$((code & 255))
     next_states=()
     for p in "${states[@]}"; do
       lsof_tokens "${name}" "${p}"
