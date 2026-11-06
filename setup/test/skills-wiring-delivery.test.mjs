@@ -93,7 +93,7 @@ test("provider delivery skills link the same delivery-common targets", async () 
 
   const github = await commonTargets("github-issue-delivery");
   const azure = await commonTargets("azure-devops-work-item-delivery");
-  for (const target of ["references/local-review.md", "references/risk-tier.md", "references/worker-dialogue.md"]) {
+  for (const target of ["references/completion.md", "references/local-review.md", "references/risk-tier.md", "references/worker-dialogue.md"]) {
     assert.ok(github.includes(target), `github-issue-delivery: missing delivery-common link ${target}`);
   }
   assert.deepEqual(azure, github, [
@@ -112,7 +112,11 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   assert.ok(repeat, "local-review.md: missing Repeat and advance");
   assert.match(repeat, /After fixes, run\s+relevant checks and use focused follow-up/);
   assert.match(repeat, /Repeat the full review only when the design or\s+change scope shifts materially, or new evidence makes the earlier full-review\s+coverage insufficient/);
-  assert.match(repeat, /the most\s+recent full review, whether the initial one or a required new one, and the\s+follow-ups completed since it cover the current head with the reviewers its\s+current tier selects/);
+  assert.match(repeat, /no required\s+new full review is still pending, the most recent full review and the\s+follow-ups completed since it cover the current head with the reviewers its\s+current tier selects/);
+  assert.match(repeat, /A required new full review counts as the most recent one only\s+after it completes\./);
+  const fullReview = localReview.match(/## Run the full review\n[\s\S]*?(?=\n## |$)/)?.[0];
+  assert.ok(fullReview, "local-review.md: missing Run the full review");
+  assert.match(fullReview, /A full review is one pass of every selected reviewer over the entire task diff,\s+not only the last fix commit/);
   assert.match(repeat, /at most three local review rounds per target across the delivery,\s+including resumes/);
   assert.match(repeat, /Count the initial full review, each focused follow-up on a\s+fixed snapshot, and each required new full review as one round apiece/);
   assert.match(repeat, /full-review and\s+follow-up head SHAs, their coverage, and the local round count/);
@@ -126,7 +130,6 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
     providers[delivery] = skill;
     assert.match(skill, /After fixes, follow Local Review's Repeat and advance for focused follow-up,\s+escalation to a full review, and advancement\./, delivery);
     assert.match(skill, /Local review rounds follow Local Review's Repeat and advance/, delivery);
-    assert.match(skill, /the local review record\s+under Local Review/, delivery);
     assert.doesNotMatch(skill, /repeat the selected reviews on the new snapshot/, delivery);
     assert.doesNotMatch(skill, /three local review rounds/, delivery);
     assert.doesNotMatch(skill, /Count the initial full review/, delivery);
@@ -141,7 +144,12 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   for (const [name, text] of Object.entries(providers)) {
     assert.doesNotMatch(text, /full local reviews and completed follow-ups|initial full\s+review and completed follow-ups/, name);
   }
-  for (const [name, text] of Object.entries({ "local-review.md": localReview, ...providers })) {
+  const riskTier = await readText(path.join(deliveryCommon, "references", "risk-tier.md"));
+  const docs = {};
+  for (const doc of ["skills-profiles.md", "skills-profiles.ja.md"]) {
+    docs[doc] = await readText(path.join(repoRoot, "docs", doc));
+  }
+  for (const [name, text] of Object.entries({ "local-review.md": localReview, "risk-tier.md": riskTier, ...docs, ...providers })) {
     assert.doesNotMatch(text, /full\s+pair/, name);
   }
 });
@@ -223,8 +231,9 @@ test("change review skills are explicit-only and share target selection", async 
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const deliverySkill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
     assert.match(deliverySkill, /\[Risk Tier\]\(\.\.\/delivery-common\/references\/risk-tier\.md\)/);
-    assert.match(deliverySkill, /risk tier for that head with\s+(its )?recommended human review/);
   }
+  const completion = await readText(path.join(deliveryCommon, "references", "completion.md"));
+  assert.match(completion, /risk tier for that head with its\s+recommended human review/);
   assert.match(changeReview, /correctness/i);
   assert.match(changeReview, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
@@ -262,7 +271,6 @@ test("delivery workers draft the understanding and preflight for the coordinator
     assert.match(skill, /its worker drafts `shared-understanding`, and the coordinator asks the user one (issue|item) at a time/, delivery);
     assert.match(skill, /no worker asks the user directly/, delivery);
     assert.match(skill, /drafted by the worker and asked by the coordinator under Worker Dialogue/, delivery);
-    assert.match(skill, /shared understanding result and the latest worker drafts/, delivery);
   }
 
   const rule = /defaults only for implementation tactics[^.]*?; return contract, boundary, compatibility, and security decisions to the coordinator as questions with options and a recommendation, even when they look low-risk/;
@@ -287,6 +295,66 @@ test("delivery workers draft the understanding and preflight for the coordinator
   const withDocs = flat(await read("design-preflight-with-docs", "SKILL.md"));
   assert.match(withDocs, /When a delivery coordinator asks for a draft, forward that request so `design-preflight` returns its questions instead of asking\./);
   assert.match(withDocs, /write documentation only after the coordinator returns the user's answers\./);
+});
+
+test("delivery-common owns the shared completion policy", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = (...parts) => readText(path.join(localRoot, ...parts));
+  const completion = flat(await read("delivery-common", "references", "completion.md"));
+  const localReview = flat(await read("delivery-common", "references", "local-review.md"));
+  const common = await read("delivery-common", "SKILL.md");
+
+  for (const rule of [
+    /classify them as temporary and choose ignored agent-work storage or `\/tmp`/,
+    /the shared understanding result and the latest worker drafts/,
+    /the local review record under \[Local Review\]\(local-review\.md\)/,
+    /Before publication, show the user the tier, its main reasons, the recommended human review/,
+    /Pending, failed, or inaccessible required evidence leaves the task waiting or blocked\./,
+    /Request confirmation to merge that specific PR\./,
+    /a queued or scheduled merge remains pending/,
+    /Advance as soon as the completion criteria are met\./,
+    /If progress repeatedly stalls, a review times out, a required check fails, or a material human decision is needed, preserve progress and report the next action/,
+    /Stop further publication targets after a publication failure/,
+    /A wait or an unresolved approval stays open/,
+    /Mark `Complete` only after acceptance criteria, current verification and reviews, actual merge, task closure, and confirmed local cleanup/,
+    /the calling workflow defines task closure/,
+    /Before cleanup, keep this task's follow-up candidates in a record outside the worktree being removed/,
+    /create-or-drop recommendation/,
+    /source links to the calling workflow's create skill/,
+    /Pending candidates do not block `Complete`/,
+  ]) {
+    assert.match(completion, rule, `completion.md: ${rule}`);
+  }
+  assert.match(completion, /plus the calling workflow's additions/);
+  assert.doesNotMatch(completion, /github|azure|codex|`[a-z-]+-create`/i, "completion.md stays provider-neutral");
+  assert.match(common, /\[Delivery Completion\]\(references\/completion\.md\)/);
+  assert.match(common, /^description: .*merge confirmation.*follow-up candidates/m);
+  assert.match(localReview, /Apply worthwhile fixes and record a concise reason for each explained, duplicate, stale, pre-existing, or skipped finding\. Leave disputed material findings and design decisions open for the user\./);
+
+  const additions = {
+    "github-issue-delivery": [/`github-issue-create`/, /hosted review outcome/, /hosted limit reached with required work remaining/, /issue's actual closed state/],
+    "azure-devops-work-item-delivery": [/`azure-devops-work-item-create`/, /proposed state-transition scope/, /`Merged; Work Item completion pending`/, /Work Item's verified completion/],
+  };
+  for (const [delivery, rules] of Object.entries(additions)) {
+    const skill = flat(await read(delivery, "SKILL.md"));
+    for (const rule of rules) assert.match(skill, rule, `${delivery}: ${rule}`);
+    for (const moved of [
+      /classify them as temporary/,
+      /Apply worthwhile fixes/,
+      /Before publication, show the user the tier/,
+      /Request confirmation (to merge|for) that specific PR/,
+      /queued (or scheduled )?merge remains pending/,
+      /Advance as soon as the completion criteria are met/,
+      /progress repeatedly stalls|repeated non-progress/,
+      /Independent local work may continue/,
+      /Mark `Complete` only after/,
+      /in a record outside the worktree being removed/,
+      /create-or-drop recommendation/,
+      /Pending candidates do not block/,
+    ]) {
+      assert.doesNotMatch(skill, moved, `${delivery} restates moved policy: ${moved}`);
+    }
+  }
 });
 
 test("delivery resume checks the recorded branch name", async () => {

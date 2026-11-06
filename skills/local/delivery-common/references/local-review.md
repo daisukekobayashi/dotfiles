@@ -19,8 +19,8 @@ the implementation owner's informal inspection for a completed review.
 Record the task URL/acceptance criteria, applicable standards, worktree, branch,
 base SHA, merge-base, head SHA, and dirty/untracked state. Use the task workspace's
 recorded base; do not ask for a fixed point already established by workspace
-preparation. For a full review, cover the entire task diff, not only the last fix
-commit. Run a full review unless Repeat and advance selects focused follow-up.
+preparation. Run a full review unless Repeat and advance selects focused
+follow-up.
 
 Before running reviewers on a pinned head, set the tier for that head under
 [Risk Tier](risk-tier.md) and record it with the selected reviewers.
@@ -47,7 +47,8 @@ changes it.
 
 ## Assess findings
 
-The caller applies these defaults when assessing local or hosted findings:
+The caller assesses each local or hosted finding against the task, code, and
+evidence, applying these defaults:
 
 - **Triage:** Classify each finding as `material`, `minor`, or `pre-existing`.
   Reviewer labels (High/Medium/Low, P0-P3, critical-low, or none) are hints. A
@@ -77,6 +78,11 @@ The caller applies these defaults when assessing local or hosted findings:
   and hosted dispositions from the progress record to hosted follow-up so it
   applies the same rule.
 
+Apply worthwhile fixes and record a concise reason for each explained, duplicate,
+stale, pre-existing, or skipped finding. Leave disputed material findings and
+design decisions open for the user. Keep fixes within the task's scope and
+backed by a finding.
+
 At the round limit, classify the remaining findings before reporting: mostly
 pre-existing (recommend proceeding with follow-up candidates), repeated in one
 area or approach (recommend revisiting the design through design-preflight), or
@@ -100,16 +106,17 @@ newly discovered material risks visible for that assessment.
 
 Run `change-review` and `change-adversarial-review` with
 `--base <preceding reviewed head> --scope branch`, and `change-security-review`
-with the base Risk Tier sets; pass the accepted findings and dispositions as focus text. Preserve the
-route's independence and read-only requirements.
+with the base Risk Tier sets; pass the accepted findings and dispositions as
+focus text. Preserve the route's independence and read-only requirements.
 
 ## Run the full review
 
-A full review is one pass of every selected reviewer: `change-review` and
-`change-adversarial-review`, plus `change-security-review` when selected. Run
-them as separate reviewers independent of the implementation owner: a separate fresh subagent of
-the current host for each, or a separate fresh run of the explicitly named tool
-for each, as the skills define. Report the reduced independence of same-host
+A full review is one pass of every selected reviewer over the entire task diff,
+not only the last fix commit: `change-review` and `change-adversarial-review`,
+plus `change-security-review` when selected. Run them as separate reviewers
+independent of the implementation owner: a separate fresh subagent of the
+current host for each, or a separate fresh run of the explicitly named tool for
+each, as the skills define. Report the reduced independence of same-host
 subagents. Give each the same exact
 worktree, branch, committed head, `--base <base-sha> --scope branch`, task
 criteria, accepted design/docs, and the user's delivery request. Require the
@@ -131,11 +138,12 @@ regressions in affected paths. Repeat the full review only when the design or
 change scope shifts materially, or new evidence makes the earlier full-review
 coverage insufficient.
 
-Advance when acceptance criteria are met, verification is current, the most
-recent full review, whether the initial one or a required new one, and the
+Advance when acceptance criteria are met, verification is current, no required
+new full review is still pending, the most recent full review and the
 follow-ups completed since it cover the current head with the reviewers its
 current tier selects, and no material actionable finding or human decision
-remains open. Recorded deferrals of minor or pre-existing findings do not
+remains open. A required new full review counts as the most recent one only
+after it completes. Recorded deferrals of minor or pre-existing findings do not
 require another round or a result with zero findings. Failed, unavailable,
 empty, or partial review output is not a pass.
 
