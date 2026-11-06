@@ -369,6 +369,43 @@ test("delivery-common owns the shared completion policy", async () => {
   }
 });
 
+test("delivery shows material self-closures before publication and at merge", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = (...parts) => readText(path.join(localRoot, ...parts));
+  const localReview = flat(await read("delivery-common", "references", "local-review.md"));
+  const completion = flat(await read("delivery-common", "references", "completion.md"));
+  const github = flat(await read("github-issue-delivery", "SKILL.md"));
+  const azure = flat(await read("azure-devops-work-item-delivery", "SKILL.md"));
+
+  const selfClosures = localReview.match(/- \*\*Self-closures:\*\*.*?(?= Apply worthwhile fixes)/)?.[0];
+  assert.ok(selfClosures, "Assess findings defines self-closures");
+  for (const rule of [
+    /Keep a self-closure list in the progress record/,
+    /A `material` finding that ends without a verified fix and is not left open for the user, whatever its disposition: `explained`, `stale`, `skipped`, or `duplicate`\./,
+    /A `duplicate` stays listed even when the earlier finding is `applied`, unless a later reviewer round verified that fix against this report\./,
+    /Marked `downgraded`, a finding triaged `minor` whose reviewer label is `unknown` or at the blocking level: High from `change-review` or `change-adversarial-review`, P0 or P1 from a hosted reviewer\./,
+    /Marked `reclassified`, a finding triaged `pre-existing` that its reviewer tagged `introduced` or `worsened`\./,
+    /the finding, its source reviewer and round or thread, the reviewer's label and tag, the disposition, and the reason/,
+    /Add the source of a later `duplicate` to the existing entry for the same finding\./,
+    /Drop an entry once a later reviewer round checks the fix against this finding and confirms it, or re-triage leaves the finding open for the user; a hosted review with no findings does not count as that check\./,
+    /publication and merge approval cover it, and a finding the user reopens is open again\./,
+    /A `material` `change-security-review` finding, including any its reviewer tagged `introduced` or `worsened` whatever its triage here, stays under \[Risk Tier\]\(risk-tier\.md\): it never enters this list, and publication or merge approval never covers it\./,
+    /A `pre-existing` Critical or High `change-security-review` finding is a follow-up candidate that the user also sees with this list\./,
+  ]) {
+    assert.match(selfClosures, rule, `local-review.md: ${rule}`);
+  }
+  assert.doesNotMatch(selfClosures, /Critical or High from `change-security-review`/, "security findings are never downgraded");
+
+  assert.match(completion, /finding dispositions, the self-closure list under Local Review, follow-up candidates/);
+  assert.match(completion, /Beside them, show the self-closure list under \[Local Review\]\(local-review\.md\), or `none` when it is empty, and any pre-existing Critical or High security findings\./);
+  assert.match(completion, /user-accepted security findings, the self-closure list or `none`, any pre-existing Critical or High security findings, and the proposed repository-supported merge method/);
+
+  assert.match(github, /Pass the progress record location to the cycle so that, before its Writeback, it persists the prepared record's items not `applied` \(the head Codex reviewed, thread, finding, reviewer label, triage class, disposition, and reason\) there\. When the cycle returns the items instead, record them there and confirm to the cycle\. Add their self-closures to the list under Local Review's Assess findings; on resume, use the persisted items for the current hosted-reviewed head\./);
+  for (const [delivery, skill] of [["github-issue-delivery", github], ["azure-devops-work-item-delivery", azure]]) {
+    assert.doesNotMatch(skill, /`none` when it is empty|`downgraded`|`reclassified`/, `${delivery} restates the self-closure policy`);
+  }
+});
+
 test("delivery resume checks the recorded branch name", async () => {
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const skill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));

@@ -113,6 +113,10 @@ Still stop and ask before:
    - Capture its prepared record, including per-thread dispositions, verification,
      proposed replies, and pending publication. Do not reply or resolve yet,
      even though this cycle authorizes later writeback.
+   - When the caller supplies a progress record location, write the record's
+     items not `applied` there (the head Codex reviewed, thread, finding,
+     reviewer label, triage class, disposition, and reason), or return them to
+     the caller and wait until it confirms they are persisted.
 6. If review fixes changed files, commit and push the verified fixes.
    - Reuse Prepare's successful verification if no relevant files changed after
      it; otherwise run the smallest relevant verification for the changed files.
@@ -136,6 +140,11 @@ Still stop and ask before:
    - Confirm the fixes are present in the remote PR head and add the published
      commit to the prepared record.
 7. Use only the **Writeback** phase of `github-pr-ai-review-followup`.
+   - With a caller's progress record location, enter only after step 5's items
+     are persisted there. When they are missing for the head Codex reviewed, as
+     on a resume that reaches a pending Writeback, re-triage only the prepared
+     record's items not `applied` against that head, keep step 6's publication
+     evidence, and persist them before continuing; Prepare does not run again.
    - Pass the prepared record, publication evidence, and existing authorization
      for clearly closed latest AI review items under the Approval Model.
    - Delegate target revalidation, replies, resolutions, and writeback verification
@@ -171,6 +180,8 @@ Use this structure:
 - Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result>`
 - Codex: `<acknowledged/completed/blocked summary>`
 - Follow-up: `<applied/explained/skipped/pre-existing/stale/duplicate counts>`
+- Not applied: one line per item not `applied`, from the prepared record:
+  `<thread>`: <finding> - `<reviewer label>` - `<triage class>` - `<disposition>`: <reason>; or "None"
 - Review fix commit: `<sha>` or "No review-fix commit needed"
 - Writeback: `<replied/resolved counts>`
 

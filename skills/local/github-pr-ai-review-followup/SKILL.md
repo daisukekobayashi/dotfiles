@@ -31,8 +31,14 @@ This skill does not commit or push; the user or an orchestration skill owns publ
    If it fails or cannot run, report the cause and leave the fixes unpublished;
    do not represent them as verified or ready for writeback.
 8. Assign a disposition to every latest AI feedback item, even when no code changed.
+   Also give every item a triage class, whatever its disposition:
+   `pre-existing` under step 5, which takes precedence; otherwise `material`
+   when it describes a concrete failure under step 6's criterion, whatever its
+   label; otherwise `minor`.
 9. Return a prepared record with the repository/PR, inspected head commit,
-   review/comment/thread IDs, per-item disposition and supporting evidence,
+   review/comment/thread IDs, per-item disposition, triage class (step 8),
+   reviewer label (`none` when the reviewer gives none, `unknown` when it
+   cannot be read), and supporting evidence,
    changed files, verification result, proposed replies, resolve candidates,
    open items, and any publication still needed. Mark dispositions based on
    local changes as pending publication, including `stale` or `duplicate` when

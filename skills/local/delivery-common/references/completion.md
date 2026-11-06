@@ -13,9 +13,9 @@ scope, the shared understanding result and the latest worker drafts, worktree,
 branch, base ref and SHA, current phase, accepted design decisions, risk tier
 with its reasons and head, verification, the local review record under
 [Local Review](local-review.md), PR and published head, finding dispositions,
-follow-up candidates, blockers, and next action, plus the calling workflow's
-additions. Report the resume path. Keep durable definitions and decisions in
-the repository's normal docs.
+the self-closure list under Local Review, follow-up candidates, blockers, and
+next action, plus the calling workflow's additions. Report the resume path.
+Keep durable definitions and decisions in the repository's normal docs.
 
 ## Before publication
 
@@ -25,7 +25,9 @@ tier, and local review evidence.
 
 Before publication, show the user the tier, its main reasons, the recommended
 human review, and any security deferred candidates or user-accepted security
-findings under [Risk Tier](risk-tier.md).
+findings under [Risk Tier](risk-tier.md). Beside them, show the self-closure
+list under [Local Review](local-review.md), or `none` when it is empty, and any
+pre-existing Critical or High security findings.
 
 ## Merge confirmation
 
@@ -38,8 +40,10 @@ material change; reassess before proceeding.
 Present the PR URL, task, reviewed and published head, base, checks, review
 outcome including any security review, the risk tier for that head with its
 recommended human review, any security deferred candidates or user-accepted
-security findings, and the proposed repository-supported merge method, plus the
-calling workflow's additions. Request confirmation to merge that specific PR.
+security findings, the self-closure list or `none`, any pre-existing Critical
+or High security findings, and the proposed repository-supported merge method,
+plus the calling workflow's additions. Request confirmation to merge that
+specific PR.
 
 After approval, recheck the target and merge within that approval, keeping
 checks and policies in force and the source branch in place. If the user merges

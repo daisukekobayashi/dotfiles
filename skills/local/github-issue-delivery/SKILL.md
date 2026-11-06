@@ -115,9 +115,15 @@ publication approval model, actual-review completion criteria, Prepare -> publis
 Pass the earlier local and hosted dispositions from the progress record, and
 have its follow-up assess hosted findings with Local Review's Assess findings.
 
-Record the returned status, PR, published head, reviewed head, dispositions, and
-unresolved items. An acknowledgement or an `eyes` reaction is not a completed
-review. An open PR is not a merged PR.
+Pass the progress record location to the cycle so that, before its Writeback,
+it persists the prepared record's items not `applied` (the head Codex reviewed,
+thread, finding, reviewer label, triage class, disposition, and reason) there.
+When the cycle returns the items instead, record them there and confirm to the
+cycle. Add their self-closures to the list under Local Review's Assess
+findings; on resume, use the persisted items for the current hosted-reviewed
+head. Record the returned status, PR, published head, reviewed head,
+dispositions, and unresolved items. An acknowledgement or an `eyes` reaction is
+not a completed review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
 for focused follow-up or a full review under Local Review's Repeat and advance. Obtain a fresh

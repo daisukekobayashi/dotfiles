@@ -78,6 +78,33 @@ evidence, applying these defaults:
   `duplicate` unless new evidence changes the assessment. Pass the earlier local
   and hosted dispositions from the progress record to hosted follow-up so it
   applies the same rule.
+- **Self-closures:** Keep a self-closure list in the progress record so the user
+  can check what the implementation owner closed alone. List each of these:
+  - A `material` finding that ends without a verified fix and is not left open
+    for the user, whatever its disposition: `explained`, `stale`, `skipped`, or
+    `duplicate`. A `duplicate` stays listed even when the earlier finding is
+    `applied`, unless a later reviewer round verified that fix against this
+    report.
+  - Marked `downgraded`, a finding triaged `minor` whose reviewer label is
+    `unknown` or at the blocking level: High from `change-review` or
+    `change-adversarial-review`, P0 or P1 from a hosted reviewer.
+  - Marked `reclassified`, a finding triaged `pre-existing` that its reviewer
+    tagged `introduced` or `worsened`.
+
+  Give each entry the finding, its source reviewer and round or thread, the
+  reviewer's label and tag, the disposition, and the reason. Add the source of a
+  later `duplicate` to the existing entry for the same finding. Drop an entry
+  once a later reviewer round checks the fix against this finding and confirms
+  it, or re-triage leaves the finding open for the user; a hosted review with no
+  findings does not count as that check. The list informs the user; publication
+  and merge approval cover it, and a finding the user reopens is open again.
+
+  A `material` `change-security-review` finding, including any its reviewer
+  tagged `introduced` or `worsened` whatever its triage here, stays under
+  [Risk Tier](risk-tier.md): it never enters this list, and publication or
+  merge approval never covers it. A `pre-existing` Critical or High
+  `change-security-review` finding is a follow-up candidate that the user also
+  sees with this list.
 
 Apply worthwhile fixes and record a concise reason for each explained, duplicate,
 stale, pre-existing, or skipped finding. Leave disputed material findings and
