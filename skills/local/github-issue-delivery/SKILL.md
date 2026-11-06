@@ -107,9 +107,8 @@ escalation to a full review, and advancement.
 
 ### 3. Publish and complete hosted Codex review
 
-Coordinate publication sequentially across issue targets; workers hand off their
-branch, worktree, issue/spec, recorded base, verification, risk tier, and local
-review evidence. Show the tier before publication under Delivery Completion.
+Coordinate publication and show the tier under Delivery Completion's Before
+publication.
 Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
 -> confirm remote head -> Writeback ordering, and stop-on-failure behavior.

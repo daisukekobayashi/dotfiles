@@ -110,9 +110,8 @@ escalation to a full review, and advancement.
 
 ### 3. Publish the PR
 
-Coordinate publication sequentially across targets. Workers hand off their exact
-branch/worktree, Work Item/spec, base, verification, risk tier, and local review
-evidence. Show the tier before publication under Delivery Completion.
+Coordinate publication and show the tier under Delivery Completion's Before
+publication.
 Use `azure-devops-pr-publish`, forwarding the full request and existing approvals.
 Honor its stop-on-failure behavior. Supply known Work Item IDs, completion scope,
 and the user's state-transition intent; use structured PR links under the common
