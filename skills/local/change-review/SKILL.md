@@ -34,6 +34,11 @@ node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
   --prompt-file <prompt-file>
 ```
 
+Run one Codex run at a time per target worktree; wait for any other in progress.
+Before and after the run, including a failed run, follow
+`../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
+the target worktree, and report its result with the output.
+
 Return the named tool's completed output. A launched background job is not a
 completed review. If the named tool is not installed or its run fails, such as
 on authentication, timeout, or runtime error, report the failure and stop; do

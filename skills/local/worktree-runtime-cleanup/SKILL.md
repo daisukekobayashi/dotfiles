@@ -12,7 +12,9 @@ verification evidence.
 
 Worktree cleanup skills (`github-worktree-cleanup`,
 `azure-devops-worktree-cleanup`, `beads-merge-cleanup`) read this file and run
-it for the worktree they are about to remove.
+it for the worktree they are about to remove. Review skills that run Codex
+follow only [Brokers Started by a Codex Review](#brokers-started-by-a-codex-review),
+so a broker found at cleanup is a leak to report.
 
 Run this before `git worktree remove`: the live worktree helps establish runtime
 ownership, and Compose stacks can be matched by path rather than the weaker
@@ -57,6 +59,40 @@ cleanup session, so discover them from process state.
    the same `list-processes.sh` command. Sending a signal or ending the launcher
    alone does not establish cleanup. Report remaining processes and unverified
    ownership explicitly.
+
+## Brokers Started by a Codex Review
+
+`change-review`, `change-adversarial-review`, and `change-security-review`
+follow this section around each Codex companion run for a target worktree. The
+run owns the brokers it starts, so stopping them needs no confirmation; the stop
+covers only the processes recorded below and sends only SIGTERM.
+
+1. Before the run, record `scripts/list-processes.sh <worktree>` in this
+   skill's directory.
+2. After the run, whether it succeeded or failed, list again. A process running
+   `app-server-broker.mjs` is a broker this run started only when it is absent
+   from the first list, by PID and start time, and its `--cwd` argument, or its
+   cwd when it has none, resolves to exactly the target worktree root. The list
+   also matches paths below the target, such as a nested worktree; prefix
+   matching never establishes ownership here. Report any other listed broker,
+   whether pre-existing or under the target without equaling it, and leave it
+   running. If the run started none, report that and stop here.
+3. Record each started broker's tree from the second list: the broker and every
+   listed process descending from it by `ppid`, with PID and start time.
+4. Immediately before signaling, recheck each broker's PID and start time; if
+   they no longer match, leave it and report it as unverified. Send SIGTERM to
+   each broker.
+5. Re-list for up to about 10 seconds until the recorded processes exit. Send
+   SIGTERM once to each recorded process still running whose PID and start time
+   match, even if it was reparented. Never signal a process outside the recorded
+   tree, and never use SIGKILL.
+6. Report the stopped brokers, any broker left running, and recorded processes
+   still running. Leftovers do not change the review result; cleanup under
+   [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
+   handles them before the worktree is removed.
+
+When `list-processes.sh` cannot run, such as without bash, `/proc`, or `lsof`,
+report the teardown as unverified and leave it to cleanup.
 
 ## Compose Stacks
 
