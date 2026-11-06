@@ -97,6 +97,25 @@ check_trailing_newline_and_plain() {
   [ "$(row_for "${plain_pid}" | cut -f5)" = "${plain}" ]
 }
 
+# lsof prints a literal "^@" or "\x41" unchanged or escaped; neither may turn
+# into a different path, such as the target itself.
+check_literal_notation() {
+  local lister="$1" sibling literal sibling_pid literal_pid
+  sibling="${target}^@"
+  literal="${target}/a^@b\\x41"
+  mkdir -p "${sibling}" "${literal}"
+  start_in "${sibling}"
+  sibling_pid="${started_pid}"
+  start_in "${literal}"
+  literal_pid="${started_pid}"
+  sleep 0.3
+
+  run "${lister}" "${target}"
+  assert_no_forged_row ""
+  [ -z "$(row_for "${sibling_pid}")" ]
+  [ "$(row_for "${literal_pid}" | cut -f5)" = "${target}/a^@b\\\\x41" ]
+}
+
 @test "list-processes escapes a crafted cwd instead of forging a row" {
   check_crafted_cwd "${script}"
 }
@@ -115,4 +134,25 @@ check_trailing_newline_and_plain() {
   [[ -d /proc/self ]] || skip "the default run already uses lsof"
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
   check_trailing_newline_and_plain "$(lsof_script)"
+}
+
+@test "list-processes keeps a literal ^@ and backslash in a cwd" {
+  check_literal_notation "${script}"
+}
+
+@test "list-processes lsof path keeps a literal ^@ and backslash in a cwd" {
+  [[ -d /proc/self ]] || skip "the default run already uses lsof"
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  check_literal_notation "$(lsof_script)"
+}
+
+# The lsof decoding relies on lsof escaping a literal backslash as "\\".
+@test "lsof escapes a literal backslash in a cwd name" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local dir="${target}/b\\xc3"
+  mkdir -p "${dir}"
+  start_in "${dir}"
+  sleep 0.3
+  run lsof -w -a -p "${started_pid}" -d cwd -Fn
+  [[ "${output}" == *"/b\\\\xc3"* ]]
 }

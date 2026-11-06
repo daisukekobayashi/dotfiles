@@ -47,7 +47,7 @@ esac
 # pid<TAB>cwd for every process of the current user, each record ending in NUL
 # so a cwd may contain any byte but NUL.
 list_cwds() {
-  local dir pid cwd field
+  local dir pid cwd field decoded
   if [[ -d /proc/self ]]; then
     for dir in /proc/[0-9]*; do
       [[ -O "${dir}" ]] || continue
@@ -64,8 +64,8 @@ list_cwds() {
         case "${field}" in
           p*) pid="${field#p}" ;;
           n*)
-            cwd="$(lsof_name "${field#n}" && printf x)"
-            printf '%s\t%s\0' "${pid}" "${cwd%x}"
+            lsof_name "${field#n}"
+            printf '%s\t%s\0' "${pid}" "${decoded}"
             ;;
         esac
       done
@@ -75,26 +75,50 @@ list_cwds() {
   fi
 }
 
-# Decodes lsof's escaped name (\n, \t, \r, \b, \f, \\, \xNN, ^X) to raw bytes.
-# lsof leaves a literal "^" unescaped, so "^X" is always read as a control byte.
+# Sets "decoded" to lsof's escaped name with its escapes of non-printable bytes
+# (\n, \t, \r, \b, \f, \\, \xHH, ^A to ^_) turned back into those bytes. lsof
+# leaves "^" unescaped, so "^X" is ambiguous; it is read as a control byte that
+# the output escapes again. Any other sequence, such as "^@" or "\x41", stays
+# as it is, so no character is dropped and NUL is never produced.
 lsof_name() {
-  local LC_ALL=C name="$1" out="" c next
+  local LC_ALL=C name="$1" c next hex byte
+  decoded=""
   if [[ "${name}" != *[\\^]* ]]; then
-    printf '%s' "${name}"
+    decoded="${name}"
     return
   fi
   while [[ -n "${name}" ]]; do
     c="${name:0:1}"
     next="${name:1:1}"
-    if [[ "${c}" == "^" && "${next}" == [@A-Z\[\\\]^_] ]]; then
-      out+="$(printf '\\x%02x' "$(( $(printf '%d' "'${next}") - 64 ))")"
+    byte=""
+    case "${c}${next}" in
+      '\\') byte='\' ;;
+      '\n') byte=$'\n' ;;
+      '\t') byte=$'\t' ;;
+      '\r') byte=$'\r' ;;
+      '\b') byte=$'\b' ;;
+      '\f') byte=$'\f' ;;
+      '\x')
+        hex="${name:2:2}"
+        if [[ "${hex}" == [01][0-9a-fA-F] && "${hex}" != 00 ||
+          "${hex}" == 7[fF] || "${hex}" == [89a-fA-F][0-9a-fA-F] ]]; then
+          printf -v byte "\\x${hex}"
+          name="${name:2}"
+        fi
+        ;;
+      ^[A-Z\[\\\]^_])
+        printf -v byte '\\x%02x' "$(($(printf '%d' "'${next}") - 64))"
+        printf -v byte '%b' "${byte}"
+        ;;
+    esac
+    if [[ -n "${byte}" ]]; then
+      decoded+="${byte}"
       name="${name:2}"
     else
-      out+="${c}"
+      decoded+="${c}"
       name="${name:1}"
     fi
   done
-  printf '%b' "${out}"
 }
 
 # Escapes a cwd for the one-line output; see the header.
