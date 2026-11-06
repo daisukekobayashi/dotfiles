@@ -260,14 +260,14 @@ U+2018-U+201B もクォートとして扱うように、`'` 以外もクォー�
 stderr に出力）です。それ以外の終了コードは、`node` がスクリプトがないときに
 返す 1 も含めて、確認を実行できなかったことを意味します。ホストのシェルが 3 以外
 の非 0 を報告することがあるため（PowerShell は 1 を報告します）、安全でない場合
-に処理を分ける呼び出し側は、stderr が `unsafe branch name:` の行だけからなる
-非 0 の終了も安全でないと扱います。両プロバイダーの start、delivery、PR、Codex
+に処理を分ける呼び出し側は、stderr が1行以上の `unsafe branch name:` の行だけ
+からなる非 0 の終了も安全でないと扱います。両プロバイダーの start、delivery、PR、Codex
 レビューサイクル、クリーンアップの各スキルと、Beads の worktree とマージクリーンアップ
 のスキルはブランチを確認し、PR の作成と公開のスキルはベースまたはターゲットの
-ブランチも確認します。`azure-devops-work-item-start` は終了コード 3 のときか、
-名前がその ASCII の範囲外のときだけ open PR の比較を飛ばし、それ以外の失敗では
-止まります。worktree のパス、bead
-ID、head owner（`github-pr-create` が独自のルールで確認）、PR の作成と公開以外
+ブランチも確認します。`azure-devops-work-item-start` は、名前がその ASCII の
+範囲外のとき、終了コード 3 のとき、stderr が1行以上の `unsafe branch name:` の
+行だけからなる非 0 の終了のときだけ open PR の比較を飛ばし、それ以外の失敗では
+止まります。worktree のパス、bead ID、head owner（`github-pr-create` が独自のルールで確認）、PR の作成と公開以外
 のスキルのベースブランチは、このスクリプトの対象外です。
 `tests/check_branch_name.bats` がスクリプトをテストします。
 

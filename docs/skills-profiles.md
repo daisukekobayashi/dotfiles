@@ -275,13 +275,14 @@ rule. Exit 0 means every name is safe, 2 is a usage error, and 3 means at least
 one is unsafe (each reported on stderr); any other status, including the 1 that
 `node` returns for a missing script, means the check could not run. A host
 shell may report a non-zero status other than 3, as PowerShell reports 1, so a
-caller that branches on unsafe also accepts a non-zero exit whose stderr is
-only `unsafe branch name:` lines. The start, delivery, PR, Codex review cycle,
-and cleanup skills of both providers and the Beads worktree and merge cleanup
-skills check their branch; the PR create and publish skills also check their
-base or target branch. `azure-devops-work-item-start` skips comparing an open PR
-only on exit 3 or a name outside that ASCII set, and stops on any other
-failure. Worktree paths, bead ids, the
+caller that branches on unsafe also accepts a non-zero exit whose stderr is one
+or more `unsafe branch name:` lines and nothing else. The start, delivery, PR,
+Codex review cycle, and cleanup skills of both providers and the Beads worktree
+and merge cleanup skills check their branch; the PR create and publish skills
+also check their base or target branch. `azure-devops-work-item-start` skips
+comparing an open PR only for a name outside that ASCII set, exit 3, or a
+non-zero exit whose stderr is one or more `unsafe branch name:` lines and
+nothing else, and stops on any other failure. Worktree paths, bead ids, the
 head owner (which `github-pr-create` checks with its own rule), and base
 branches outside the PR create and publish skills are not checked by it.
 `tests/check_branch_name.bats` covers the script.

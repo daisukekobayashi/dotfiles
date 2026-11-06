@@ -41,8 +41,8 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      `node <script> -- '<target>' '<source>'`, where `<script>` is
      [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
      resolved from this skill's directory. When it exits 3, or exits non-zero
-     with stderr made only of `unsafe branch name: ` lines, skip and report
-     that PR the same way and continue. On any other non-zero exit, including
+     with stderr of one or more `unsafe branch name: ` lines and nothing else,
+     skip and report that PR the same way and continue. On any other non-zero exit, including
      when the check cannot run, stop and report it. On exit 0, compare
      changed files with `git diff --name-only <target>...<source>` when both
      branches are available as local or remote-tracking refs. Do not fetch or
