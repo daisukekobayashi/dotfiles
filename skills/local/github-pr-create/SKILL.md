@@ -30,8 +30,14 @@ This skill is not for:
    - Confirm the working directory is inside a git repository.
    - Resolve the current branch with `git branch --show-current`.
    - Stop and report the branch unless it is a **safe branch name**, using only `[A-Za-z0-9/._-]`, before running any command with it.
-   - Resolve the remote repository with `gh repo view --json nameWithOwner,defaultBranchRef`.
+   - Resolve the remote repository with `gh repo view --json nameWithOwner,url,defaultBranchRef`. This is the PR **base repository**; `<base host>` is the host of its `url`.
    - Stop if the current branch is the default branch.
+   - Resolve the **head repository**, the `<owner>/<repo>` the branch was pushed to. Use the push remote and `<owner>/<repo>` that `github-pr-publish` passes, as given, or a head `<owner>/<repo>` or remote the user names. Otherwise, when neither is given and the skill is invoked directly: the effective push remote is `branch.<branch>.pushRemote`, or `remote.pushDefault` when that is unset; when it is set and names a different remote than `branch.<branch>.remote`, stop and ask the user to name the head `<owner>/<repo>` or the remote, because the branch may have been pushed there. Then read `<remote>` with `git config --get-all branch.<branch>.remote` and continue only on exactly one value. For a remote, the head repository is the `<owner>/<repo>` that its fetch URL and every push URL (`git remote -v`) name on `<base host>`, normalized as in `github-pr-publish` step 2. When the head repository cannot be determined, as with no upstream, an SSH host alias, another host, or URLs that name different repositories, stop and ask the user to name the head `<owner>/<repo>` or the remote; do not fall back to a bare `--head <branch>`.
+   - Stop and report the head owner unless it is a **safe owner name**, using only `[A-Za-z0-9-]` and not starting with `-`. Check it before any command uses it, including an owner that `github-pr-publish` passes.
+   - The PR is **cross-repository** when the head repository differs from the base repository, compared case-insensitively. For a cross-repository PR:
+     - Stop and report when the owners match but the repository names differ; `--head <owner>:<branch>` cannot select that repository.
+     - Look up the owner type on the base repository's host with `gh api --hostname <base host> users/<owner> --jq .type`, and stop and report when it is `Organization`, which `gh pr create --head` does not support, or when the lookup fails.
+     - In these stops, say that the user can name the head `<owner>/<repo>`, or update the remote with `git remote set-url` when its URL still names a renamed or transferred repository.
 2. Find an optional pull request template.
    - Check these paths in order:
      - `.github/pull_request_template.md`
@@ -58,20 +64,24 @@ This skill is not for:
    - Do not use an auto-closing keyword for a parent tracker unless this PR
      completes the whole tracker.
 4. Avoid duplicate PRs.
-   - Run `gh pr view --json number,url,state,headRefName,baseRefName` on the current branch.
-   - If a PR already exists, return that PR and do not create another one.
+   - Run `gh pr view --json number,url,state,headRefName,baseRefName,headRepository,headRepositoryOwner` on the current branch.
+   - If a PR exists and its head repository is the head repository (`headRepositoryOwner.login`/`headRepository.name`, compared case-insensitively), return that PR and do not create another one.
+   - If a PR exists with another head repository or none, stop and report its number, URL, and head repository; do not create or reuse a PR.
 5. Create the PR.
    - Use the repository default branch as the base unless the user specifies another base.
    - Use `gh pr create --base <base> --head <branch> --body-file <tmp-file>`.
+   - For a cross-repository PR, pass `--head <owner>:<branch>` with the head repository's owner instead of `--head <branch>`.
    - If a title is not provided, derive a concise title from the branch name and recent commits.
 6. Verify the result.
-   - Run `gh pr view --json number,url,title,state,baseRefName,headRefName`.
+   - Run `gh pr view <number> --json number,url,title,state,baseRefName,headRefName,headRepository,headRepositoryOwner` with the PR number from step 4 or the URL `gh pr create` printed.
+   - Stop and report unless the PR's head repository is the head repository.
    - Report the PR URL and whether it was newly created or already existed.
 
 ## Guardrails
 
 - Do not commit, push, merge, or request reviews.
 - Do not create a duplicate PR for a branch that already has one.
+- Do not create or reuse a PR whose head repository is not the head repository.
 - Do not hardcode or print secrets while summarizing diffs or templates.
 - Do not modify repository files while preparing the PR body.
 - If GitHub authentication, permissions, or branch publication blocks PR creation, report the blocker and stop.

@@ -52,6 +52,7 @@ Still stop and ask before any action outside that narrow scope, including:
    - Resolve the remote repository with `gh repo view --json nameWithOwner,url,defaultBranchRef`.
    - Resolve the push remote. Use the remote the user names. Otherwise `<remote>` is the one remote whose fetch URL and every push URL (`git remote -v`) name the repository's host and `<owner>/<repo>`, ignoring the scheme, user, letter case, and a trailing `.git` or `/`. Stop and report the candidates when more than one remote matches. When none matches, as with an SSH host alias, stop and ask the user to name the remote.
    - Without a user-named remote, rule out a fork layout when at least one other remote exists, where `gh repo view` and gh's default repository can name a parent or an older ancestor rather than the push target. With no other remote, skip this check. Look up the resolved repository and each other remote's repository with `gh repo view <owner>/<repo> --json parent,isFork`; a repository **has a parent** when `parent` is not null or `isFork` is true. Check every other remote: stop and ask the user to name the remote when its repository or the resolved repository has a parent, when its fetch URL and push URLs name different repositories (normalized as above), or when the check cannot finish: any of its fetch or push URLs does not name an `<owner>/<repo>` on the resolved repository's host, such as an SSH host alias or a non-GitHub mirror, or a parent lookup fails, such as for an inaccessible or deleted repository or a network or auth error; a failed lookup is not "no parent". Any parent stops, because the lookup shows only the direct parent and cannot rule out a fork of a fork or a cousin fork.
+   - Resolve the **head repository**, the push remote's `<owner>/<repo>`. For a remote matched above, it is the resolved repository. For a user-named remote, it is the `<owner>/<repo>` that its fetch URL and every push URL name on the resolved repository's host, normalized as above. When they do not name one, as with an SSH host alias, another host, or URLs that name different repositories, stop and ask the user to name the head `<owner>/<repo>`.
    - Stop if the current branch is the default branch.
 3. Inspect local state before changing anything.
    - Run `git status --short --branch`.
@@ -84,11 +85,12 @@ Still stop and ask before any action outside that narrow scope, including:
    - Do not force push, delete remote branches, or rewrite history.
 8. Create or resolve the PR.
    - Use the `github-pr-create` skill for the target branch.
+   - Pass the push remote and the head repository `<owner>/<repo>` from step 2; that skill uses them as given and opens a PR from another repository than the base as `--head <owner>:<branch>`.
    - That skill should use a pull request template when present and a minimal generic body when no template exists.
    - That skill should apply its related issue rules: `Closes #123` for issues fully completed by the PR, and `Refs #123` for parent trackers, partial work, follow-ups, or context.
    - Reuse an existing PR when one already exists for the branch.
 9. Verify and report the result.
-   - Run `gh pr view --json number,url,title,state,baseRefName,headRefName`.
+   - Run `gh pr view <number> --json number,url,title,state,baseRefName,headRefName` with the PR number from step 8.
    - Report the branch, commit SHA if one was created, push target, PR URL, whether the PR was new or existing, and the verification command/result.
 
 ## Output Format
