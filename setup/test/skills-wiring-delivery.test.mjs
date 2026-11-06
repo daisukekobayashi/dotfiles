@@ -322,6 +322,12 @@ test("delivery-common owns the shared completion policy", async () => {
     /the calling workflow defines task closure/,
     /Before cleanup, keep this task's follow-up candidates in a record outside the worktree being removed/,
     /create-or-drop recommendation/,
+    /the creation criterion it meets or `none`/,
+    /Recommend create only when the candidate meets at least one criterion/,
+    /it reproduces under supported use of the changed behavior;/,
+    /it is an exploitable security vulnerability;/,
+    /the user asked for it\./,
+    /Otherwise recommend drop, including theoretical edge cases and tests that only pin current behavior\./,
     /source links to the calling workflow's create skill/,
     /Pending candidates do not block `Complete`/,
   ]) {
