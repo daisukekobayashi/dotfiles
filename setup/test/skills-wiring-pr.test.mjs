@@ -77,7 +77,9 @@ test("PR create opens a fork PR with the head owner and reuses only its own head
   assert.match(context, /before any command uses it, including an owner that `github-pr-publish` passes/);
   assert.match(context, /\*\*cross-repository\*\* when the head repository differs from the base repository, compared case-insensitively/);
   assert.match(context, /Stop and report when the owners match but the repository names differ/, "same-owner fork stops");
-  assert.match(context, /`gh api users\/<owner> --jq \.type`[^.]*stop and report when it is `Organization`/, "org-owned head stops");
+  assert.match(context, /`gh api --hostname <base host> users\/<owner> --jq \.type`[^.]*stop and report when it is `Organization`/, "org-owned head stops; lookup on the base host");
+  assert.match(context, /When invoked directly and `branch\.<branch>\.pushRemote` or `remote\.pushDefault` is set and names a different remote than `branch\.<branch>\.remote`, stop and ask the user to name the head `<owner>\/<repo>` or the remote/, "divergent push remote stops");
+  assert.match(context, /`git remote set-url`[^.]*renamed or transferred repository/, "stop suggests updating a stale remote URL");
 
   assert.match(reuse, /`gh pr view --json number,url,state,headRefName,baseRefName,headRepository,headRepositoryOwner`/);
   assert.match(reuse, /If a PR exists and its head repository is the head repository \(`headRepositoryOwner\.login`\/`headRepository\.name`, compared case-insensitively\), return that PR/);
@@ -86,8 +88,11 @@ test("PR create opens a fork PR with the head owner and reuses only its own head
   assert.match(createStep, /`gh pr create --base <base> --head <branch> --body-file <tmp-file>`/, "same-repository command unchanged");
   assert.match(createStep, /For a cross-repository PR, pass `--head <owner>:<branch>` with the head repository's owner/);
   assert.match(verify, /`gh pr view <number> --json number,url,title,state,baseRefName,headRefName,headRepository,headRepositoryOwner`/);
+  assert.match(verify, /Stop and report unless the PR's head repository is the head repository\./, "verification checks the head");
+  assert.match(create, /^- Do not create or reuse a PR whose head repository is not the head repository\.$/m, "guardrail");
 
   assert.match(resolve, /Resolve the \*\*head repository\*\*/);
+  assert.match(resolve, /For a user-named remote, it is the `<owner>\/<repo>` that its fetch URL and every push URL name on the resolved repository's host, normalized as above/, "user-named remote URL normalization");
   assert.match(resolve, /stop and ask the user to name the head `<owner>\/<repo>`/);
   assert.match(handoff, /Pass the push remote and the head repository `<owner>\/<repo>` from step 2/);
   assert.match(report, /`gh pr view <number> --json number,url,title,state,baseRefName,headRefName`/);
