@@ -71,10 +71,14 @@ covers only the processes recorded below and sends only SIGTERM.
    skill's directory.
 2. After the run, whether it succeeded or failed, list again. A process running
    `app-server-broker.mjs` is a broker this run started only when it is absent
-   from the first list, by PID and start time, and its `--cwd` argument, or its
-   cwd when it has none, resolves to exactly the target worktree root. The list
-   also matches paths below the target, such as a nested worktree; prefix
-   matching never establishes ownership here. Report any other listed broker,
+   from the first list, by PID and start time, and its `cwd` column in the
+   second list equals exactly the target worktree root. The companion starts
+   the broker with its cwd set to the `--cwd` path, so the untruncated `cwd`
+   column carries that path. The `command` column is cut to 200 characters and
+   never establishes ownership. A missing, unreadable, or ` (deleted)` cwd is
+   not an exact match. The list also matches paths below the target, such as a
+   nested worktree; prefix matching never establishes ownership here. Report
+   any other listed broker,
    whether pre-existing or under the target without equaling it, and leave it
    running. If the run started none, report that and stop here.
 3. Record each started broker's tree from the second list: the broker and every

@@ -379,7 +379,10 @@ test("Codex review runs stop only the broker tree they started", async () => {
   assert.match(brokers, /stopping them needs no confirmation/);
   assert.match(brokers, /Before the run, record `scripts\/list-processes\.sh <worktree>`/);
   assert.match(brokers, /is a broker this run started only when it is absent from the first list, by PID and start time, and/);
-  assert.match(brokers, /its `--cwd` argument, or its cwd when it has none, resolves to exactly the target worktree root/);
+  assert.match(brokers, /its `cwd` column in the second list equals exactly the target worktree root/);
+  assert.match(brokers, /The `command` column is cut to 200 characters and never establishes ownership/);
+  assert.match(brokers, /A missing, unreadable, or ` \(deleted\)` cwd is not an exact match/);
+  assert.doesNotMatch(brokers, /`--cwd` argument, or its cwd when it has none/);
   assert.match(brokers, /prefix matching never establishes ownership here/);
   assert.match(brokers, /Report any other listed broker, whether pre-existing or under the target without equaling it, and leave it running\./);
   assert.match(brokers, /every listed process descending from it by `ppid`, with PID and start time/);
