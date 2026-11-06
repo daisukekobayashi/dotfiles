@@ -233,6 +233,7 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(agents, /^- exclude `skills\/\*\*\/\*\.md` from agent instruction files$/m);
   assert.match(agents, /^- add `skills\/local\/delivery-common\/\*\*`$/m);
   assert.match(agents, /^- add `skills\/local\/change-\*review\/\*\*`$/m);
+  assert.match(agents, /^- add `skills\/local\/\*-delivery\/\*\*`$/m);
   assert.match(riskTier, /^## Sensitive paths$/m);
   assert.match(riskTier, /deletes `SECURITY\.md`, `REVIEW\.md`, or `CODEOWNERS`\s+touches a sensitive path/);
   assert.match(riskTier, /Always read policy at the delivery's recorded base/);
