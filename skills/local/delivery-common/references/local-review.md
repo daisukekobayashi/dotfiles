@@ -78,6 +78,21 @@ evidence, applying these defaults:
   `duplicate` unless new evidence changes the assessment. Pass the earlier local
   and hosted dispositions from the progress record to hosted follow-up so it
   applies the same rule.
+- **Self-closures:** Keep a self-closure list in the progress record so the user
+  can check what the implementation owner closed alone. A self-closure is a
+  `material` finding that ends without a verified fix and is not left open for
+  the user, whatever its disposition: `explained`, `stale`, `skipped`, or a
+  `duplicate` of one. Also list, marked `downgraded`, a finding triaged `minor`
+  that its reviewer labelled at the blocking level: High from `change-review`
+  or `change-adversarial-review`, Critical or High from
+  `change-security-review`, P0 or P1 from a hosted reviewer. Give each entry
+  the finding, its source reviewer and round or thread, the reviewer's label,
+  the disposition, and the reason. A later `duplicate` adds its source to the
+  existing entry. Drop an entry once a later round verifies a fix or re-triage
+  leaves the finding open for the user. A material `change-security-review`
+  finding closes only under [Risk Tier](risk-tier.md), so it never enters this
+  list. The list informs the user; publication and merge approval cover it,
+  and a finding the user reopens is open again.
 
 Apply worthwhile fixes and record a concise reason for each explained, duplicate,
 stale, pre-existing, or skipped finding. Leave disputed material findings and

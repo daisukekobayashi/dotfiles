@@ -32,7 +32,9 @@ This skill does not commit or push; the user or an orchestration skill owns publ
    do not represent them as verified or ready for writeback.
 8. Assign a disposition to every latest AI feedback item, even when no code changed.
 9. Return a prepared record with the repository/PR, inspected head commit,
-   review/comment/thread IDs, per-item disposition and supporting evidence,
+   review/comment/thread IDs, per-item disposition, triage class (`material`,
+   `minor`, or `pre-existing`, from steps 5-6), reviewer label (or `none`),
+   and supporting evidence,
    changed files, verification result, proposed replies, resolve candidates,
    open items, and any publication still needed. Mark dispositions based on
    local changes as pending publication, including `stale` or `duplicate` when

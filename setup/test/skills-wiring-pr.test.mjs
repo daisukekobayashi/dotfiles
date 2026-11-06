@@ -49,6 +49,20 @@ test("Codex review cycle pushes review fixes to the publication remote", async (
   assert.match(push, /Confirm the fixes are present in the remote PR head/);
 });
 
+test("AI review follow-up and Codex cycle return per-item triage for items not applied", async () => {
+  const followup = (await readText(
+    path.join(repoRoot, "skills", "local", "github-pr-ai-review-followup", "SKILL.md"),
+  )).replace(/\s+/g, " ");
+  const cycle = (await readText(
+    path.join(repoRoot, "skills", "local", "github-pr-codex-review-cycle", "SKILL.md"),
+  )).replace(/\s+/g, " ");
+
+  assert.match(followup, /per-item disposition, triage class \(`material`, `minor`, or `pre-existing`, from steps 5-6\), reviewer label \(or `none`\), and supporting evidence/);
+  const report = cycle.match(/## Final Report.*/)?.[0];
+  assert.ok(report, "missing final report");
+  assert.match(report, /- Not applied: one line per item not `applied`, from the prepared record: `<thread>`: <finding> - `<reviewer label>` - `<triage class>` - `<disposition>`: <reason>; or "None"/);
+});
+
 test("PR create opens a fork PR with the head owner and reuses only its own head", async () => {
   const create = await readText(
     path.join(repoRoot, "skills", "local", "github-pr-create", "SKILL.md"),

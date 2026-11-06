@@ -116,8 +116,9 @@ Pass the earlier local and hosted dispositions from the progress record, and
 have its follow-up assess hosted findings with Local Review's Assess findings.
 
 Record the returned status, PR, published head, reviewed head, dispositions, and
-unresolved items. An acknowledgement or an `eyes` reaction is not a completed
-review. An open PR is not a merged PR.
+unresolved items. Add the self-closures among its items not applied to the list
+under Local Review's Assess findings. An acknowledgement or an `eyes` reaction
+is not a completed review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
 for focused follow-up or a full review under Local Review's Repeat and advance. Obtain a fresh

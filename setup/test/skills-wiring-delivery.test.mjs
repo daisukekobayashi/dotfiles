@@ -369,6 +369,39 @@ test("delivery-common owns the shared completion policy", async () => {
   }
 });
 
+test("delivery shows material self-closures before publication and at merge", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = (...parts) => readText(path.join(localRoot, ...parts));
+  const localReview = flat(await read("delivery-common", "references", "local-review.md"));
+  const completion = flat(await read("delivery-common", "references", "completion.md"));
+  const github = flat(await read("github-issue-delivery", "SKILL.md"));
+  const azure = flat(await read("azure-devops-work-item-delivery", "SKILL.md"));
+
+  const selfClosures = localReview.match(/- \*\*Self-closures:\*\*.*?(?= Apply worthwhile fixes)/)?.[0];
+  assert.ok(selfClosures, "Assess findings defines self-closures");
+  for (const rule of [
+    /Keep a self-closure list in the progress record/,
+    /A self-closure is a `material` finding that ends without a verified fix and is not left open for the user, whatever its disposition: `explained`, `stale`, `skipped`, or a `duplicate` of one\./,
+    /marked `downgraded`, a finding triaged `minor` that its reviewer labelled at the blocking level: High from `change-review` or `change-adversarial-review`, Critical or High from `change-security-review`, P0 or P1 from a hosted reviewer\./,
+    /the finding, its source reviewer and round or thread, the reviewer's label, the disposition, and the reason/,
+    /A later `duplicate` adds its source to the existing entry\./,
+    /Drop an entry once a later round verifies a fix or re-triage leaves the finding open for the user\./,
+    /A material `change-security-review` finding closes only under \[Risk Tier\]\(risk-tier\.md\), so it never enters this list\./,
+    /publication and merge approval cover it, and a finding the user reopens is open again\./,
+  ]) {
+    assert.match(selfClosures, rule, `local-review.md: ${rule}`);
+  }
+
+  assert.match(completion, /finding dispositions, the self-closure list under Local Review, follow-up candidates/);
+  assert.match(completion, /Beside them, show the self-closure list under \[Local Review\]\(local-review\.md\), or `none` when it is empty\./);
+  assert.match(completion, /user-accepted security findings, the self-closure list or `none`, and the proposed repository-supported merge method/);
+
+  assert.match(github, /Add the self-closures among its items not applied to the list under Local Review's Assess findings\./);
+  for (const [delivery, skill] of [["github-issue-delivery", github], ["azure-devops-work-item-delivery", azure]]) {
+    assert.doesNotMatch(skill, /`none` when it is empty|marked `downgraded`/, `${delivery} restates the self-closure policy`);
+  }
+});
+
 test("delivery resume checks the recorded branch name", async () => {
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const skill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));

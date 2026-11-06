@@ -171,6 +171,8 @@ Use this structure:
 - Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result>`
 - Codex: `<acknowledged/completed/blocked summary>`
 - Follow-up: `<applied/explained/skipped/pre-existing/stale/duplicate counts>`
+- Not applied: one line per item not `applied`, from the prepared record:
+  `<thread>`: <finding> - `<reviewer label>` - `<triage class>` - `<disposition>`: <reason>; or "None"
 - Review fix commit: `<sha>` or "No review-fix commit needed"
 - Writeback: `<replied/resolved counts>`
 
