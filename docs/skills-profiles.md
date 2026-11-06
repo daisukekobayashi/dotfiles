@@ -273,7 +273,10 @@ some shells treat more than `'` as a quote, such as PowerShell with
 U+2018-U+201B. The script stays the authority for the leading `-` and any later
 rule. Exit 0 means every name is safe, 2 is a usage error, and 3 means at least
 one is unsafe (each reported on stderr); any other status, including the 1 that
-`node` returns for a missing script, means the check could not run. The start, delivery, PR, Codex review cycle,
+`node` returns for a missing script, means the check could not run. A host
+shell may report a non-zero status other than 3, as PowerShell reports 1, so a
+caller that branches on unsafe also accepts a non-zero exit whose stderr is
+only `unsafe branch name:` lines. The start, delivery, PR, Codex review cycle,
 and cleanup skills of both providers and the Beads worktree and merge cleanup
 skills check their branch; the PR create and publish skills also check their
 base or target branch. `azure-devops-work-item-start` skips comparing an open PR

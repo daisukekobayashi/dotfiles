@@ -152,9 +152,10 @@ test("azure-devops-work-item-start skips comparing an open PR with an unsafe bra
 
   assert.ok(step2, "missing step 2");
   const check = step2.search(new RegExp(escapeRegExp(
-    `For each PR, check its source and target names as \`az repos pr list\` returns them before running any command with them: run \`node <script> -- '<target>' '<source>'\`, ${scriptClause}. When either name uses any character other than ASCII letters, digits, \`/\`, \`.\`, \`_\`, and \`-\`, or the check exits 3, they are not both a **safe branch name**: skip that PR's comparison without writing the names into any command, report the PR and its branch as not compared, and continue. On any other non-zero exit, including when the check cannot run, stop and report it. On exit 0, compare`,
+    `For each PR, check its source and target names as \`az repos pr list\` returns them before running any command with them. When either name uses any character other than ASCII letters, digits, \`/\`, \`.\`, \`_\`, and \`-\`, it is not a **safe branch name**: skip that PR's comparison without writing the names into any command, report the PR and its branch as not compared, and continue. Otherwise run \`node <script> -- '<target>' '<source>'\`, ${scriptClause}. When it exits 3, or exits non-zero with stderr made only of \`unsafe branch name: \` lines, skip and report that PR the same way and continue. On any other non-zero exit, including when the check cannot run, stop and report it. On exit 0, compare`,
   )));
-  assert.ok(check >= 0, "both names checked by the script; only exit 3 or a name outside the ASCII set skips the PR, and other failures stop");
+  assert.ok(check >= 0, "the ASCII gate precedes the check; only a name outside the ASCII set, exit 3, or unsafe-only stderr skips the PR, and other failures stop");
+  assert.ok(step2.indexOf("any character other than ASCII letters") < step2.indexOf("`node <script> --"), "ASCII gate precedes writing the names into the check");
   assert.ok(check < step2.indexOf("available as local or remote-tracking refs"), "names checked before the ref availability check");
   assert.ok(check < step2.indexOf("git diff --name-only"), "names checked before git diff");
 });

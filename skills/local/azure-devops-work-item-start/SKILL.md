@@ -33,15 +33,17 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      them as inferred.
    - When multiple Work Items were provided, list open PRs with
      `az repos pr list`. For each PR, check its source and target names as
-     `az repos pr list` returns them before running any command with them:
-     run `node <script> -- '<target>' '<source>'`, where `<script>` is
-     [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
-     resolved from this skill's directory. When either name uses any character
-     other than ASCII letters, digits, `/`, `.`, `_`, and `-`, or the check
-     exits 3, they are not both a **safe branch name**: skip that PR's
+     `az repos pr list` returns them before running any command with them.
+     When either name uses any character other than ASCII letters, digits,
+     `/`, `.`, `_`, and `-`, it is not a **safe branch name**: skip that PR's
      comparison without writing the names into any command, report the PR and
-     its branch as not compared, and continue. On any other non-zero exit,
-     including when the check cannot run, stop and report it. On exit 0, compare
+     its branch as not compared, and continue. Otherwise run
+     `node <script> -- '<target>' '<source>'`, where `<script>` is
+     [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
+     resolved from this skill's directory. When it exits 3, or exits non-zero
+     with stderr made only of `unsafe branch name: ` lines, skip and report
+     that PR the same way and continue. On any other non-zero exit, including
+     when the check cannot run, stop and report it. On exit 0, compare
      changed files with `git diff --name-only <target>...<source>` when both
      branches are available as local or remote-tracking refs. Do not fetch or
      check out branches only for this.
