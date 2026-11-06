@@ -818,6 +818,25 @@ function entryIdentities(directory) {
     }
     return identities;
 }
+// Fails when an install left an agent skills directory, or a directory on the
+// way to it inside the work directory, as a symbolic link or anything other
+// than a directory. entryIdentities sees no entries there, so the collision and
+// reserved-name checks would pass, and the link would be moved into the
+// project. An absent directory is left to requireInstalledSkills.
+function requireRealAgentSkillDir(workDir, agent, source) {
+    let current = workDir;
+    for (const part of path.relative(workDir, agentSkillDir(workDir, agent)).split(path.sep)) {
+        current = path.join(current, part);
+        const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+        if (!stat) {
+            return;
+        }
+        if (!stat.isDirectory()) {
+            const reason = stat.isSymbolicLink() ? "symbolic link" : "not a directory";
+            fail(`skill entry collision in project install: ${path.relative(workDir, current)} (${source}, ${reason})`);
+        }
+    }
+}
 // All sources install in sequence into one work directory, so a later source
 // can replace an entry an earlier source produced. Fail when an install
 // removes or replaces any entry that existed before it ran.
@@ -837,6 +856,7 @@ function installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCache
             NPM_CONFIG_CACHE: npmCacheDir,
         });
         for (const agent of agents) {
+            requireRealAgentSkillDir(workDir, agent, entry.source);
             const skillsDir = agentSkillDir(workDir, agent);
             const agentOwners = owners.get(agent);
             for (const [name, identity] of before.get(agent)) {

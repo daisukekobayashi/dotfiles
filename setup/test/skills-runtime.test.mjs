@@ -1496,6 +1496,52 @@ done
   });
 }
 
+// The install leaves an agent skills directory, or a directory on the way to
+// it, as something other than a directory. A link to a directory that holds
+// every requested skill passes the SKILL.md check, so only this check stops it.
+const skillsDirReplacements = {
+  "the agent skills directory with a link": {
+    npxSuffix: '[ -L .claude/skills ] || { mv .claude/skills .linked-claude-skills && ln -s ../.linked-claude-skills .claude/skills; }\n',
+    message: /skill entry collision in project install: \.claude\/skills \(anthropics\/skills, symbolic link\)/,
+  },
+  "a directory above the agent skills directory with a link": {
+    npxSuffix: '[ -L .claude ] || { mv .claude .linked-claude && ln -s .linked-claude .claude; }\n',
+    message: /skill entry collision in project install: \.claude \(anthropics\/skills, symbolic link\)/,
+  },
+  "the agent skills directory with a file": {
+    npxSuffix: 'rm -rf .agents/skills && printf file > .agents/skills\n',
+    message: /skill entry collision in project install: \.agents\/skills \(anthropics\/skills, not a directory\)/,
+  },
+};
+
+for (const [label, { npxSuffix, message }] of Object.entries(skillsDirReplacements)) {
+  test(`project scope fails when an install replaces ${label} and restores the project`, posixOnly, async () => {
+    const fixture = await createFixture({ npxSuffix });
+    try {
+      const previous = path.join(fixture.project, ".agents", "skills", "previous");
+      await mkdir(previous, { recursive: true });
+      await writeFile(path.join(previous, "SKILL.md"), "previous skill\n");
+
+      const result = runSkills(
+        ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+        fixture,
+        { cwd: fixture.project },
+      );
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, message);
+      assert.equal((await lstat(path.join(fixture.project, ".agents"))).isDirectory(), true);
+      assert.equal((await lstat(path.join(fixture.project, ".agents", "skills"))).isDirectory(), true);
+      assert.deepEqual(await readdir(path.join(fixture.project, ".agents", "skills")), ["previous"]);
+      for (const output of [path.join(".claude", "skills"), "skills-lock.json"]) {
+        assert.equal(await lstat(path.join(fixture.project, output)).then(() => true, () => false), false);
+      }
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
 test("project scope keeps entries a later install leaves untouched", posixOnly, async () => {
   const fixture = await createFixture();
   try {
