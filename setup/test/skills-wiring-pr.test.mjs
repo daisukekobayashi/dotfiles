@@ -48,3 +48,47 @@ test("Codex review cycle pushes review fixes to the publication remote", async (
   assert.doesNotMatch(push, /normal push/, "a plain push follows pushRemote away from the PR head");
   assert.match(push, /Confirm the fixes are present in the remote PR head/);
 });
+
+test("PR create opens a fork PR with the head owner and reuses only its own head", async () => {
+  const create = await readText(
+    path.join(repoRoot, "skills", "local", "github-pr-create", "SKILL.md"),
+  );
+  const publish = await readText(
+    path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md"),
+  );
+  const step = (text, n) =>
+    text.match(new RegExp(`\\n${n}\\. [\\s\\S]*?(?=\\n${n + 1}\\. |\\n## )`))?.[0]?.replace(/\s+/g, " ");
+  const context = step(create, 1);
+  const reuse = step(create, 4);
+  const createStep = step(create, 5);
+  const verify = step(create, 6);
+  const resolve = step(publish, 2);
+  const handoff = step(publish, 8);
+  const report = step(publish, 9);
+
+  assert.ok(context && reuse && createStep && verify, "missing create steps");
+  assert.ok(resolve && handoff && report, "missing publish steps");
+
+  assert.match(context, /the push remote and `<owner>\/<repo>` that `github-pr-publish` passes, as given/, "publish handoff used as given");
+  assert.match(context, /When invoked directly, read `<remote>` with `git config --get-all branch\.<branch>\.remote` and continue only on exactly one value/, "direct call derives from the upstream");
+  assert.match(context, /normalized as in `github-pr-publish` step 2/);
+  assert.match(context, /When the head repository cannot be determined[^.]*stop and ask the user to name the head `<owner>\/<repo>` or the remote; do not fall back to a bare `--head <branch>`/);
+  assert.match(context, /\*\*safe owner name\*\*, using only `\[A-Za-z0-9-\]` and not starting with `-`/);
+  assert.match(context, /before any command uses it, including an owner that `github-pr-publish` passes/);
+  assert.match(context, /\*\*cross-repository\*\* when the head repository differs from the base repository, compared case-insensitively/);
+  assert.match(context, /Stop and report when the owners match but the repository names differ/, "same-owner fork stops");
+  assert.match(context, /`gh api users\/<owner> --jq \.type`[^.]*stop and report when it is `Organization`/, "org-owned head stops");
+
+  assert.match(reuse, /`gh pr view --json number,url,state,headRefName,baseRefName,headRepository,headRepositoryOwner`/);
+  assert.match(reuse, /If a PR exists and its head repository is the head repository \(`headRepositoryOwner\.login`\/`headRepository\.name`, compared case-insensitively\), return that PR/);
+  assert.match(reuse, /If a PR exists with another head repository or none, stop and report its number, URL, and head repository; do not create or reuse a PR/);
+
+  assert.match(createStep, /`gh pr create --base <base> --head <branch> --body-file <tmp-file>`/, "same-repository command unchanged");
+  assert.match(createStep, /For a cross-repository PR, pass `--head <owner>:<branch>` with the head repository's owner/);
+  assert.match(verify, /`gh pr view <number> --json number,url,title,state,baseRefName,headRefName,headRepository,headRepositoryOwner`/);
+
+  assert.match(resolve, /Resolve the \*\*head repository\*\*/);
+  assert.match(resolve, /stop and ask the user to name the head `<owner>\/<repo>`/);
+  assert.match(handoff, /Pass the push remote and the head repository `<owner>\/<repo>` from step 2/);
+  assert.match(report, /`gh pr view <number> --json number,url,title,state,baseRefName,headRefName`/);
+});
