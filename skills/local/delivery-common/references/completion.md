@@ -24,7 +24,8 @@ exact branch and worktree, task and spec, recorded base, verification, risk
 tier, and local review evidence.
 
 Before publication, show the user the tier, its main reasons, the recommended
-human review, and any security deferred candidates or user-accepted security
+human review from the column Risk Tier applies, the heaviest recorded tier when
+it differs from the current one, and any security deferred candidates or user-accepted security
 findings under [Risk Tier](risk-tier.md). Beside them, show the self-closure
 list under [Local Review](local-review.md), or `none` when it is empty, and any
 pre-existing Critical or High security findings.
@@ -38,12 +39,27 @@ waiting or blocked. Approval for one head does not cover an intervening
 material change; reassess before proceeding.
 
 Present the PR URL, task, reviewed and published head, base, checks, review
-outcome including any security review, the risk tier for that head with its
-recommended human review, any security deferred candidates or user-accepted
+outcome including any security review, the risk tier for that head and the
+heaviest tier recorded in this delivery when it differs, the recommended human
+review from the column [Risk Tier](risk-tier.md#tier-procedure) applies, any security deferred candidates or user-accepted
 security findings, the self-closure list or `none`, any pre-existing Critical
 or High security findings, and the proposed repository-supported merge method,
 plus the calling workflow's additions. Request confirmation to merge that
 specific PR.
+
+Combine the merge and cleanup confirmations only when every tier recorded in
+this delivery, including the one for the merge head, is Low under
+[Risk Tier](risk-tier.md#tier-procedure). Before presenting the merge, have the
+calling workflow's cleanup skill preview the exact cleanup targets, and request
+one confirmation for that PR merge and those targets. That confirmation approves
+cleanup only when the user gives it in their own message, explicitly accepts the
+cleanup targets, and, after the merge, every cleanup safety check passes and the
+targets match the preview as the cleanup skill's Caller preview defines. A reply
+that approves the merge without explicitly accepting the cleanup targets
+approves the merge only; any other reply approves neither. A
+changed head, a resume, or any other target difference requires a separate
+cleanup confirmation. At every other tier, cleanup keeps its own confirmation after the
+merge.
 
 After approval, recheck the target and merge within that approval, keeping
 checks and policies in force and the source branch in place. If the user merges

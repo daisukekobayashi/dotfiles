@@ -27,8 +27,9 @@ is missing, prepare the concrete result and request only the approval needed for
 the next operation. Reuse authorization already given for the same scope.
 
 The workflow includes the selected local review passes and the normal publication,
-Codex review, and writeback cycle. It requires separate confirmation for the
-specific PR merge and for the exact local cleanup resources. Preserve all
+Codex review, and writeback cycle. It requires explicit confirmation for the
+specific PR merge and for the exact local cleanup resources, combined only where
+Delivery Completion's Merge confirmation allows. Preserve all
 applicable dependency, history-rewrite, remote-write, and user-change protections.
 
 ## Prepare and Coordinate
@@ -77,15 +78,15 @@ result carries forward. A progress file is evidence, not authorization.
 
 ### 1. Preflight, implement, and verify
 
-Use `design-preflight-with-docs` for this issue in its worktree before editing the
+Set the tentative tier under [Risk Tier](../delivery-common/references/risk-tier.md)
+first. Use `design-preflight-with-docs` for this issue in its worktree before editing the
 implementation, drafted by the worker and asked by the coordinator under Worker
-Dialogue. Forward any requested mode or question limit; otherwise use its
-default. Give it the issue's shared understanding result: its agreed decisions
-and agreed issue changes are settled scope, and its preflight items open the
+Dialogue. Forward any requested mode or question limit; otherwise use the mode
+the tier's Tier procedure selects. Give it the issue's
+shared understanding result: its agreed decisions and agreed issue changes are settled scope, and its preflight items open the
 design questions. Inherit its completion and documentation criteria without an additional
 interview. Carry forward settled decisions on resume. Leave material unanswered
-decisions pending and continue only work that does not depend on them. Set the
-tentative tier under [Risk Tier](../delivery-common/references/risk-tier.md).
+decisions pending and continue only work that does not depend on them.
 
 Implement the issue's acceptance criteria and confirmed examples, following the resulting design and
 repository conventions. Run the smallest relevant checks. Record actual results
@@ -126,7 +127,8 @@ dispositions, and unresolved items. An acknowledgement or an `eyes` reaction is
 not a completed review. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
-for focused follow-up or a full review under Local Review's Repeat and advance. Obtain a fresh
+for focused follow-up or a full review under Local Review's Repeat and advance.
+Within the hosted rounds the Risk Tier's Tier procedure sets, obtain a fresh
 hosted Codex review when the delta from the last hosted-reviewed head to the
 published head contains a material change under Local Review's Triage, whether
 it came from hosted or local follow-up; when uncertain, request it. Otherwise,
@@ -144,8 +146,10 @@ and published, and remaining thread dispositions clearly close them.
 ### 4. Confirm and perform the merge
 
 Check and present the merge under Delivery Completion's Merge confirmation,
-adding the hosted review outcome and its remaining review threads. After
-approval, merge through the available GitHub tool or CLI.
+adding the hosted review outcome and its remaining review threads. When it
+combines the confirmations, use `github-worktree-cleanup`'s caller preview for
+the cleanup targets. After approval, merge through the available GitHub tool or
+CLI.
 
 ### 5. Confirm cleanup and verify completion
 
@@ -155,8 +159,9 @@ Completion.
 Use `github-worktree-cleanup` for this issue's branch and worktree. Pass the
 verified merge evidence. Let it inspect runtime resources, show exact
 targets including any remote branch it proposes, obtain confirmation, and
-perform its safety checks. A merge confirmation
-alone does not approve cleanup. Preserve a dirty, busy, or otherwise unsafe
+perform its safety checks. Pass a combined confirmation only as Delivery
+Completion's Merge confirmation allows; otherwise a merge confirmation alone
+does not approve cleanup. Preserve a dirty, busy, or otherwise unsafe
 worktree and report the blocker.
 
 Verify the PR is merged and the confirmed local targets are gone. Read the issue
@@ -167,9 +172,9 @@ than a fully completed issue delivery.
 ## Bounds and Handoffs
 
 Local review rounds follow Local Review's Repeat and advance; hosted-fix
-follow-ups use the same local budget. Default to at most three hosted Codex
-review rounds per issue across this delivery, including resumes. A hosted round
-requires actual output. User-specified lower limits take precedence. Apply
+follow-ups use the same local budget. Hosted Codex review rounds per issue
+follow the Risk Tier's Tier procedure across this delivery, including resumes.
+A hosted round requires actual output. Apply
 Delivery Completion's Bounds, adding a hosted limit reached with required work
 remaining as a stop condition. At a hosted limit, include the remaining-findings
 classification from Local Review's Assess findings. Ask before extending the

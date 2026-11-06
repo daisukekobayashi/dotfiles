@@ -2,9 +2,10 @@
 
 Use the caller's GitHub issue or Azure DevOps Work Item as the task context.
 
-On every host, use the `change-review` skill for the first pass and the
-`change-adversarial-review` skill for the second. When the [Risk Tier](risk-tier.md)
-selects it, add the `change-security-review` skill as a third reviewer. Each runs
+On every host, the [Risk Tier](risk-tier.md)'s
+[Tier procedure](risk-tier.md#tier-procedure) selects the reviewers: the
+`change-review` skill for the first pass, the `change-adversarial-review` skill
+for the second, and the `change-security-review` skill as a third. Each runs
 in a fresh subagent of the current host unless the user's delivery request
 explicitly names another review tool, such as Codex; forward that instruction to
 every selected skill and read their instructions for how each route runs. Do not
@@ -24,7 +25,8 @@ preparation. Run a full review unless Repeat and advance selects focused
 follow-up.
 
 Before running reviewers on a pinned head, set the tier for that head under
-[Risk Tier](risk-tier.md) and record it with the selected reviewers.
+[Risk Tier](risk-tier.md), including its Low check, and record it with the
+selected reviewers.
 
 For delivery, use `--base <base-sha> --scope branch` with every selected skill to
 review the committed implementation. Include new code and files in a normal
@@ -123,16 +125,17 @@ full-review base/head and completed follow-up coverage. Pin the new committed
 head, and give the relevant independent reviewers the accepted findings,
 dispositions, and all changes since the preceding reviewed snapshot. Have them
 verify the fixes and check regressions in affected paths, with enough surrounding
-context to trace behavior. Use both reviewers when changes affect both areas of
-coverage, and the security reviewer when Risk Tier selects it, run as Risk
-Tier directs. Wait for the required results before the implementation owner edits.
+context to trace behavior. Use each selected normal and adversarial reviewer
+whose area of coverage the changes affect, and the security reviewer when Risk
+Tier selects it, run as Risk Tier directs. Wait for the required results before
+the implementation owner edits.
 
 Return the reviewed head, scope, confirmed fixes, remaining findings, and coverage
 limits. Earlier review evidence remains valid for unaffected areas; decide
 whether broader changes require another full review under Repeat and advance. Keep
 newly discovered material risks visible for that assessment.
 
-Run `change-review` and `change-adversarial-review` with
+Run the selected `change-review` and `change-adversarial-review` with
 `--base <preceding reviewed head> --scope branch`, and `change-security-review`
 with the base Risk Tier sets; pass the accepted findings and dispositions as
 focus text. Preserve the route's independence and read-only requirements.
@@ -140,8 +143,7 @@ focus text. Preserve the route's independence and read-only requirements.
 ## Run the full review
 
 A full review is one pass of every selected reviewer over the entire task diff,
-not only the last fix commit: `change-review` and `change-adversarial-review`,
-plus `change-security-review` when selected. Run them as separate reviewers
+not only the last fix commit. Run them as separate reviewers
 independent of the implementation owner: a separate fresh subagent of the
 current host for each, or a separate fresh run of the explicitly named tool for
 each, as the skills define. Report the reduced independence of same-host
@@ -168,17 +170,18 @@ coverage insufficient.
 
 Advance when acceptance criteria are met, verification is current, no required
 new full review is still pending, the most recent full review and the
-follow-ups completed since it cover the current head with the reviewers its
-current tier selects, and no material actionable finding or human decision
+follow-ups completed since it cover the current head with the reviewers the
+Tier procedure selects, and no material actionable finding or human decision
 remains open. A required new full review counts as the most recent one only
 after it completes. Recorded deferrals of minor or pre-existing findings do not
 require another round or a result with zero findings. Failed, unavailable,
 empty, or partial review output is not a pass.
 
-Allow at most three local review rounds per target across the delivery,
-including resumes. Count the initial full review, each focused follow-up on a
-fixed snapshot, and each required new full review as one round apiece, including
-any reviewer Risk Tier adds on the same head. Lower user limits take precedence.
+Allow at most the local review rounds the Tier procedure sets per target
+across the delivery, including resumes. Count the initial full review, each
+focused follow-up on a fixed snapshot, and each required new full review as
+one round apiece, including any reviewer Risk Tier adds on the same head. Lower
+user limits take precedence.
 Advance as soon as the criteria above are met. At the limit with required work
 remaining, preserve progress, report the remaining-findings classification from
 Assess findings, and ask before extending the budget.
