@@ -39,6 +39,8 @@ cleanup session, so discover them from process state.
    Add dev servers/watchers known from existing launch information, tool
    sessions, or explicit user-provided targets. A cwd or `--cwd` under the
    target establishes ownership; a port or process name alone is insufficient.
+   A row with reason `cwd ambiguous` never establishes ownership, because its
+   cwd may name another directory: report it as uncertain.
    Interactive shells, terminal panes, and agent sessions with a tty (such as
    `zsh`, `claude`, or `codex` TUIs) are not runtimes: report them and leave them
    running. Report other uncertain candidates and leave them running too.
@@ -77,8 +79,9 @@ covers only the processes recorded below and sends only SIGTERM.
    column carries that path. The `command` column is cut to 200 characters and
    never establishes ownership. A missing, unreadable, or ` (deleted)` cwd is
    not an exact match, nor is a `cwd` column containing a backslash: the script
-   escapes control bytes and backslashes in the path. The list also matches paths below the target, such as a
-   nested worktree; prefix matching never establishes ownership here. Report
+   escapes control bytes and backslashes in the path, and a `cwd ambiguous`
+   row always carries one. The list also matches paths below the target, such
+   as a nested worktree; prefix matching never establishes ownership here. Report
    any other listed broker,
    whether pre-existing or under the target without equaling it, and leave it
    running. If the run started none, report that and stop here.

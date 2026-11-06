@@ -59,8 +59,9 @@ row_for() {
   awk -F '\t' -v pid="$1" '$1 == pid' <<<"${output}"
 }
 
+# $2 is the expected reason: the 0x01 in the name makes an lsof cwd ambiguous.
 check_crafted_cwd() {
-  local lister="$1" decoy crafted sleeper
+  local lister="$1" reason="$2" decoy crafted sleeper
   start_in "${outside}"
   decoy="${started_pid}"
   # The part after the newline reads as a row for the decoy with cwd == target.
@@ -76,7 +77,7 @@ check_crafted_cwd() {
   assert_no_forged_row "${decoy}"
   [ "$(row_for "${sleeper}" | wc -l | tr -d ' ')" -eq 1 ]
   [ "$(row_for "${sleeper}" | cut -f5)" = "${target}/c\\x01\\\\d/x\\n${decoy}\\t${target}" ]
-  [ "$(row_for "${sleeper}" | cut -f6)" = "cwd under target" ]
+  [ "$(row_for "${sleeper}" | cut -f6)" = "${reason}" ]
 }
 
 check_trailing_newline_and_plain() {
@@ -116,9 +117,27 @@ check_literal_notation() {
   [ "$(row_for "${literal_pid}" | cut -f5)" = "${target}/a^@b\\\\x41" ]
 }
 
-# lsof prints a literal "^A" like a control byte; the existing directory decides.
-check_literal_caret() {
-  local lister="$1" dir dir_pid
+# /proc reads a literal "^A" directory name exactly.
+check_literal_caret_proc() {
+  local dir dir_pid
+  dir="${target}/w^A"
+  mkdir -p "${dir}"
+  start_in "${dir}"
+  dir_pid="${started_pid}"
+  sleep 0.3
+
+  run "${script}" "${target}"
+  [ "$(row_for "${dir_pid}" | cut -f5)" = "${dir}" ]
+  [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd under target" ]
+
+  run "${script}" --stale
+  [ -z "$(row_for "${dir_pid}")" ]
+}
+
+# lsof prints a literal "^A" like a control byte, so the cwd stays ambiguous.
+check_ambiguous_caret_lsof() {
+  local lister dir dir_pid
+  lister="$(lsof_script)"
   dir="${target}/w^A"
   mkdir -p "${dir}"
   start_in "${dir}"
@@ -126,15 +145,41 @@ check_literal_caret() {
   sleep 0.3
 
   run "${lister}" "${target}"
-  [ "$(row_for "${dir_pid}" | cut -f5)" = "${dir}" ]
-  [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd under target" ]
+  [ "$(row_for "${dir_pid}" | cut -f5)" = "${target}/w\\x01" ]
+  [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd ambiguous" ]
 
   run "${lister}" --stale
-  [ -z "$(row_for "${dir_pid}")" ]
+  [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd ambiguous" ]
+}
+
+# A target "m^A^B" and a sibling "m^A<0x02>" print alike; neither row may claim
+# the target exactly or as "cwd under target".
+check_mixed_caret_lsof() {
+  local lister base sibling target_pid sibling_pid
+  lister="$(lsof_script)"
+  base="${BATS_TEST_TMPDIR}"
+  target="$(mkdir -p "${base}/m^A^B" && cd "${base}/m^A^B" && pwd -P)"
+  sibling="${target%^B}"$'\x02'
+  mkdir -p "${sibling}"
+  start_in "${target}"
+  target_pid="${started_pid}"
+  start_in "${sibling}"
+  sibling_pid="${started_pid}"
+  sleep 0.3
+
+  run "${lister}" "${target}"
+  assert_no_forged_row ""
+  [[ "${output}" != *$'\tcwd under target\t'* ]]
+  [ "$(row_for "${target_pid}" | cut -f6)" = "cwd ambiguous" ]
+  [ "$(row_for "${sibling_pid}" | cut -f6)" = "cwd ambiguous" ]
 }
 
 @test "list-processes escapes a crafted cwd instead of forging a row" {
-  check_crafted_cwd "${script}"
+  if [[ -d /proc/self ]]; then
+    check_crafted_cwd "${script}" "cwd under target"
+  else
+    check_crafted_cwd "${script}" "cwd ambiguous"
+  fi
 }
 
 @test "list-processes keeps a trailing newline escaped and a plain cwd raw" {
@@ -144,7 +189,7 @@ check_literal_caret() {
 @test "list-processes lsof path escapes a crafted cwd the same way" {
   [[ -d /proc/self ]] || skip "the default run already uses lsof"
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
-  check_crafted_cwd "$(lsof_script)"
+  check_crafted_cwd "$(lsof_script)" "cwd ambiguous"
 }
 
 @test "list-processes lsof path keeps a trailing newline and a plain cwd" {
@@ -174,12 +219,17 @@ check_literal_caret() {
   [[ "${output}" == *"/b\\\\xc3"* ]]
 }
 
-@test "list-processes matches a literal ^A cwd and does not call it stale" {
-  check_literal_caret "${script}"
+@test "list-processes /proc path matches a literal ^A cwd exactly" {
+  [[ -d /proc/self ]] || skip "no /proc; the lsof tests cover this platform"
+  check_literal_caret_proc
 }
 
-@test "list-processes lsof path matches a literal ^A cwd and does not call it stale" {
-  [[ -d /proc/self ]] || skip "the default run already uses lsof"
+@test "list-processes lsof path lists a literal ^A cwd as ambiguous" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
-  check_literal_caret "$(lsof_script)"
+  check_ambiguous_caret_lsof
+}
+
+@test "list-processes lsof path never resolves mixed carets to the target" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  check_mixed_caret_lsof
 }

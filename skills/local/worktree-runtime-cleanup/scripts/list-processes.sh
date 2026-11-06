@@ -14,12 +14,17 @@
 # brokers and daemons. <started> lets callers detect PID reuse before stopping.
 # <cwd> is escaped so every process stays on one line: newline as \n, tab as
 # \t, backslash as \\, and other control bytes as \xNN; other bytes are as-is.
+# Without /proc, lsof prints a control byte and a literal "^A" to "^_" alike.
+# Such a cwd is ambiguous: <cwd> shows each as a control byte, so it always has
+# a backslash, and <reason> is "cwd ambiguous". PATH mode lists it when any
+# reading is PATH or below it, and --stale lists every ambiguous cwd instead of
+# calling it missing. A "cwd ambiguous" row never establishes ownership.
 # The script and its ancestors are never listed. It only reads process state;
 # it never sends signals.
 set -euo pipefail
 
 usage() {
-  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -44,9 +49,9 @@ case "${1:-}" in
     ;;
 esac
 
-# pid<TAB>cwd<NUL>alt<NUL> for every process of the current user, so a cwd may
-# contain any byte but NUL. alt is the other reading of an ambiguous lsof name,
-# or empty.
+# pid<TAB>cwd<NUL>literal<NUL> for every process of the current user, so a cwd
+# may contain any byte but NUL. literal is set only for an ambiguous lsof name;
+# see lsof_name.
 list_cwds() {
   local dir pid cwd field decoded literal
   if [[ -d /proc/self ]]; then
@@ -66,12 +71,7 @@ list_cwds() {
           p*) pid="${field#p}" ;;
           n*)
             lsof_name "${field#n}"
-            # Prefer the literal reading of "^X" only when it alone exists.
-            if [[ -n "${literal}" && -d "${literal}" && ! -d "${decoded}" ]]; then
-              printf '%s\t%s\0%s\0' "${pid}" "${literal}" "${decoded}"
-            else
-              printf '%s\t%s\0%s\0' "${pid}" "${decoded}" "${literal}"
-            fi
+            printf '%s\t%s\0%s\0' "${pid}" "${decoded}" "${literal}"
             ;;
         esac
       done
@@ -85,8 +85,9 @@ list_cwds() {
 # (\n, \t, \r, \b, \f, \\, \xHH, ^A to ^_) turned back into those bytes. lsof
 # leaves "^" unescaped, so "^X" is ambiguous: "decoded" reads it as a control
 # byte, and "literal" keeps it as written; "literal" is empty when the name has
-# no "^X". Any other sequence, such as "^@" or "\x41", stays as it is, so no
-# character is dropped and NUL is never produced.
+# no "^X". Each "^X" may be either, so no reading names the directory reliably.
+# Any other sequence, such as "^@" or "\x41", stays as it is, so no character is
+# dropped and NUL is never produced.
 lsof_name() {
   local LC_ALL=C name="$1" c next hex byte ambiguous=""
   decoded=""
@@ -193,6 +194,37 @@ under_target() {
   [[ "${dir}" == "${target}" || "${dir}" == "${target}/"* ]]
 }
 
+# Prints PATH as lsof's literal reading would show it: control bytes that lsof
+# prints as "^X" become those two characters.
+caret_form() {
+  local LC_ALL=C path="$1" out="" c i ch
+  for ((i = 0; i < ${#path}; i++)); do
+    c="${path:i:1}"
+    case "${c}" in
+      $'\n' | $'\t' | $'\r' | $'\b' | $'\f' | $'\x7f') out+="${c}" ;;
+      [[:cntrl:]])
+        printf -v ch '\\x%02x' "$(($(printf '%d' "'${c}") + 64))"
+        printf -v ch '%b' "${ch}"
+        out+="^${ch}"
+        ;;
+      *) out+="${c}" ;;
+    esac
+  done
+  printf '%s' "${out}"
+}
+
+# True when some reading of an ambiguous name is the target or below it. Every
+# reading has the same caret form, so comparing caret forms covers them all.
+maybe_under_target() {
+  [[ "$1" == "${caret_target}" || "$1" == "${caret_target}/"* ]]
+}
+
+caret_target=""
+if [[ "${mode}" == "path" ]]; then
+  caret_target="$(caret_form "${target}" && printf x)"
+  caret_target="${caret_target%x}"
+fi
+
 # The caller's shell usually runs inside the target; never list it.
 ancestors=" "
 pid=$$
@@ -205,21 +237,28 @@ done
 while IFS= read -r -d '' record; do
   pid="${record%%$'\t'*}"
   cwd="${record#*$'\t'}"
-  IFS= read -r -d '' alt || break
+  IFS= read -r -d '' literal || break
   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
   # A process that exits mid-listing is skipped rather than ending the list.
   arg_cwd="$(cwd_argument "${pid}")" || continue
   reason=""
   case "${mode}" in
     path)
-      if under_target "${cwd}" || { [[ -n "${alt}" ]] && under_target "${alt}"; }; then
+      if [[ -n "${literal}" ]]; then
+        if maybe_under_target "${literal}"; then
+          reason="cwd ambiguous"
+        fi
+      elif under_target "${cwd}"; then
         reason="cwd under target"
-      elif [[ -n "${arg_cwd}" ]] && under_target "${arg_cwd}"; then
+      fi
+      if [[ -z "${reason}" && -n "${arg_cwd}" ]] && under_target "${arg_cwd}"; then
         reason="--cwd under target"
       fi
       ;;
     stale)
-      if is_missing "${cwd}" && { [[ -z "${alt}" ]] || is_missing "${alt}"; }; then
+      if [[ -n "${literal}" ]]; then
+        reason="cwd ambiguous"
+      elif is_missing "${cwd}"; then
         reason="cwd missing"
       elif [[ -n "${arg_cwd}" ]] && is_missing "${arg_cwd}"; then
         reason="--cwd missing"
