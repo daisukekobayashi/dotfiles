@@ -16,6 +16,11 @@ it for the worktree they are about to remove. Review skills that run Codex
 follow only [Brokers Started by a Codex Review](#brokers-started-by-a-codex-review),
 so a broker found at cleanup is a leak to report.
 
+A confirmation a cleanup skill obtained from its Caller preview covers only the
+runtime resources listed there with the same identifiers: processes by PID,
+start time, and cwd, Compose projects with their `working_dir` and volumes, and
+temporary file paths. Get a separate confirmation for any other resource.
+
 Run this before `git worktree remove`: the live worktree helps establish runtime
 ownership, and Compose stacks can be matched by path rather than the weaker
 `--stale` reasons.

@@ -235,11 +235,27 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(agents, /^- add `skills\/local\/delivery-common\/\*\*`$/m);
   assert.match(agents, /^- add `skills\/local\/change-\*review\/\*\*`$/m);
   assert.match(agents, /^- add `skills\/local\/\*-delivery\/\*\*`$/m);
+  for (const pattern of [
+    "*-worktree-cleanup/**",
+    "worktree-runtime-cleanup/**",
+    "beads-merge-cleanup/**",
+    "github-pr-*/**",
+    "azure-devops-pr-*/**",
+    "azure-devops-common/**",
+    "github-issue-create/**",
+    "azure-devops-work-item-create/**",
+  ]) {
+    assert.ok(agents.includes(`- add \`skills/local/${pattern}\`\n`), `AGENTS.md: missing add ${pattern}`);
+  }
+  for (const line of agents.split("\n").filter((l) => l.startsWith("- "))) {
+    assert.match(line, /^- (add `[^`]+`|exclude `[^`]+` from [^`]+)$/, `AGENTS.md: invalid entry ${line}`);
+  }
   assert.match(riskTier, /^## Sensitive paths$/m);
   assert.match(riskTier, /deletes `SECURITY\.md`, `REVIEW\.md`, or `CODEOWNERS`\s+touches a sensitive path/);
   assert.match(riskTier, /Always read policy at the delivery's recorded base/);
   assert.match(riskTier, /Always run it with `--base <base-sha>`/);
-  assert.match(riskTier, /current tier is High/);
+  assert.match(riskTier, /focused follow-up when the\s+heaviest tier recorded in this delivery is High/);
+  assert.doesNotMatch(riskTier, /current tier is High/);
   assert.match(riskTier, /closes only by a\s+verified fix or an explicit decision to accept it in the user.s own message/);
   assert.match(localReview, /\[Risk Tier\]\(risk-tier\.md\)/);
   assert.match(localReview, /`change-security-review`/);
@@ -249,7 +265,7 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(deliverySkill, /\[Risk Tier\]\(\.\.\/delivery-common\/references\/risk-tier\.md\)/);
   }
   const completion = await readText(path.join(deliveryCommon, "references", "completion.md"));
-  assert.match(completion, /risk tier for that head with its\s+recommended human review/);
+  assert.match(completion, /risk tier for that head and the\s+heaviest tier recorded in this delivery when it differs, the recommended human\s+review from the column \[Risk Tier\]\(risk-tier\.md#tier-procedure\) applies/);
   assert.match(changeReview, /correctness/i);
   assert.match(changeReview, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
@@ -473,7 +489,8 @@ test("the risk tier table scales the delivery procedure", async () => {
   for (const row of ["Design preflight", "Local reviewers", "Local review rounds", "Hosted AI review rounds", "Merge and cleanup confirmation", "Recommended human review"]) {
     assert.match(procedure, new RegExp(`^\\| ${row} \\|`, "m"), row);
   }
-  assert.match(procedure, /^\| Local reviewers \| `change-review` \| `change-review` and `change-adversarial-review` \|/m);
+  assert.match(procedure, /^\| Local reviewers \| `change-review` \| `change-review` and `change-adversarial-review` \| `change-review` and `change-adversarial-review` \|$/m);
+  assert.match(procedure, /^\| Hosted AI review rounds \| One( \| A fresh round only while the delta since the last hosted-reviewed head is material; at most three){2} \|$/m);
   assert.match(procedure, /^\| Hosted AI review rounds \| One \|/m);
   assert.match(procedure, /^\| Merge and cleanup confirmation \| One combined confirmation [^|]*\| Separate \| Separate \|$/m);
   assert.match(procedure, /^\| Recommended human review \| AI review only \| One human reviewer \| Multiple human reviewers \|$/m);
@@ -491,12 +508,20 @@ test("the risk tier table scales the delivery procedure", async () => {
 
   const dialogue = flat(await readText(path.join(deliveryCommon, "references", "worker-dialogue.md")));
   assert.match(dialogue, /The worker sets the tentative tier under \[Risk Tier\]\(risk-tier\.md\), runs `design-preflight-with-docs` in draft mode/);
-  assert.match(dialogue, /For a Low tentative tier, also read back the draft's direction and assumptions and ask the user to confirm or correct them\./);
+  assert.match(dialogue, /For a Low tentative tier, first confirm it under Risk Tier's Low check; when it falls back to Medium, have the worker redraft in the mode Medium selects\./);
+  assert.match(dialogue, /For a confirmed Low tier, also read back the draft's direction and assumptions and ask the user to confirm or correct them\./);
+  assert.match(flat(riskTier), /\*\*Low check:\*\* when a rating gives Low, tentative or final, the coordinator independently checks it against the diff, or the planned paths for a tentative tier, and the sensitive paths at the recorded base before applying the Low column, and records the basis\. When it cannot confirm Low, use Medium\./);
+  assert.match(localReview, /set the tier for that head under \[Risk Tier\]\(risk-tier\.md\), including its Low check/);
+  assert.match(flat(riskTier), /Show the tier at the current head, the heaviest tier recorded in this delivery when it differs, their main reasons, and the recommended human review from the column \[Tier procedure\]\(#tier-procedure\) applies/);
 
   const completion = flat(await readText(path.join(deliveryCommon, "references", "completion.md")));
   assert.match(completion, /Combine the merge and cleanup confirmations only when every tier recorded in this delivery, including the one for the merge head, is Low/);
-  assert.match(completion, /approves cleanup only when the user gives it in their own message and, after the merge, every cleanup safety check passes and the targets match the preview exactly/);
-  assert.match(completion, /A changed head, a resume, or any target difference requires a separate cleanup confirmation\./);
+  const runtime = flat(await readText(path.join(repoRoot, "skills", "local", "worktree-runtime-cleanup", "SKILL.md")));
+  assert.match(runtime, /A confirmation a cleanup skill obtained from its Caller preview covers only the runtime resources listed there with the same identifiers/);
+  assert.match(completion, /show the user the tier, its main reasons, the recommended human review from the column Risk Tier applies, the heaviest recorded tier when it differs from the current one/);
+  assert.match(completion, /A reply that does not explicitly accept the cleanup targets approves the merge only\./);
+  assert.match(completion, /A changed head, a resume, or any other target difference requires a separate cleanup confirmation\./);
+  assert.match(completion, /explicitly accepts the cleanup targets, and, after the merge, every cleanup safety check passes and the targets match the preview as the cleanup skill's Caller preview defines/);
 
   for (const [delivery, cleanup] of [
     ["github-issue-delivery", "github-worktree-cleanup"],
@@ -508,12 +533,18 @@ test("the risk tier table scales the delivery procedure", async () => {
     assert.match(skill, new RegExp(`use \`${cleanup}\`'s caller preview for the cleanup targets`), delivery);
     assert.doesNotMatch(skill, /requires? separate confirmation for the specific PR merge/, delivery);
     assert.doesNotMatch(skill, /\bthree\b/, delivery);
+    if (delivery === "azure-devops-work-item-delivery") {
+      assert.match(skill, /this workflow\s+runs no hosted AI review rounds/, delivery);
+    }
 
     const cleanupSkill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
     const preview = cleanupSkill.match(/## Caller preview ([\s\S]*?)(?= ## |$)/)?.[1];
     assert.ok(preview, `${cleanup}: missing Caller preview`);
     assert.match(preview, /Remove and stop nothing\./, cleanup);
     assert.match(preview, /must match the preview exactly/, cleanup);
-    assert.match(cleanupSkill, /A caller's combined confirmation from \[Caller preview\]\(#caller-preview\) counts only when the user gave it in their own message for exactly these resources; on any difference, show them and ask again\./, cleanup);
+    assert.match(preview, /runtime resources with their identifiers: each process's PID, start time, and cwd as `list-processes\.sh` reports them, each Compose project with its `working_dir` and volumes, and each temporary file path/, cleanup);
+    assert.match(preview, /The one tolerated difference is a previewed remote branch that no longer exists, [^:]+: drop it and report it as already deleted by the host\./, cleanup);
+    assert.match(preview, /A combined confirmation authorizes stopping or removing only runtime resources whose identifiers match the preview; any new or different resource needs its own confirmation\./, cleanup);
+    assert.match(cleanupSkill, /Show runtime resources with the identifiers \[Caller preview\]\(#caller-preview\) lists\. A caller's combined confirmation from Caller preview counts only when the user gave it in their own message and explicitly accepted these resources, and they match the preview as Caller preview defines; otherwise show them and ask again\./, cleanup);
   }
 });

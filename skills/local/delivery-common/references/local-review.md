@@ -25,7 +25,8 @@ preparation. Run a full review unless Repeat and advance selects focused
 follow-up.
 
 Before running reviewers on a pinned head, set the tier for that head under
-[Risk Tier](risk-tier.md) and record it with the selected reviewers.
+[Risk Tier](risk-tier.md), including its Low check, and record it with the
+selected reviewers.
 
 For delivery, use `--base <base-sha> --scope branch` with every selected skill to
 review the committed implementation. Include new code and files in a normal

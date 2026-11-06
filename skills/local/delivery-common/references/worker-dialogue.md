@@ -39,10 +39,12 @@ For each target, in this order:
    `design-preflight-with-docs` in draft mode with the shared understanding
    result in the mode the tier's [Tier procedure](risk-tier.md#tier-procedure)
    selects, and returns its draft with the tier and its ratings.
-5. The coordinator verifies the preflight draft the same way, then asks its
-   questions under the preflight's question budget. When an answer changes a
-   dependent question, have the worker revise that question before asking it.
-   For a Low tentative tier, also read back the draft's direction and
+5. The coordinator verifies the preflight draft the same way. For a Low
+   tentative tier, first confirm it under Risk Tier's Low check; when it falls
+   back to Medium, have the worker redraft in the mode Medium selects. Then ask
+   the draft's questions under the preflight's question budget. When an answer
+   changes a dependent question, have the worker revise that question before
+   asking it. For a confirmed Low tier, also read back the draft's direction and
    assumptions and ask the user to confirm or correct them. Send the settled
    decisions to the worker.
 6. The worker writes the preflight's durable documentation and implements on the

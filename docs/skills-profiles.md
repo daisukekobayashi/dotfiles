@@ -161,7 +161,11 @@ Delivery workflows run it as a third local reviewer when the change's risk tier
 is High or the diff touches a sensitive path. A repository can add or exclude
 default sensitive paths in a `## Delivery sensitive paths` section of its root
 `AGENTS.md`; this repository excludes Markdown under `skills/` except in
-`delivery-common`, the `*-delivery` skills, and the `change-*review` skills.
+`delivery-common`, the `*-delivery` skills, the `change-*review` skills, and
+the skills that delete local or remote resources or write to GitHub or Azure
+DevOps (the worktree, runtime, and beads merge cleanup skills, the GitHub and
+Azure DevOps PR skills, `azure-devops-common`, and the issue and Work Item
+create skills).
 The shared `delivery-common` risk tier (Low, Medium, High) is set from the change rather than its author, and
 scales the review effort through one per-tier table: the preflight depth, the
 local reviewers and round limits, the hosted review rounds, whether the merge and

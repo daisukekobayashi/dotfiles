@@ -22,6 +22,10 @@ merge, and the exact cleanup targets.
   run that review on the same head as part of the same round.
 - **Changed head:** re-evaluate whenever the head changes, including hosted
   follow-up fixes, before reusing review evidence.
+- **Low check:** when a rating gives Low, tentative or final, the coordinator
+  independently checks it against the diff, or the planned paths for a
+  tentative tier, and the sensitive paths at the recorded base before applying
+  the Low column, and records the basis. When it cannot confirm Low, use Medium.
 
 Record the tier, the dimension ratings, the matched sensitive paths, any
 `AGENTS.md` entries ignored as invalid, and the head they describe in the
@@ -87,7 +91,7 @@ touches a sensitive path; changed policy applies to later deliveries, never this
 Run `change-security-review` as a third local reviewer when the tier is High or
 the task diff touches a sensitive path. Once selected, keep it on every later
 full review in this delivery, and include it in a focused follow-up when the
-current tier is High, the delta touches a sensitive path, or the delta fixes a
+heaviest tier recorded in this delivery is High, the delta touches a sensitive path, or the delta fixes a
 material security finding. Always run it with `--base <base-sha>` so its
 `SECURITY.md` policy comes from the recorded base; in a focused follow-up, name
 the delta and the findings it fixes in its focus text.
@@ -128,9 +132,10 @@ newly exposed design decision to the coordinator as a question.
 
 ## Recommend human review
 
-Show the tier, its main reasons, and the recommended human review from
-[Tier procedure](#tier-procedure) before PR publication and in the merge
-confirmation, and keep them in the progress record. Keep them
+Show the tier at the current head, the heaviest tier recorded in this delivery
+when it differs, their main reasons, and the recommended human review from the
+column [Tier procedure](#tier-procedure) applies before PR publication and in
+the merge confirmation, and keep them in the progress record. Keep them
 out of the PR body. The recommendation adds to repository-required approvals
 and never replaces them. When the recommended reviewers are unavailable, say so
 in the merge confirmation and let the user decide. For High, mention that
