@@ -158,6 +158,8 @@ OpenAI の `codex-security` の diff レビュー手順を参考に、変更が�
 sensitive path を対象外にしたり、material やセキュリティの基準を下げたりはできません。
 delivery フローでは、変更のリスク tier が High のとき、
 または diff が sensitive path に触れるときに3番目のローカルレビューとして実行します。
+リポジトリはルートの `AGENTS.md` の `## Delivery sensitive paths` セクションで、
+既定の sensitive path を追加または除外できます。このリポジトリは `delivery-common`、`*-delivery`、`change-*review` を除く `skills/` 配下の Markdown を除外します。
 `delivery-common` のリスク tier（Low、Medium、High）は作者ではなく変更から決まり、
 推奨する人間レビュー（AI のみ、1名、複数名）を PR 公開前とマージ確認時に提示します。
 PR 本文には書かず、マージ確認は常に必要です。Matt Pocock 版の `code-review` は規約・仕様の2軸で
