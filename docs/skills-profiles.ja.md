@@ -161,8 +161,14 @@ delivery フローでは、変更のリスク tier が High のとき、
 リポジトリはルートの `AGENTS.md` の `## Delivery sensitive paths` セクションで、
 既定の sensitive path を追加または除外できます。このリポジトリは `delivery-common`、`*-delivery`、`change-*review` を除く `skills/` 配下の Markdown を除外します。
 `delivery-common` のリスク tier（Low、Medium、High）は作者ではなく変更から決まり、
-推奨する人間レビュー（AI のみ、1名、複数名）を PR 公開前とマージ確認時に提示します。
-PR 本文には書かず、マージ確認は常に必要です。Matt Pocock 版の `code-review` は規約・仕様の2軸で
+tier ごとの1つの表でレビューの量を決めます。preflight の深さ、ローカルレビューの reviewer と
+ラウンド上限、hosted レビューのラウンド数、マージと cleanup の確認をまとめるかどうか、
+PR 公開前とマージ確認時に提示する推奨の人間レビュー（AI のみ、1名、複数名）です。
+Low の変更は短い preflight の読み上げ確認、`change-review` のみ、hosted レビュー1回、
+PR のマージと事前に確認した cleanup 対象を1度にまとめた確認になり、Medium と High は
+2つの reviewer によるローカルレビューを続けます。delivery の中で記録された最も重い tier が
+適用され、手順が途中で軽くなることはありません。tier は PR 本文には書かず、push、マージ、
+cleanup の明示的な承認はどの tier でも必要です。Matt Pocock 版の `code-review` は規約・仕様の2軸で
 確認したい場面向けに残し、delivery の標準レビューには使いません。
 
 外部 skill 用の pool/catalog ファイルは追加しません。Profile が curated external skill group の正本になります。
@@ -182,8 +188,9 @@ delivery スキルは、共通のポリシー層と薄いプロバイダー別�
   Work Item のリンクや状態遷移などのプロバイダー固有の状態が含まれます。共通の
   ポリシーは書き直さずに `delivery-common` を参照し、承認は `github-pr-publish` など
   呼び出す各スキルに委ねます。承認ルールはそれぞれのスキルが持ちます。
-  hosted Codex レビューのラウンド上限や再レビュー条件のように、片方のプロバイダーにしか
-  ないポリシーは、そのプロバイダーのスキルに残します。
+  hosted レビューのラウンド上限を含む tier ごとのレビュー量は、リスク tier の表にある
+  共通のポリシーです。Codex のトリガーや material な差分の判定のように、hosted
+  レビューの実行方法と差分に次のラウンドが必要かの判断は、プロバイダーのスキルに残します。
 
 `delivery-common` は、Worker Dialogue（worker が shared understanding と
 design preflight を草稿にし、コーディネーターがユーザーに質問する流れ）、ローカル
@@ -192,7 +199,7 @@ follow-up、reviewer の選択、ローカルレビューの full review への�
 条件、ラウンドの数え方と上限、head と coverage の記録）、リスク tier、Delivery
 Completion（進捗記録、公開前に示す tier、マージ確認で示す内容、delivery の上限と
 停止条件、最終報告と `Complete` の条件、delivery 終了時の follow-up 候補の報告と
-作成）を持ちます。その `SKILL.md` では、hosted レビューのポリシーと承認は呼び出し
+作成）を持ちます。その `SKILL.md` では、hosted レビューの実行方法と承認は呼び出し
 元のワークフローが持つとしています。共通の記述はプロバイダーに依存せず、task と
 task の完了（task closure）という言葉を使い、呼び出し元のワークフローが項目を追加
 する箇所を示します。各プロバイダー別スキルは、GitHub の hosted レビューの結果や

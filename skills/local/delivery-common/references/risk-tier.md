@@ -1,13 +1,15 @@
 # Risk Tier
 
-The tier describes the change, not its author. It selects the security
-reviewer and the recommended human review; every tier still runs the full
-local review and the caller's merge confirmation.
+The tier describes the change, not its author. It selects the review
+procedure in [Tier procedure](#tier-procedure), including the security reviewer
+and the recommended human review. Every tier keeps explicit approval for push,
+merge, and the exact cleanup targets.
 
 ## Set and update the tier
 
-- **Tentative:** at preflight, from the task's scope and the paths it will
-  likely touch.
+- **Tentative:** before the design preflight draft, from the shared
+  understanding result, the paths the task will likely touch, and the checks it
+  plans; rate protection from those planned checks.
 - **Final:** at the start of each full local review and focused follow-up,
   from the committed diff of the whole task against the recorded base. Impact,
   recoverability, and matched sensitive paths never drop below what was recorded
@@ -99,16 +101,36 @@ merge only with none open. Present its deferred candidates on sensitive paths,
 and any user-accepted security findings, to the user before publication and in
 the merge confirmation; they need a user decision, not silence.
 
+## Tier procedure
+
+| Procedure | Low | Medium | High |
+| --- | --- | --- | --- |
+| Design preflight | `quick`, with its direction and assumptions read back for the user's confirmation | The requested or default mode | The requested or default mode |
+| Local reviewers | `change-review` | `change-review` and `change-adversarial-review` | `change-review` and `change-adversarial-review` |
+| Local review rounds | At most three | At most three | At most three |
+| Hosted AI review rounds | One | A fresh round only while the delta since the last hosted-reviewed head is material; at most three | A fresh round only while the delta since the last hosted-reviewed head is material; at most three |
+| Merge and cleanup confirmation | One combined confirmation under [Delivery Completion](completion.md#merge-confirmation) | Separate | Separate |
+| Recommended human review | AI review only | One human reviewer | Multiple human reviewers |
+
+[Select the security review](#select-the-security-review) adds
+`change-security-review` to the local reviewers at any tier it selects. Hosted
+round counts apply only where the calling workflow runs a hosted AI review, and
+it defines the hosted review and its material-delta test. Lower user limits
+take precedence over every count.
+
+Apply the column of the heaviest tier recorded in this delivery, so the
+procedure never lightens within it. When the tier rises, the heavier column
+applies from the current head: rounds already spent count toward its limits,
+and each newly selected reviewer runs a full review of the whole task diff on
+the current head, within the same round when the rise is found during a round
+on that head. A rise after preflight keeps the completed preflight; return a
+newly exposed design decision to the coordinator as a question.
+
 ## Recommend human review
 
-| Tier | Recommended review |
-| --- | --- |
-| Low | AI review only |
-| Medium | One human reviewer |
-| High | Multiple human reviewers |
-
-Show the tier, its main reasons, and the recommendation before PR publication
-and in the merge confirmation, and keep them in the progress record. Keep them
+Show the tier, its main reasons, and the recommended human review from
+[Tier procedure](#tier-procedure) before PR publication and in the merge
+confirmation, and keep them in the progress record. Keep them
 out of the PR body. The recommendation adds to repository-required approvals
 and never replaces them. When the recommended reviewers are unavailable, say so
 in the merge confirmation and let the user decide. For High, mention that
@@ -121,4 +143,4 @@ Rating dimensions adapted from the `assess-patch-risk` risk rubric in OpenAI's
 [codex-security](https://github.com/openai/codex-security/tree/cb92c4fb41510a1c5e51452897e5d94b2f9f083e/plugins/codex-security)
 plugin (Apache-2.0), compared on 2026-11-04 with upstream commit `cb92c4f`.
 Its strict auto-merge gate became the Low tier here; local delivery always
-keeps the user's merge confirmation.
+keeps the user's merge confirmation, combined with cleanup only at Low.

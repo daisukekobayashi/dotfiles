@@ -45,6 +45,17 @@ or High security findings, and the proposed repository-supported merge method,
 plus the calling workflow's additions. Request confirmation to merge that
 specific PR.
 
+Combine the merge and cleanup confirmations only when every tier recorded in
+this delivery, including the one for the merge head, is Low under
+[Risk Tier](risk-tier.md#tier-procedure). Before presenting the merge, have the
+calling workflow's cleanup skill preview the exact cleanup targets, and request
+one confirmation for that PR merge and those targets. That confirmation approves
+cleanup only when the user gives it in their own message and, after the merge,
+every cleanup safety check passes and the targets match the preview exactly. A
+changed head, a resume, or any target difference requires a separate cleanup
+confirmation. At every other tier, cleanup keeps its own confirmation after the
+merge.
+
 After approval, recheck the target and merge within that approval, keeping
 checks and policies in force and the source branch in place. If the user merges
 separately, verify that outcome instead. Confirm the actual merged state and

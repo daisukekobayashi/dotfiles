@@ -32,8 +32,9 @@ checkpoint commits, normal pushes, and PR creation. Prepare the concrete result
 before requesting missing approval; reuse approval already given for the same
 scope.
 
-Require separate confirmation for the specific PR merge and the exact local
-cleanup resources. Work Item state transitions also require explicit intent;
+Require explicit confirmation for the specific PR merge and the exact local
+cleanup resources, combined only where Delivery Completion's Merge confirmation
+allows. Work Item state transitions also require explicit intent;
 include any proposed transitions in the merge confirmation. Preserve dependency,
 history-rewrite, remote-write, and user-change protections. This workflow ends
 its publication phase at the PR; it has no hosted AI review request or follow-up
@@ -82,15 +83,16 @@ carries forward. A progress record is evidence, not authorization.
 
 ### 1. Preflight, implement, and verify
 
-Use `design-preflight-with-docs` in the assigned worktree before implementation,
-drafted by the worker and asked by the coordinator under Worker Dialogue.
-Forward the requested mode/question limit or use its default. Give it the item's
+Set the tentative tier under [Risk Tier](../delivery-common/references/risk-tier.md)
+first. Use `design-preflight-with-docs` in the assigned worktree before
+implementation, drafted by the worker and asked by the coordinator under Worker
+Dialogue. Forward the requested mode/question limit or use the mode the tier's
+Tier procedure selects. Give it the item's
 shared understanding result: its agreed decisions and agreed changes are
 settled scope, and its preflight items open the design questions. Inherit its
 completion and documentation criteria without a second interview. Carry forward
 settled decisions on resume. Keep material unanswered decisions pending and
-continue only work that does not depend on them. Set the tentative tier under
-[Risk Tier](../delivery-common/references/risk-tier.md).
+continue only work that does not depend on them.
 
 Implement the Work Item's acceptance criteria, confirmed examples, and accepted design. Run focused
 repository checks and record actual results and coverage limits; the baseline
@@ -138,8 +140,9 @@ current source/target, required policies/CI, human approvals, discussion threads
 and mergeability. Keep source-HEAD concurrency limits explicit.
 
 Check and present the merge under Delivery Completion's Merge confirmation,
-adding the required policies and the proposed state-transition scope. Complete
-the PR as that reference describes.
+adding the required policies and the proposed state-transition scope. When it
+combines the confirmations, use `azure-devops-worktree-cleanup`'s caller preview
+for the cleanup targets. Complete the PR as that reference describes.
 
 ### 5. Confirm cleanup and verify completion
 
@@ -149,7 +152,8 @@ Completion.
 After verifying actual PR completion and the merged source/merge commit, use
 `azure-devops-worktree-cleanup` for the exact item branch/worktree. Pass merge
 evidence and let it inspect runtimes, show exact resources including any remote
-branch it proposes, obtain separate confirmation, and perform its safety checks.
+branch it proposes, obtain separate confirmation unless Delivery Completion's
+Merge confirmation combined it, and perform its safety checks.
 Preserve dirty, busy, or otherwise unsafe resources and report the blocker.
 
 Verify that confirmed local targets are gone. Read the Work Item's actual state
@@ -160,8 +164,8 @@ comment on the Work Item.
 
 ## Bounds and Handoffs
 
-Local review rounds follow Local Review's Repeat and advance. Apply Delivery
-Completion's Bounds.
+Local review rounds follow Local Review's Repeat and advance; this workflow
+runs no hosted AI review rounds. Apply Delivery Completion's Bounds.
 
 Check policies when reaching merge or resuming; avoid indefinite polling. If the
 user asks to wait, use a bounded window and report its limit; otherwise report

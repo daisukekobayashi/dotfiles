@@ -112,13 +112,13 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   assert.ok(repeat, "local-review.md: missing Repeat and advance");
   assert.match(repeat, /After fixes, run\s+relevant checks and use focused follow-up/);
   assert.match(repeat, /Repeat the full review only when the design or\s+change scope shifts materially, or new evidence makes the earlier full-review\s+coverage insufficient/);
-  assert.match(repeat, /no required\s+new full review is still pending, the most recent full review and the\s+follow-ups completed since it cover the current head with the reviewers its\s+current tier selects/);
+  assert.match(repeat, /no required\s+new full review is still pending, the most recent full review and the\s+follow-ups completed since it cover the current head with the reviewers the\s+Tier procedure selects/);
   assert.match(repeat, /A required new full review counts as the most recent one only\s+after it completes\./);
   const fullReview = localReview.match(/## Run the full review\n[\s\S]*?(?=\n## |$)/)?.[0];
   assert.ok(fullReview, "local-review.md: missing Run the full review");
   assert.match(fullReview, /A full review is one pass of every selected reviewer over the entire task diff,\s+not only the last fix commit/);
-  assert.match(repeat, /at most three local review rounds per target across the delivery,\s+including resumes/);
-  assert.match(repeat, /Count the initial full review, each focused follow-up on a\s+fixed snapshot, and each required new full review as one round apiece/);
+  assert.match(repeat, /at most the local review rounds the Tier procedure sets per target\s+across the delivery, including resumes/);
+  assert.match(repeat, /Count the initial full review, each\s+focused follow-up on a\s+fixed snapshot, and each required new full review as\s+one round apiece/);
   assert.match(repeat, /full-review and\s+follow-up head SHAs, their coverage, and the local round count/);
   assert.doesNotMatch(common, /owns[^.]*review round\s+limits/);
   assert.match(common, /^description: .*repeat or advance/m);
@@ -137,7 +137,8 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
     assert.doesNotMatch(skill, /selected local\s+reviews completed/, delivery);
     assert.doesNotMatch(skill, /Local Review's escalation rule/, delivery);
   }
-  assert.match(providers["github-issue-delivery"], /at most three hosted Codex\s+review rounds per issue/);
+  assert.match(providers["github-issue-delivery"], /Hosted Codex review rounds per issue\s+follow the Risk Tier's Tier procedure/);
+  assert.doesNotMatch(providers["github-issue-delivery"], /three hosted Codex/);
   assert.match(providers["github-issue-delivery"], /hosted-fix\s+follow-ups use the same local budget/);
   assert.match(providers["azure-devops-work-item-delivery"], /Advance when the exact published implementation is covered by the most recent\s+full review and the follow-ups completed since it under Local Review's Repeat\s+and advance/);
   assert.match(providers["github-issue-delivery"], /Advance only when the current\s+published head is covered by the most recent full review and the follow-ups\s+completed since it under Local Review's Repeat and advance/);
@@ -460,5 +461,59 @@ test("Codex review runs stop only the broker tree they started", async () => {
   for (const cleanup of ["github-worktree-cleanup", "azure-devops-worktree-cleanup"]) {
     const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
     assert.match(skill, /Before removal, follow `\.\.\/worktree-runtime-cleanup\/SKILL\.md` for the/, cleanup);
+  }
+});
+
+test("the risk tier table scales the delivery procedure", async () => {
+  const deliveryCommon = path.join(repoRoot, "skills", "local", "delivery-common");
+  const riskTier = await readText(path.join(deliveryCommon, "references", "risk-tier.md"));
+  const procedure = riskTier.match(/## Tier procedure\n[\s\S]*?(?=\n## |$)/)?.[0];
+  assert.ok(procedure, "risk-tier.md: missing Tier procedure");
+  assert.match(procedure, /^\| Procedure \| Low \| Medium \| High \|$/m);
+  for (const row of ["Design preflight", "Local reviewers", "Local review rounds", "Hosted AI review rounds", "Merge and cleanup confirmation", "Recommended human review"]) {
+    assert.match(procedure, new RegExp(`^\\| ${row} \\|`, "m"), row);
+  }
+  assert.match(procedure, /^\| Local reviewers \| `change-review` \| `change-review` and `change-adversarial-review` \|/m);
+  assert.match(procedure, /^\| Hosted AI review rounds \| One \|/m);
+  assert.match(procedure, /^\| Merge and cleanup confirmation \| One combined confirmation [^|]*\| Separate \| Separate \|$/m);
+  assert.match(procedure, /^\| Recommended human review \| AI review only \| One human reviewer \| Multiple human reviewers \|$/m);
+  assert.equal((riskTier.match(/^\| --- /gm) ?? []).length, 1, "risk-tier.md: one table");
+  const rules = flat(procedure);
+  assert.match(rules, /adds `change-security-review` to the local reviewers at any tier it selects/);
+  assert.match(rules, /Apply the column of the heaviest tier recorded in this delivery, so the procedure never lightens within it\./);
+  assert.match(rules, /rounds already spent count toward its limits, and each newly selected reviewer runs a full review of the whole task diff on the current head/);
+  assert.match(rules, /Lower user limits take precedence over every count\./);
+  assert.match(flat(riskTier), /Every tier keeps explicit approval for push, merge, and the exact cleanup targets\./);
+  assert.match(flat(riskTier), /\*\*Tentative:\*\* before the design preflight draft, from the shared understanding result, the paths the task will likely touch, and the checks it plans/);
+
+  const localReview = flat(await readText(path.join(deliveryCommon, "references", "local-review.md")));
+  assert.match(localReview, /\[Tier procedure\]\(risk-tier\.md#tier-procedure\) selects the reviewers/);
+
+  const dialogue = flat(await readText(path.join(deliveryCommon, "references", "worker-dialogue.md")));
+  assert.match(dialogue, /The worker sets the tentative tier under \[Risk Tier\]\(risk-tier\.md\), runs `design-preflight-with-docs` in draft mode/);
+  assert.match(dialogue, /For a Low tentative tier, also read back the draft's direction and assumptions and ask the user to confirm or correct them\./);
+
+  const completion = flat(await readText(path.join(deliveryCommon, "references", "completion.md")));
+  assert.match(completion, /Combine the merge and cleanup confirmations only when every tier recorded in this delivery, including the one for the merge head, is Low/);
+  assert.match(completion, /approves cleanup only when the user gives it in their own message and, after the merge, every cleanup safety check passes and the targets match the preview exactly/);
+  assert.match(completion, /A changed head, a resume, or any target difference requires a separate cleanup confirmation\./);
+
+  for (const [delivery, cleanup] of [
+    ["github-issue-delivery", "github-worktree-cleanup"],
+    ["azure-devops-work-item-delivery", "azure-devops-worktree-cleanup"],
+  ]) {
+    const skill = flat(await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md")));
+    assert.match(skill, /combined only where Delivery Completion's Merge confirmation allows/, delivery);
+    assert.match(skill, /use the mode the tier's Tier procedure selects/, delivery);
+    assert.match(skill, new RegExp(`use \`${cleanup}\`'s caller preview for the cleanup targets`), delivery);
+    assert.doesNotMatch(skill, /requires? separate confirmation for the specific PR merge/, delivery);
+    assert.doesNotMatch(skill, /\bthree\b/, delivery);
+
+    const cleanupSkill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
+    const preview = cleanupSkill.match(/## Caller preview ([\s\S]*?)(?= ## |$)/)?.[1];
+    assert.ok(preview, `${cleanup}: missing Caller preview`);
+    assert.match(preview, /Remove and stop nothing\./, cleanup);
+    assert.match(preview, /must match the preview exactly/, cleanup);
+    assert.match(cleanupSkill, /A caller's combined confirmation from \[Caller preview\]\(#caller-preview\) counts only when the user gave it in their own message for exactly these resources; on any difference, show them and ask again\./, cleanup);
   }
 });

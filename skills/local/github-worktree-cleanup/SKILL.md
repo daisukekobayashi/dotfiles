@@ -23,7 +23,7 @@ description: Use when the user says the work is already merged or otherwise comp
    - The branch is not the default branch and is not protected.
    - `gh pr list --head <branch> --state open` returns no other PR.
    If the remote branch no longer exists, report that and skip it.
-6. Show the exact resources that would be removed, including any proposed remote branch with its remote and SHA, and require explicit confirmation.
+6. Show the exact resources that would be removed, including any proposed remote branch with its remote and SHA, and require explicit confirmation. A caller's combined confirmation from [Caller preview](#caller-preview) counts only when the user gave it in their own message for exactly these resources; on any difference, show them and ask again.
 7. Remove the local worktree first when one exists. If you are inside it, change to a safe location before removal.
    - Before removal, follow `../worktree-runtime-cleanup/SKILL.md` for the worktree path. If that file is absent, say so in the summary.
 8. Delete the local branch after the worktree is removed.
@@ -31,6 +31,10 @@ description: Use when the user says the work is already merged or otherwise comp
    `git push --force-with-lease=refs/heads/<branch>:<sha> <remote> :refs/heads/<branch>`.
    If the lease is rejected, keep the branch and report that it changed.
 10. Summarize what was removed and what remains.
+
+## Caller preview
+
+When a delivery caller combines the merge and cleanup confirmations, it asks for a preview before the merge. Run steps 1-2, list the runtime resources `../worktree-runtime-cleanup/SKILL.md` would stop for the worktree path using only its read-only listing, and check step 5's conditions other than the merged state, taking the PR head SHA to be merged as the expected remote SHA. Return the worktree path, local branch, proposed remote branch with its remote and expected SHA, and runtime resources. Remove and stop nothing. After the merge, run the full workflow; the resources step 6 shows must match the preview exactly, and the remote SHA must equal both the expected SHA and the PR's merged `headRefOid`.
 
 ## Guardrails
 

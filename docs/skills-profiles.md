@@ -163,9 +163,16 @@ default sensitive paths in a `## Delivery sensitive paths` section of its root
 `AGENTS.md`; this repository excludes Markdown under `skills/` except in
 `delivery-common`, the `*-delivery` skills, and the `change-*review` skills.
 The shared `delivery-common` risk tier (Low, Medium, High) is set from the change rather than its author, and
-selects the recommended human review (AI only, one human, or multiple humans)
-shown before publication and at merge confirmation; it is not written into PR
-bodies, and merge confirmation is always required. Matt Pocock's `code-review` remains available
+scales the review effort through one per-tier table: the preflight depth, the
+local reviewers and round limits, the hosted review rounds, whether the merge and
+cleanup confirmations are combined, and the recommended human review (AI only,
+one human, or multiple humans) shown before publication and at merge
+confirmation. A Low change gets a short preflight read-back, `change-review`
+alone, one hosted round, and one confirmation that names the PR merge and the
+exact previewed cleanup targets; Medium and High keep the two-reviewer local
+review. The heaviest tier recorded in a delivery governs, so the procedure
+never lightens within it. The tier is not written into PR bodies, and explicit
+merge, push, and cleanup approval is required at every tier. Matt Pocock's `code-review` remains available
 for separate Standards/Spec reviews; it is not the delivery default.
 
 Do not add a separate external skill pool/catalog file. Profiles are the source of truth for curated external skill groups.
@@ -188,8 +195,10 @@ adapters.
   transitions. They reference `delivery-common` for shared policy instead of
   restating it, and forward approvals to the component skills they call, such
   as `github-pr-publish`, which keep their own approval rules.
-  Policy that exists for only one provider, such as hosted Codex review round
-  limits and re-review conditions, stays in that provider's skill.
+  Per-tier review effort, including the hosted review round limits, is shared
+  policy in the Risk Tier's table. How a hosted review runs and when its delta
+  needs another round, such as the Codex trigger and the material-delta test,
+  stay in the provider's skill.
 
 `delivery-common` holds the Worker Dialogue (workers draft the shared
 understanding and design preflight, and the coordinator asks the user), the
@@ -200,7 +209,7 @@ head and coverage record), the Risk Tier, and Delivery Completion (the progress
 record, the tier shown before publication, merge confirmation contents, delivery
 bounds and stop conditions, the final report and `Complete` rule, and
 end-of-delivery follow-up candidate reporting and creation). Its `SKILL.md` says
-the calling workflow owns hosted review policy and approvals. The shared text is
+the calling workflow owns how its hosted review runs and approvals. The shared text is
 provider-neutral: it names the task and task closure, and marks where the
 calling workflow adds its own items. Each provider skill lists only those
 additions next to its link, such as the hosted review outcome on GitHub or the
