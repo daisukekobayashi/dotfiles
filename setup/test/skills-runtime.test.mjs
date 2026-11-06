@@ -1542,6 +1542,52 @@ for (const [label, { npxSuffix, message }] of Object.entries(skillsDirReplacemen
   });
 }
 
+// A user install leaves the staging agent skills directory, or a directory on
+// the way to it, as something other than a directory. A link to a directory
+// outside staging that holds every requested skill passes the SKILL.md check,
+// so only this check keeps setup from copying what the link points to.
+const userSkillsDirReplacements = {
+  "the agent skills directory with a link": {
+    npxSuffix: 'if [ "${source_name}" = anthropics/skills ]; then mv .agents/skills "${TEST_OUTSIDE_DIR}/skills" && ln -s "${TEST_OUTSIDE_DIR}/skills" .agents/skills; fi\n',
+    message: /skill entry collision in user staging: \.agents\/skills \(anthropics\/skills, symbolic link\)/,
+  },
+  "a directory above the agent skills directory with a link": {
+    npxSuffix: 'if [ "${source_name}" = anthropics/skills ]; then mv .agents "${TEST_OUTSIDE_DIR}/agents" && ln -s "${TEST_OUTSIDE_DIR}/agents" .agents; fi\n',
+    message: /skill entry collision in user staging: \.agents \(anthropics\/skills, symbolic link\)/,
+  },
+  "the agent skills directory with a file": {
+    npxSuffix: 'if [ "${source_name}" = anthropics/skills ]; then rm -rf .agents/skills && printf file > .agents/skills; fi\n',
+    message: /skill entry collision in user staging: \.agents\/skills \(anthropics\/skills, not a directory\)/,
+  },
+};
+
+for (const [label, { npxSuffix, message }] of Object.entries(userSkillsDirReplacements)) {
+  test(`user scope fails when an install replaces ${label} and keeps the user view`, posixOnly, async () => {
+    const fixture = await createFixture({ npxSuffix });
+    try {
+      const outside = path.join(fixture.root, "outside");
+      await mkdir(outside);
+      fixture.env.TEST_OUTSIDE_DIR = outside;
+      const userRoot = path.join(fixture.dotfiles, ".agents", "user");
+      const old = path.join(userRoot, "skills", "old-user");
+      await mkdir(old, { recursive: true });
+      await writeFile(path.join(old, "SKILL.md"), "previous skill\n");
+      await writeFile(path.join(userRoot, "skills-profile.json"), "old-profile\n");
+
+      const result = runSkills(["--scope", "user", "--profile", "office", "--agent", "codex"], fixture);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, message);
+      assert.deepEqual((await readdir(userRoot)).sort(), ["skills", "skills-profile.json"]);
+      assert.deepEqual(await readdir(path.join(userRoot, "skills")), ["old-user"]);
+      assert.equal(await readText(path.join(old, "SKILL.md")), "previous skill\n");
+      assert.equal(await readText(path.join(userRoot, "skills-profile.json")), "old-profile\n");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
 test("project scope keeps entries a later install leaves untouched", posixOnly, async () => {
   const fixture = await createFixture();
   try {
