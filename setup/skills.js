@@ -820,10 +820,12 @@ function entryIdentities(directory) {
 }
 // Fails when an install left an agent skills directory, or a directory on the
 // way to it inside the work directory, as a symbolic link or anything other
-// than a directory. entryIdentities sees no entries there, so the collision and
-// reserved-name checks would pass, and the link would be moved into the
-// project. An absent directory is left to requireInstalledSkills.
-function requireRealAgentSkillDir(workDir, agent, source) {
+// than a directory. In a project install entryIdentities sees no entries there,
+// so the collision and reserved-name checks would pass, and the link would be
+// moved into the project; in a user install the copy would read what the link
+// points to outside the staging directory. An absent directory is left to
+// requireInstalledSkills.
+function requireRealAgentSkillDir(workDir, agent, source, place) {
     let current = workDir;
     for (const part of path.relative(workDir, agentSkillDir(workDir, agent)).split(path.sep)) {
         current = path.join(current, part);
@@ -833,7 +835,7 @@ function requireRealAgentSkillDir(workDir, agent, source) {
         }
         if (!stat.isDirectory()) {
             const reason = stat.isSymbolicLink() ? "symbolic link" : "not a directory";
-            fail(`skill entry collision in project install: ${path.relative(workDir, current)} (${source}, ${reason})`);
+            fail(`skill entry collision in ${place}: ${path.relative(workDir, current)} (${source}, ${reason})`);
         }
     }
 }
@@ -856,7 +858,7 @@ function installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCache
             NPM_CONFIG_CACHE: npmCacheDir,
         });
         for (const agent of agents) {
-            requireRealAgentSkillDir(workDir, agent, entry.source);
+            requireRealAgentSkillDir(workDir, agent, entry.source, "project install");
             const skillsDir = agentSkillDir(workDir, agent);
             const agentOwners = owners.get(agent);
             for (const [name, identity] of before.get(agent)) {
@@ -918,7 +920,8 @@ function runUserExternalInstalls(stagingBase, restoreSkillsDir, plan, npmCacheDi
                 ...process.env,
                 NPM_CONFIG_CACHE: npmCacheDir,
             });
-            const installedSkillsDir = path.join(installDir, ".agents", "skills");
+            requireRealAgentSkillDir(installDir, "codex", entry.source, "user staging");
+            const installedSkillsDir = agentSkillDir(installDir, "codex");
             requireInstalledSkills(installedSkillsDir, entry);
             copyDirectoryContents(installedSkillsDir, restoreSkillsDir, entry.source, owners);
         });
