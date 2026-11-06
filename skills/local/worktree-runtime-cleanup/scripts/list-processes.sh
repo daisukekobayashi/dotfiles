@@ -16,15 +16,17 @@
 # \t, backslash as \\, and other control bytes as \xNN; other bytes are as-is.
 # Without /proc, lsof prints a control byte and a literal "^A" to "^_" alike.
 # Such a cwd is ambiguous: <cwd> shows each as a control byte, so it always has
-# a backslash, and <reason> is "cwd ambiguous". PATH mode lists it when any
-# reading is PATH or below it, and --stale lists every ambiguous cwd instead of
-# calling it missing. A "cwd ambiguous" row never establishes ownership.
+# a backslash. PATH mode lists it as "cwd ambiguous" when any name that lsof
+# could have printed this way is PATH or below it; otherwise a --cwd argument
+# under PATH may still list it as "--cwd under target". --stale lists every
+# ambiguous cwd as "cwd ambiguous" instead of calling it missing. A
+# "cwd ambiguous" row never establishes ownership.
 # The script and its ancestors are never listed. It only reads process state;
 # it never sends signals.
 set -euo pipefail
 
 usage() {
-  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -49,11 +51,11 @@ case "${1:-}" in
     ;;
 esac
 
-# pid<TAB>cwd<NUL>literal<NUL> for every process of the current user, so a cwd
-# may contain any byte but NUL. literal is set only for an ambiguous lsof name;
+# pid<TAB>cwd<NUL>raw<NUL> for every process of the current user, so a cwd
+# may contain any byte but NUL. raw is set only for an ambiguous lsof name;
 # see lsof_name.
 list_cwds() {
-  local dir pid cwd field decoded literal
+  local dir pid cwd field decoded raw
   if [[ -d /proc/self ]]; then
     for dir in /proc/[0-9]*; do
       [[ -O "${dir}" ]] || continue
@@ -71,7 +73,7 @@ list_cwds() {
           p*) pid="${field#p}" ;;
           n*)
             lsof_name "${field#n}"
-            printf '%s\t%s\0%s\0' "${pid}" "${decoded}" "${literal}"
+            printf '%s\t%s\0%s\0' "${pid}" "${decoded}" "${raw}"
             ;;
         esac
       done
@@ -84,14 +86,14 @@ list_cwds() {
 # Sets "decoded" to lsof's escaped name with its escapes of non-printable bytes
 # (\n, \t, \r, \b, \f, \\, \xHH, ^A to ^_) turned back into those bytes. lsof
 # leaves "^" unescaped, so "^X" is ambiguous: "decoded" reads it as a control
-# byte, and "literal" keeps it as written; "literal" is empty when the name has
-# no "^X". Each "^X" may be either, so no reading names the directory reliably.
-# Any other sequence, such as "^@" or "\x41", stays as it is, so no character is
-# dropped and NUL is never produced.
+# byte, and "raw" keeps the whole name as lsof printed it for maybe_under_target;
+# "raw" is empty when the name has no "^X". Each "^X" may be either, so no
+# reading names the directory reliably. Any other sequence, such as "^@" or
+# "\x41", stays as it is, so no character is dropped and NUL is never produced.
 lsof_name() {
   local LC_ALL=C name="$1" c next hex byte ambiguous=""
   decoded=""
-  literal=""
+  raw=""
   if [[ "${name}" != *[\\^]* ]]; then
     decoded="${name}"
     return
@@ -118,7 +120,6 @@ lsof_name() {
       ^[A-Z\[\\\]^_])
         printf -v byte '\\x%02x' "$(($(printf '%d' "'${next}") - 64))"
         printf -v byte '%b' "${byte}"
-        literal+="${c}${next}"
         decoded+="${byte}"
         name="${name:2}"
         ambiguous=1
@@ -126,16 +127,14 @@ lsof_name() {
         ;;
     esac
     if [[ -n "${byte}" ]]; then
-      literal+="${byte}"
       decoded+="${byte}"
       name="${name:2}"
     else
-      literal+="${c}"
       decoded+="${c}"
       name="${name:1}"
     fi
   done
-  [[ -n "${ambiguous}" ]] || literal=""
+  [[ -z "${ambiguous}" ]] || raw="$1"
 }
 
 # Escapes a cwd for the one-line output; see the header.
@@ -194,36 +193,95 @@ under_target() {
   [[ "${dir}" == "${target}" || "${dir}" == "${target}/"* ]]
 }
 
-# Prints PATH as lsof's literal reading would show it: control bytes that lsof
-# prints as "^X" become those two characters.
-caret_form() {
-  local LC_ALL=C path="$1" out="" c i ch
-  for ((i = 0; i < ${#path}; i++)); do
-    c="${path:i:1}"
-    case "${c}" in
-      $'\n' | $'\t' | $'\r' | $'\b' | $'\f' | $'\x7f') out+="${c}" ;;
-      [[:cntrl:]])
-        printf -v ch '\\x%02x' "$(($(printf '%d' "'${c}") + 64))"
-        printf -v ch '%b' "${ch}"
-        out+="^${ch}"
-        ;;
-      *) out+="${c}" ;;
-    esac
-  done
-  printf '%s' "${out}"
+# Sets tok_lens and tok_codes to the tokens that can start at index $2 of the
+# lsof name $1: the length of each and the byte it stands for. lsof escapes
+# every backslash, so a "\" that starts no escape starts no token; a "^" may be
+# a literal "^" or start caret notation.
+lsof_tokens() {
+  local LC_ALL=C name="$1" i="$2" c next hex code
+  c="${name:i:1}"
+  next="${name:i+1:1}"
+  tok_lens=()
+  tok_codes=()
+  case "${c}" in
+    '') ;;
+    \\)
+      case "${next}" in
+        \\) tok_lens=(2) tok_codes=(92) ;;
+        n) tok_lens=(2) tok_codes=(10) ;;
+        t) tok_lens=(2) tok_codes=(9) ;;
+        r) tok_lens=(2) tok_codes=(13) ;;
+        b) tok_lens=(2) tok_codes=(8) ;;
+        f) tok_lens=(2) tok_codes=(12) ;;
+        x)
+          hex="${name:i+2:2}"
+          if [[ "${hex}" == [01][0-9a-fA-F] && "${hex}" != 00 ||
+            "${hex}" == 7[fF] || "${hex}" == [89a-fA-F][0-9a-fA-F] ]]; then
+            tok_lens=(4)
+            tok_codes=($((16#${hex})))
+          fi
+          ;;
+      esac
+      ;;
+    ^)
+      tok_lens=(1)
+      tok_codes=(94)
+      case "${next}" in
+        [A-Z\[\\\]^_])
+          printf -v code '%d' "'${next}"
+          tok_lens+=(2)
+          tok_codes+=($(((code & 255) - 64)))
+          ;;
+      esac
+      ;;
+    *)
+      printf -v code '%d' "'${c}"
+      tok_lens=(1)
+      # Bash 3.2 may print a byte >= 0x80 as negative; codes are 0 to 255.
+      tok_codes=($((code & 255)))
+      ;;
+  esac
 }
 
-# True when some reading of an ambiguous name is the target or below it. Every
-# reading has the same caret form, so comparing caret forms covers them all.
+# True when some name that lsof could have printed as the ambiguous name $1 is
+# the target or below it. It follows every split of $1 into lsof tokens at once,
+# keeping the set of indexes reachable after each byte of the target.
 maybe_under_target() {
-  [[ "$1" == "${caret_target}" || "$1" == "${caret_target}/"* ]]
+  local LC_ALL=C name="$1" n i j k p code
+  local -a whole=() states=(0) next_states=()
+  # Byte length: LC_ALL=C applies only after the local above.
+  n="${#name}"
+  # whole[i] is set when the name from index i on splits into tokens.
+  whole[n]=1
+  for ((i = n - 1; i >= 0; i--)); do
+    lsof_tokens "${name}" "${i}"
+    for k in "${!tok_lens[@]}"; do
+      if [[ -n "${whole[i + tok_lens[k]]:-}" ]]; then
+        whole[i]=1
+        break
+      fi
+    done
+  done
+  for ((j = 0; j < ${#target}; j++)); do
+    printf -v code '%d' "'${target:j:1}"
+    # Bash 3.2 may print a byte >= 0x80 as negative; codes are 0 to 255.
+    code=$((code & 255))
+    next_states=()
+    for p in "${states[@]}"; do
+      lsof_tokens "${name}" "${p}"
+      for k in "${!tok_lens[@]}"; do
+        ((tok_codes[k] == code)) && next_states[p + tok_lens[k]]=1
+      done
+    done
+    states=("${!next_states[@]}")
+    ((${#states[@]} > 0)) || return 1
+  done
+  for p in "${states[@]}"; do
+    [[ -n "${whole[p]:-}" ]] || continue
+    [[ "${p}" -eq "${n}" || "${name:p:1}" == / ]] && return 0
+  done
+  return 1
 }
-
-caret_target=""
-if [[ "${mode}" == "path" ]]; then
-  caret_target="$(caret_form "${target}" && printf x)"
-  caret_target="${caret_target%x}"
-fi
 
 # The caller's shell usually runs inside the target; never list it.
 ancestors=" "
@@ -237,7 +295,7 @@ done
 while IFS= read -r -d '' record; do
   pid="${record%%$'\t'*}"
   cwd="${record#*$'\t'}"
-  IFS= read -r -d '' literal || break
+  IFS= read -r -d '' raw || break
   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
   # A process that exits mid-listing is skipped rather than ending the list:
   # each lookup below fails for it, and set -e would otherwise stop the script.
@@ -245,8 +303,8 @@ while IFS= read -r -d '' record; do
   reason=""
   case "${mode}" in
     path)
-      if [[ -n "${literal}" ]]; then
-        if maybe_under_target "${literal}"; then
+      if [[ -n "${raw}" ]]; then
+        if maybe_under_target "${raw}"; then
           reason="cwd ambiguous"
         fi
       elif under_target "${cwd}"; then
@@ -257,7 +315,7 @@ while IFS= read -r -d '' record; do
       fi
       ;;
     stale)
-      if [[ -n "${literal}" ]]; then
+      if [[ -n "${raw}" ]]; then
         reason="cwd ambiguous"
       elif is_missing "${cwd}"; then
         reason="cwd missing"
