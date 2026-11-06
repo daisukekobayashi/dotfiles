@@ -76,7 +76,8 @@ covers only the processes recorded below and sends only SIGTERM.
    the broker with its cwd set to the `--cwd` path, so the untruncated `cwd`
    column carries that path. The `command` column is cut to 200 characters and
    never establishes ownership. A missing, unreadable, or ` (deleted)` cwd is
-   not an exact match. The list also matches paths below the target, such as a
+   not an exact match, nor is a `cwd` column containing a backslash: the script
+   escapes control bytes and backslashes in the path. The list also matches paths below the target, such as a
    nested worktree; prefix matching never establishes ownership here. Report
    any other listed broker,
    whether pre-existing or under the target without equaling it, and leave it
