@@ -81,7 +81,7 @@ function Read-Launch {
 
 try {
   foreach ($directory in @($FixtureRoot, $TestUserDir, $TestBin)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
-  foreach ($relative in @('setup.ps1', 'setup/claude.ps1', 'setup/claude.js', 'setup/shared-links.js', 'lib/common.ps1', 'lib/windows-links.ps1', 'tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
+  foreach ($relative in @('setup.ps1', 'setup/claude.ps1', 'setup/claude.js', 'setup/shared-links.js', 'setup/skill-names.js', 'lib/common.ps1', 'lib/windows-links.ps1', 'tools/claude/claude-pick.ps1', 'tools/claude/auth-env.txt', 'claude/profile-settings.json', 'claude/settings.json', 'claude/statusline.cjs', 'claude/mcp/base.json', 'ai-rules/base/global.md', 'ai-rules/agents/claude.md')) {
     $target = Join-Path $FixtureRoot $relative
     New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $RepoRoot $relative) -Destination $target

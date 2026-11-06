@@ -71,7 +71,7 @@ When user profiles are changed, rebuild this single user skill view instead of k
 
 For Codex user skills, keep using `$HOME/.agents/skills` because that is the path documented by OpenAI Codex skills documentation. Do not rely on the `skills` CLI global Codex path if it differs.
 
-User-scope regeneration preserves externally synchronized skills under `synced/`; profile-managed skills are regenerated from the selected profiles.
+User-scope regeneration preserves externally synchronized skills under `synced/`; profile-managed skills are regenerated from the selected profiles. `synced` and `anthropic-skills` are reserved names in any letter case: a profile that declares either as a local or external skill fails `profile validate` and installation in every scope with `Invalid or reserved skill name: <name>`, and a user-scope install that produces a `synced` entry fails with `skill entry collision in user staging: synced (<source>, synced skills)` without replacing the user view.
 
 ## Dotfiles Layout
 
@@ -580,6 +580,8 @@ After each external install, setup checks that every requested skill has a `SKIL
 
 In user scope, setup copies every entry each install produces, including entries that were not requested, into one staged view. When two installs produce an entry with the same name, setup fails with `skill entry collision in user staging: <entry> (<earlier source>, <later source>)` and does not replace the user view.
 
+In project scope, the installs run in sequence in one private directory, and the CLI replaces a same-name skill there by removing and copying it again. When an install removes or replaces an entry that an earlier install produced, even with the same content, setup fails with `skill entry collision in project install: <entry> (<earlier source>, <later source>)` and restores the project from the backup.
+
 ## Local Skills
 
 Local skills live under `skills/local/<name>` and are dotfiles-owned.
@@ -593,7 +595,7 @@ repo/.claude/skills/<name> -> ~/.dotfiles/skills/local/<name>
 
 User scope should also symlink local skills into the generated user profile view.
 
-If a target path already exists and is not a dotfiles-managed symlink, fail instead of overwriting it.
+If a target path already exists and is not a dotfiles-managed symlink, fail instead of overwriting it. Local skills take no precedence over external installs: when an install produces an entry with a local skill's name, setup fails with `skill entry collision in user staging: <entry> (<source>, local)` or `skill entry collision in project install: <entry> (<source>, local)`, keeps the user view, and restores the project.
 
 Skill names must be unique across the selected profiles. A local skill must not share a name with an external skill, and two external sources must not provide the same name; `profile validate` and installation fail on a collision before any external install. Avoid generic names that hosts or popular skill sets already use, such as `review` or `code-review`.
 

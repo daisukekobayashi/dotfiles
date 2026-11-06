@@ -1254,3 +1254,183 @@ emit_helper .agents/skills/shared-helper
     }
   });
 }
+
+const reservedNameCases = [
+  ["an external skill named synced", { source: "acme/skills", skills: ["synced"] }, null, "synced"],
+  ["an external skill named Anthropic-Skills", { source: "acme/skills", skills: ["Anthropic-Skills"] }, null, "Anthropic-Skills"],
+  ["a local skill named SYNCED", null, "SYNCED", "SYNCED"],
+];
+
+for (const [label, external, local, name] of reservedNameCases) {
+  for (const args of [
+    ["profile", "validate", "--profile", "reserved"],
+    ["--scope", "user", "--profile", "reserved", "--agent", "codex"],
+    ["--scope", "project", "--profile", "reserved", "--agent", "codex"],
+  ]) {
+    test(`${args.slice(0, 2).join(" ")} rejects ${label}`, async () => {
+      const fixture = await createFixture();
+      try {
+        if (local) {
+          await mkdir(path.join(fixture.dotfiles, "skills", "local", local), { recursive: true });
+          await writeFile(path.join(fixture.dotfiles, "skills", "local", local, "SKILL.md"), "reserved\n");
+        }
+        await writeFile(
+          path.join(fixture.dotfiles, "skills", "profiles", "reserved.json"),
+          JSON.stringify({ description: "Reserved name profile", external: external ? [external] : [], local: local ? [local] : [] }) + "\n",
+        );
+
+        const result = runSkills(args, fixture, { cwd: fixture.project });
+
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, new RegExp(`Invalid or reserved skill name: ${name}`));
+        assert.equal(existsSync(fixture.log), false);
+        assert.deepEqual(await readdir(fixture.project), [".git"]);
+        assert.equal(existsSync(path.join(fixture.dotfiles, ".agents")), false);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+}
+
+// An install emits an undeclared top-level synced entry in the given form.
+const syncedEntryForms = {
+  directory: 'mkdir -p .agents/skills/synced && printf ext > .agents/skills/synced/SKILL.md',
+  file: "printf ext > .agents/skills/synced",
+  "link to a directory outside staging": 'ln -s "${TEST_OUTSIDE_DIR}" .agents/skills/synced',
+};
+
+for (const [form, emit] of Object.entries(syncedEntryForms)) {
+  test(`user scope fails when an install emits synced as a ${form} and keeps the user view`, posixOnly, async () => {
+    const fixture = await createFixture({
+      npxSuffix: `if [ "\${source_name}" = anthropics/skills ]; then ${emit}; fi\n`,
+    });
+    try {
+      const outside = path.join(fixture.root, "outside");
+      await mkdir(outside);
+      fixture.env.TEST_OUTSIDE_DIR = outside;
+      const userRoot = path.join(fixture.dotfiles, ".agents", "user");
+      const synced = path.join(userRoot, "skills", "synced", "account");
+      await mkdir(synced, { recursive: true });
+      await writeFile(path.join(synced, "SKILL.md"), "synchronized content\n");
+      await writeFile(path.join(userRoot, "skills-profile.json"), "old-profile\n");
+
+      const result = runSkills(["--scope", "user", "--profile", "office", "--agent", "codex"], fixture);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /skill entry collision in user staging: synced \(anthropics\/skills, synced skills\)/);
+      assert.doesNotMatch(result.stderr, /EEXIST|ERR_FS_CP_/);
+      assert.deepEqual(await readdir(outside), []);
+      assert.deepEqual((await readdir(userRoot)).sort(), ["skills", "skills-profile.json"]);
+      assert.deepEqual(await readdir(path.join(userRoot, "skills")), ["synced"]);
+      assert.equal(await readText(path.join(synced, "SKILL.md")), "synchronized content\n");
+      assert.equal(await readText(path.join(userRoot, "skills-profile.json")), "old-profile\n");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+// An install emits an undeclared entry named like the local skill local-one.
+const localNameSuffix = `if [ "\${source_name}" = anthropics/skills ]; then
+  for dir in .agents/skills .claude/skills; do
+    mkdir -p "\${dir}/local-one" && printf ext > "\${dir}/local-one/SKILL.md"
+  done
+fi
+`;
+
+test("user scope fails when an install emits a local skill name and keeps the user view", posixOnly, async () => {
+  const fixture = await createFixture({ npxSuffix: localNameSuffix });
+  try {
+    const userRoot = path.join(fixture.dotfiles, ".agents", "user");
+    await mkdir(path.join(userRoot, "skills", "old-user"), { recursive: true });
+
+    const result = runSkills(["--scope", "user", "--profile", "office", "--agent", "codex"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skill entry collision in user staging: local-one \(anthropics\/skills, local\)/);
+    assert.deepEqual(await readdir(userRoot), ["skills"]);
+    assert.deepEqual(await readdir(path.join(userRoot, "skills")), ["old-user"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope fails when an install emits a local skill name and restores the project", posixOnly, async () => {
+  const fixture = await createFixture({ npxSuffix: localNameSuffix });
+  try {
+    const previous = path.join(fixture.project, ".claude", "skills", "previous");
+    await mkdir(previous, { recursive: true });
+    await writeFile(path.join(previous, "SKILL.md"), "previous skill\n");
+    await writeFile(path.join(fixture.project, "skills-lock.json"), "previous lock\n");
+
+    const result = runSkills(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skill entry collision in project install: local-one \(anthropics\/skills, local\)/);
+    assert.deepEqual(await readdir(path.join(fixture.project, ".claude", "skills")), ["previous"]);
+    assert.equal(await readText(path.join(previous, "SKILL.md")), "previous skill\n");
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "previous lock\n");
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+// Like the skills CLI in copy mode, each install removes a same-name skill and
+// copies it again, here with the same content from both sources.
+const replaceForms = {
+  "different content": 'printf "%s" "${source_name}"',
+  "the same content": "printf helper",
+};
+
+for (const [label, content] of Object.entries(replaceForms)) {
+  test(`project scope fails when a later install replaces an entry with ${label} and restores the project`, posixOnly, async () => {
+    const fixture = await createFixture({
+      npxSuffix: `for dir in .agents/skills .claude/skills; do
+  rm -rf "\${dir}/shared-helper"
+  mkdir -p "\${dir}/shared-helper" && ${content} > "\${dir}/shared-helper/SKILL.md"
+done
+`,
+    });
+    try {
+      const previous = path.join(fixture.project, ".agents", "skills", "previous");
+      await mkdir(previous, { recursive: true });
+      await writeFile(path.join(previous, "SKILL.md"), "previous skill\n");
+
+      const result = runSkills(
+        ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+        fixture,
+        { cwd: fixture.project },
+      );
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /skill entry collision in project install: shared-helper \(anthropics\/skills, vercel-labs\/skills\)/);
+      assert.deepEqual(await readdir(path.join(fixture.project, ".agents", "skills")), ["previous"]);
+      assert.equal(existsSync(path.join(fixture.project, ".claude", "skills")), false);
+      assert.equal(existsSync(path.join(fixture.project, "skills-lock.json")), false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+test("project scope keeps entries a later install leaves untouched", posixOnly, async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkills(
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.deepEqual((await readdir(path.join(fixture.project, ".agents", "skills"))).sort(), ["docx", "find-skills", "local-one", "pdf"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});

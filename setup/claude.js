@@ -8,6 +8,7 @@ const readline = require("node:readline");
 const node_stream_1 = require("node:stream");
 const node_util_1 = require("node:util");
 const shared_links_1 = require("./shared-links");
+const skill_names_1 = require("./skill-names");
 function entry(file) {
     try {
         return fs.lstatSync(file);
@@ -228,7 +229,7 @@ function mergeSettings(previous, current, desired, key = "settings.json", legacy
 function sharedSkills(dotfiles, required) {
     const root = path.join(dotfiles, ".agents/user/skills");
     const names = fs.existsSync(root) ? fs.readdirSync(root).sort() : [];
-    const valid = (name) => /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !/^(synced|anthropic-skills)$/i.test(name);
+    const valid = (name) => /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !(0, skill_names_1.isReservedSkillName)(name);
     const installed = (name) => {
         const file = path.join(root, name, "SKILL.md");
         return fs.existsSync(file) && fs.statSync(file).isFile();
