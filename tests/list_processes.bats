@@ -35,6 +35,29 @@ lsof_script() {
   printf '%s' "${copy}"
 }
 
+# A ps on PATH that fails for pid $FAIL_PID and field $FAIL_FIELD, as ps does
+# for a process that exits between the cwd read and that lookup.
+fake_ps() {
+  local bin="${BATS_TEST_TMPDIR}/bin" real
+  real="$(command -v ps)"
+  mkdir -p "${bin}"
+  cat >"${bin}/ps" <<EOF
+#!/usr/bin/env bash
+prev="" field="" pid=""
+for arg in "\$@"; do
+  case "\${prev}" in
+    -o) field="\${arg}" ;;
+    -p) pid="\${arg}" ;;
+  esac
+  prev="\${arg}"
+done
+[[ "\${pid}" == "\${FAIL_PID}" && "\${field}" == "\${FAIL_FIELD}" ]] && exit 1
+exec "${real}" "\$@"
+EOF
+  chmod +x "${bin}/ps"
+  printf '%s' "${bin}"
+}
+
 # Asserts the output has one 7-field row per line and none forged for $1.
 assert_no_forged_row() {
   local decoy="$1" line
@@ -71,9 +94,7 @@ check_crafted_cwd() {
   sleeper="${started_pid}"
   sleep 0.3
 
-  # Exit status is not checked: a process that exits mid-listing can end the
-  # script early, which is independent of the cwd escaping under test.
-  run "${lister}" "${target}"
+  run -0 "${lister}" "${target}"
   assert_no_forged_row "${decoy}"
   [ "$(row_for "${sleeper}" | wc -l | tr -d ' ')" -eq 1 ]
   [ "$(row_for "${sleeper}" | cut -f5)" = "${target}/c\\x01\\\\d/x\\n${decoy}\\t${target}" ]
@@ -91,9 +112,7 @@ check_trailing_newline_and_plain() {
   plain_pid="${started_pid}"
   sleep 0.3
 
-  # Exit status is not checked: a process that exits mid-listing can end the
-  # script early, which is independent of the cwd escaping under test.
-  run "${lister}" "${target}"
+  run -0 "${lister}" "${target}"
   [ "$(row_for "${trailing_pid}" | cut -f5)" = "${target}/t\\n" ]
   [ "$(row_for "${plain_pid}" | cut -f5)" = "${plain}" ]
 }
@@ -111,7 +130,7 @@ check_literal_notation() {
   literal_pid="${started_pid}"
   sleep 0.3
 
-  run "${lister}" "${target}"
+  run -0 "${lister}" "${target}"
   assert_no_forged_row ""
   [ -z "$(row_for "${sibling_pid}")" ]
   [ "$(row_for "${literal_pid}" | cut -f5)" = "${target}/a^@b\\\\x41" ]
@@ -126,11 +145,11 @@ check_literal_caret_proc() {
   dir_pid="${started_pid}"
   sleep 0.3
 
-  run "${script}" "${target}"
+  run -0 "${script}" "${target}"
   [ "$(row_for "${dir_pid}" | cut -f5)" = "${dir}" ]
   [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd under target" ]
 
-  run "${script}" --stale
+  run -0 "${script}" --stale
   [ -z "$(row_for "${dir_pid}")" ]
 }
 
@@ -144,11 +163,11 @@ check_ambiguous_caret_lsof() {
   dir_pid="${started_pid}"
   sleep 0.3
 
-  run "${lister}" "${target}"
+  run -0 "${lister}" "${target}"
   [ "$(row_for "${dir_pid}" | cut -f5)" = "${target}/w\\x01" ]
   [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd ambiguous" ]
 
-  run "${lister}" --stale
+  run -0 "${lister}" --stale
   [ "$(row_for "${dir_pid}" | cut -f6)" = "cwd ambiguous" ]
 }
 
@@ -167,11 +186,36 @@ check_mixed_caret_lsof() {
   sibling_pid="${started_pid}"
   sleep 0.3
 
-  run "${lister}" "${target}"
+  run -0 "${lister}" "${target}"
   assert_no_forged_row ""
   [[ "${output}" != *$'\tcwd under target\t'* ]]
   [ "$(row_for "${target_pid}" | cut -f6)" = "cwd ambiguous" ]
   [ "$(row_for "${sibling_pid}" | cut -f6)" = "cwd ambiguous" ]
+}
+
+@test "list-processes exits 0 when no process matches" {
+  run -0 "${script}" "${target}"
+  [ -z "${output}" ]
+}
+
+@test "list-processes skips a process that exits during its metadata lookup" {
+  local bin field gone kept
+  bin="$(fake_ps)"
+  start_in "${target}"
+  gone="${started_pid}"
+  start_in "${target}"
+  kept="${started_pid}"
+  sleep 0.3
+
+  for field in ppid= tty= lstart= args=; do
+    run -0 env PATH="${bin}:${PATH}" FAIL_PID="${gone}" FAIL_FIELD="${field}" \
+      "${script}" "${target}"
+    [ -z "$(row_for "${gone}")" ] || {
+      echo "listed after its ${field} lookup failed: ${output}"
+      return 1
+    }
+    [ "$(row_for "${kept}" | wc -l | tr -d ' ')" -eq 1 ]
+  done
 }
 
 @test "list-processes escapes a crafted cwd instead of forging a row" {
@@ -215,7 +259,7 @@ check_mixed_caret_lsof() {
   mkdir -p "${dir}"
   start_in "${dir}"
   sleep 0.3
-  run lsof -w -a -p "${started_pid}" -d cwd -Fn
+  run -0 lsof -w -a -p "${started_pid}" -d cwd -Fn
   [[ "${output}" == *"/b\\\\xc3"* ]]
 }
 

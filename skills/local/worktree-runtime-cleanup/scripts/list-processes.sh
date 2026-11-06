@@ -231,7 +231,7 @@ pid=$$
 while [[ -n "${pid}" && "${pid}" != "0" ]]; do
   ancestors+="${pid} "
   [[ "${pid}" == "1" ]] && break
-  pid="$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')"
+  pid="$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')" || break
 done
 
 while IFS= read -r -d '' record; do
@@ -239,7 +239,8 @@ while IFS= read -r -d '' record; do
   cwd="${record#*$'\t'}"
   IFS= read -r -d '' literal || break
   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
-  # A process that exits mid-listing is skipped rather than ending the list.
+  # A process that exits mid-listing is skipped rather than ending the list:
+  # each lookup below fails for it, and set -e would otherwise stop the script.
   arg_cwd="$(cwd_argument "${pid}")" || continue
   reason=""
   case "${mode}" in
@@ -269,10 +270,10 @@ while IFS= read -r -d '' record; do
 
   ppid="$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')" || continue
   [[ -z "${ppid}" ]] && continue
-  tty="$(ps -o tty= -p "${pid}" 2>/dev/null | tr -d ' ')"
+  tty="$(ps -o tty= -p "${pid}" 2>/dev/null | tr -d ' ')" || continue
   [[ -z "${tty}" || "${tty}" == "??" ]] && tty="?"
-  started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')"
-  command="$(ps -ww -o args= -p "${pid}" 2>/dev/null | cut -c1-200)"
+  started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')" || continue
+  command="$(ps -ww -o args= -p "${pid}" 2>/dev/null | cut -c1-200)" || continue
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${pid}" "${ppid}" "${tty}" "${started}" "$(encode_cwd "${cwd}")" "${reason}" "${command}"
 done < <(list_cwds)
