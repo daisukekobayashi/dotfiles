@@ -1318,13 +1318,68 @@ for (const [form, emit] of Object.entries(syncedEntryForms)) {
       const result = runSkills(["--scope", "user", "--profile", "office", "--agent", "codex"], fixture);
 
       assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /skill entry collision in user staging: synced \(anthropics\/skills, synced skills\)/);
+      assert.match(result.stderr, /skill entry collision in user staging: synced \(anthropics\/skills, reserved name\)/);
       assert.doesNotMatch(result.stderr, /EEXIST|ERR_FS_CP_/);
       assert.deepEqual(await readdir(outside), []);
       assert.deepEqual((await readdir(userRoot)).sort(), ["skills", "skills-profile.json"]);
       assert.deepEqual(await readdir(path.join(userRoot, "skills")), ["synced"]);
       assert.equal(await readText(path.join(synced, "SKILL.md")), "synchronized content\n");
       assert.equal(await readText(path.join(userRoot, "skills-profile.json")), "old-profile\n");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+// An install emits an undeclared top-level entry with a reserved name in a
+// letter case other than synced.
+for (const name of ["anthropic-skills", "Anthropic-Skills", "SYNCED"]) {
+  const reservedSuffix = `if [ "\${source_name}" = anthropics/skills ]; then
+  for dir in .agents/skills .claude/skills; do
+    mkdir -p "\${dir}/${name}" && printf ext > "\${dir}/${name}/SKILL.md"
+  done
+fi
+`;
+
+  test(`user scope fails when an install emits ${name} and keeps the user view`, posixOnly, async () => {
+    const fixture = await createFixture({ npxSuffix: reservedSuffix });
+    try {
+      const userRoot = path.join(fixture.dotfiles, ".agents", "user");
+      await mkdir(path.join(userRoot, "skills", "old-user"), { recursive: true });
+      await writeFile(path.join(userRoot, "skills-profile.json"), "old-profile\n");
+
+      const result = runSkills(["--scope", "user", "--profile", "office", "--agent", "codex"], fixture);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, new RegExp(`skill entry collision in user staging: ${name} \\(anthropics/skills, reserved name\\)`));
+      assert.deepEqual((await readdir(userRoot)).sort(), ["skills", "skills-profile.json"]);
+      assert.deepEqual(await readdir(path.join(userRoot, "skills")), ["old-user"]);
+      assert.equal(await readText(path.join(userRoot, "skills-profile.json")), "old-profile\n");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test(`project scope fails when an install emits ${name} and restores the project`, posixOnly, async () => {
+    const fixture = await createFixture({ npxSuffix: reservedSuffix });
+    try {
+      const previous = path.join(fixture.project, ".claude", "skills", "previous");
+      await mkdir(previous, { recursive: true });
+      await writeFile(path.join(previous, "SKILL.md"), "previous skill\n");
+      await writeFile(path.join(fixture.project, "skills-lock.json"), "previous lock\n");
+
+      const result = runSkills(
+        ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+        fixture,
+        { cwd: fixture.project },
+      );
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, new RegExp(`skill entry collision in project install: ${name} \\(anthropics/skills, reserved name\\)`));
+      assert.deepEqual(await readdir(path.join(fixture.project, ".claude", "skills")), ["previous"]);
+      assert.equal(await readText(path.join(previous, "SKILL.md")), "previous skill\n");
+      assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "previous lock\n");
+      assert.equal(existsSync(path.join(fixture.project, ".agents", "skills")), false);
     } finally {
       await fixture.cleanup();
     }
