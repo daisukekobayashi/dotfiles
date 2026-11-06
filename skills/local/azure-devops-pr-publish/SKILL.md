@@ -45,16 +45,18 @@ Still stop and ask before:
      running any command with it: run `node <script> -- '<branch>'`, where
      `<script>` is
      [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
-     resolved from this skill's directory, and continue only on exit 0. A name
-     containing `'` or a newline is not safe; do not write it into any
-     command. The check also refuses a leading `+`, which would make the push
+     resolved from this skill's directory, and continue only on exit 0. Write a
+     name into this or any command only when it uses solely ASCII letters,
+     digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running
+     the check. The check also refuses a leading `+`, which would make the push
      refspec a force push.
    - Stop and report the default branch, and a target the user specifies,
      unless each is a **safe branch name** before running any command with
      it: run `node <script> -- '<default branch>'`, adding `'<target>'` when
-     the user specifies one, with the script above, and continue only on exit
-     0. A name containing `'` or a newline is not safe; do not write it into
-     any command.
+     the user specifies one, with the script above, and continue only on
+     exit 0. Write a name into this or any command only when it uses solely
+     ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not
+     safe, without running the check.
    - Resolve the push remote. Use the remote the user names. Otherwise
      `<remote>` is the one remote whose fetch URL and every push URL
      (`git remote -v`) name the resolved organization, project, and repository

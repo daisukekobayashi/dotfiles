@@ -12,7 +12,7 @@ import {
 const flat = (text) => text?.replace(/\s+/g, " ");
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
-const quoteRule = "A name containing `'` or a newline is not safe; do not write it into any command.";
+const quoteRule = "Write a name into this or any command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running the check.";
 // The one-line run of the shared safe branch name check, as each calling step states it.
 const safeBranchRun = (subject, args) => new RegExp(escapeRegExp(
   `Stop and report ${subject} unless it is a **safe branch name** before running any command with it: run \`node <script> -- ${args}\`, ${scriptClause}, and continue only on exit 0. ${quoteRule}`,

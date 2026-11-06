@@ -204,7 +204,7 @@ test("the shared safe branch name check resolves and runs in copied base and pro
         const safe = spawnSync(process.execPath, [script, "--", "main", "feat/1-x"], { encoding: "utf8" });
         assert.equal(safe.status, 0, `${provider}/${name}: ${safe.stderr}`);
         const unsafe = spawnSync(process.execPath, [script, "--", "main", "-x"], { encoding: "utf8" });
-        assert.equal(unsafe.status, 1, `${provider}/${name}: leading - accepted`);
+        assert.equal(unsafe.status, 3, `${provider}/${name}: leading - accepted`);
         assert.equal(unsafe.stderr, 'unsafe branch name: "-x"\n');
       }
       assert.notEqual(callers.length, 0, `${provider}: no skill runs the shared check`);

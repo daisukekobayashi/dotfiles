@@ -11,7 +11,7 @@ import {
 const flat = (text) => text?.replace(/\s+/g, " ");
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
-const quoteRule = "A name containing `'` or a newline is not safe; do not write it into any command.";
+const quoteRule = "Write a name into this or any command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running the check.";
 // The one-line run of the shared safe branch name check, as each calling step states it.
 const safeBranchRun = (subject, args) => new RegExp(escapeRegExp(
   `Stop and report ${subject} unless it is a **safe branch name** before running any command with it: run \`node <script> -- ${args}\`, ${scriptClause}, and continue only on exit 0. ${quoteRule}`,
@@ -152,9 +152,9 @@ test("azure-devops-work-item-start skips comparing an open PR with an unsafe bra
 
   assert.ok(step2, "missing step 2");
   const check = step2.search(new RegExp(escapeRegExp(
-    `For each PR, check its source and target names as \`az repos pr list\` returns them before running any command with them: run \`node <script> -- '<target>' '<source>'\`, ${scriptClause}. When either name contains \`'\` or a newline, or the check exits 1, they are not both a **safe branch name**: skip that PR's comparison without writing the names into any command, report the PR and its branch as not compared, and continue. On any other non-zero exit, including when the check cannot run, stop and report it. On exit 0, compare`,
+    `For each PR, check its source and target names as \`az repos pr list\` returns them before running any command with them: run \`node <script> -- '<target>' '<source>'\`, ${scriptClause}. When either name uses any character other than ASCII letters, digits, \`/\`, \`.\`, \`_\`, and \`-\`, or the check exits 3, they are not both a **safe branch name**: skip that PR's comparison without writing the names into any command, report the PR and its branch as not compared, and continue. On any other non-zero exit, including when the check cannot run, stop and report it. On exit 0, compare`,
   )));
-  assert.ok(check >= 0, "both names checked by the script; only exit 1 or an unquotable name skips the PR, and other failures stop");
+  assert.ok(check >= 0, "both names checked by the script; only exit 3 or a name outside the ASCII set skips the PR, and other failures stop");
   assert.ok(check < step2.indexOf("available as local or remote-tracking refs"), "names checked before the ref availability check");
   assert.ok(check < step2.indexOf("git diff --name-only"), "names checked before git diff");
 });

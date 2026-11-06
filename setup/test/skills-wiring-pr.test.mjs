@@ -8,7 +8,7 @@ import {
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
-const quoteRule = "A name containing `'` or a newline is not safe; do not write it into any command.";
+const quoteRule = "Write a name into this or any command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running the check.";
 
 test("Codex review cycle detects completion from the review-state marker", async () => {
   const cycle = await readText(

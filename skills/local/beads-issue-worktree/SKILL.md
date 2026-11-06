@@ -22,7 +22,7 @@ Start Beads issue work safely from the current repository. A single actionable b
    - Branch format: `<type>/<bead-id>-<slug>`.
    - Use `fix` for bugs, `feat` for features, `chore` for maintenance/internal workflow.
    - Derive `<slug>` from the bead title using only lowercase ASCII letters, digits, and hyphens (`[a-z0-9-]`); drop or replace every other character. If no characters remain, write a short English slug from the bead content in the same character set.
-   - A **safe branch name** passes `node <script> -- '<name>'` with exit 0, where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory. A name containing `'` or a newline is not safe; do not write it into any command. Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise, including when the check cannot run, stop and report it before running any command with it.
+   - A **safe branch name** passes `node <script> -- '<name>'` with exit 0, where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory. Write a name into this or any command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running the check. Use a branch name supplied by the user or reused from an existing worktree as-is only when it is a safe branch name; otherwise, including when the check cannot run, stop and report it before running any command with it.
 6. Claim each actionable bead before editing:
    - `bd update <id> --claim`
 7. Prepare the isolated workspace using **Worktree Preparation** below.

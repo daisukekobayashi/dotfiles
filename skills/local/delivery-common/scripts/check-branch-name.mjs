@@ -10,20 +10,23 @@
 // `+` that would turn a push refspec into a force push. The leading `-` rule
 // keeps a name from being parsed as an option such as `--force`.
 //
-// Callers single-quote each name and never write a name containing `'` or a
-// newline into a command; they treat such a name as unsafe without running
-// this script.
+// Callers write a name into this or any command only when it uses solely
+// ASCII letters, digits, `/`, `.`, `_`, and `-`, and single-quote it; any other
+// name is unsafe without running this script. Some shells treat more than
+// `'` as a quote, such as PowerShell with U+2018-U+201B, so a name with such a
+// character could end the quoting before this script ever sees it. This script
+// stays the authority for the leading `-` and any later rule.
 //
 // Every argument after the leading `--` is a name; the `--` is required so
 // that a host shell which drops it fails here instead of checking fewer names.
 //
 // Exit status:
 //   0  every name is safe
-//   1  at least one name is unsafe; each one is reported on stderr as
-//      `unsafe branch name: <JSON string>`
 //   2  usage error: the first argument is not `--`, or no name follows it
-// Any other failure, such as a missing script or node, means the check could
-// not run.
+//   3  at least one name is unsafe; each one is reported on stderr as
+//      `unsafe branch name: <JSON string>`
+// Any other status, including 1, which node uses for a missing script or an
+// uncaught error, means the check could not run.
 
 const SAFE_BRANCH_NAME = /^[A-Za-z0-9/._][A-Za-z0-9/._-]*$/;
 
@@ -42,4 +45,4 @@ for (const name of names) {
   }
 }
 
-process.exit(unsafe ? 1 : 0);
+process.exit(unsafe ? 3 : 0);

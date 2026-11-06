@@ -124,8 +124,10 @@ Still stop and ask before:
    - Stop and report `<branch>` unless it is a **safe branch name**: run
      `node <script> -- '<branch>'`, where `<script>` is
      [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
-     resolved from this skill's directory, and continue only on exit 0. A name
-     containing `'` or a newline is not safe; do not write it into any command.
+     resolved from this skill's directory, and continue only on exit 0. Write a
+     name into this or any command only when it uses solely ASCII letters,
+     digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running
+     the check.
    - Use a normal commit, then push with
      `git push <remote> <branch>:refs/heads/<branch>`. `<remote>` is the push
      remote captured in step 2, used as is. On resume without it, read

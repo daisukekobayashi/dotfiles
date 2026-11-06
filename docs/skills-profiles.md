@@ -266,14 +266,19 @@ profile whose skills call a script needs `base`: use `base,github`,
 
 `check-branch-name.mjs` defines a **safe branch name**: non-empty, only
 `[A-Za-z0-9/._-]`, and not starting with `-`. A caller runs
-`node <script> -- '<name>' ...` with each name single-quoted, and never writes a
-name containing `'` or a newline into a command; such a name is unsafe. Exit 0
-means every name is safe, 1 means at least one is unsafe (each reported on
-stderr), and 2 is a usage error. The start, delivery, PR, Codex review cycle,
+`node <script> -- '<name>' ...` with each name single-quoted, and writes a name
+into this or any command only when it uses solely ASCII letters, digits, `/`,
+`.`, `_`, and `-`; any other name is unsafe without running anything, because
+some shells treat more than `'` as a quote, such as PowerShell with
+U+2018-U+201B. The script stays the authority for the leading `-` and any later
+rule. Exit 0 means every name is safe, 2 is a usage error, and 3 means at least
+one is unsafe (each reported on stderr); any other status, including the 1 that
+`node` returns for a missing script, means the check could not run. The start, delivery, PR, Codex review cycle,
 and cleanup skills of both providers and the Beads worktree and merge cleanup
 skills check their branch; the PR create and publish skills also check their
 base or target branch. `azure-devops-work-item-start` skips comparing an open PR
-only on exit 1 and stops on any other failure. Worktree paths, bead ids, the
+only on exit 3 or a name outside that ASCII set, and stops on any other
+failure. Worktree paths, bead ids, the
 head owner (which `github-pr-create` checks with its own rule), and base
 branches outside the PR create and publish skills are not checked by it.
 `tests/check_branch_name.bats` covers the script.

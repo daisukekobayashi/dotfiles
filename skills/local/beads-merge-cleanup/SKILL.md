@@ -14,7 +14,7 @@ Complete a Beads-backed development branch with evidence: verify, commit, merge 
 1. Identify the bead and branch.
    - Prefer an explicit bead ID from the user.
    - Otherwise infer from the current branch/worktree and confirm if unclear.
-   - Stop and report the branch unless it is a **safe branch name** before running any command with it: run `node <script> -- '<branch>'`, where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory, and continue only on exit 0. A name containing `'` or a newline is not safe; do not write it into any command.
+   - Stop and report the branch unless it is a **safe branch name** before running any command with it: run `node <script> -- '<branch>'`, where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory, and continue only on exit 0. Write a name into this or any command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running the check.
    - Run `bd show <id>`.
 2. Inspect git state in the feature worktree.
    - `git status --short --branch`

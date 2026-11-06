@@ -36,15 +36,15 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      `az repos pr list` returns them before running any command with them:
      run `node <script> -- '<target>' '<source>'`, where `<script>` is
      [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
-     resolved from this skill's directory. When either name contains `'` or a
-     newline, or the check exits 1, they are not both a **safe branch name**:
-     skip that PR's comparison without writing the names into any command,
-     report the PR and its branch as not compared, and continue. On any
-     other non-zero exit, including when the check cannot run, stop and
-     report it. On exit 0, compare changed files with
-     `git diff --name-only <target>...<source>` when both branches are
-     available as local or remote-tracking refs. Do not fetch or check out
-     branches only for this.
+     resolved from this skill's directory. When either name uses any character
+     other than ASCII letters, digits, `/`, `.`, `_`, and `-`, or the check
+     exits 3, they are not both a **safe branch name**: skip that PR's
+     comparison without writing the names into any command, report the PR and
+     its branch as not compared, and continue. On any other non-zero exit,
+     including when the check cannot run, stop and report it. On exit 0, compare
+     changed files with `git diff --name-only <target>...<source>` when both
+     branches are available as local or remote-tracking refs. Do not fetch or
+     check out branches only for this.
 3. Summarize and classify each Work Item:
    - directly actionable implementation work
    - parent/tracking item
@@ -62,11 +62,12 @@ exact target, and existing approvals to the worker; a brief alone grants none.
    - A **safe branch name** passes `node <script> -- '<name>'` with exit 0,
      where `<script>` is
      [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
-     resolved from this skill's directory. A name containing `'` or a newline
-     is not safe; do not write it into any command. Use a branch name
-     supplied by the user or reused from an existing worktree as-is only when
-     it is a safe branch name; otherwise, including when the check cannot
-     run, stop and report it before running any command with it.
+     resolved from this skill's directory. Write a name into this or any command
+     only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any
+     other name is not safe, without running the check. Use a branch name
+     supplied by the user or reused from an existing worktree as-is only when it
+     is a safe branch name; otherwise, including when the check cannot run, stop
+     and report it before running any command with it.
 5. If exactly one Work Item was provided:
    - Follow **Worktree Preparation** below, then implement in that worktree, or
      in its worker when a delivery brief dispatches one.

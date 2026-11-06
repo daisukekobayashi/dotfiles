@@ -23,9 +23,9 @@ check() {
 
 @test "check-branch-name rejects names outside the charset" {
   local name
-  for name in 'feat x' 'a;b' 'a$(id)' '+main' 'a~1' 'a^' 'a:b' 'a=b' "a'b" 'a"b' 'brañch' 'a\b' $'a\nb' ''; do
+  for name in 'feat x' 'a;b' 'a$(id)' '+main' 'a~1' 'a^' 'a:b' 'a=b' "a'b" 'a"b' 'brañch' $'a\xe2\x80\x98b' $'a\xe2\x80\x9bb' 'a\b' $'a\nb' ''; do
     check -- "${name}"
-    [ "${status}" -eq 1 ]
+    [ "${status}" -eq 3 ]
     [ -z "${output}" ]
     [[ "${stderr}" == "unsafe branch name: "* ]]
   done
@@ -35,7 +35,7 @@ check() {
   local name
   for name in -x --force -; do
     check -- "${name}"
-    [ "${status}" -eq 1 ]
+    [ "${status}" -eq 3 ]
   done
   check -- feat/-x a-
   [ "${status}" -eq 0 ]
@@ -43,7 +43,7 @@ check() {
 
 @test "check-branch-name reports every unsafe name with JSON escaping" {
   check -- main $'bad\tname' --force feat/ok
-  [ "${status}" -eq 1 ]
+  [ "${status}" -eq 3 ]
   [ "${stderr}" = $'unsafe branch name: "bad\\tname"\nunsafe branch name: "--force"' ]
 }
 
@@ -57,4 +57,11 @@ check() {
   [ "${status}" -eq 2 ]
   check -x -- main
   [ "${status}" -eq 2 ]
+}
+
+@test "check-branch-name reports a missing script with a status other than unsafe" {
+  run --separate-stderr node "${BATS_TEST_TMPDIR}/missing/check-branch-name.mjs" -- main
+  [ "${status}" -ne 0 ]
+  [ "${status}" -ne 2 ]
+  [ "${status}" -ne 3 ]
 }
