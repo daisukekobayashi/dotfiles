@@ -106,10 +106,13 @@ test("github-pr-publish stops in an unresolved fork layout", async () => {
 
   assert.ok(context, "missing step 2");
   assert.doesNotMatch(context, /set-default|shows no default/, "gh's default names the PR base, not the push target");
-  assert.match(context, /Check every other remote: stop and ask the user to name the remote when its repository is in the resolved repository's fork network/, "fork layout asks for a remote");
-  assert.match(context, /`gh repo view <owner>\/<repo> --json parent`/, "fork network lookup");
-  assert.match(context, /Look up the parent of the resolved repository and of each other remote's repository with `gh repo view <owner>\/<repo> --json parent`\./, "both parents looked up");
-  assert.match(context, /one is the other's parent, or both are forks with the same parent/, "shared parent means both are forks");
+  assert.match(context, /Check every other remote: stop and ask the user to name the remote when its repository or the resolved repository has a parent/, "any parent asks for a remote");
+  assert.match(context, /`gh repo view <owner>\/<repo> --json parent,isFork`/, "parent lookup");
+  assert.match(context, /Look up the resolved repository and each other remote's repository with `gh repo view <owner>\/<repo> --json parent,isFork`;/, "both repositories looked up");
+  assert.match(context, /a repository \*\*has a parent\*\* when `parent` is not null or `isFork` is true/, "isFork counts as a parent");
+  assert.match(context, /rule out a fork layout when at least one other remote exists[^.]*\. With no other remote, skip this check\./, "a lone remote skips the check");
+  assert.match(context, /cannot rule out a fork of a fork or a cousin fork/, "fork of a fork stops");
+  assert.doesNotMatch(context, /fork network|both are forks with the same parent/, "direct-parent comparison removed");
   assert.match(context, /any of its fetch or push URLs does not name an `<owner>\/<repo>` on the resolved repository's host/, "every remote URL checked");
   assert.match(context, /or a parent lookup fails[^.]*a failed lookup is not "no parent"/, "failed lookup fails closed");
 });
