@@ -170,7 +170,6 @@ Root の `skills-lock.json` は、この移行後は global な全 skill catalog
 ### Delivery ポリシーの階層
 
 delivery スキルは、共通のポリシー層と薄いプロバイダー別アダプターに分けます。
-これは目標とする階層で、現在の分担は後述します。
 
 - `delivery-common` は、両方のプロバイダーに共通する delivery のポリシー、つまり
   何を、いつ、どの深さで行うかの置き場所です。リスク tier、レビューの選択、
@@ -184,22 +183,30 @@ delivery スキルは、共通のポリシー層と薄いプロバイダー別�
   hosted Codex レビューのラウンド上限や再レビュー条件のように、片方のプロバイダーにしか
   ないポリシーは、そのプロバイダーのスキルに残します。
 
-現在の `delivery-common` は、Worker Dialogue（worker が shared understanding と
-design preflight を草稿にし、コーディネーターがユーザーに質問する流れ）、ローカルレビュー手順（snapshot の固定、follow-up 候補の
-記録を含む指摘の評価、focused follow-up、reviewer の選択、ローカルレビューの
-full review への切り替え条件、完了条件、ラウンドの数え方と上限、head と coverage の
-記録）とリスク tier を持ちます。その `SKILL.md` では、hosted レビューのポリシーと
-承認は呼び出し元のワークフローが持つとしています。マージ確認で
-示す内容、delivery 終了時の follow-up 候補の報告と作成など、その他の共通ポリシーは
-まだ両方のプロバイダー別 delivery スキルに書かれています。
+`delivery-common` は、Worker Dialogue（worker が shared understanding と
+design preflight を草稿にし、コーディネーターがユーザーに質問する流れ）、ローカル
+レビュー手順（snapshot の固定、follow-up 候補の記録を含む指摘の評価、focused
+follow-up、reviewer の選択、ローカルレビューの full review への切り替え条件、完了
+条件、ラウンドの数え方と上限、head と coverage の記録）、リスク tier、Delivery
+Completion（進捗記録、公開前に示す tier、マージ確認で示す内容、delivery の上限と
+停止条件、最終報告と `Complete` の条件、delivery 終了時の follow-up 候補の報告と
+作成）を持ちます。その `SKILL.md` では、hosted レビューのポリシーと承認は呼び出し
+元のワークフローが持つとしています。共通の記述はプロバイダーに依存せず、task と
+task の完了（task closure）という言葉を使い、呼び出し元のワークフローが項目を追加
+する箇所を示します。各プロバイダー別スキルは、GitHub の hosted レビューの結果や
+Azure DevOps の Work Item 状態遷移の提案など、追加する項目だけをリンクの横に
+書きます。
 
-移行は一度のリファクタリングではなく段階的に行います。ポリシー変更の issue が
-両方のプロバイダー別 delivery スキルの同じポリシーを編集することになる場合は、
-2回編集する代わりに、その issue の中で両方のプロバイダーに共通する部分を
-`delivery-common` に移し、両方のスキルから参照させます。片方のプロバイダーにしか
-ないポリシーはプロバイダー別スキルに残します。同じ issue で `delivery-common/SKILL.md`
-の担当範囲の記述と frontmatter の `description` も、移した内容に合わせて更新します。
-それ以外の重複したポリシーは、ポリシー変更が触れるまでそのまま残します。
+共通の delivery ポリシーは `delivery-common` に置き、プロバイダー別 delivery
+スキルで書き直すことはずれとして扱います。両方のプロバイダーに当てはまるポリシー
+変更は `delivery-common` を1回だけ編集し、`delivery-common/SKILL.md` の担当範囲の
+記述と frontmatter の `description` もそれに合わせて更新します。片方のプロバイダー
+にしかないポリシーはプロバイダー別スキルに残します。両方のプロバイダー別スキルは、
+テストが固定している次の短い記述をローカルの安全確認として意図的に残します。
+
+- 再開時の段落。記録されたブランチをコマンドで使う前の安全なブランチ名の確認を含みます。
+- 各プロバイダーの調整手順にある shared understanding の状態の確認（`confirmed`、
+  `corrected`、`skipped`）
 
 Azure DevOps 版との同等性を標準とします。`delivery-common` のポリシーは両方の
 プロバイダーに自動的に適用されます。一方のプロバイダーでの変更が、もう一方の
@@ -260,7 +267,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
-- worker の草稿とコーディネーターの質問の流れ、commit 済み snapshot のローカルレビュー手順、リスク tier を共有する `delivery-common`
+- worker の草稿とコーディネーターの質問の流れ、commit 済み snapshot のローカルレビュー手順、リスク tier、delivery の完了ポリシーを共有する `delivery-common`
 - design preflight の前に、before/after の具体例を含む概要で issue や Work Item の内容を読み上げ、決めていることと決めていない点をユーザーと合意する `shared-understanding`
 - `git-commit`
 
@@ -435,7 +442,7 @@ Azure Repos Git を対象に、独立 worktree、`shared-understanding`、
 Codex では `$azure-devops-work-item-delivery 123 456` のように Work Item ID を
 指定します。前提スキルは `base,azure-devops` で揃えます。
 GitHub 版と Azure 版は、worker が草稿を作りコーディネーターがユーザーに質問する
-`delivery-common` の流れ、ローカルレビュー手順、ホスト別の reviewer を共有します。一括フローの明示依頼は preflight、adversarial review、
+`delivery-common` の流れ、ローカルレビュー手順、完了ポリシー、ホスト別の reviewer を共有します。一括フローの明示依頼は preflight、adversarial review、
 PR 公開への委譲を含み、既存の承認条件に従います。マージと cleanup はそれぞれ
 対象を示して確認します。Work Item の状態遷移には明示的な意図が必要で、
 マージ後の実状態も確認します。再開記録は一時的な agent-work 領域に残します。

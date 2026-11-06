@@ -172,7 +172,7 @@ The root `skills-lock.json` should stop acting as a global all-skills catalog af
 ### Delivery Policy Layering
 
 Delivery skills are layered into a shared policy layer and thin provider
-adapters. This is the target layering; the current split is described below.
+adapters.
 
 - `delivery-common` is the home for delivery policy shared by both providers:
   what happens, when, and at what depth. This covers the risk tier, review
@@ -188,25 +188,32 @@ adapters. This is the target layering; the current split is described below.
   Policy that exists for only one provider, such as hosted Codex review round
   limits and re-review conditions, stays in that provider's skill.
 
-`delivery-common` currently holds the Worker Dialogue (workers draft the
-shared understanding and design preflight, and the coordinator asks the user),
-the Local Review procedure (snapshot pinning,
-finding assessment including follow-up candidate recording, focused follow-up,
-reviewer selection, and local review escalation, advancement criteria, round
-counting and limits, and the head and coverage record) and the Risk Tier. Its
-`SKILL.md` says the calling workflow owns hosted review policy and approvals.
-Other shared policy, such as merge confirmation
-contents, and end-of-delivery follow-up candidate reporting and creation, is
-still written in both provider delivery skills.
+`delivery-common` holds the Worker Dialogue (workers draft the shared
+understanding and design preflight, and the coordinator asks the user), the
+Local Review procedure (snapshot pinning, finding assessment including
+follow-up candidate recording, focused follow-up, reviewer selection, and local
+review escalation, advancement criteria, round counting and limits, and the
+head and coverage record), the Risk Tier, and Delivery Completion (the progress
+record, the tier shown before publication, merge confirmation contents, delivery
+bounds and stop conditions, the final report and `Complete` rule, and
+end-of-delivery follow-up candidate reporting and creation). Its `SKILL.md` says
+the calling workflow owns hosted review policy and approvals. The shared text is
+provider-neutral: it names the task and task closure, and marks where the
+calling workflow adds its own items. Each provider skill lists only those
+additions next to its link, such as the hosted review outcome on GitHub or the
+proposed Work Item state transitions on Azure DevOps.
 
-Migrate incrementally rather than in one refactor. When a policy issue would
-edit the same policy in both provider delivery skills, move the part that is
-common to both providers into `delivery-common` as part of that issue and have
-both provider skills reference it, instead of editing it twice. Leave
-provider-only policy in the provider skill. Update the ownership statement and
-the frontmatter `description` in `delivery-common/SKILL.md` in the same issue so
-they match what moved. Leave other duplicated policy in place until a policy
-change touches it.
+Shared delivery policy lives in `delivery-common`; restating it in a provider
+delivery skill is drift. A policy change that applies to both providers edits
+`delivery-common` once and updates the ownership statement and the frontmatter
+`description` in `delivery-common/SKILL.md` to match. Provider-only policy stays
+in the provider skill. Both provider skills deliberately keep these short
+restatements as local guards that tests pin:
+
+- the resume paragraph, including the safe branch name check before any command
+  uses the recorded branch
+- the shared understanding status gate (`confirmed`, `corrected`, or `skipped`)
+  in each provider's coordination steps
 
 Azure DevOps parity is the default. Policy in `delivery-common` applies to both
 providers automatically. When a change on one provider also requires
@@ -267,7 +274,7 @@ Include:
 - `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
 - `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
-- `delivery-common` for the shared worker dialogue, committed-snapshot local review procedure, and risk tier
+- `delivery-common` for the shared worker dialogue, committed-snapshot local review procedure, risk tier, and delivery completion policy
 - `shared-understanding`, which before design preflight reads an issue or Work Item back to the user with a before/after example and settles with them what it decides and what it leaves undecided
 - `git-commit`
 
@@ -448,7 +455,7 @@ example `/azure-devops-work-item-delivery 123 456` in Claude Code or
 `$azure-devops-work-item-delivery 123 456` in Codex. Use `base,azure-devops` for its
 prerequisites. GitHub and Azure delivery share the `delivery-common` worker dialogue, in
 which workers draft and the coordinator asks the user, the local review
-procedure, and the same host-specific reviewers. An explicit full delivery request
+procedure, the completion policy, and the same host-specific reviewers. An explicit full delivery request
 selects delegated preflight, adversarial review, and publication, subject to the
 governing approval rules; merge and cleanup require separate target-specific
 confirmation. Work Item state transitions need explicit intent and actual state

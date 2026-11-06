@@ -60,15 +60,9 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    waiting for the user with their open points. Route workers' material design
    questions and approval requests through the coordinator, with the affected
    issue clearly identified; no worker asks the user directly.
-5. Before writing progress records, classify them as temporary and choose ignored
-   agent-work storage or `/tmp`. Keep a separate record per issue: URL, scope,
-   shared understanding result and the latest worker drafts, worktree, branch, base ref and SHA, current phase,
-   accepted design decisions,
-   risk tier with its reasons and head, verification, the local review record
-   under Local Review, hosted review round count, PR and trigger/thread
-   identifiers, dispositions, follow-up candidates,
-   blockers, and next action. Report the resume path.
-   Keep durable definitions and decisions in the repository's normal docs.
+5. Keep a progress record per issue under
+   [Delivery Completion](../delivery-common/references/completion.md), adding
+   the hosted review round count and the PR trigger and thread identifiers.
 
 On resume, reconcile the record with actual local and GitHub state. Stop and
 report the recorded branch unless it is a **safe branch name**, using only
@@ -107,13 +101,7 @@ selected reviewer on the same base, issue, and implementation snapshot. Reviewer
 remain read-only. Wait for all completed results before the implementation owner
 edits.
 
-Assess each finding against the issue, code, and evidence, using the Assess
-findings defaults in Local Review. Apply worthwhile fixes; record a concise reason
-for explained, duplicate, stale, pre-existing, or skipped findings. Material,
-minor, and pre-existing follow Local Review's Triage; minor findings may be
-deferred with a reason. Leave disputed material findings or design decisions
-open for the user. Avoid scope expansion and speculative churn.
-
+Assess the findings under Local Review's Assess findings.
 After fixes, follow Local Review's Repeat and advance for focused follow-up,
 escalation to a full review, and advancement.
 
@@ -121,9 +109,8 @@ escalation to a full review, and advancement.
 
 Coordinate publication sequentially across issue targets; workers hand off their
 branch, worktree, issue/spec, recorded base, verification, risk tier, and local
-review evidence. Before publication, show the user the tier, its main reasons,
-the recommended human review, and any security deferred candidates or
-user-accepted security findings under Risk Tier. Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
+review evidence. Show the tier before publication under Delivery Completion.
+Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
 -> confirm remote head -> Writeback ordering, and stop-on-failure behavior.
 Pass the earlier local and hosted dispositions from the progress record, and
@@ -145,29 +132,20 @@ reuse the existing PR and call the cycle again for that target; it does not
 request another review automatically. If any other edit or new commit changes
 the head, refresh the affected review coverage. Advance only when the current
 published head is covered by the most recent full review and the follow-ups
-completed since it under Local Review's Repeat and advance, has completed hosted review or the recorded non-material delta above,
-worthwhile fixes are verified and published, and remaining thread dispositions
-clearly close them.
+completed since it under Local Review's Repeat and advance, has completed hosted
+review or the recorded non-material delta above, worthwhile fixes are verified
+and published, and remaining thread dispositions clearly close them.
 
 ### 4. Confirm and perform the merge
 
-Check the current PR head, base, required CI checks, required human approvals,
-mergeability, and remaining review threads. Pending, failed, or inaccessible
-required checks leave the issue waiting or blocked. Approval for one head does
-not cover an intervening material change; reassess before proceeding.
-
-Present the PR URL, issue, head SHA, base, checks, review outcome including any
-security review, the risk tier for that head with its recommended human review,
-any security deferred candidates or user-accepted security findings, and proposed repository-supported merge method. Request confirmation to merge that specific
-PR. After approval, recheck the target and merge through the available GitHub
-tool or CLI without bypassing checks or requesting branch deletion. If the user
-merges separately, verify that outcome instead. Confirm actual merged state and
-merge commit before cleanup; a queued or scheduled merge remains pending.
+Check and present the merge under Delivery Completion's Merge confirmation,
+adding the hosted review outcome and its remaining review threads. After
+approval, merge through the available GitHub tool or CLI.
 
 ### 5. Confirm cleanup and verify completion
 
-Before cleanup, keep this issue's follow-up candidates in a record outside the
-worktree being removed; move or copy them first when needed.
+Before cleanup, keep this issue's follow-up candidates under Delivery
+Completion.
 
 Use `github-worktree-cleanup` for this issue's branch and worktree. Pass the
 verified merge evidence. Let it inspect runtime resources, show exact
@@ -186,32 +164,15 @@ than a fully completed issue delivery.
 Local review rounds follow Local Review's Repeat and advance; hosted-fix
 follow-ups use the same local budget. Default to at most three hosted Codex
 review rounds per issue across this delivery, including resumes. A hosted round
-requires actual output. Advance as soon as the completion criteria are met.
-User-specified lower limits take precedence. If a hosted limit is reached with
-required work remaining, progress repeatedly stalls, a review times out, a
-required check fails, or a material human decision is needed, preserve progress
-and report the next action. At a hosted limit, include the remaining-findings
+requires actual output. User-specified lower limits take precedence. Apply
+Delivery Completion's Bounds, adding a hosted limit reached with required work
+remaining as a stop condition. At a hosted limit, include the remaining-findings
 classification from Local Review's Assess findings. Ask before extending the
 hosted budget or retrying a timed-out external review; do not repeatedly post
 triggers.
 
-Use the cycle's bounded waiting rules and keep the user informed. Stop further
-publication targets after a cycle failure. Independent local work may continue
-when it does not depend on the blocker. Never turn a wait or unresolved approval
-into a successful completion claim.
+Use the cycle's bounded waiting rules. A cycle failure is a publication failure.
 
-Report each issue separately with issue/PR links, branch/worktree or confirmed
-removal, verification and limitations, current reviewed head and review rounds,
-merge state, issue state, and exact pending decision or action. Use states such
-as `In progress`, `Waiting for user`, `Waiting for review/CI`, `Blocked`,
-`Merged; cleanup pending`, and `Complete`. Mark `Complete` only after acceptance
-criteria, current verification/reviews, actual merge, issue closure, and confirmed
-local cleanup have all been verified. Overall completion requires every requested
-issue to meet that condition.
-
-After the per-issue reports, including a stopping report, list the follow-up
-candidates from all targets with duplicates merged. Give each its source issue/PR
-and review round or thread, evidence, and create-or-drop recommendation. Ask which
-to create, and pass only approved candidates with their evidence and source links
-to `github-issue-create`. Pending candidates do not block `Complete`; report them
-as a separate open list.
+Report each issue, mark it `Complete`, and list follow-up candidates under
+Delivery Completion. Task closure is the issue's actual closed state, and the
+create skill is `github-issue-create`.

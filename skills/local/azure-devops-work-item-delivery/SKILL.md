@@ -25,11 +25,12 @@ Azure Repos target for them.
 Read component skills before their phases. Forward the user's actual full
 workflow request, exact Work Item/branch/worktree, and existing authorizations.
 An explicit full delivery request selects the delegated shared understanding,
-preflight, local review, and publication phases. Automatic discovery or a reference to this skill selects
-none of them and grants no mutation approval. Honor the publisher's approval
-model and governing instructions for scoped checkpoint commits, normal pushes,
-and PR creation. Prepare the concrete result before requesting missing approval;
-reuse approval already given for the same scope.
+preflight, local review, and publication phases. Automatic discovery or a
+reference to this skill selects none of them and grants no mutation approval.
+Honor the publisher's approval model and governing instructions for scoped
+checkpoint commits, normal pushes, and PR creation. Prepare the concrete result
+before requesting missing approval; reuse approval already given for the same
+scope.
 
 Require separate confirmation for the specific PR merge and the exact local
 cleanup resources. Work Item state transitions also require explicit intent;
@@ -64,16 +65,10 @@ cycle.
    whose status is `confirmed`, `corrected`, or `skipped`; report the others as
    waiting for the user with their open points. Route material design questions
    and approvals through the coordinator; no worker asks the user directly.
-5. Before writing progress records, classify them as temporary and choose ignored
-   agent-work storage or `/tmp`. Record separately per item: organization,
-   project/repository IDs, Work Item URL and scope, shared understanding result
-   and the latest worker drafts,
-   branch/worktree, base ref/SHA,
-   phase, accepted design, risk tier with its reasons and head, verification,
-   the local review record under Local Review, PR ID/URL and source/target refs,
-   published head, policy/merge state,
-   Work Item state, finding dispositions, follow-up candidates, blockers, and next
-   action. Report the resume path. Keep stable definitions and decisions in normal repository docs.
+5. Keep a progress record per item under
+   [Delivery Completion](../delivery-common/references/completion.md), adding
+   the organization, project and repository IDs, the PR ID and source/target
+   refs, the policy and merge state, and the Work Item state.
 
 On resume, reconcile the record with actual local and Azure DevOps state. Stop
 and report the recorded branch unless it is a **safe branch name**, using only
@@ -109,9 +104,7 @@ risk tier, select the reviewers, and run an initial full review with every
 selected read-only reviewer on the same recorded base, Work Item/spec, and
 committed snapshot. Wait for all results before the implementation owner edits.
 
-Assess findings against the requirements, code, and evidence, using the Assess
-findings defaults in Local Review. Apply worthwhile fixes; record concise reasons
-for explained, duplicate, stale, pre-existing, or skipped findings. Keep disputed material findings and design decisions open for the user.
+Assess the findings under Local Review's Assess findings.
 After fixes, follow Local Review's Repeat and advance for focused follow-up,
 escalation to a full review, and advancement.
 
@@ -119,9 +112,7 @@ escalation to a full review, and advancement.
 
 Coordinate publication sequentially across targets. Workers hand off their exact
 branch/worktree, Work Item/spec, base, verification, risk tier, and local review
-evidence. Before publication, show the user the tier, its main reasons, the
-recommended human review, and any security deferred candidates or user-accepted
-security findings under Risk Tier.
+evidence. Show the tier before publication under Delivery Completion.
 Use `azure-devops-pr-publish`, forwarding the full request and existing approvals.
 Honor its stop-on-failure behavior. Supply known Work Item IDs, completion scope,
 and the user's state-transition intent; use structured PR links under the common
@@ -145,22 +136,16 @@ PR.
 
 Follow [Merge and Work Item State](references/merge-and-state.md) to check the
 current source/target, required policies/CI, human approvals, discussion threads,
-and mergeability. Pending, failed, or inaccessible required evidence leaves the
-item waiting or blocked. Keep source-HEAD concurrency limits explicit.
+and mergeability. Keep source-HEAD concurrency limits explicit.
 
-Present the PR URL, Work Item, reviewed/published head, target, checks, local
-review outcome including any security review, the risk tier for that head with
-its recommended human review, any security deferred candidates or user-accepted
-security findings, repository-supported merge method, and proposed state-transition
-scope. Request confirmation for that specific PR. Recheck after approval;
-material changes require reassessment. Complete the PR only within that approval
-and without bypassing policies or deleting the remote branch. If the user merges
-separately, verify the result instead. A queued merge remains pending.
+Check and present the merge under Delivery Completion's Merge confirmation,
+adding the required policies and the proposed state-transition scope. Complete
+the PR as that reference describes.
 
 ### 5. Confirm cleanup and verify completion
 
-Before cleanup, keep this item's follow-up candidates in a record outside the
-worktree being removed; move or copy them first when needed.
+Before cleanup, keep this item's follow-up candidates under Delivery
+Completion.
 
 After verifying actual PR completion and the merged source/merge commit, use
 `azure-devops-worktree-cleanup` for the exact item branch/worktree. Pass merge
@@ -176,29 +161,15 @@ comment on the Work Item.
 
 ## Bounds and Handoffs
 
-Local review rounds follow Local Review's Repeat and advance. Advance as soon
-as the completion criteria are met. At repeated non-progress, a timeout, failed
-required check, or material human decision, preserve progress and report the
-next action.
+Local review rounds follow Local Review's Repeat and advance. Apply Delivery
+Completion's Bounds.
 
 Check policies when reaching merge or resuming; avoid indefinite polling. If the
 user asks to wait, use a bounded window and report its limit; otherwise report
-`Waiting for review/CI`. Keep updates timely. Stop further publication targets
-after a verification, commit, push, or PR failure. Independent local work may
-continue when it does not depend on the blocker.
+`Waiting for review/CI`. A verification, commit, push, or PR failure is a
+publication failure.
 
-Report each item separately with Work Item/PR links, branch/worktree or confirmed
-removal, verification and limits, reviewed/published head and local round count,
-policy/merge state, Work Item state, and exact pending decision/action. Use
-`In progress`, `Waiting for user`, `Waiting for review/CI`, `Blocked`,
-`Merged; Work Item completion pending`, `Merged; cleanup pending`, or `Complete`.
-Mark `Complete` only after acceptance criteria, current verification/local
-reviews, actual merge, Work Item completion, and confirmed local cleanup have
-all been verified. Overall completion requires every requested item to qualify.
-
-After the per-item reports, including a stopping report, list the follow-up
-candidates from all targets with duplicates merged. Give each its source Work
-Item/PR and review round or thread, evidence, and create-or-drop recommendation.
-Ask which to create, and pass only approved candidates with their evidence and
-source links to `azure-devops-work-item-create`. Pending candidates do not block
-`Complete`; report them as a separate open list.
+Report each item, mark it `Complete`, and list follow-up candidates under
+Delivery Completion, adding the state `Merged; Work Item completion pending`.
+Task closure is the Work Item's verified completion under its process, and the
+create skill is `azure-devops-work-item-create`.
