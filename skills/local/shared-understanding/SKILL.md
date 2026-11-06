@@ -30,7 +30,8 @@ points it leaves undecided or ambiguous.
 
 Write the overview for a user who has not reread the issue.
 
-- State in one sentence what changes and why.
+- State in one sentence what changes and why, and ask the user to confirm or
+  correct it. When the user corrects it, revise the overview before step 3.
 - Show one typical case as **before / after**: a concrete situation (input,
   operation, or state, using real names and values from the repository) and the
   observable result before and after the change.
