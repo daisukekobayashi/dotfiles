@@ -68,6 +68,10 @@ jobs:
       - name: Install setup dependencies
         run: npm --prefix setup ci
 
+      - name: Check generated setup scripts
+        shell: pwsh
+        run: ./scripts/check-skills-build.ps1
+
       - name: PowerShell syntax
         shell: pwsh
         run: ./tests/helpers/check_powershell_syntax.ps1 $PWD
