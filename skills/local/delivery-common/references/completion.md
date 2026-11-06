@@ -75,7 +75,15 @@ worktree being removed; move or copy them first when needed.
 
 After the per-task reports, including a stopping report, list the follow-up
 candidates from all targets with duplicates merged. Give each its source task
-or PR and review round or thread, evidence, and create-or-drop recommendation.
-Ask which to create, and pass only approved candidates with their evidence and
-source links to the calling workflow's create skill. Pending candidates do not
-block `Complete`; report them as a separate open list.
+or PR and review round or thread, evidence, the creation criterion it meets or
+`none`, and a create-or-drop recommendation. Recommend create only when the
+candidate meets at least one criterion:
+
+- it reproduces under supported use of the changed behavior;
+- it is an exploitable security vulnerability;
+- the user asked for it.
+
+Otherwise recommend drop, including theoretical edge cases and tests that only
+pin current behavior. Ask which to create, and pass only approved candidates
+with their evidence and source links to the calling workflow's create skill.
+Pending candidates do not block `Complete`; report them as a separate open list.
