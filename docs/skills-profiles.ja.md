@@ -67,7 +67,7 @@ User scope では dotfiles 管理の user skill view を 1 つ作り、ユーザ
 ~/.claude/skills  -> ~/.dotfiles/.agents/user/skills/
 ```
 
-`synced/` 配下の外部同期スキルは user skill view の再生成時に引き継ぎます。プロファイル管理のスキルは選択した構成で再生成します。
+`synced/` 配下の外部同期スキルは user skill view の再生成時に引き継ぎます。プロファイル管理のスキルは選択した構成で再生成します。`synced` と `anthropic-skills` は大文字小文字を問わず予約名です。どちらかを local skill または external skill として宣言した profile は、どの scope でも `profile validate` とインストールが `Invalid or reserved skill name: <name>` で失敗します。user scope のインストールが `synced` エントリを生成した場合は `skill entry collision in user staging: synced (<source>, synced skills)` で失敗し、user view を入れ替えません。
 
 User profile を変更した場合は、profile の組み合わせごとに別 view を持つのではなく、この 1 つの user skill view を作り直します。選択した profile は `skills-profile.json` に記録します。
 
@@ -566,6 +566,8 @@ npx skills add <owner/repo> \
 
 user scope では、各インストールが生成したエントリを、指定していないものも含めてすべて1つのステージング view にコピーします。2つのインストールが同じ名前のエントリを生成した場合は `skill entry collision in user staging: <entry> (<earlier source>, <later source>)` で失敗し、user view を入れ替えません。
 
+project scope では、各インストールを1つのプライベートディレクトリで順に実行し、CLI はそこにある同じ名前の skill を削除してコピーし直します。先のインストールが生成したエントリを後のインストールが削除または置き換えた場合は、内容が同じでも `skill entry collision in project install: <entry> (<earlier source>, <later source>)` で失敗し、backup から project を復元します。
+
 ## Local Skills
 
 Local skill は `skills/local/<name>` に置き、dotfiles が正本です。
@@ -579,7 +581,7 @@ repo/.claude/skills/<name> -> ~/.dotfiles/skills/local/<name>
 
 User scope でも、生成した user profile view 内に local skill を symlink します。
 
-Target path がすでに存在し、それが dotfiles 管理の symlink ではない場合は、上書きせずエラーにします。
+Target path がすでに存在し、それが dotfiles 管理の symlink ではない場合は、上書きせずエラーにします。local skill は external のインストールより優先しません。インストールが local skill と同じ名前のエントリを生成した場合は `skill entry collision in user staging: <entry> (<source>, local)` または `skill entry collision in project install: <entry> (<source>, local)` で失敗し、user view を入れ替えず、project を復元します。
 
 Skill 名は選択した profile 全体で一意にします。local skill は external skill と同じ名前にできず、2つの external source が同じ名前を提供することもできません。`profile validate` とインストールは、external のインストールを始める前に衝突を検出して失敗します。`review` や `code-review` のように、ホストや広く使われている skill 集がすでに使っている汎用名は避けます。
 

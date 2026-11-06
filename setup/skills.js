@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const shared_links_1 = require("./shared-links");
+const skill_names_1 = require("./skill-names");
 const private_base_1 = require("./private-base");
 const SUPPORTED_AGENTS = new Set(["codex", "claude-code"]);
 function fail(message) {
@@ -215,6 +216,11 @@ function getObjectProperty(value, key) {
     }
     return value[key];
 }
+function requireUnreservedSkillName(name) {
+    if ((0, skill_names_1.isReservedSkillName)(name)) {
+        fail(`Invalid or reserved skill name: ${name}`);
+    }
+}
 function profilePath(profileDir, name) {
     return path.join(profileDir, `${name}.json`);
 }
@@ -278,6 +284,7 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
                 if (typeof skillName !== "string" || skillName.trim() === "") {
                     fail(`${filePath}: external skills must contain names`);
                 }
+                requireUnreservedSkillName(skillName);
                 sourceSkills.add(skillName);
             }
         }
@@ -286,6 +293,7 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
             if (typeof skillName !== "string" || skillName.trim() === "") {
                 fail(`${filePath}: local must contain skill names`);
             }
+            requireUnreservedSkillName(skillName);
             const skillPath = path.join(localDir, skillName);
             if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
                 fail(`unknown local skill ${skillName}`);
@@ -398,10 +406,24 @@ function windowsLinkType(linkPath) {
         return "dir";
     }
 }
+// The source that produced an entry, also when the name differs only in letter
+// case, as it can on a case-insensitive file system.
+function entryOwner(owners, entry) {
+    return owners.get(entry)
+        ?? Array.from(owners).find(([name]) => name.toLowerCase() === entry.toLowerCase())?.[1]
+        ?? "an earlier install";
+}
+// Fails when directory already holds an entry named entry. The check uses
+// lstat on the target path, so it also catches a dangling link and a name that
+// differs only in letter case on a case-insensitive file system, and it never
+// follows a link out of the directory.
+function requireNoEntry(directory, entry, owners, origin, place) {
+    if (fs.lstatSync(path.join(directory, entry), { throwIfNoEntry: false })) {
+        fail(`skill entry collision in ${place}: ${entry} (${entryOwner(owners, entry)}, ${origin})`);
+    }
+}
 // Copies every entry an install produced into the user staging view, failing
-// when an earlier install already produced an entry with the same name. The
-// check uses the target path, so it also catches a dangling link and a name
-// that differs only in letter case on a case-insensitive file system. owners
+// when an earlier install already produced an entry with the same name. owners
 // maps each copied entry name to the source that produced it.
 function copyDirectoryContents(sourceDir, targetDir, source, owners) {
     if (!fs.existsSync(sourceDir)) {
@@ -409,14 +431,8 @@ function copyDirectoryContents(sourceDir, targetDir, source, owners) {
     }
     fs.mkdirSync(targetDir, { recursive: true });
     for (const entry of fs.readdirSync(sourceDir)) {
-        const targetEntry = path.join(targetDir, entry);
-        if (fs.lstatSync(targetEntry, { throwIfNoEntry: false })) {
-            const earlier = owners.get(entry)
-                ?? Array.from(owners).find(([name]) => name.toLowerCase() === entry.toLowerCase())?.[1]
-                ?? "an earlier install";
-            fail(`skill entry collision in user staging: ${entry} (${earlier}, ${source})`);
-        }
-        copyEntry(path.join(sourceDir, entry), targetEntry, false);
+        requireNoEntry(targetDir, entry, owners, source, "user staging");
+        copyEntry(path.join(sourceDir, entry), path.join(targetDir, entry), false);
         owners.set(entry, source);
     }
 }
@@ -591,6 +607,13 @@ function agentSkillDir(root, agent) {
     }
     fail(`unsupported agent: ${agent}`);
 }
+// Local skills never replace an entry an external install produced; a
+// same-name entry fails with both origins before any link is created.
+function requireNoLocalSkillEntries(plan, skillsDir, owners, place) {
+    for (const skill of plan.local) {
+        requireNoEntry(skillsDir, skill.name, owners, "local", place);
+    }
+}
 function linkLocalSkills(plan, dotfilesRoot, target, rootOrSkillsDir) {
     const localRoot = path.join(dotfilesRoot, "skills", "local");
     if (target === "user") {
@@ -742,22 +765,56 @@ function removeStagingDir(workDir) {
 // project, so npx and any batch shim never run with the project as their
 // current directory, where an untrusted checkout could plant node.exe,
 // cmd.exe, or npm configuration.
+// Returns, for each agent, the source that produced each installed entry.
 function runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir) {
     if (plan.external.length === 0) {
-        return;
+        return new Map();
     }
     const npx = resolveNpx();
     // mkdtemp creates the directory with mode 0700 on POSIX.
     const workDir = fs.mkdtempSync(path.join(stagingBase, PROJECT_STAGING_PREFIX));
     try {
-        installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCacheDir);
+        return installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCacheDir);
     }
     finally {
         removeStagingDir(workDir);
     }
 }
+// Identifies one file system entry. The skills CLI replaces a same-name skill
+// by removing and recopying it, which gives the entry a new identity even when
+// the content is the same.
+function entryIdentity(entryPath) {
+    const stat = fs.lstatSync(entryPath, { bigint: true, throwIfNoEntry: false });
+    if (!stat) {
+        return undefined;
+    }
+    const type = stat.isSymbolicLink() ? `link:${fs.readlinkSync(entryPath)}` : stat.isDirectory() ? "dir" : "file";
+    return `${stat.dev}:${stat.ino}:${stat.birthtimeNs}:${type}`;
+}
+function entryIdentities(directory) {
+    const identities = new Map();
+    if (!fs.lstatSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
+        return identities;
+    }
+    for (const name of fs.readdirSync(directory)) {
+        // Dot entries are not skills; the CLI may keep its own state there.
+        if (name.startsWith(".")) {
+            continue;
+        }
+        const identity = entryIdentity(path.join(directory, name));
+        if (identity) {
+            identities.set(name, identity);
+        }
+    }
+    return identities;
+}
+// All sources install in sequence into one work directory, so a later source
+// can replace an entry an earlier source produced. Fail when an install
+// removes or replaces any entry that existed before it ran.
 function installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCacheDir) {
+    const owners = new Map(agents.map(agent => [agent, new Map()]));
     for (const entry of plan.external) {
+        const before = new Map(agents.map(agent => [agent, entryIdentities(agentSkillDir(workDir, agent))]));
         const args = ["skills", "add", entry.source, "--copy", "--yes"];
         for (const agent of agents) {
             args.push("--agent", agent);
@@ -770,7 +827,19 @@ function installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCache
             NPM_CONFIG_CACHE: npmCacheDir,
         });
         for (const agent of agents) {
-            requireInstalledSkills(agentSkillDir(workDir, agent), entry);
+            const skillsDir = agentSkillDir(workDir, agent);
+            const agentOwners = owners.get(agent);
+            for (const [name, identity] of before.get(agent)) {
+                if (entryIdentity(path.join(skillsDir, name)) !== identity) {
+                    fail(`skill entry collision in project install: ${name} (${entryOwner(agentOwners, name)}, ${entry.source})`);
+                }
+            }
+            for (const name of entryIdentities(skillsDir).keys()) {
+                if (!agentOwners.has(name)) {
+                    agentOwners.set(name, entry.source);
+                }
+            }
+            requireInstalledSkills(skillsDir, entry);
         }
     }
     const outputs = [
@@ -786,6 +855,7 @@ function installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCache
         removePath(target);
         movePath(staged, target);
     }
+    return owners;
 }
 function requireInstalledSkills(skillsDir, entry) {
     for (const name of entry.skills) {
@@ -797,14 +867,14 @@ function requireInstalledSkills(skillsDir, entry) {
 }
 // Like project installs, run each source in a fresh directory inside a private
 // per-run staging directory so npx never sees a shared parent directory.
-function runUserExternalInstalls(stagingBase, restoreSkillsDir, plan, npmCacheDir) {
+// owners receives the source that produced each copied entry.
+function runUserExternalInstalls(stagingBase, restoreSkillsDir, plan, npmCacheDir, owners) {
     if (plan.external.length === 0) {
         return;
     }
     const npx = resolveNpx();
     // mkdtemp creates the directory with mode 0700 on POSIX.
     const workDir = fs.mkdtempSync(path.join(stagingBase, USER_STAGING_PREFIX));
-    const owners = new Map();
     try {
         plan.external.forEach((entry, index) => {
             const installDir = path.join(workDir, String(index));
@@ -894,7 +964,7 @@ function claudeEnvironmentSkillDirs(setupHome) {
     return directories;
 }
 function isClaudeEnvironmentSkillName(name) {
-    return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !/^(synced|anthropic-skills)$/i.test(name);
+    return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !(0, skill_names_1.isReservedSkillName)(name);
 }
 function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRun) {
     if (directories.length === 0) {
@@ -994,12 +1064,17 @@ function setupUserSkills(dotfilesRoot, setupHome, profilesCsv, agents, dryRun, s
     fs.mkdirSync(restoreRoot, { recursive: true });
     fs.mkdirSync(stagingSkillsDir, { recursive: true });
     try {
-        runUserExternalInstalls(stagingBase, stagingSkillsDir, plan, npmCacheDir);
+        const owners = new Map();
+        runUserExternalInstalls(stagingBase, stagingSkillsDir, plan, npmCacheDir, owners);
+        // synced/ is reserved for externally synchronized skills; an install that
+        // produced it would be merged with them, or written through as a link.
+        requireNoEntry(stagingSkillsDir, "synced", owners, "synced skills", "user staging");
         copyMissingDirectoryEntries(path.join(restoreSkillsDir, "synced"), path.join(stagingSkillsDir, "synced"));
         if (skipUserLocalSkillLinks) {
             info("User local skill links skipped");
         }
         else {
+            requireNoLocalSkillEntries(plan, stagingSkillsDir, owners, "user staging");
             linkLocalSkills(plan, dotfilesRoot, "user", stagingSkillsDir);
         }
         writeMetadata(plan, stagingMetadata);
@@ -1177,7 +1252,10 @@ function setupProjectSkills(dotfilesRoot, profilesCsv, agents, dryRun) {
     fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
     const backups = prepareProjectTargets(targets, backupRoot);
     try {
-        runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
+        const owners = runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
+        for (const agent of agents) {
+            requireNoLocalSkillEntries(plan, agentSkillDir(projectRoot, agent), owners.get(agent) ?? new Map(), "project install");
+        }
         linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
         restoreUnmanagedProjectSkills(backups, projectRoot, agents, localRoot, localNames);
         writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));

@@ -6,6 +6,7 @@ import * as readline from "node:readline";
 import { Writable } from "node:stream";
 import { isDeepStrictEqual } from "node:util";
 import { copyMarker, copyMetadata, planSharedLink, sameSnapshot, snapshot, stageSharedLinks, SharedChange, SharedLink } from "./shared-links";
+import { isReservedSkillName } from "./skill-names";
 
 type Table = Record<string, unknown>;
 type Link = SharedLink;
@@ -202,7 +203,7 @@ function mergeSettings(previous: unknown, current: unknown, desired: unknown, ke
 function sharedSkills(dotfiles: string, required: Set<string>): Link[] {
   const root = path.join(dotfiles, ".agents/user/skills");
   const names = fs.existsSync(root) ? fs.readdirSync(root).sort() : [];
-  const valid = (name: string) => /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !/^(synced|anthropic-skills)$/i.test(name);
+  const valid = (name: string) => /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name) && !isReservedSkillName(name);
   const installed = (name: string) => {
     const file = path.join(root, name, "SKILL.md");
     return fs.existsSync(file) && fs.statSync(file).isFile();
