@@ -381,11 +381,13 @@ test("delivery shows material self-closures before publication and at merge", as
   assert.ok(selfClosures, "Assess findings defines self-closures");
   for (const rule of [
     /Keep a self-closure list in the progress record/,
-    /A self-closure is a `material` finding that ends without a verified fix and is not left open for the user, whatever its disposition: `explained`, `stale`, `skipped`, or a `duplicate` of one\./,
-    /marked `downgraded`, a finding triaged `minor` that its reviewer labelled at the blocking level: High from `change-review` or `change-adversarial-review`, Critical or High from `change-security-review`, P0 or P1 from a hosted reviewer\./,
-    /the finding, its source reviewer and round or thread, the reviewer's label, the disposition, and the reason/,
-    /A later `duplicate` adds its source to the existing entry\./,
-    /Drop an entry once a later round verifies a fix or re-triage leaves the finding open for the user\./,
+    /A `material` finding that ends without a verified fix and is not left open for the user, whatever its disposition: `explained`, `stale`, `skipped`, or `duplicate`\./,
+    /A `duplicate` stays listed even when the earlier finding is `applied`, unless a later reviewer round verified that fix against this report\./,
+    /Marked `downgraded`, a finding triaged `minor` whose reviewer label is `unknown` or at the blocking level: High from `change-review` or `change-adversarial-review`, Critical or High from `change-security-review`, P0 or P1 from a hosted reviewer\./,
+    /Marked `reclassified`, a finding triaged `pre-existing` that its reviewer tagged `introduced` or `worsened`\./,
+    /the finding, its source reviewer and round or thread, the reviewer's label and tag, the disposition, and the reason/,
+    /Add the source of a later `duplicate` to the existing entry for the same finding\./,
+    /Drop an entry once a later reviewer round verifies the fix or re-triage leaves the finding open for the user\./,
     /A material `change-security-review` finding closes only under \[Risk Tier\]\(risk-tier\.md\), so it never enters this list\./,
     /publication and merge approval cover it, and a finding the user reopens is open again\./,
   ]) {
@@ -396,9 +398,9 @@ test("delivery shows material self-closures before publication and at merge", as
   assert.match(completion, /Beside them, show the self-closure list under \[Local Review\]\(local-review\.md\), or `none` when it is empty\./);
   assert.match(completion, /user-accepted security findings, the self-closure list or `none`, and the proposed repository-supported merge method/);
 
-  assert.match(github, /Add the self-closures among its items not applied to the list under Local Review's Assess findings\./);
+  assert.match(github, /Before the cycle's Writeback, persist the prepared record's items not `applied` \(thread, finding, reviewer label, triage class, disposition, and reason\) in the progress record, and add their self-closures to the list under Local Review's Assess findings; on resume, use the persisted items\./);
   for (const [delivery, skill] of [["github-issue-delivery", github], ["azure-devops-work-item-delivery", azure]]) {
-    assert.doesNotMatch(skill, /`none` when it is empty|marked `downgraded`/, `${delivery} restates the self-closure policy`);
+    assert.doesNotMatch(skill, /`none` when it is empty|`downgraded`|`reclassified`/, `${delivery} restates the self-closure policy`);
   }
 });
 

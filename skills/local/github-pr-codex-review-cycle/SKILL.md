@@ -113,6 +113,8 @@ Still stop and ask before:
    - Capture its prepared record, including per-thread dispositions, verification,
      proposed replies, and pending publication. Do not reply or resolve yet,
      even though this cycle authorizes later writeback.
+   - When the caller keeps a progress record, hand it the record's items not
+     `applied` before step 7.
 6. If review fixes changed files, commit and push the verified fixes.
    - Reuse Prepare's successful verification if no relevant files changed after
      it; otherwise run the smallest relevant verification for the changed files.

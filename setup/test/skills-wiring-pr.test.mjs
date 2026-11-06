@@ -57,7 +57,9 @@ test("AI review follow-up and Codex cycle return per-item triage for items not a
     path.join(repoRoot, "skills", "local", "github-pr-codex-review-cycle", "SKILL.md"),
   )).replace(/\s+/g, " ");
 
-  assert.match(followup, /per-item disposition, triage class \(`material`, `minor`, or `pre-existing`, from steps 5-6\), reviewer label \(or `none`\), and supporting evidence/);
+  assert.match(followup, /Also give every item a triage class, whatever its disposition: `material` when it describes a concrete failure under step 6's criterion, whatever its label; `pre-existing` under step 5; otherwise `minor`\./);
+  assert.match(followup, /per-item disposition, triage class \(step 8\), reviewer label \(`none` when the reviewer gives none, `unknown` when it cannot be read\), and supporting evidence/);
+  assert.match(cycle, /- When the caller keeps a progress record, hand it the record's items not `applied` before step 7\./);
   const report = cycle.match(/## Final Report.*/)?.[0];
   assert.ok(report, "missing final report");
   assert.match(report, /- Not applied: one line per item not `applied`, from the prepared record: `<thread>`: <finding> - `<reviewer label>` - `<triage class>` - `<disposition>`: <reason>; or "None"/);
