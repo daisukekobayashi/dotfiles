@@ -55,7 +55,8 @@ one confirmation for that PR merge and those targets. That confirmation approves
 cleanup only when the user gives it in their own message, explicitly accepts the
 cleanup targets, and, after the merge, every cleanup safety check passes and the
 targets match the preview as the cleanup skill's Caller preview defines. A reply
-that does not explicitly accept the cleanup targets approves the merge only. A
+that approves the merge without explicitly accepting the cleanup targets
+approves the merge only; any other reply approves neither. A
 changed head, a resume, or any other target difference requires a separate
 cleanup confirmation. At every other tier, cleanup keeps its own confirmation after the
 merge.

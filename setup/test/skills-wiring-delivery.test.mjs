@@ -244,6 +244,8 @@ test("change review skills are explicit-only and share target selection", async 
     "azure-devops-common/**",
     "github-issue-create/**",
     "azure-devops-work-item-create/**",
+    "github-issue-start/**",
+    "azure-devops-work-item-start/**",
   ]) {
     assert.ok(agents.includes(`- add \`skills/local/${pattern}\`\n`), `AGENTS.md: missing add ${pattern}`);
   }
@@ -510,7 +512,7 @@ test("the risk tier table scales the delivery procedure", async () => {
   assert.match(dialogue, /The worker sets the tentative tier under \[Risk Tier\]\(risk-tier\.md\), runs `design-preflight-with-docs` in draft mode/);
   assert.match(dialogue, /For a Low tentative tier, first confirm it under Risk Tier's Low check; when it falls back to Medium, have the worker redraft in the mode Medium selects\./);
   assert.match(dialogue, /For a confirmed Low tier, also read back the draft's direction and assumptions and ask the user to confirm or correct them\./);
-  assert.match(flat(riskTier), /\*\*Low check:\*\* when a rating gives Low, tentative or final, the coordinator independently checks it against the diff, or the planned paths for a tentative tier, and the sensitive paths at the recorded base before applying the Low column, and records the basis\. When it cannot confirm Low, use Medium\./);
+  assert.match(flat(riskTier), /\*\*Low check:\*\* when a rating gives Low, tentative or final, the coordinator independently checks it against the diff, or the planned paths for a tentative tier, and the sensitive paths at the recorded base before it presents a Low draft or applies any other Low procedure, and records the basis\. When it cannot confirm Low, use Medium\./);
   assert.match(localReview, /set the tier for that head under \[Risk Tier\]\(risk-tier\.md\), including its Low check/);
   assert.match(flat(riskTier), /Show the tier at the current head, the heaviest tier recorded in this delivery when it differs, their main reasons, and the recommended human review from the column \[Tier procedure\]\(#tier-procedure\) applies/);
 
@@ -519,7 +521,7 @@ test("the risk tier table scales the delivery procedure", async () => {
   const runtime = flat(await readText(path.join(repoRoot, "skills", "local", "worktree-runtime-cleanup", "SKILL.md")));
   assert.match(runtime, /A confirmation a cleanup skill obtained from its Caller preview covers only the runtime resources listed there with the same identifiers/);
   assert.match(completion, /show the user the tier, its main reasons, the recommended human review from the column Risk Tier applies, the heaviest recorded tier when it differs from the current one/);
-  assert.match(completion, /A reply that does not explicitly accept the cleanup targets approves the merge only\./);
+  assert.match(completion, /A reply that approves the merge without explicitly accepting the cleanup targets approves the merge only; any other reply approves neither\./);
   assert.match(completion, /A changed head, a resume, or any other target difference requires a separate cleanup confirmation\./);
   assert.match(completion, /explicitly accepts the cleanup targets, and, after the merge, every cleanup safety check passes and the targets match the preview as the cleanup skill's Caller preview defines/);
 

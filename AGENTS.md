@@ -14,3 +14,5 @@
 - add `skills/local/azure-devops-common/**`
 - add `skills/local/github-issue-create/**`
 - add `skills/local/azure-devops-work-item-create/**`
+- add `skills/local/github-issue-start/**`
+- add `skills/local/azure-devops-work-item-start/**`

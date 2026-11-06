@@ -165,7 +165,7 @@ default sensitive paths in a `## Delivery sensitive paths` section of its root
 the skills that delete local or remote resources or write to GitHub or Azure
 DevOps (the worktree, runtime, and beads merge cleanup skills, the GitHub and
 Azure DevOps PR skills, `azure-devops-common`, and the issue and Work Item
-create skills).
+create and start skills).
 The shared `delivery-common` risk tier (Low, Medium, High) is set from the change rather than its author, and
 scales the review effort through one per-tier table: the preflight depth, the
 local reviewers and round limits, the hosted review rounds, whether the merge and

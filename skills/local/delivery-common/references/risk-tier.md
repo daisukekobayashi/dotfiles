@@ -24,8 +24,9 @@ merge, and the exact cleanup targets.
   follow-up fixes, before reusing review evidence.
 - **Low check:** when a rating gives Low, tentative or final, the coordinator
   independently checks it against the diff, or the planned paths for a
-  tentative tier, and the sensitive paths at the recorded base before applying
-  the Low column, and records the basis. When it cannot confirm Low, use Medium.
+  tentative tier, and the sensitive paths at the recorded base before it
+  presents a Low draft or applies any other Low procedure, and records the
+  basis. When it cannot confirm Low, use Medium.
 
 Record the tier, the dimension ratings, the matched sensitive paths, any
 `AGENTS.md` entries ignored as invalid, and the head they describe in the
