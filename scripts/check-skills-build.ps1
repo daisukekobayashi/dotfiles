@@ -16,5 +16,5 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-& git diff --exit-code -- setup/*.js
+& git diff --exit-code -- 'setup/*.js'
 exit $LASTEXITCODE
