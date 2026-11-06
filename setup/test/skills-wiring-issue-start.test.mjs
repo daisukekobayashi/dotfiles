@@ -107,6 +107,7 @@ test("github-pr-publish stops in an unresolved fork layout", async () => {
   assert.ok(context, "missing step 2");
   assert.doesNotMatch(context, /set-default|shows no default/, "gh's default names the PR base, not the push target");
   assert.match(context, /Check every other remote: stop and ask the user to name the remote when its repository or the resolved repository has a parent/, "any parent asks for a remote");
+  assert.match(context, /has a parent, when its fetch URL and push URLs name different repositories \(normalized as above\), or when the check cannot finish/, "split fetch and push repositories stop");
   assert.match(context, /`gh repo view <owner>\/<repo> --json parent,isFork`/, "parent lookup");
   assert.match(context, /Look up the resolved repository and each other remote's repository with `gh repo view <owner>\/<repo> --json parent,isFork`;/, "both repositories looked up");
   assert.match(context, /a repository \*\*has a parent\*\* when `parent` is not null or `isFork` is true/, "isFork counts as a parent");
