@@ -198,7 +198,7 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(runnerSection(skill), new RegExp(`Start it with \`Use \\$${name}\``));
     assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
     assert.match(runnerSection(skill), /Run one Codex run at a time per target worktree/);
-    assert.match(runnerSection(skill), /several review skills for one worktree\s+together, run them in parallel as one set instead: follow that section once\s+before the first run starts and once after every run ends/);
+    assert.match(runnerSection(skill), /several review skills for one worktree\s+together, wait for any other run in progress, then run them in parallel as one\s+set instead: follow that section once before the first run starts and once\s+after every run ends/);
     assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Brokers Started by a Codex Review"/);
   }
   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
