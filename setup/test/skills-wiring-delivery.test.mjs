@@ -68,17 +68,21 @@ test("delivery starts the worker, then runs the shared understanding before pref
     ["azure-devops-work-item-delivery", "azure-devops-work-item-start"],
   ]) {
     const deliverySkill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
-    const checkIndex = deliverySkill.indexOf("worker drafts `shared-understanding`");
+    const dialogueIndex = deliverySkill.indexOf("[Worker Dialogue](../delivery-common/references/worker-dialogue.md)");
     const startIndex = deliverySkill.indexOf(`Use \`${start}\``);
     const preflightIndex = deliverySkill.indexOf("Use `design-preflight-with-docs`");
     assert.ok(startIndex > 0, `${delivery}: missing start`);
-    assert.ok(startIndex < checkIndex, `${delivery}: start must dispatch the worker before the shared understanding`);
-    assert.ok(checkIndex < preflightIndex, `${delivery}: shared understanding must precede preflight`);
+    assert.ok(startIndex < dialogueIndex, `${delivery}: start must dispatch the worker before the shared understanding`);
+    assert.ok(dialogueIndex < preflightIndex, `${delivery}: shared understanding must precede preflight`);
     assert.doesNotMatch(deliverySkill, /run `shared-understanding` in the\s+coordinator/, delivery);
-    assert.match(deliverySkill, /`confirmed`, `corrected`, or `skipped`/);
-    assert.match(deliverySkill, /waiting for the user with their open points/);
-    assert.match(deliverySkill, /shared understanding result: its agreed decisions/);
+    // The status gate and the preflight handoff live once in Worker Dialogue.
+    assert.doesNotMatch(deliverySkill, /`confirmed`, `corrected`, or `skipped`/, delivery);
+    assert.doesNotMatch(deliverySkill, /waiting for the user with their open points/, delivery);
+    assert.doesNotMatch(deliverySkill, /shared understanding result: its agreed decisions/, delivery);
   }
+  const dialogue = flat(await readText(path.join(repoRoot, "skills", "local", "delivery-common", "references", "worker-dialogue.md")));
+  assert.match(dialogue, /Continue only with a status of `confirmed`, `corrected`, or `skipped`; report other targets as waiting for the user with their open points\./);
+  assert.match(dialogue, /Give it the target's shared understanding result: its agreed decisions and agreed task changes are settled scope/);
 });
 
 test("provider delivery skills link the same delivery-common targets", async () => {
@@ -135,8 +139,9 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const skill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
     providers[delivery] = skill;
-    assert.match(skill, /After fixes, follow Local Review's Repeat and advance for focused follow-up,\s+escalation to a full review, and advancement\./, delivery);
-    assert.match(skill, /Local review rounds follow Local Review's Repeat and advance/, delivery);
+    assert.match(skill, /under \[Local Review\]\(\.\.\/delivery-common\/references\/local-review\.md\): the initial\s+full review, Assess findings, and Repeat and advance\./, delivery);
+    assert.doesNotMatch(skill, /[Rr]eviewers\s+remain read-only|read-only reviewer|Wait for all (completed )?results before the implementation owner/, delivery);
+    assert.doesNotMatch(skill, /covered by the most recent\s+full review/, delivery);
     assert.doesNotMatch(skill, /repeat the selected reviews on the new snapshot/, delivery);
     assert.doesNotMatch(skill, /three local review rounds/, delivery);
     assert.doesNotMatch(skill, /Count the initial full review/, delivery);
@@ -146,9 +151,11 @@ test("delivery-common owns local review repetition, advancement, and rounds", as
   }
   assert.match(providers["github-issue-delivery"], /Hosted Codex review rounds per issue\s+follow the Risk Tier's Tier procedure/);
   assert.doesNotMatch(providers["github-issue-delivery"], /three hosted Codex/);
-  assert.match(providers["github-issue-delivery"], /hosted-fix\s+follow-ups use the same local budget/);
-  assert.match(providers["azure-devops-work-item-delivery"], /Advance when the exact published implementation is covered by the most recent\s+full review and the follow-ups completed since it under Local Review's Repeat\s+and advance/);
-  assert.match(providers["github-issue-delivery"], /Advance only when the current\s+published head is covered by the most recent full review and the follow-ups\s+completed since it under Local Review's Repeat and advance/);
+  assert.match(providers["github-issue-delivery"], /Hosted-fix follow-ups use the same local review budget/);
+  const afterPublication = flat(await readText(path.join(deliveryCommon, "references", "completion.md")));
+  assert.match(afterPublication, /Advance to the merge only when the current published head is covered by the most recent full review and the follow-ups completed since it under Local Review's Repeat and advance and has current verification, plus the calling workflow's additions\./);
+  assert.match(flat(providers["github-issue-delivery"]), /Advance under Delivery Completion's After publication, adding that the published head has completed hosted review/);
+  assert.match(flat(providers["azure-devops-work-item-delivery"]), /and advance under it, adding that the PR has the intended Work Item links\./);
   for (const [name, text] of Object.entries(providers)) {
     assert.doesNotMatch(text, /full local reviews and completed follow-ups|initial full\s+review and completed follow-ups/, name);
   }
@@ -272,7 +279,7 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(localReview, /`change-security-review`\s+with the base Risk Tier sets/);
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const deliverySkill = await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md"));
-    assert.match(deliverySkill, /\[Risk Tier\]\(\.\.\/delivery-common\/references\/risk-tier\.md\)/);
+    assert.match(deliverySkill, /\[Risk Tier\]\(\.\.\/delivery-common\/references\/risk-tier\.md(#[a-z-]+)?\)/);
   }
   const completion = await readText(path.join(deliveryCommon, "references", "completion.md"));
   assert.match(completion, /the tier at the current head, the heaviest tier recorded in this delivery\s+when it differs, and their main reasons;\s+- the recommended human review from the column\s+\[Risk Tier\]\(risk-tier\.md#tier-procedure\) applies;/);
@@ -307,12 +314,37 @@ test("delivery workers draft the understanding and preflight for the coordinator
   assert.match(common, /^description: Shared worker dialogue, .*workers draft the shared understanding and design preflight for the coordinator to ask/m);
   assert.match(common, /\[Worker Dialogue\]\(references\/worker-dialogue\.md\)/);
 
+  for (const rule of [
+    /Preserve the start skill's task classification, dependency checks, stop condition, and one-target\/one-branch\/one-worktree ownership; implementation begins only after preflight\./,
+    /The start skill owns worker dispatch; do not launch duplicate workers\. Parallelize only independent targets, within the host's available capacity, and keep each worker in its assigned worktree\./,
+    /calling the start skill separately for each single target instead of entering its multi-worker path\. Local reviews still require their own delegation capabilities\./,
+    /routes workers' material design questions and approval requests to the user with the affected target clearly identified/,
+    /## Preflight and implementation Run the preflight in the target's worktree before editing the implementation\./,
+    /Inherit the preflight's completion and documentation criteria without an additional interview\. Carry forward settled decisions on resume\. Leave material unanswered decisions pending and continue only work that does not depend on them\./,
+    /a successful baseline is not implementation verification\./,
+  ]) {
+    assert.match(dialogue, rule, `worker-dialogue.md: ${rule}`);
+  }
+
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
     const skill = flat(await read(delivery, "SKILL.md"));
-    assert.match(skill, /dispatch the (issue|item)'s worker before the shared understanding/, delivery);
-    assert.match(skill, /its worker drafts `shared-understanding`, and the coordinator asks the user one (issue|item) at a time/, delivery);
-    assert.match(skill, /no worker asks the user directly/, delivery);
-    assert.match(skill, /drafted by the worker and asked by the coordinator under Worker Dialogue/, delivery);
+    assert.match(skill, /under \[Worker Dialogue\]\(\.\.\/delivery-common\/references\/worker-dialogue\.md\)'s Assign the worker\./, delivery);
+    assert.match(skill, /drafted by the worker and asked by the coordinator under Worker Dialogue, then implement and verify under its \[Preflight and implementation\]\(\.\.\/delivery-common\/references\/worker-dialogue\.md#preflight-and-implementation\)\./, delivery);
+    for (const moved of [
+      /dispatch the (issue|item)'s worker/,
+      /no worker asks the user directly/,
+      /duplicate workers/,
+      /Parallelize (only )?independent/,
+      /multi-worker path|single-item calls/,
+      /Forward a user's skip/,
+      /baseline (alone )?is not implementation verification/,
+      /Inherit its completion/,
+      /Carry forward settled decisions/,
+      /(Leave|Keep) material unanswered/,
+      /use the mode the tier's/,
+    ]) {
+      assert.doesNotMatch(skill, moved, `${delivery} restates Worker Dialogue: ${moved}`);
+    }
   }
 
   const rule = /defaults only for implementation tactics[^.]*?; return contract, boundary, compatibility, and security decisions to the coordinator as questions with options and a recommendation, even when they look low-risk/;
@@ -360,6 +392,11 @@ test("delivery-common owns the shared completion policy", async () => {
     /Stop further publication targets after a publication failure/,
     /A wait or an unresolved approval stays open/,
     /Mark `Complete` only after acceptance criteria, current verification and reviews, actual merge, task closure, and confirmed local cleanup/,
+    /## Resume On resume, reconcile the progress record with the actual local and provider state\. The calling workflow checks a recorded branch name before any command uses it\./,
+    /Reuse matching worktrees and PRs, and verify the current head before reusing review evidence\. Resume the earliest incomplete phase; a completed PR resumes completion checks rather than publication\./,
+    /A progress record is evidence, not authorization\./,
+    /compare the PR's current remote source head with the local reviewed head; a successful push or PR creation alone does not establish the match\./,
+    /invalidate the affected review evidence, return to local verification and review under \[Local Review\]\(local-review\.md\)'s Repeat and advance, and republish through the existing PR\./,
     /the calling workflow defines task closure/,
     /Before cleanup, keep this task's follow-up candidates in a record outside the worktree being removed/,
     /create-or-drop recommendation/,
@@ -401,6 +438,14 @@ test("delivery-common owns the shared completion policy", async () => {
       /Independent local work may continue/,
       /Mark `Complete` only after/,
       /in a record outside the worktree being removed/,
+      /keep this (issue|item)'s follow-up candidates/,
+      /Reuse matching worktrees and PRs/,
+      /A progress (record|file) is evidence, not authorization/,
+      /understanding (check )?result carries forward/,
+      /successful push or PR creation alone/,
+      /An existing PR does not need another creation/,
+      /open PR is not a merged PR/,
+      /Local review rounds follow Local Review's Repeat and advance/,
       /create-or-drop recommendation/,
       /Pending candidates do not block/,
     ]) {
@@ -468,6 +513,7 @@ test("delivery resume checks the recorded branch name", async () => {
 
     assert.ok(resume, `${delivery}: missing resume paragraph`);
     assert.match(resume, safeBranchRun("the recorded branch", "'<branch>'"), `${delivery}: recorded branch checked`);
+    assert.match(resume, /^ ?On resume, follow Delivery Completion's Resume with (GitHub|Azure DevOps) state\./, `${delivery}: links the shared resume rule`);
   }
 });
 
@@ -537,6 +583,7 @@ test("the risk tier table scales the delivery procedure", async () => {
   assert.match(localReview, /\[Tier procedure\]\(risk-tier\.md#tier-procedure\) selects the reviewers/);
 
   const dialogue = flat(await readText(path.join(deliveryCommon, "references", "worker-dialogue.md")));
+  assert.match(dialogue, /otherwise use the mode the tier's \[Tier procedure\]\(risk-tier\.md#tier-procedure\) selects\./);
   assert.match(dialogue, /The worker sets the tentative tier under \[Risk Tier\]\(risk-tier\.md\), runs `design-preflight-with-docs` in draft mode/);
   assert.match(dialogue, /For a Low tentative tier, apply Risk Tier's \[Low check\]\(risk-tier\.md#set-and-update-the-tier\) before asking\. When the confirmed tier's \[Tier procedure\]\(risk-tier\.md#tier-procedure\) column selects a different preflight mode than the draft used, have the worker redraft in that mode before asking; for a confirmed Low tier, apply its Design preflight row\./);
   assert.doesNotMatch(dialogue, /falls back to Medium|read back the draft's direction/, "worker-dialogue.md restates the Low check or the Design preflight row");
@@ -559,7 +606,7 @@ test("the risk tier table scales the delivery procedure", async () => {
   ]) {
     const skill = flat(await readText(path.join(repoRoot, "skills", "local", delivery, "SKILL.md")));
     assert.match(skill, /combined only where Delivery Completion's Merge confirmation allows/, delivery);
-    assert.match(skill, /use the mode the tier's Tier procedure selects/, delivery);
+    assert.doesNotMatch(skill, /use the mode the tier's Tier procedure selects/, delivery);
     assert.match(skill, new RegExp(`use \`${cleanup}\`'s caller preview for the cleanup targets`), delivery);
     assert.doesNotMatch(skill, /requires? separate confirmation for the specific PR merge/, delivery);
     assert.doesNotMatch(skill, /\bthree\b/, delivery);
@@ -668,4 +715,33 @@ test("skills profile docs name the delegated authorization home", async () => {
   const japanese = flat(await readText(path.join(repoRoot, "docs", "skills-profiles.ja.md")));
   assert.match(english, /Its Delegated Authorization section states once how a caller passes the user's request, exact target, and existing approvals to the skills it calls/);
   assert.match(japanese, /その Delegated Authorization の節は/);
+});
+
+test("a missing prerequisite has one home that delivery links", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const commonRaw = await readText(path.join(localRoot, "delivery-common", "SKILL.md"));
+  const home = flat(commonRaw.match(/\n## Missing Prerequisites\n[\s\S]*?(?=\n## |$)/)?.[0]);
+  assert.ok(home, "delivery-common: missing Missing Prerequisites");
+  assert.match(home, /stops the phase that needs it for the affected targets\./);
+  assert.match(home, /Report it as a blocker, naming what is missing and, for a skill, the profile that installs it, such as `base,github`\. Never install it, substitute another skill or an informal check for it, or skip the phase\./);
+  assert.match(home, /Independent work that does not depend on it continues under Delivery Completion's \[Bounds\]\(references\/completion\.md#bounds\)\./);
+  assert.match(commonRaw, /^description: .*stops at a bound or a missing prerequisite/m);
+
+  const localReview = flat(await readText(path.join(localRoot, "delivery-common", "references", "local-review.md")));
+  assert.match(localReview, /is a missing prerequisite under \[Missing Prerequisites\]\(\.\.\/SKILL\.md#missing-prerequisites\)/);
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const skill = flat(await readText(path.join(localRoot, delivery, "SKILL.md")));
+    assert.ok(skill.includes("[Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites)"), `${delivery}: links Missing Prerequisites`);
+    assert.doesNotMatch(skill, /silently installing|rather than installing|skipping (a )?required phases?/, `${delivery} restates the missing-prerequisite rule`);
+  }
+});
+
+test("skills profile docs keep one deliberate delivery restatement", async () => {
+  const english = await readText(path.join(repoRoot, "docs", "skills-profiles.md"));
+  const layering = flat(english.match(/\n### Delivery Policy Layering\n[\s\S]*?(?=\n### )/)?.[0]);
+  assert.ok(layering, "skills-profiles.md: missing Delivery Policy Layering");
+  assert.match(layering, /Both provider skills deliberately keep one short restatement as a local guard that tests pin: the one-line run of the shared safe branch name check/);
+  assert.doesNotMatch(layering, /status gate \(`confirmed`/);
+  assert.match(flat(await readText(path.join(repoRoot, "docs", "skills-profiles.ja.md"))), /その Missing Prerequisites の節は/);
+  assert.match(layering, /Missing Prerequisites section states once/);
 });

@@ -45,74 +45,41 @@ cycle.
 1. Resolve the requested IDs, organization, project, repository, instructions,
    dirty state, and matching worktrees/PRs. Require at least one actual Work
    Item. Check component skills and the local reviewers, including
-   `change-security-review`, before starting.
-   The normal installation is `base,azure-devops`; report missing prerequisites
-   rather than installing them or skipping required phases.
+   `change-security-review`, before starting. The normal installation is
+   `base,azure-devops`; a missing one stops under
+   [Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites).
 2. Use `azure-devops-work-item-start` with the per-item workflow below as its
-   implementation brief. Prepare its worktree and baseline and dispatch the
-   item's worker before the shared understanding; implement only after
-   preflight. Preserve classification, dependency checks,
-   and one-Work-Item/one-branch/one-worktree ownership. Proceed only with directly
-   actionable items; report parent trackers, blockers, and ambiguous scope first.
-3. Let the start skill own worker dispatch. Parallelize independent items only
-   within available capacity and keep each worker in its assigned worktree.
-   When delegation is unavailable, report it and process safe items sequentially
-   through separate single-item calls. Local reviews still need their own
-   delegation capabilities. For dependent or unsafe groups, honor the start
-   skill's stop condition and present an order or independent subset to the user.
-4. Follow [Worker Dialogue](../delivery-common/references/worker-dialogue.md)
-   for each item: its worker drafts `shared-understanding`, and the coordinator
-   asks the user one item at a time. Forward a user's skip. Pass on only items
-   whose status is `confirmed`, `corrected`, or `skipped`; report the others as
-   waiting for the user with their open points. Route material design questions
-   and approvals through the coordinator; no worker asks the user directly.
-5. Keep a progress record per item under
+   implementation brief, under
+   [Worker Dialogue](../delivery-common/references/worker-dialogue.md)'s Assign
+   the worker.
+3. Follow Worker Dialogue for each item's shared understanding and preflight.
+4. Keep a progress record per item under
    [Delivery Completion](../delivery-common/references/completion.md), adding
    the organization, project and repository IDs, the PR ID and source/target
    refs, the policy and merge state, and the Work Item state.
 
-On resume, reconcile the record with actual local and Azure DevOps state. Stop
+On resume, follow Delivery Completion's Resume with Azure DevOps state. Stop
 and report the recorded branch unless it is a **safe branch name** before
 running any command with it: run `node <script> -- '<branch>'`, where `<script>`
 is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
 resolved from this skill's directory, and continue only on exit 0. Write a name
 into this or any command only when it uses solely ASCII letters, digits, `/`,
-`.`, `_`, and `-`; any other name is not safe, without running the check. Reuse
-matching worktrees and PRs; a completed PR resumes completion checks rather than
-publication. Recheck the current source ref before reusing review evidence.
-Resume the earliest incomplete phase. A recorded shared understanding result
-carries forward. A progress record is evidence, not authorization.
+`.`, `_`, and `-`; any other name is not safe, without running the check.
 
 ## Per-Work-Item Workflow
 
 ### 1. Preflight, implement, and verify
 
-Set the tentative tier under [Risk Tier](../delivery-common/references/risk-tier.md)
-first. Use `design-preflight-with-docs` in the assigned worktree before
-implementation, drafted by the worker and asked by the coordinator under Worker
-Dialogue. Forward the requested mode/question limit or use the mode the tier's
-Tier procedure selects. Give it the item's
-shared understanding result: its agreed decisions and agreed changes are
-settled scope, and its preflight items open the design questions. Inherit its
-completion and documentation criteria without a second interview. Carry forward
-settled decisions on resume. Keep material unanswered decisions pending and
-continue only work that does not depend on them.
-
-Implement the Work Item's acceptance criteria, confirmed examples, and accepted design. Run focused
-repository checks and record actual results and coverage limits; the baseline
-alone is not implementation verification. Finish with an implementation and
-verification evidence ready for review, or an explicit blocker.
+Use `design-preflight-with-docs` for this item, drafted by the worker and asked
+by the coordinator under Worker Dialogue, then implement and verify under its
+[Preflight and implementation](../delivery-common/references/worker-dialogue.md#preflight-and-implementation).
 
 ### 2. Run local reviews, assess, and repeat
 
-Follow [Local Review](../delivery-common/references/local-review.md) to set the
-risk tier, select the reviewers, and run an initial full review with every
-selected read-only reviewer on the same recorded base, Work Item/spec, and
-committed snapshot. Wait for all results before the implementation owner edits.
-
-Assess the findings under Local Review's Assess findings.
-After fixes, follow Local Review's Repeat and advance for focused follow-up,
-escalation to a full review, and advancement.
+Run the local reviews the
+[Risk Tier](../delivery-common/references/risk-tier.md#tier-procedure) selects
+under [Local Review](../delivery-common/references/local-review.md): the initial
+full review, Assess findings, and Repeat and advance.
 
 ### 3. Publish the PR
 
@@ -122,18 +89,10 @@ Use `azure-devops-pr-publish` and honor its stop-on-failure behavior. Supply
 known Work Item IDs, completion scope, and the user's state-transition intent.
 
 Verify the returned PR's repository, source/target refs, and Work Item links.
-Read the current remote source ref and compare its commit with the local reviewed
-HEAD; a successful push or PR creation alone does not establish this match.
-Record the PR and published head. If publication creates a different commit or
-any later edit changes the implementation, invalidate affected review evidence,
-return to local verification and review under Local Review's Repeat and advance,
-and republish through the existing PR.
-
-Advance when the exact published implementation is covered by the most recent
-full review and the follow-ups completed since it under Local Review's Repeat
-and advance, has current verification, and has the intended Work Item links.
-An existing PR does not need another creation, and an open PR is not a merged
-PR.
+Read the current remote source ref and compare its commit with the local
+reviewed HEAD under Delivery Completion's
+[After publication](../delivery-common/references/completion.md#after-publication),
+and advance under it, adding that the PR has the intended Work Item links.
 
 ### 4. Confirm and perform the merge
 
@@ -147,9 +106,6 @@ combines the confirmations, use `azure-devops-worktree-cleanup`'s caller preview
 for the cleanup targets. Complete the PR as that reference describes.
 
 ### 5. Confirm cleanup and verify completion
-
-Before cleanup, keep this item's follow-up candidates under Delivery
-Completion.
 
 After verifying actual PR completion and the merged source/merge commit, use
 `azure-devops-worktree-cleanup` for the exact item branch/worktree. Pass merge
@@ -166,8 +122,8 @@ comment on the Work Item.
 
 ## Bounds and Handoffs
 
-Local review rounds follow Local Review's Repeat and advance; this workflow
-runs no hosted AI review rounds. Apply Delivery Completion's Bounds.
+Apply Delivery Completion's Bounds; this workflow runs no hosted AI review
+rounds.
 
 Check policies when reaching merge or resuming; avoid indefinite polling. If the
 user asks to wait, use a bounded window and report its limit; otherwise report

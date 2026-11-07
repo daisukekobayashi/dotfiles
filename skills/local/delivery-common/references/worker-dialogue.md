@@ -8,6 +8,15 @@ researched in parallel while questions to the user stay sequential.
 
 ## Assign the worker
 
+The calling workflow calls its start skill with the per-target workflow as the
+implementation brief. Preserve the start skill's task classification,
+dependency checks, stop condition, and one-target/one-branch/one-worktree
+ownership; implementation begins only after preflight. The start skill owns
+worker dispatch; do not launch duplicate workers. Parallelize only independent
+targets, within the host's available capacity, and keep each worker in its
+assigned worktree. For unsafe or dependent groups, honor the start skill's stop
+condition and present a proposed order or an independent subset to the user.
+
 With delegation, the start skill prepares the target's worktree and baseline,
 then dispatches one worker for it, including when the delivery has a single
 target. The same worker drafts the shared understanding, drafts the preflight,
@@ -19,7 +28,9 @@ and results.
 Without delegation, report the limitation and process targets one at a time.
 The coordinator runs `shared-understanding` and `design-preflight-with-docs`
 itself and asks the user directly, under the same rule for which decisions may
-take a default.
+take a default. Handle safe targets sequentially, calling the start skill
+separately for each single target instead of entering its multi-worker path.
+Local reviews still require their own delegation capabilities.
 
 ## Draft and ask
 
@@ -57,7 +68,27 @@ target's dialogue at a time, finishing its open questions before starting the
 next target's. A drafted recommendation is not a decision; only the user's
 answers settle the points. A worker returns a material question that arises
 later, during implementation or review fixes, to the coordinator in the same
-way.
+way. The coordinator routes workers' material design questions and approval
+requests to the user with the affected target clearly identified.
+
+## Preflight and implementation
+
+Run the preflight in the target's worktree before editing the implementation.
+Forward any mode or question limit the user requested; otherwise use the mode
+the tier's [Tier procedure](risk-tier.md#tier-procedure) selects. Give it the
+target's shared understanding result: its agreed decisions and agreed task
+changes are settled scope, and its Carry to Design Preflight items open the
+design questions. Inherit the preflight's completion and documentation criteria
+without an additional interview. Carry forward settled decisions on resume.
+Leave material unanswered decisions pending and continue only work that does
+not depend on them.
+
+Implement the task's acceptance criteria and agreed decisions, following the
+settled design and repository conventions. Run the smallest relevant checks and
+record actual results and material coverage limits; a successful baseline is
+not implementation verification. Complete this phase only with an
+implementation and verification evidence ready for review, or an explicit
+blocker.
 
 ## Worker defaults
 

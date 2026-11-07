@@ -192,18 +192,24 @@ delivery スキルは、共通のポリシー層と薄いプロバイダー別�
   共通のポリシーです。Codex のトリガーや material な差分の判定のように、hosted
   レビューの実行方法と差分に次のラウンドが必要かの判断は、プロバイダーのスキルに残します。
 
-`delivery-common` は、Worker Dialogue（worker が shared understanding と
-design preflight を草稿にし、コーディネーターがユーザーに質問する流れ）、ローカル
+`delivery-common` は、Worker Dialogue（start スキルによる worker の割り当て、worker が
+shared understanding と design preflight を草稿にし、コーディネーターがユーザーに
+質問する流れ、preflight と実装への引き継ぎ）、ローカル
 レビュー手順（snapshot の固定、follow-up 候補の記録を含む指摘の評価、focused
 follow-up、reviewer の選択、ローカルレビューの full review への切り替え条件、完了
 条件、ラウンドの数え方と上限、head と coverage の記録）、リスク tier、Delivery
-Completion（進捗記録、公開前とマージ確認時に示す decision summary、マージ確認で示す内容、delivery の上限と
+Completion（進捗記録、再開、公開前とマージ確認時に示す decision summary、公開後の
+公開 head の確認と次への進行、マージ確認で示す内容、delivery の上限と
 停止条件、最終報告と `Complete` の条件、delivery 終了時の follow-up 候補の報告と
 作成）を持ちます。その `SKILL.md` では、hosted レビューの実行方法と承認は呼び出し
 元のワークフローが持つとしています。その Delegated Authorization の節は、呼び出し元が
 ユーザーの依頼、正確な対象、既存の承認を呼び出すスキルに渡す方法を1か所で定めます。
 両方のプロバイダーの PR スキル、レビュー依頼スキル、delivery スキルはこれにリンクし、
-それぞれ自身の承認モデルを持ちます。共通の記述はプロバイダーに依存せず、task と
+それぞれ自身の承認モデルを持ちます。その Missing Prerequisites の節は、必要な
+スキル、reviewer、ツールが欠けているとき、それを必要とするフェーズを対象の task
+について止めてブロッカーとして報告し、インストール、代替、省略はしないことを1か所で
+定めます。両方のプロバイダー別 delivery スキルとローカルレビュー手順はこれにリンク
+します。共通の記述はプロバイダーに依存せず、task と
 task の完了（task closure）という言葉を使い、呼び出し元のワークフローが項目を追加
 する箇所を示します。各プロバイダー別スキルは、GitHub の hosted レビューの結果や
 Azure DevOps の Work Item 状態遷移の提案など、追加する項目だけをリンクの横に
@@ -214,12 +220,11 @@ Azure DevOps の Work Item 状態遷移の提案など、追加する項目だ�
 変更は `delivery-common` を1回だけ編集し、`delivery-common/SKILL.md` の担当範囲の
 記述と frontmatter の `description` もそれに合わせて更新します。片方のプロバイダー
 にしかないポリシーはプロバイダー別スキルに残します。両方のプロバイダー別スキルは、
-テストが固定している次の短い記述をローカルの安全確認として意図的に残します。
-
-- 再開時の段落。記録されたブランチをコマンドで使う前に、共有の安全なブランチ名
-  チェック（[共有スクリプト](#共有スクリプト)）を1行で実行する確認を含みます。
-- 各プロバイダーの調整手順にある shared understanding の状態の確認（`confirmed`、
-  `corrected`、`skipped`）
+テストが固定している短い記述を1つだけ、ローカルの安全確認として意図的に残します。
+再開時の段落で、記録されたブランチをコマンドで使う前に、共有の安全なブランチ名
+チェック（[共有スクリプト](#共有スクリプト)）を1行で実行する確認です。再開のそれ以外の
+手順は Delivery Completion に置き、shared understanding の状態の確認は Worker
+Dialogue だけに置きます。
 
 Azure DevOps 版との同等性を標準とします。`delivery-common` のポリシーは両方の
 プロバイダーに自動的に適用されます。一方のプロバイダーでの変更が、もう一方の
