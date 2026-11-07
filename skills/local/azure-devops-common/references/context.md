@@ -49,7 +49,11 @@ Resolution rules:
 - Preview Work Item or pull request content before creating it.
 - Require explicit confirmation before creating or updating Work Items.
 - Require explicit confirmation before destructive local cleanup.
-- Never delete remote branches unless the user explicitly asks.
+- Delete a remote branch only when the user explicitly asks, or confirms a
+  deletion that the remote branch deletion check in
+  [`azure-devops-worktree-cleanup`](../../azure-devops-worktree-cleanup/SKILL.md)
+  step 5 proposed. That confirmed deletion, conditioned on the expected SHA with
+  `--force-with-lease`, is not a force push under the next rule.
 - Never force push, reset, rebase, amend, merge, complete a PR, set auto-complete,
   vote, approve, or resolve threads unless a workflow skill explicitly allows it
   and the user explicitly asks.
@@ -76,10 +80,13 @@ Resolution rules:
   implemented by the PR; do not rely only on body text when a structured link is
   available. Use `az repos pr create --work-items` if the CLI supports it;
   otherwise add the link after PR creation with `az repos pr work-item add`.
-- Structured links are separate from state transitions. Enable
-  `--transition-work-items` only with explicit intent covering the linked set;
-  it attempts the next logical state and does not prove Work Item completion.
-  Verify the actual state under the project's process after merging.
+- Structured links are separate from state transitions.
+  `--transition-work-items` applies to every linked Work Item, not only the one
+  being delivered; enable it only with explicit intent covering the whole
+  linked set. When only some linked Work Items should transition, leave it off
+  and obtain approval for the exact item-specific transitions. It attempts the
+  next logical state and does not prove Work Item completion; verify the actual
+  state under the project's process after merging.
 - Use state-transition keywords in the PR description, such as `Fixes #123`,
   `Closes #123`, or `Resolves #123`, only when the user explicitly wants the
   Work Item to transition on PR completion or merge and the PR fully completes

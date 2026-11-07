@@ -43,10 +43,6 @@ Use the repository and PR resolved by the parent skill.
 - Do not push, commit, merge, or edit repository files.
 - Do not request Copilot review from this provider procedure.
 - Use only the PR comment path described above to request Codex review.
-- Treat comment existence as proof that the request was posted, not as proof
-  that Codex picked it up.
-- Do not claim Codex acknowledged the request unless the posted comment has an
-  `eyes` reaction.
 - Assume Codex review is already configured unless an API error proves
   otherwise; do not run setup troubleshooting by default.
 - Do not delete or repost the trigger comment unless the user explicitly asks

@@ -22,15 +22,13 @@ This skill is not for:
 ## Workflow
 
 1. Resolve targets.
-   - Identify each branch or worktree requested by the user.
-   - If no target is specified, use the current worktree and branch.
-   - For multiple targets, process them sequentially and stop on the first failure.
+   - Resolve and process targets under `github-pr-publish` step 1, across
+     publication and review requests.
 2. Use `github-pr-publish` for the target.
    - Delegate repository checks, verification, staging, commit, push, and PR
      creation or reuse to that skill; do not maintain a second publication workflow.
-   - Apply its approval model to the requested publication, subject to governing
-     instructions and the user's actual authorization. Pass through existing
-     authorization rather than asking again for the same operation.
+   - Apply its approval model to the requested publication; delegated calls
+     follow [Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization).
    - Capture the branch, commit, push target, PR number/URL, and verification result.
    - If publication fails or is blocked, stop before requesting review or moving
      to another target.
@@ -38,6 +36,7 @@ This skill is not for:
    - An explicit request to run this combined workflow includes requesting both
      reviews, subject to governing approval rules.
    - Let that skill handle both requests and their separate verification.
+   - Capture the Copilot and Codex request status for the final report.
    - Report partial success; if either request fails or remains unacknowledged,
      stop before moving to another target. Do not repeat publication or a
      successful review request to recover the other request.
@@ -45,5 +44,3 @@ This skill is not for:
 ## Guardrails
 
 - Do not force push, merge, delete remote branches, or clean up worktrees.
-- Do not hide partial AI review failures.
-- Keep a per-target record of verification, commit, push, PR URL, Copilot request status, and Codex request status for the final report.

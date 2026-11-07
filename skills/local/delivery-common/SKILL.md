@@ -1,6 +1,6 @@
 ---
 name: delivery-common
-description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow has workers draft the shared understanding and design preflight for the coordinator to ask, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, prepares a merge confirmation, stops at a bound, or reports completion and follow-up candidates.
+description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow has workers draft the shared understanding and design preflight for the coordinator to ask, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, prepares a merge confirmation, stops at a bound, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
 ---
 
 # Delivery Common
@@ -20,10 +20,28 @@ confirmation, bounds, the final report and `Complete` rule, and follow-up
 candidates.
 
 The calling workflow owns implementation, assessment decisions, how its hosted
-review runs, publication, and approvals. Where shared text names the calling
-workflow's additions, the calling workflow lists its provider-specific items
-next to its link. Return the completed results, review scope, reviewed
-snapshot, and tier to that caller.
+review runs, publication, and approvals;
+[Delegated Authorization](#delegated-authorization) says how those approvals
+pass to the skills it calls. Where shared text names the calling workflow's
+additions, the calling workflow lists its provider-specific items next to its
+link. Return the completed results, review scope, reviewed snapshot, and tier
+to that caller.
+
+## Delegated Authorization
+
+A delegated call carries the user's actual request, the exact target, and the
+existing approvals. The caller forwards them to each skill it calls; the called
+skill acts only within them and, before an action they do not cover, prepares
+the concrete result and asks for the missing approval. A skill reference,
+automatic selection, or automatic discovery authorizes nothing. Reuse approval
+already given for the same scope instead of asking again. Each called skill
+keeps its own approval model: what an explicit request approves and what still
+needs asking.
+
+The PR, review request, and Codex review cycle skills and the delivery skills
+of both providers link this section instead of restating it.
+
+## Shared Scripts
 
 [`scripts/check-branch-name.mjs`](scripts/check-branch-name.mjs) is the shared
 **safe branch name** check. The start, delivery, PR, and cleanup skills of every

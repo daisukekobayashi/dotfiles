@@ -213,7 +213,11 @@ head and coverage record), the Risk Tier, and Delivery Completion (the progress
 record, the decision summary shown before publication and at merge, merge confirmation contents, delivery
 bounds and stop conditions, the final report and `Complete` rule, and
 end-of-delivery follow-up candidate reporting and creation). Its `SKILL.md` says
-the calling workflow owns how its hosted review runs and approvals. The shared text is
+the calling workflow owns how its hosted review runs and approvals. Its
+Delegated Authorization section states once how a caller passes the user's
+request, exact target, and existing approvals to the skills it calls; the PR,
+review request, and delivery skills of both providers link it, and each keeps
+its own approval model. The shared text is
 provider-neutral: it names the task and task closure, and marks where the
 calling workflow adds its own items. Each provider skill lists only those
 additions next to its link, such as the hosted review outcome on GitHub or the

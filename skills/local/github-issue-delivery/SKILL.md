@@ -17,14 +17,14 @@ Codex:       $github-issue-delivery 12 36 56 60
 ## Scope and Authorization
 
 Use the current repository and explicitly requested issues. Read the component
-skills before their phases and pass the user's full workflow request, exact
-target, and existing authorizations to each. An explicit user request for this
-full workflow selects its delegated shared understanding, preflight, local review,
-and PR-cycle phases;
-their instructions recognize this caller. Automatic discovery or a reference to
-this file does not select those phases or grant mutation approval. If authorization
-is missing, prepare the concrete result and request only the approval needed for
-the next operation. Reuse authorization already given for the same scope.
+skills before their phases and call them under
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the issue, branch, and worktree. An explicit user request
+for this full workflow selects its delegated shared understanding, preflight,
+local review, and PR-cycle phases; their instructions recognize this caller.
+Automatic discovery or a reference to this file does not select those phases.
+If authorization is missing, prepare the concrete result and request only the
+approval needed for the next operation.
 
 The workflow includes the selected local review passes and the normal publication,
 Codex review, and writeback cycle. It requires explicit confirmation for the
@@ -128,8 +128,7 @@ disposition missing from the progress record from the PR's review threads,
 including resolved ones, before advancing, and add its self-closures to the
 list; report history that cannot be recovered as a blocker to a complete
 decision summary. Record the returned status, PR, published head, reviewed head,
-dispositions, and unresolved items. An acknowledgement or an `eyes` reaction is
-not a completed review. An open PR is not a merged PR.
+dispositions, and unresolved items. An open PR is not a merged PR.
 
 If hosted follow-up changed the implementation, return to the local review phase
 for focused follow-up or a full review under Local Review's Repeat and advance.

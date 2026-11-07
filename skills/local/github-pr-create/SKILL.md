@@ -12,10 +12,9 @@ respecting the repository's pull request template when one exists. Templates
 are optional; if no template exists, create a minimal generic body with summary
 and test sections.
 
-For delegated calls, require the actual enclosing user request, exact branch/base,
-and authorization for PR creation. A reference to this skill or automatic
-selection does not authorize a GitHub write; request any missing approval before
-creation.
+Delegated calls follow
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the branch and base, for PR creation.
 
 This skill is not for:
 - committing changes
@@ -78,8 +77,6 @@ This skill is not for:
 ## Guardrails
 
 - Do not commit, push, merge, or request reviews.
-- Do not create a duplicate PR for a branch that already has one.
-- Do not create or reuse a PR whose head repository is not the head repository.
 - Do not hardcode or print secrets while summarizing diffs or templates.
 - Do not modify repository files while preparing the PR body.
 - If GitHub authentication, permissions, or branch publication blocks PR creation, report the blocker and stop.
