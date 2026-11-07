@@ -131,6 +131,42 @@ check() {
   done
 }
 
+@test "resolve rejects URLs that git splits to another host or runs another transport for" {
+  local url
+  for url in 'evil.invalid:x@github.com:owner/repo' 'ssh://evil.invalid:%2F@github.com/owner/repo' 'git://evil.invalid:%2F@github.com/owner/repo' 'ssh://git%40evil.invalid@github.com/owner/repo' 'git+ssh://u:p@github.com/owner/repo' 'file://github.com/owner/repo' 'foo://github.com/owner/repo' 'FILE://github.com/owner/repo' 'github.com::owner/repo' 'ext::ssh github.com owner/repo'; do
+    git remote remove origin 2>/dev/null || true
+    git remote add origin "${url}"
+    check resolve --github github.com owner/repo
+    [ "${status}" -eq 3 ]
+  done
+  for url in 'evil.invalid:x@ssh.dev.azure.com:v3/my-org/My%20Project/my-repo' 'ssh://evil.invalid:%2F@ssh.dev.azure.com/v3/my-org/My%20Project/my-repo' 'file://dev.azure.com/my-org/My%20Project/_git/my-repo' 'foo://dev.azure.com/my-org/My%20Project/_git/my-repo' 'http://dev.azure.com/my-org/My%20Project/_git/my-repo'; do
+    git remote remove origin 2>/dev/null || true
+    git remote add origin "${url}"
+    check resolve --azure my-org 'My Project' my-repo
+    [ "${status}" -eq 3 ]
+  done
+}
+
+@test "resolve still matches the legitimate URL shapes" {
+  local url
+  for url in 'https://x-access-token:ghp_Ab1-x.~%2F@github.com/owner/repo.git' 'ssh://git@github.com:22/owner/repo.git' 'git@github.com:owner/repo.git' 'git://github.com/owner/repo' 'git+ssh://git@github.com/owner/repo' 'ssh+git://git@github.com/owner/repo' 'HTTP://github.com/owner/repo'; do
+    git remote remove origin 2>/dev/null || true
+    git remote add origin "${url}"
+    check resolve --github github.com owner/repo
+    [ "${status}" -eq 0 ]
+    [ "${output}" = $'origin\nowner/repo' ]
+  done
+  git remote set-url origin 'https://ghe.example.com:8443/owner/repo'
+  check resolve --github ghe.example.com:8443 owner/repo
+  [ "${status}" -eq 0 ]
+  for url in 'https://dev.azure.com/my-org/My%20Project/_git/my-repo' 'https://my-org@dev.azure.com/my-org/My%20Project/_git/my-repo' 'git@ssh.dev.azure.com:v3/my-org/My%20Project/my-repo' 'ssh.dev.azure.com:v3/my-org/My%20Project/my-repo'; do
+    git remote set-url origin "${url}"
+    check resolve --azure my-org 'My Project' my-repo
+    [ "${status}" -eq 0 ]
+    [ "${output}" = origin ]
+  done
+}
+
 @test "resolve ignores a port in the GitHub host" {
   git remote add origin https://ghe.example.com:8443/owner/repo.git
   check resolve --github GHE.example.com:8443 owner/repo

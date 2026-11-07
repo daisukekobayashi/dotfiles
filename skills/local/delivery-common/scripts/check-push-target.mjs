@@ -27,17 +27,23 @@
 //   repository, and for --azure it is used as given.
 //   Prints the remote on line 1 and, for --github, the head `<owner>/<repo>`
 //   on line 2.
-//   GitHub URLs: `https://[user@]<host>/<owner>/<repo>`, `ssh://` and `git://`
-//   forms, and `[user@]<host>:<owner>/<repo>`; the scheme, user, port, letter
+//   Accepted URL forms, each split the way git splits it so that the host
+//   compared is the host git connects to:
+//   - `https://` or `http://` with an optional `<user>[:<password>]@`
+//   - `ssh://`, `git://`, `git+ssh://`, or `ssh+git://` with an optional
+//     `<user>@` and no `%` in the user, host, or port
+//   - the scp form `[<user>@]<host>:<path>`
+//   where <user> uses only `[A-Za-z0-9._~-]`, <password> only
+//   `[A-Za-z0-9._~%-]`, <host> only `[A-Za-z0-9.-]`, and a port only digits.
+//   Any other scheme (such as `file://`), a `<helper>::` transport, and a URL
+//   with `#`, `?`, `\`, or whitespace never match.
+//   GitHub URLs name `<host>/<owner>/<repo>`; the scheme, user, port, letter
 //   case, and a trailing `.git` or `/` are ignored, including a port in <host>.
 //   An SSH host alias names another host and does not match.
 //   Azure URLs: exactly the accepted remote URL shapes in
 //   azure-devops-common/references/context.md, after decoding percent-encoding
 //   and ignoring letter case, the `user@` part, and a trailing `.git` or `/`.
 //   <org>, <project>, and <repo> are decoded the same way.
-//   A URL with `#`, `?`, `\`, or whitespace, or with other characters in its
-//   user or host part, never matches, so the host compared is the one git
-//   connects to.
 //
 // pre
 //   Reads `branch.<branch>.remote` and `branch.<branch>.merge` with
@@ -129,28 +135,48 @@ const git = (args, { allowMissing = false } = {}) => {
 
 const stripSuffix = (path) => path.replace(/\/+$/, "").replace(/\.git$/i, "");
 
-// A URL with a fragment, query, backslash, or whitespace can name a different
-// host to git than to a simple parser (`https://evil#@github.com/...` connects
-// to `evil`), so such a URL never matches.
-const AMBIGUOUS_URL = /[#?\\\s]/;
-// Userinfo and host allow only plain characters, so the host below is the one
-// git connects to.
-const USERINFO = "[A-Za-z0-9._~-]+(?::[A-Za-z0-9._~%-]*)?@";
+// Each accepted form follows how git splits it, so the host compared is the
+// host git connects to:
+// - git url-decodes `ssh://` and `git://` URLs before splitting them, so a
+//   `%` there could hide another host; those forms allow a username only and
+//   no `%` in the authority.
+// - git splits the scp form at the first `:`, so it allows a username only.
+// - curl splits `https://` and `http://` without decoding, so they keep
+//   `user:password@` for tokens.
+// - Any other scheme, such as `file://` or `foo://` (which runs
+//   `git-remote-foo`), and a `<helper>::` transport never match.
+// A fragment, query, backslash, or whitespace can name a different host to git
+// than to a simple parser (`https://evil#@github.com/...` connects to `evil`),
+// so a URL with one never matches.
+const AMBIGUOUS_URL = /[#?\\\s]|::/;
+const USERNAME = "[A-Za-z0-9._~-]+";
 const HOST = "[A-Za-z0-9.-]+";
-const SCHEME_AUTHORITY = new RegExp(`^(?:${USERINFO})?(${HOST})(?::\\d*)?$`);
-const SCP_URL = new RegExp(`^(?:${USERINFO})?(${HOST}):(.*)$`);
+const HTTP_AUTHORITY = new RegExp(`^(?:${USERNAME}(?::[A-Za-z0-9._~%-]*)?@)?(${HOST})(?::\\d*)?$`);
+const SSH_AUTHORITY = new RegExp(`^(?:${USERNAME}@)?(${HOST})(?::\\d*)?$`);
+const SCP_URL = new RegExp(`^(?:${USERNAME}@)?(${HOST}):(.*)$`);
+const AUTHORITY_BY_SCHEME = {
+  https: HTTP_AUTHORITY,
+  http: HTTP_AUTHORITY,
+  ssh: SSH_AUTHORITY,
+  git: SSH_AUTHORITY,
+  "git+ssh": SSH_AUTHORITY,
+  "ssh+git": SSH_AUTHORITY,
+};
 
-// Splits a remote URL into a lower-cased host and its path, or null.
+// Splits a remote URL into its lower-cased scheme (`scp` for the scp form),
+// lower-cased host, and path, or null.
 const splitUrl = (url) => {
   if (AMBIGUOUS_URL.test(url)) return null;
-  const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/([^/]*)\/(.*)$/i);
+  const scheme = url.match(/^([a-z][a-z0-9+.-]*):\/\/([^/]*)\/(.*)$/i);
   if (scheme) {
-    const authority = scheme[1].match(SCHEME_AUTHORITY);
-    return authority ? { host: authority[1].toLowerCase(), path: scheme[2] } : null;
+    const name = scheme[1].toLowerCase();
+    if (!Object.hasOwn(AUTHORITY_BY_SCHEME, name)) return null;
+    const authority = scheme[2].match(AUTHORITY_BY_SCHEME[name]);
+    return authority ? { scheme: name, host: authority[1].toLowerCase(), path: scheme[3] } : null;
   }
   if (url.includes("://")) return null;
   const scp = url.match(SCP_URL);
-  if (scp) return { host: scp[1].toLowerCase(), path: scp[2] };
+  if (scp) return { scheme: "scp", host: scp[1].toLowerCase(), path: scp[2] };
   return null;
 };
 
@@ -180,9 +206,9 @@ const parseAzure = (url) => {
   if (!parts) return null;
   const segments = stripSuffix(parts.path).split("/");
   let named;
-  if (/^https:\/\//i.test(url) && parts.host === "dev.azure.com" && segments.length === 4 && segments[2].toLowerCase() === "_git") {
+  if (parts.scheme === "https" && parts.host === "dev.azure.com" && segments.length === 4 && segments[2].toLowerCase() === "_git") {
     named = [segments[0], segments[1], segments[3]];
-  } else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && parts.host === "ssh.dev.azure.com" && segments.length === 4 && segments[0].toLowerCase() === "v3") {
+  } else if (parts.scheme === "scp" && parts.host === "ssh.dev.azure.com" && segments.length === 4 && segments[0].toLowerCase() === "v3") {
     named = segments.slice(1);
   } else {
     return null;

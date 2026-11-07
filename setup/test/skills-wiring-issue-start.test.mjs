@@ -121,7 +121,18 @@ test("azure-devops-pr-publish writes the Azure DevOps names into the push target
   const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
 
   assert.ok(context, "missing step 2");
-  assert.match(context, /with the resolved organization, project, and repository, writing each into the command only when it uses solely ASCII letters, digits, space, `\.`, `_`, and `-` \(otherwise stop and report\)/, "org, project, and repo written only when safe");
+  assert.match(context, /with the resolved organization, project, and repository, percent-decoded \(`My Project`, not `My%20Project`\), writing each into the command only when it uses solely ASCII letters, digits, space, `\.`, `_`, and `-` \(otherwise stop and report\)/, "org, project, and repo written only when safe");
+});
+
+test("GitHub skills write the host and repository into the push target check only when safe", async () => {
+  const gate = "writing the host into the command only when it uses solely ASCII letters, digits, `.`, and `-`, optionally followed by `:` and digits, and `<owner>/<repo>` only when it uses solely ASCII letters, digits, `.`, `_`, `-`, and one `/` (otherwise stop and report)";
+  for (const name of ["github-pr-publish", "github-pr-create", "github-pr-codex-review-cycle"]) {
+    const skill = flat(await readText(path.join(repoRoot, "skills", "local", name, "SKILL.md")));
+    const run = skill.indexOf("`node <push-script> resolve --github '<");
+    assert.ok(run >= 0, `${name}: missing resolve run`);
+    const gated = skill.indexOf(gate, run);
+    assert.ok(gated > run && gated - run < 400, `${name}: host and repository written only when safe`);
+  }
 });
 
 test("publish skills drop the fork-layout lookups", async () => {

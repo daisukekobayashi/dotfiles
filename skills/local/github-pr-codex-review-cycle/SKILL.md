@@ -134,8 +134,11 @@ Still stop and ask before:
      `<remote>` by the push target rule in `github-pr-publish` step 2: run
      `node <push-script> resolve --github '<host>' '<owner>/<repo>'` with the
      PR URL's host and the PR's head repository
-     (`gh pr view --json headRepository,headRepositoryOwner`), where
-     `<push-script>` is
+     (`gh pr view --json headRepository,headRepositoryOwner`), writing the
+     host into the command only when it uses solely ASCII letters, digits,
+     `.`, and `-`, optionally followed by `:` and digits, and `<owner>/<repo>`
+     only when it uses solely ASCII letters, digits, `.`, `_`, `-`, and one
+     `/` (otherwise stop and report), where `<push-script>` is
      [`check-push-target.mjs`](../delivery-common/scripts/check-push-target.mjs)
      resolved from this skill's directory, and use line 1 on exit 0.
      Otherwise stop before the push and ask the user to confirm or name the

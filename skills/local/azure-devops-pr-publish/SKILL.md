@@ -62,8 +62,9 @@ Still stop and ask before:
      with an explicit `<branch>:refs/heads/<branch>` refspec; with more than one
      remote and none named, ask. Run `node <push-script> resolve --azure '<org>'
      '<project>' '<repo>'` with the resolved organization, project, and
-     repository, writing each into the command only when it uses solely ASCII
-     letters, digits, space, `.`, `_`, and `-` (otherwise stop and report),
+     repository, percent-decoded (`My Project`, not `My%20Project`), writing
+     each into the command only when it uses solely ASCII letters, digits,
+     space, `.`, `_`, and `-` (otherwise stop and report),
      adding `--remote '<name>'` when the user names a remote that uses solely
      ASCII letters, digits, `/`, `.`, `_`, and `-` (ask again for any other
      name), where `<push-script>` is
