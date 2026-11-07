@@ -110,20 +110,39 @@ ps_script() {
 }
 
 # Starts a process in $outside with the arguments "$@", and sets started_pid.
-# A bash script keeps them in its argv; sleep alone rejects extra arguments.
+# The runner is written once per test, since rewriting it races with a runner
+# still starting, and bash runs it directly so no shebang or env is involved.
+# sleep alone rejects extra arguments on macOS.
 start_with_args() {
   local runner="${BATS_TEST_TMPDIR}/argv-runner"
-  cat >"${runner}" <<'EOF'
-#!/usr/bin/env bash
+  if [[ ! -e "${runner}" ]]; then
+    cat >"${runner}.tmp" <<'EOF'
 trap 'kill "${child}" 2>/dev/null; exit 0' TERM
 sleep 60 &
 child=$!
 wait "${child}"
 EOF
-  chmod +x "${runner}"
-  (cd "${outside}" && exec "${runner}" "$@") &
+    mv "${runner}.tmp" "${runner}"
+  fi
+  (cd "${outside}" && exec bash "${runner}" "$@") &
   started_pid=$!
   pids+=("${started_pid}")
+}
+
+# Waits up to about 10 seconds until ps shows each pid in "$@" running the
+# argv runner, so a slow start is not read as a missing row.
+wait_for_runners() {
+  local pid tries
+  for pid in "$@"; do
+    for ((tries = 0; tries < 100; tries++)); do
+      [[ "$(ps -ww -o args= -p "${pid}" 2>/dev/null)" == *argv-runner* ]] && break
+      sleep 0.1
+    done
+    [[ "$(ps -ww -o args= -p "${pid}" 2>/dev/null)" == *argv-runner* ]] || {
+      echo "runner ${pid} did not start"
+      return 1
+    }
+  done
 }
 
 # Asserts the output has one 7-field row per line and none forged for $1.
@@ -497,7 +516,7 @@ check_unreadable_cmdline() {
   deeper="${started_pid}"
   start_with_args "--cwd=${target}/a b/y"
   equal_eq="${started_pid}"
-  sleep 0.3
+  wait_for_runners "${sibling}" "${deeper}" "${equal_eq}"
 
   # "<target>/a b" may read as "<target>/a", but it is not under it.
   run -0 "${lister}" "${target}/a"
@@ -521,7 +540,7 @@ check_unreadable_cmdline() {
   kept="${started_pid}"
   start_with_args --cwd "${outside}/gone b"
   gone="${started_pid}"
-  sleep 0.3
+  wait_for_runners "${kept}" "${gone}"
 
   run -0 "${lister}" --stale
   [ -z "$(row_for "${kept}")" ]
@@ -538,7 +557,7 @@ check_unreadable_cmdline() {
   under="${started_pid}"
   start_with_args --cwd "${outside}/gone\\012x"
   opaque="${started_pid}"
-  sleep 0.3
+  wait_for_runners "${under}" "${opaque}"
 
   run -0 "${lister}" "${target}"
   [ "$(row_for "${under}" | cut -f6)" = "--cwd under target" ]
@@ -555,7 +574,7 @@ check_unreadable_cmdline() {
   target="$(mkdir -p "${base}"$'\x01' && cd "${base}"$'\x01' && pwd -P)"
   start_with_args --cwd "${target}/x"
   dir_pid="${started_pid}"
-  sleep 0.3
+  wait_for_runners "${dir_pid}"
 
   run -0 "${lister}" "${target}"
   [ "$(row_for "${dir_pid}" | cut -f6)" = "--cwd ambiguous" ]
@@ -572,7 +591,7 @@ check_unreadable_cmdline() {
   eq="${started_pid}"
   start_with_args --cwd "" --watch
   empty="${started_pid}"
-  sleep 0.3
+  wait_for_runners "${eq}" "${empty}"
 
   run -0 "${lister}" --stale
   [ -z "$(row_for "${eq}")" ]
