@@ -39,6 +39,10 @@ Run one Codex run at a time per target worktree; wait for any other in progress.
 Before and after the run, including a failed run, follow
 `../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
 the target worktree, and report its result with the output.
+When you start the Codex runs of several review skills for one worktree
+together, wait for any other run in progress, then run them in parallel as one
+set instead: follow that section once before the first run starts and once
+after every run ends, and report its result once.
 
 Return the named tool's completed output. A launched background job is not a
 completed review. If the named tool is not installed or its run fails, such as

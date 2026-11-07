@@ -198,6 +198,7 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(runnerSection(skill), new RegExp(`Start it with \`Use \\$${name}\``));
     assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
     assert.match(runnerSection(skill), /Run one Codex run at a time per target worktree/);
+    assert.match(runnerSection(skill), /several review skills for one worktree\s+together, wait for any other run in progress, then run them in parallel as one\s+set instead: follow that section once before the first run starts and once\s+after every run ends/);
     assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Brokers Started by a Codex Review"/);
   }
   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
@@ -478,6 +479,7 @@ test("Codex review runs stop only the broker tree they started", async () => {
 
   assert.ok(brokers, "worktree-runtime-cleanup: missing Brokers Started by a Codex Review");
   assert.match(brokers, /stopping them needs no confirmation/);
+  assert.match(brokers, /Runs started together for one worktree as a set count as one run: record the first list before any starts and the second after all end\./);
   assert.match(brokers, /Before the run, record `scripts\/list-processes\.sh <worktree>`/);
   assert.match(brokers, /is a broker this run started only when it is absent from the first list, by PID and start time, and/);
   assert.match(brokers, /its `cwd` column in the second list equals exactly the target worktree root/);
@@ -496,7 +498,7 @@ test("Codex review runs stop only the broker tree they started", async () => {
   const localReview = flat(await readText(
     path.join(repoRoot, "skills", "local", "delivery-common", "references", "local-review.md"),
   ));
-  assert.match(localReview, /Run Codex-routed reviewers for one worktree one at a time; each stops the broker it starts\./);
+  assert.match(localReview, /Run the Codex-routed reviewers for one pinned head in parallel as one set; only when the host cannot run them concurrently, run them one at a time and report that\./);
 
   for (const cleanup of ["github-worktree-cleanup", "azure-devops-worktree-cleanup"]) {
     const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
