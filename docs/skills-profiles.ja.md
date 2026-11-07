@@ -200,7 +200,10 @@ follow-up、reviewer の選択、ローカルレビューの full review への�
 Completion（進捗記録、公開前とマージ確認時に示す decision summary、マージ確認で示す内容、delivery の上限と
 停止条件、最終報告と `Complete` の条件、delivery 終了時の follow-up 候補の報告と
 作成）を持ちます。その `SKILL.md` では、hosted レビューの実行方法と承認は呼び出し
-元のワークフローが持つとしています。共通の記述はプロバイダーに依存せず、task と
+元のワークフローが持つとしています。その Delegated Authorization の節は、呼び出し元が
+ユーザーの依頼、正確な対象、既存の承認を呼び出すスキルに渡す方法を1か所で定めます。
+両方のプロバイダーの PR スキル、レビュー依頼スキル、delivery スキルはこれにリンクし、
+それぞれ自身の承認モデルを持ちます。共通の記述はプロバイダーに依存せず、task と
 task の完了（task closure）という言葉を使い、呼び出し元のワークフローが項目を追加
 する箇所を示します。各プロバイダー別スキルは、GitHub の hosted レビューの結果や
 Azure DevOps の Work Item 状態遷移の提案など、追加する項目だけをリンクの横に

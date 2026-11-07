@@ -35,11 +35,11 @@ This skill is not for:
 
 An explicit invocation of this cycle, or an explicit request for the full
 `github-issue-delivery` workflow for named issues, selects this cycle on the
-requested feature branches. A delivery caller must forward the actual user
-request, exact target, and existing authorizations; a skill reference or automatic
-discovery is insufficient. Honor stricter applicable approval instructions and
-request any missing approval before mutation. Within those rules, treat the
-explicit request as approval for the normal, non-destructive cycle:
+requested feature branches. Delegated calls follow
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the requested feature branches. Honor stricter applicable
+approval instructions. Within those rules, treat the explicit request as
+approval for the normal, non-destructive cycle:
 
 - verification required by `github-pr-publish`
 - ordinary commit of the requested implementation work
@@ -65,8 +65,8 @@ Still stop and ask before:
 ## Workflow
 
 1. Resolve the target branch or worktree.
-   - If no target is specified, use the current worktree and branch.
-   - For multiple targets, process sequentially and stop on the first failure.
+   - Resolve and process targets under `github-pr-publish` step 1, across the
+     whole cycle.
    - On resume, revalidate any supplied PR/head/trigger and follow-up record.
      Reuse verified completed operations and enter the earliest incomplete phase.
      If a trigger already awaits output for the same published head, resume step
@@ -78,12 +78,9 @@ Still stop and ask before:
    - Capture the PR number, PR URL, branch, push remote, commit, and
      verification result.
 3. Use `github-pr-review-request` with provider `codex` for the resolved PR.
-   - Treat `Codex acknowledged` as acknowledgement only.
    - Treat `Codex request posted but not acknowledged` as a blocker unless the
      user explicitly asks to continue waiting or retry.
 4. Wait for Codex review completion.
-   - The exact `@codex review` trigger comment receiving an `eyes` reaction is
-     not review completion.
    - Codex posts a summary comment starting with
      `<!-- codex-pull-request-review-summary -->` and edits it in place. Read
      its `<!-- codex-review-state:v1 {...} -->` JSON only when the comment's
@@ -142,16 +139,14 @@ Still stop and ask before:
      refspec keep `branch.<branch>.pushRemote` or `remote.pushDefault` from
      sending the fixes away from the PR head.
    - If verification is unsuccessful or unavailable, stop before commit or push.
-     If verification, commit, or push fails, stop before reply or resolution.
-   - Confirm the fixes are present in the remote PR head and add the published
-     commit to the prepared record.
+     If verification, commit, or push fails, stop the cycle and report; do not
+     enter step 7.
+   - Add the published commit to the prepared record.
 7. Use only the **Writeback** phase of `github-pr-ai-review-followup`.
    - Pass the prepared record, publication evidence, and existing authorization
      for clearly closed latest AI review items under the Approval Model.
    - Delegate target revalidation, replies, resolutions, and writeback verification
      to that phase. Do not reapply fixes or duplicate its writeback procedure.
-   - Without code changes, proceed using the evidence from the published PR;
-     no empty commit is needed.
 8. Verify final PR state when possible.
    - Re-read thread state after writeback.
    - Report unresolved, skipped, ambiguous, or human-decision items.

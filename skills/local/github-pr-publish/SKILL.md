@@ -25,9 +25,10 @@ This skill is not for:
 ## Approval Model
 
 An explicit publication request can arrive directly or through the named
-composing workflows. Require a delegated caller to forward the actual user
-request, exact target, and existing authorizations; a skill reference or automatic
-selection is insufficient. Subject to governing approval instructions, treat
+composing workflows. Delegated calls follow
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the target branches. Subject to governing approval
+instructions, treat
 the explicit publication request as approval for ordinary non-destructive commits
 and normal pushes for the requested target branches. Ask for any missing approval
 after preparing the verified publication target.
@@ -111,11 +112,7 @@ For multiple targets, repeat the same fields per target.
 
 ## Guardrails
 
-- Do not proceed to commit, push, or PR creation until verification has succeeded for the target's latest changes.
-- Do not continue to later targets after a verification, commit, push, or PR creation failure.
 - Do not create a PR from the default branch.
-- Do not create duplicate PRs for a branch that already has one.
 - Do not force push, merge, delete remote branches, rewrite history, or clean up worktrees.
 - Do not stage dependency manifests or lockfiles, edit them, or install dependencies unless the user explicitly asks.
 - Do not hardcode or print secrets while summarizing diffs, commits, or templates.
-- Do not request AI, Copilot, Codex, or human review.

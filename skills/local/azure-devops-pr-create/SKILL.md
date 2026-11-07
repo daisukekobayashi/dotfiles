@@ -13,9 +13,9 @@ complete, merge, or edit implementation files.
 
 Read `../azure-devops-common/references/context.md` before resolving the target.
 
-A delegated caller must forward the user's actual publication request, exact
-target, and existing authorizations. A reference to this skill alone does not
-authorize PR creation or updates.
+Delegated calls follow
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the branch and target branch, for PR creation or update.
 
 ## Workflow
 

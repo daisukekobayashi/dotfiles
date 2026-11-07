@@ -55,15 +55,9 @@ Sources: [Complete PRs](https://learn.microsoft.com/en-us/azure/devops/repos/git
 
 ## Verify the Work Item independently
 
-Use structured PR links under the common context rules. Linking a Work Item is
-separate from asking to change its state. A full delivery request alone does not
-authorize changing Work Item fields or adding closing keywords.
-
-`--transition-work-items true` applies to linked Work Items, not just the one
-currently being delivered. Inspect the full linked set before proposing it;
-do not include a parent tracker or unrelated item in a bulk transition. If only
-some links should transition, leave the bulk option off and obtain approval for
-the exact item-specific transitions instead.
+Link and transition Work Items under the common context's
+[Work Item Links And State Transitions](../../azure-devops-common/references/context.md#work-item-links-and-state-transitions).
+Inspect the full linked set before proposing `--transition-work-items true`.
 
 Determine the intended completion state/category from the Work Item type and
 project process. Do not hardcode `Closed` or assume `Resolved` is completed.

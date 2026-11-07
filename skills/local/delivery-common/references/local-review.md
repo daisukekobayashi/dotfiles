@@ -49,28 +49,35 @@ snapshot, report incomplete coverage and do not advance. Keep the snapshot stabl
 until the required results arrive; invalidate affected coverage if another writer
 changes it.
 
+## Triage classes
+
+Classify each finding as `material`, `minor`, or `pre-existing`. Reviewer
+labels (High/Medium/Low, P0-P3, critical-low, or none) are hints.
+
+- **Material:** a concrete failure affecting acceptance criteria, correctness,
+  security, data integrity, regressions, a public contract, or mandatory
+  repository rules, whatever its label.
+- **Pre-existing:** the same failure, with the same impact, occurs at the
+  merge-base. Verify by tracing the failure path at the merge-base, including
+  callers and inputs this change adds; `git blame` on the reported line is only
+  a hint. This class takes precedence.
+- **Worsened:** an older defect that this change makes newly reachable or more
+  severe. It is `material`, not pre-existing.
+- **Minor:** any other finding.
+
 ## Assess findings
 
 The caller assesses each local or hosted finding against the task, code, and
 evidence, applying these defaults:
 
-- **Triage:** Classify each finding as `material`, `minor`, or `pre-existing`.
-  Reviewer labels (High/Medium/Low, P0-P3, critical-low, or none) are hints. A
-  concrete failure affecting acceptance criteria, correctness, security, data
-  integrity, regressions, a public contract, or mandatory repository rules is
-  `material` whatever its label. Fix material findings or leave them open for
-  the user.
+- **Triage:** Classify each finding under [Triage classes](#triage-classes).
+  Fix material findings or leave them open for the user.
 - **Minor:** Record and defer by default. Every fix creates a new snapshot and
   another review round; fix a minor finding only when it is a trivial, local
   correction bundled with a material fix in the same round.
-- **Pre-existing:** A finding is pre-existing only when the same failure, with
-  the same impact, occurs at the merge-base. Verify by tracing the failure path
-  at the merge-base, including callers and inputs this change adds; `git blame`
-  on the reported line is only a hint. An older defect that this change makes
-  newly reachable or more severe is `worsened` and material. Do not fix
-  pre-existing findings in this delivery; record them as follow-up candidates
-  and report them to the user rather than creating an issue or Work Item
-  silently.
+- **Pre-existing:** Do not fix pre-existing findings in this delivery; record
+  them as follow-up candidates and report them to the user rather than creating
+  an issue or Work Item silently.
 - **Follow-up candidates:** Record deferred minor findings, pre-existing
   findings, and out-of-scope problems found during the delivery in the progress
   record. Include the source target, phase, and review round or thread, the

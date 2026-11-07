@@ -617,3 +617,55 @@ test("both worktree cleanup skills run the shared cleanup target checks in one l
   const deliveryCommon = flat(await readText(path.join(repoRoot, "skills", "local", "delivery-common", "SKILL.md")));
   assert.match(deliveryCommon, /\[`scripts\/check-cleanup-targets\.mjs`\]\(scripts\/check-cleanup-targets\.mjs\) is the shared \*\*remote branch deletion check\*\* and \*\*cleanup target manifest\*\*/);
 });
+
+test("local review defines the triage classes apart from delivery actions", async () => {
+  const localReview = await readText(path.join(repoRoot, "skills", "local", "delivery-common", "references", "local-review.md"));
+  const classes = flat(localReview.match(/\n## Triage classes\n[\s\S]*?(?=\n## )/)?.[0]);
+  const assess = flat(localReview.match(/\n## Assess findings\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.ok(classes && assess, "missing Triage classes or Assess findings");
+  assert.match(classes, /- \*\*Material:\*\* a concrete failure affecting acceptance criteria, correctness, security, data integrity, regressions, a public contract, or mandatory repository rules, whatever its label\./);
+  assert.match(classes, /- \*\*Pre-existing:\*\* the same failure, with the same impact, occurs at the merge-base\./);
+  assert.match(classes, /- \*\*Worsened:\*\* an older defect that this change makes newly reachable or more severe\. It is `material`, not pre-existing\./);
+  assert.match(classes, /- \*\*Minor:\*\* any other finding\./);
+  assert.doesNotMatch(classes, /this delivery|follow-up candidates|progress record/, "Triage classes holds definitions only");
+  assert.match(assess, /- \*\*Triage:\*\* Classify each finding under \[Triage classes\]\(#triage-classes\)\. Fix material findings or leave them open for the user\./);
+  assert.match(assess, /- \*\*Pre-existing:\*\* Do not fix pre-existing findings in this delivery; record them as follow-up candidates/);
+  assert.doesNotMatch(assess, /occurs at the merge-base|newly reachable or more severe|concrete failure affecting/, "Assess findings restates the triage definitions");
+});
+
+test("provider delivery skills link delegated authorization and Work Item transition rules", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const link = "[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization)";
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const skill = flat(await readText(path.join(localRoot, delivery, "SKILL.md")));
+    assert.ok(skill.includes(link), `${delivery}: links Delegated Authorization`);
+    assert.doesNotMatch(skill, /grants? (no )?mutation approval|[Rr]euse (authorization|approval) already given|Forward the user's actual|forwarding the full request and existing approvals/, `${delivery} restates delegated authorization`);
+    assert.match(skill, /If authorization is missing, prepare the concrete result|Prepare the concrete result before requesting missing approval\./, `${delivery}: keeps its missing-approval step`);
+  }
+  const github = flat(await readText(path.join(localRoot, "github-issue-delivery", "SKILL.md")));
+  assert.doesNotMatch(github, /An acknowledgement or an `eyes` reaction/);
+  const azure = flat(await readText(path.join(localRoot, "azure-devops-work-item-delivery", "SKILL.md")));
+  assert.match(azure, /Work Item state transitions follow \[Work Item Links And State Transitions\]\(\.\.\/azure-devops-common\/references\/context\.md#work-item-links-and-state-transitions\); include any proposed transitions in the merge confirmation\./);
+  assert.doesNotMatch(azure, /use structured PR links under the common context rules/);
+
+  const context = flat(await readText(path.join(localRoot, "azure-devops-common", "references", "context.md")));
+  assert.match(context, /`--transition-work-items` applies to every linked Work Item, not only the one being delivered; enable it only with explicit intent covering the whole linked set\. When only some linked Work Items should transition, leave it off and obtain approval for the exact item-specific transitions\./);
+  const mergeState = flat(await readText(path.join(localRoot, "azure-devops-work-item-delivery", "references", "merge-and-state.md")));
+  assert.match(mergeState, /Link and transition Work Items under the common context's \[Work Item Links And State Transitions\]\(\.\.\/\.\.\/azure-devops-common\/references\/context\.md#work-item-links-and-state-transitions\)\./);
+  assert.match(mergeState, /Inspect the full linked set before proposing `--transition-work-items true`\./);
+  assert.doesNotMatch(mergeState, /A full delivery request alone does not authorize|leave the bulk option off/, "merge-and-state.md restates the transition approval rule");
+  assert.match(mergeState, /After merge, read each requested Work Item with `az boards work-item show`/);
+});
+
+test("Azure DevOps context lets only the cleanup check propose a remote branch deletion", async () => {
+  const context = flat(await readText(path.join(repoRoot, "skills", "local", "azure-devops-common", "references", "context.md")));
+  assert.match(context, /- Delete a remote branch only when the user explicitly asks, or confirms a deletion that the remote branch deletion check in \[`azure-devops-worktree-cleanup`\]\(\.\.\/\.\.\/azure-devops-worktree-cleanup\/SKILL\.md\) step 5 proposed\. That confirmed deletion, conditioned on the expected SHA with `--force-with-lease`, is not a force push under the next rule\. - Never force push, reset, rebase, amend, merge/);
+  assert.doesNotMatch(context, /Never delete remote branches unless the user explicitly asks\./);
+});
+
+test("skills profile docs name the delegated authorization home", async () => {
+  const english = flat(await readText(path.join(repoRoot, "docs", "skills-profiles.md")));
+  const japanese = flat(await readText(path.join(repoRoot, "docs", "skills-profiles.ja.md")));
+  assert.match(english, /Its Delegated Authorization section states once how a caller passes the user's request, exact target, and existing approvals to the skills it calls/);
+  assert.match(japanese, /その Delegated Authorization の節は/);
+});

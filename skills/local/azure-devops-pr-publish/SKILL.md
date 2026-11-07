@@ -17,9 +17,10 @@ Read `../azure-devops-common/references/context.md` before resolving targets.
 ## Approval Model
 
 An explicit publication request can arrive directly or through
-`azure-devops-work-item-delivery`. A delegated caller must forward the actual
-user request, exact target, and existing authorizations; a skill reference or
-automatic selection is insufficient. Subject to governing approval instructions,
+`azure-devops-work-item-delivery`. Delegated calls follow
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the target branches. Subject to governing approval
+instructions,
 treat that request as approval for ordinary non-destructive commits and normal
 pushes for the requested target branches. Prepare the verified publication target
 before asking for any missing approval.
@@ -38,7 +39,8 @@ Still stop and ask before:
 ## Workflow
 
 1. Resolve targets from the user request. If none is specified, use the current
-   worktree and branch.
+   worktree and branch. For multiple targets, process them sequentially and
+   stop on the first failure.
 2. Resolve Azure DevOps organization, project, repository, default branch, and
    current branch for each target.
    - Stop and report the branch unless it is a **safe branch name** before
@@ -113,8 +115,6 @@ Still stop and ask before:
 
 ## Guardrails
 
-- Do not continue to later targets after a verification, commit, push, or PR
-  creation failure.
 - Do not create PRs from the default branch.
 - Do not force push, rewrite history, merge, complete, or clean up worktrees.
 - Do not hardcode or print secrets while summarizing diffs, commits, or templates.

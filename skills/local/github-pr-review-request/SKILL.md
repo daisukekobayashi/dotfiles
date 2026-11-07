@@ -8,9 +8,9 @@ description: Use only when the user explicitly requests `github-pr-review-reques
 Request AI review on an existing PR. This skill does not publish PRs, apply
 feedback, wait for review completion, or request human reviewers.
 
-For delegated calls, require the actual enclosing user request, exact PR, and
-authorization for the selected review request. A reference to this skill or
-automatic selection is insufficient; obtain any missing approval before posting.
+Delegated calls follow
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the PR and the selected providers.
 
 ## Inputs
 
@@ -38,7 +38,7 @@ automatic selection is insufficient; obtain any missing approval before posting.
    Include the Codex trigger comment URL and acknowledgement state when selected;
    include the Copilot requested-reviewer verification when selected. State
    failures and unattempted providers explicitly. A posted or acknowledged
-   request does not mean the review has completed.
+   request is not a completed review.
 
 ## Guardrails
 

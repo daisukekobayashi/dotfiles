@@ -22,19 +22,19 @@ resolving the target. Azure Boards with GitHub repositories and Azure DevOps
 Server need a different workflow; report that boundary rather than choosing an
 Azure Repos target for them.
 
-Read component skills before their phases. Forward the user's actual full
-workflow request, exact Work Item/branch/worktree, and existing authorizations.
-An explicit full delivery request selects the delegated shared understanding,
-preflight, local review, and publication phases. Automatic discovery or a
-reference to this skill selects none of them and grants no mutation approval.
-Honor the publisher's approval model and governing instructions for scoped
-checkpoint commits, normal pushes, and PR creation. Prepare the concrete result
-before requesting missing approval; reuse approval already given for the same
-scope.
+Read component skills before their phases and call them under
+[Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
+the exact target is the Work Item, branch, and worktree. An explicit full
+delivery request selects the delegated shared understanding, preflight, local
+review, and publication phases. Automatic discovery or a reference to this
+skill selects none of them. Honor the publisher's approval model and governing
+instructions for scoped checkpoint commits, normal pushes, and PR creation.
+Prepare the concrete result before requesting missing approval.
 
 Require explicit confirmation for the specific PR merge and the exact local
 cleanup resources, combined only where Delivery Completion's Merge confirmation
-allows. Work Item state transitions also require explicit intent;
+allows. Work Item state transitions follow
+[Work Item Links And State Transitions](../azure-devops-common/references/context.md#work-item-links-and-state-transitions);
 include any proposed transitions in the merge confirmation. Preserve dependency,
 history-rewrite, remote-write, and user-change protections. This workflow ends
 its publication phase at the PR; it has no hosted AI review request or follow-up
@@ -118,10 +118,8 @@ escalation to a full review, and advancement.
 
 Coordinate publication and show the decision summary under Delivery
 Completion's Before publication.
-Use `azure-devops-pr-publish`, forwarding the full request and existing approvals.
-Honor its stop-on-failure behavior. Supply known Work Item IDs, completion scope,
-and the user's state-transition intent; use structured PR links under the common
-context rules.
+Use `azure-devops-pr-publish` and honor its stop-on-failure behavior. Supply
+known Work Item IDs, completion scope, and the user's state-transition intent.
 
 Verify the returned PR's repository, source/target refs, and Work Item links.
 Read the current remote source ref and compare its commit with the local reviewed
