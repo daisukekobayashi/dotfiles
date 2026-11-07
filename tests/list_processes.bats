@@ -35,6 +35,17 @@ lsof_script() {
   printf '%s' "${copy}"
 }
 
+# The same script with the cmdline that cwd_argument checks replaced by $1 and
+# the one it reads replaced by $2, as when the process exits meanwhile.
+cmdline_script() {
+  local copy="${BATS_TEST_TMPDIR}/list-processes-cmdline.sh"
+  sed -e "s|-r \"/proc/\${pid}/cmdline\"|-r \"$1\"|" \
+    -e "s|<\"/proc/\${pid}/cmdline\"|<\"$2\"|" "${script}" >"${copy}"
+  grep -qF -- "-r \"$1\"" "${copy}" && grep -qF -- "<\"$2\"" "${copy}"
+  chmod +x "${copy}"
+  printf '%s' "${copy}"
+}
+
 # A ps on PATH that fails for pid $FAIL_PID and field $FAIL_FIELD, as ps does
 # for a process that exits between the cwd read and that lookup.
 fake_ps() {
@@ -278,6 +289,40 @@ check_lone_backslash_lsof() {
 @test "list-processes exits 0 when no process matches" {
   run -0 "${script}" "${target}"
   [ -z "${output}" ]
+}
+
+# Runs a cmdline_script copy with checked path $1 and read path $2, and expects
+# the same row for a process in the target as the script prints, with no stderr.
+check_unreadable_cmdline() {
+  local lister kept expected
+  lister="$(cmdline_script "$1" "$2")"
+  start_in "${target}"
+  kept="${started_pid}"
+  sleep 0.3
+
+  run -0 "${script}" "${target}"
+  expected="$(row_for "${kept}")"
+  [ "$(cut -f6 <<<"${expected}")" = "cwd under target" ]
+
+  run -0 --separate-stderr "${lister}" "${target}"
+  [ -z "${stderr}" ] || {
+    echo "stderr: ${stderr}"
+    return 1
+  }
+  [ "$(row_for "${kept}")" = "${expected}" ]
+}
+
+@test "list-processes stays quiet when a cmdline read fails" {
+  local unreadable="${BATS_TEST_TMPDIR}/cmdline-dir"
+  # Reading a directory fails like reading the cmdline of an exited process.
+  mkdir -p "${unreadable}"
+  check_unreadable_cmdline "${unreadable}" "${unreadable}"
+}
+
+@test "list-processes stays quiet when a cmdline vanishes before it is opened" {
+  local checked="${BATS_TEST_TMPDIR}/cmdline-file"
+  : >"${checked}"
+  check_unreadable_cmdline "${checked}" "${BATS_TEST_TMPDIR}/cmdline-gone"
 }
 
 @test "list-processes skips a process that exits during its metadata lookup" {
