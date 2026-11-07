@@ -197,7 +197,7 @@ design preflight を草稿にし、コーディネーターがユーザーに質
 レビュー手順（snapshot の固定、follow-up 候補の記録を含む指摘の評価、focused
 follow-up、reviewer の選択、ローカルレビューの full review への切り替え条件、完了
 条件、ラウンドの数え方と上限、head と coverage の記録）、リスク tier、Delivery
-Completion（進捗記録、公開前に示す tier、マージ確認で示す内容、delivery の上限と
+Completion（進捗記録、公開前とマージ確認時に示す decision summary、マージ確認で示す内容、delivery の上限と
 停止条件、最終報告と `Complete` の条件、delivery 終了時の follow-up 候補の報告と
 作成）を持ちます。その `SKILL.md` では、hosted レビューの実行方法と承認は呼び出し
 元のワークフローが持つとしています。共通の記述はプロバイダーに依存せず、task と

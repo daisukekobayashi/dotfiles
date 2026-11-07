@@ -17,18 +17,30 @@ the self-closure list under Local Review, follow-up candidates, blockers, and
 next action, plus the calling workflow's additions. Report the resume path.
 Keep durable definitions and decisions in the repository's normal docs.
 
+## Decision summary
+
+Show the user this summary before publication and in the merge confirmation,
+keep it in the progress record, and keep it out of the PR body:
+
+- the tier at the current head, the heaviest tier recorded in this delivery
+  when it differs, and their main reasons;
+- the recommended human review from the column
+  [Risk Tier](risk-tier.md#tier-procedure) applies;
+- any `change-security-review` deferred candidates on sensitive paths and
+  user-accepted security findings under
+  [Risk Tier](risk-tier.md#select-the-security-review);
+- any `change-security-review` findings their reviewer tagged `pre-existing`
+  and labelled Critical or High;
+- the self-closure list under [Local Review](local-review.md), or `none` when
+  it is empty.
+
 ## Before publication
 
 Coordinate publication sequentially across targets. Workers hand off their
 exact branch and worktree, task and spec, recorded base, verification, risk
 tier, and local review evidence.
 
-Before publication, show the user the tier, its main reasons, the recommended
-human review from the column Risk Tier applies, the heaviest recorded tier when
-it differs from the current one, and any security deferred candidates or user-accepted security
-findings under [Risk Tier](risk-tier.md). Beside them, show the self-closure
-list under [Local Review](local-review.md), or `none` when it is empty, and any
-pre-existing Critical or High security findings.
+Before publication, show the user the [Decision summary](#decision-summary).
 
 ## Merge confirmation
 
@@ -39,12 +51,9 @@ waiting or blocked. Approval for one head does not cover an intervening
 material change; reassess before proceeding.
 
 Present the PR URL, task, reviewed and published head, base, checks, review
-outcome including any security review, the risk tier for that head and the
-heaviest tier recorded in this delivery when it differs, the recommended human
-review from the column [Risk Tier](risk-tier.md#tier-procedure) applies, any security deferred candidates or user-accepted
-security findings, the self-closure list or `none`, any pre-existing Critical
-or High security findings, and the proposed repository-supported merge method,
-plus the calling workflow's additions. Request confirmation to merge that
+outcome including any security review, the [Decision summary](#decision-summary),
+and the proposed repository-supported merge method, plus the calling workflow's
+additions. Request confirmation to merge that
 specific PR.
 
 Combine the merge and cleanup confirmations only when every tier recorded in

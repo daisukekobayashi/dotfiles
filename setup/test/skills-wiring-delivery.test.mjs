@@ -227,7 +227,7 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(riskTier, new RegExp(`^- \\*\\*${tier}:\\*\\*`, "m"));
   }
   assert.match(riskTier, /Run `change-security-review` as a third local reviewer/);
-  assert.match(riskTier, /Keep them\s+out of the PR body/);
+  assert.match(await readText(path.join(deliveryCommon, "references", "completion.md")), /keep it in the progress record, and keep it out of the PR body/);
   assert.doesNotMatch(riskTier, /it never removes a default/);
   assert.match(riskTier, /agent instruction files: skills[^\n]*\n\nThe base root `AGENTS\.md` may have a `## Delivery sensitive paths` section/);
   assert.match(riskTier, /`add <pattern>` and `exclude <pattern> from <default>` entries/);
@@ -274,7 +274,7 @@ test("change review skills are explicit-only and share target selection", async 
     assert.match(deliverySkill, /\[Risk Tier\]\(\.\.\/delivery-common\/references\/risk-tier\.md\)/);
   }
   const completion = await readText(path.join(deliveryCommon, "references", "completion.md"));
-  assert.match(completion, /risk tier for that head and the\s+heaviest tier recorded in this delivery when it differs, the recommended human\s+review from the column \[Risk Tier\]\(risk-tier\.md#tier-procedure\) applies/);
+  assert.match(completion, /the tier at the current head, the heaviest tier recorded in this delivery\s+when it differs, and their main reasons;\s+- the recommended human review from the column\s+\[Risk Tier\]\(risk-tier\.md#tier-procedure\) applies;/);
   assert.match(changeReview, /correctness/i);
   assert.match(changeReview, /regression/i);
   assert.match(adversarial, /challenge the approach/i);
@@ -350,7 +350,7 @@ test("delivery-common owns the shared completion policy", async () => {
     /the shared understanding result and the latest worker drafts/,
     /the local review record under \[Local Review\]\(local-review\.md\)/,
     /Coordinate publication sequentially across targets\. Workers hand off their exact branch and worktree, task and spec, recorded base, verification, risk tier, and local review evidence\./,
-    /Before publication, show the user the tier, its main reasons, the recommended human review/,
+    /Before publication, show the user the \[Decision summary\]\(#decision-summary\)\./,
     /Pending, failed, or inaccessible required evidence leaves the task waiting or blocked\./,
     /Request confirmation to merge that specific PR\./,
     /a queued or scheduled merge remains pending/,
@@ -386,7 +386,7 @@ test("delivery-common owns the shared completion policy", async () => {
   for (const [delivery, rules] of Object.entries(additions)) {
     const skill = flat(await read(delivery, "SKILL.md"));
     for (const rule of rules) assert.match(skill, rule, `${delivery}: ${rule}`);
-    assert.match(skill, /Coordinate publication and show the tier under Delivery Completion's Before publication\./, `${delivery}: references Before publication`);
+    assert.match(skill, /Coordinate publication and show the decision summary under Delivery Completion's Before publication\./, `${delivery}: references Before publication`);
     for (const moved of [
       /classify them as temporary/,
       /Apply worthwhile fixes/,
@@ -420,28 +420,43 @@ test("delivery shows material self-closures before publication and at merge", as
   assert.ok(selfClosures, "Assess findings defines self-closures");
   for (const rule of [
     /Keep a self-closure list in the progress record/,
-    /A `material` finding that ends without a verified fix and is not left open for the user, whatever its disposition: `explained`, `stale`, `skipped`, or `duplicate`\./,
-    /A `duplicate` stays listed even when the earlier finding is `applied`, unless a later reviewer round verified that fix against this report\./,
-    /Marked `downgraded`, a finding triaged `minor` whose reviewer label is `unknown` or at the blocking level: High from `change-review` or `change-adversarial-review`, P0 or P1 from a hosted reviewer\./,
-    /Marked `reclassified`, a finding triaged `pre-existing` that its reviewer tagged `introduced` or `worsened`\./,
-    /the finding, its source reviewer and round or thread, the reviewer's label and tag, the disposition, and the reason/,
-    /Add the source of a later `duplicate` to the existing entry for the same finding\./,
-    /Drop an entry once a later reviewer round checks the fix against this finding and confirms it, or re-triage leaves the finding open for the user; a hosted review with no findings does not count as that check\./,
+    /List each finding that ends without a reviewer-verified fix and is not left open for the user when the owner triaged it `material`, its reviewer's label is `unknown` or at the blocking level \(High from `change-review` or `change-adversarial-review`, P0 or P1 from a hosted reviewer\), or its reviewer tagged it `introduced` or `worsened`\./,
+    /A fix is reviewer-verified when a later reviewer round checks it against this finding and confirms it\./,
+    /Keep one entry per finding with its source reviewers and rounds or threads, the reviewer's label and tag, the disposition, and the reason\./,
     /publication and merge approval cover it, and a finding the user reopens is open again\./,
-    /A `material` `change-security-review` finding, including any its reviewer tagged `introduced` or `worsened` whatever its triage here, stays under \[Risk Tier\]\(risk-tier\.md\): it never enters this list, and publication or merge approval never covers it\./,
-    /A `pre-existing` Critical or High `change-security-review` finding is a follow-up candidate that the user also sees with this list\./,
+    /`change-security-review` findings never enter this list; they close only under \[Risk Tier\]\(risk-tier\.md\)\./,
   ]) {
     assert.match(selfClosures, rule, `local-review.md: ${rule}`);
   }
-  assert.doesNotMatch(selfClosures, /Critical or High from `change-security-review`/, "security findings are never downgraded");
+  for (const removed of [/`downgraded`/, /`reclassified`/, /hosted review with no findings/, /Critical or High/, /stays listed even when/]) {
+    assert.doesNotMatch(selfClosures, removed, `local-review.md keeps a self-closure sub-rule: ${removed}`);
+  }
 
+  const summary = completion.match(/## Decision summary .*?(?= ## )/)?.[0];
+  assert.ok(summary, "completion.md defines the decision summary");
+  for (const field of [
+    /Show the user this summary before publication and in the merge confirmation, keep it in the progress record, and keep it out of the PR body:/,
+    /- the tier at the current head, the heaviest tier recorded in this delivery when it differs, and their main reasons;/,
+    /- the recommended human review from the column \[Risk Tier\]\(risk-tier\.md#tier-procedure\) applies;/,
+    /- any `change-security-review` deferred candidates on sensitive paths and user-accepted security findings under \[Risk Tier\]\(risk-tier\.md#select-the-security-review\);/,
+    /- any `change-security-review` findings their reviewer tagged `pre-existing` and labelled Critical or High;/,
+    /- the self-closure list under \[Local Review\]\(local-review\.md\), or `none` when it is empty\./,
+  ]) {
+    assert.match(summary, field, `completion.md decision summary: ${field}`);
+  }
   assert.match(completion, /finding dispositions, the self-closure list under Local Review, follow-up candidates/);
-  assert.match(completion, /Beside them, show the self-closure list under \[Local Review\]\(local-review\.md\), or `none` when it is empty, and any pre-existing Critical or High security findings\./);
-  assert.match(completion, /user-accepted security findings, the self-closure list or `none`, any pre-existing Critical or High security findings, and the proposed repository-supported merge method/);
+  assert.match(completion, /Before publication, show the user the \[Decision summary\]\(#decision-summary\)\./);
+  assert.match(completion, /review outcome including any security review, the \[Decision summary\]\(#decision-summary\), and the proposed repository-supported merge method/);
+  assert.equal((completion.match(/the self-closure list/g) ?? []).length, 2, "completion.md lists self-closures only in the progress record and the decision summary");
+  const riskTier = flat(await read("delivery-common", "references", "risk-tier.md"));
+  assert.match(riskTier, /Its deferred candidates on sensitive paths and any user-accepted security findings appear in the \[Decision summary\]\(completion\.md#decision-summary\); they need a user decision, not silence\./);
+  assert.match(riskTier, /The \[Decision summary\]\(completion\.md#decision-summary\) shows the recommended human review from the column \[Tier procedure\]\(#tier-procedure\) applies\. It adds to repository-required approvals and never replaces them\./);
+  assert.doesNotMatch(riskTier, /before PR publication and in the merge confirmation|to the user before publication and in the merge confirmation/, "risk-tier.md lists decision-summary fields");
 
-  assert.match(github, /Pass the progress record location to the cycle so that, before its Writeback, it persists the prepared record's items not `applied` \(the head Codex reviewed, thread, finding, reviewer label, triage class, disposition, and reason\) there\. When the cycle returns the items instead, record them there and confirm to the cycle\. Add their self-closures to the list under Local Review's Assess findings; on resume, use the persisted items for the current hosted-reviewed head\./);
+  assert.match(github, /After the cycle returns, record its Final Report's Not applied items in the progress record and add their self-closures to the list under Local Review's Assess findings\. On resume, for each recorded hosted round, recover any disposition missing from the progress record from the PR's review threads, including resolved ones, before advancing, and add its self-closures to the list; report history that cannot be recovered as a blocker to a complete decision summary\./);
+  assert.doesNotMatch(github, /progress record location|persisted items/, "github-issue-delivery keeps the hosted persistence clauses");
   for (const [delivery, skill] of [["github-issue-delivery", github], ["azure-devops-work-item-delivery", azure]]) {
-    assert.doesNotMatch(skill, /`none` when it is empty|`downgraded`|`reclassified`/, `${delivery} restates the self-closure policy`);
+    assert.doesNotMatch(skill, /`none` when it is empty|`downgraded`|`reclassified`|heaviest tier/, `${delivery} restates the self-closure or decision-summary policy`);
   }
 });
 
@@ -506,8 +521,12 @@ test("the risk tier table scales the delivery procedure", async () => {
   assert.equal((riskTier.match(/^\| --- /gm) ?? []).length, 1, "risk-tier.md: one table");
   const rules = flat(procedure);
   assert.match(rules, /adds `change-security-review` to the local reviewers at any tier it selects/);
-  assert.match(rules, /Apply the column of the heaviest tier recorded in this delivery, so the procedure never lightens within it\./);
-  assert.match(rules, /rounds already spent count toward its limits, and each newly selected reviewer runs a full review of the whole task diff on the current head/);
+  assert.match(rules, /The procedure never lightens; a rise applies on the current head within the round\. Apply the column of the heaviest tier recorded in this delivery\./);
+  assert.match(rules, /When the tier rises, rounds already spent count toward the heavier column's limits\. Each newly selected reviewer, including the security reviewer, runs a full review of the whole task diff on the current head, in the same round when it is selected during a round on that head\./);
+  assert.match(flat(riskTier), /\*\*Final:\*\* from the committed diff of the whole task against the recorded base, at the start of each full local review and focused follow-up and again once a round's findings are assessed\. Every rating follows the current head;/);
+  for (const removed of [/never drop below/, /\*\*After findings:\*\*/, /\*\*Changed head:\*\*/]) {
+    assert.doesNotMatch(riskTier, removed, `risk-tier.md keeps a per-dimension tier-rise rule: ${removed}`);
+  }
   assert.match(rules, /Lower user limits take precedence over every count\./);
   assert.match(flat(riskTier), /Every tier keeps explicit approval for push, merge, and the exact cleanup targets\./);
   assert.match(flat(riskTier), /\*\*Tentative:\*\* before the design preflight draft, from the shared understanding result, the paths the task will likely touch, and the checks it plans/);
@@ -517,17 +536,17 @@ test("the risk tier table scales the delivery procedure", async () => {
 
   const dialogue = flat(await readText(path.join(deliveryCommon, "references", "worker-dialogue.md")));
   assert.match(dialogue, /The worker sets the tentative tier under \[Risk Tier\]\(risk-tier\.md\), runs `design-preflight-with-docs` in draft mode/);
-  assert.match(dialogue, /For a Low tentative tier, first confirm it under Risk Tier's Low check; when it falls back to Medium, have the worker redraft in the mode Medium selects\./);
-  assert.match(dialogue, /For a confirmed Low tier, also read back the draft's direction and assumptions and ask the user to confirm or correct them\./);
+  assert.match(dialogue, /For a Low tentative tier, apply Risk Tier's \[Low check\]\(risk-tier\.md#set-and-update-the-tier\) before asking\. When the confirmed tier's \[Tier procedure\]\(risk-tier\.md#tier-procedure\) column selects a different preflight mode than the draft used, have the worker redraft in that mode before asking; for a confirmed Low tier, apply its Design preflight row\./);
+  assert.doesNotMatch(dialogue, /falls back to Medium|read back the draft's direction/, "worker-dialogue.md restates the Low check or the Design preflight row");
   assert.match(flat(riskTier), /\*\*Low check:\*\* when a rating gives Low, tentative or final, the coordinator independently checks it against the diff, or the planned paths for a tentative tier, and the sensitive paths at the recorded base before it presents a Low draft or applies any other Low procedure, and records the basis\. When it cannot confirm Low, use Medium\./);
-  assert.match(localReview, /set the tier for that head under \[Risk Tier\]\(risk-tier\.md\), including its Low check/);
-  assert.match(flat(riskTier), /Show the tier at the current head, the heaviest tier recorded in this delivery when it differs, their main reasons, and the recommended human review from the column \[Tier procedure\]\(#tier-procedure\) applies/);
+  assert.match(localReview, /set its final tier under \[Risk Tier\]\(risk-tier\.md#set-and-update-the-tier\) and record it with the selected reviewers/);
+  assert.doesNotMatch(localReview, /including its Low check|any reviewer Risk Tier adds on the same head/, "local-review.md restates Risk Tier rules");
 
   const completion = flat(await readText(path.join(deliveryCommon, "references", "completion.md")));
   assert.match(completion, /Combine the merge and cleanup confirmations only when every tier recorded in this delivery, including the one for the merge head, is Low/);
   const runtime = flat(await readText(path.join(repoRoot, "skills", "local", "worktree-runtime-cleanup", "SKILL.md")));
   assert.match(runtime, /A confirmation a cleanup skill obtained from its Caller preview covers only the runtime resources listed there with the same identifiers/);
-  assert.match(completion, /show the user the tier, its main reasons, the recommended human review from the column Risk Tier applies, the heaviest recorded tier when it differs from the current one/);
+  assert.match(completion, /## Decision summary Show the user this summary before publication and in the merge confirmation/);
   assert.match(completion, /A reply that approves the merge without explicitly accepting the cleanup targets approves the merge only; any other reply approves neither\./);
   assert.match(completion, /A changed head, a resume, or any other target difference requires a separate cleanup confirmation\./);
   assert.match(completion, /explicitly accepts the cleanup targets, and, after the merge, every cleanup safety check passes and the targets match the preview as the cleanup skill's Caller preview defines/);

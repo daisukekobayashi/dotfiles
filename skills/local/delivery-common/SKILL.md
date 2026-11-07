@@ -15,8 +15,9 @@ tier's review procedure, including the security reviewer and the recommended
 human review. Local Review also sets local review
 escalation, advancement, and round limits. Use
 [Delivery Completion](references/completion.md) for the progress record, the
-tier shown before publication, the merge confirmation, bounds, the final report
-and `Complete` rule, and follow-up candidates.
+decision summary shown before publication and at merge, the merge
+confirmation, bounds, the final report and `Complete` rule, and follow-up
+candidates.
 
 The calling workflow owns implementation, assessment decisions, how its hosted
 review runs, publication, and approvals. Where shared text names the calling
