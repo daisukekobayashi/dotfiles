@@ -204,20 +204,25 @@ adapters.
   needs another round, such as the Codex trigger and the material-delta test,
   stay in the provider's skill.
 
-`delivery-common` holds the Worker Dialogue (workers draft the shared
-understanding and design preflight, and the coordinator asks the user), the
+`delivery-common` holds the Worker Dialogue (worker dispatch through the start
+skill, workers draft the shared understanding and design preflight, the
+coordinator asks the user, and the preflight and implementation handoff), the
 Local Review procedure (snapshot pinning, finding assessment including
 follow-up candidate recording, focused follow-up, reviewer selection, and local
 review escalation, advancement criteria, round counting and limits, and the
 head and coverage record), the Risk Tier, and Delivery Completion (the progress
-record, the decision summary shown before publication and at merge, merge confirmation contents, delivery
+record, resume, the decision summary shown before publication and at merge, the
+published-head check and advance after publication, merge confirmation contents, delivery
 bounds and stop conditions, the final report and `Complete` rule, and
 end-of-delivery follow-up candidate reporting and creation). Its `SKILL.md` says
 the calling workflow owns how its hosted review runs and approvals. Its
 Delegated Authorization section states once how a caller passes the user's
 request, exact target, and existing approvals to the skills it calls; the PR,
 review request, and delivery skills of both providers link it, and each keeps
-its own approval model. The shared text is
+its own approval model. Its Missing Prerequisites section states once that a
+missing skill, reviewer, or tool stops the phase that needs it for the affected
+targets and is reported as a blocker, never installed, substituted, or skipped;
+both provider delivery skills and Local Review link it. The shared text is
 provider-neutral: it names the task and task closure, and marks where the
 calling workflow adds its own items. Each provider skill lists only those
 additions next to its link, such as the hosted review outcome on GitHub or the
@@ -227,14 +232,12 @@ Shared delivery policy lives in `delivery-common`; restating it in a provider
 delivery skill is drift. A policy change that applies to both providers edits
 `delivery-common` once and updates the ownership statement and the frontmatter
 `description` in `delivery-common/SKILL.md` to match. Provider-only policy stays
-in the provider skill. Both provider skills deliberately keep these short
-restatements as local guards that tests pin:
-
-- the resume paragraph, including the one-line run of the shared safe branch
-  name check (see [Shared Scripts](#shared-scripts)) before any command uses
-  the recorded branch
-- the shared understanding status gate (`confirmed`, `corrected`, or `skipped`)
-  in each provider's coordination steps
+in the provider skill. Both provider skills deliberately keep one short
+restatement as a local guard that tests pin: the one-line run of the shared safe
+branch name check (see [Shared Scripts](#shared-scripts)) in their resume
+paragraph, before any command uses the recorded branch. The rest of resume
+lives in Delivery Completion, and the shared understanding status gate lives
+only in the Worker Dialogue.
 
 Azure DevOps parity is the default. Policy in `delivery-common` applies to both
 providers automatically. When a change on one provider also requires

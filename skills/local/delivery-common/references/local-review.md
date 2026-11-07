@@ -13,9 +13,10 @@ infer the host from a directory name. Run the Codex-routed reviewers for one
 pinned head in parallel as one set; only when the host cannot run them
 concurrently, run them one at a time and report that.
 
-Report the selected route. If any required reviewer is unavailable or cannot
-be invoked under its policy, report the missing prerequisite; do not substitute
-the implementation owner's informal inspection for a completed review.
+Report the selected route. A required reviewer that is unavailable or cannot be
+invoked under its policy is a missing prerequisite under
+[Missing Prerequisites](../SKILL.md#missing-prerequisites); the implementation
+owner's informal inspection never substitutes for a completed review.
 
 ## Pin the implementation
 

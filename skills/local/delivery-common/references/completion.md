@@ -17,6 +17,16 @@ the self-closure list under Local Review, follow-up candidates, blockers, and
 next action, plus the calling workflow's additions. Report the resume path.
 Keep durable definitions and decisions in the repository's normal docs.
 
+## Resume
+
+On resume, reconcile the progress record with the actual local and provider
+state. The calling workflow checks a recorded branch name before any command
+uses it. Reuse matching worktrees and PRs, and verify the current head before
+reusing review evidence. Resume the earliest incomplete phase; a completed PR
+resumes completion checks rather than publication. A recorded shared
+understanding result and settled preflight decisions carry forward. A progress
+record is evidence, not authorization. Apply the calling workflow's additions.
+
 ## Decision summary
 
 Show the user this summary before publication and in the merge confirmation,
@@ -41,6 +51,22 @@ exact branch and worktree, task and spec, recorded base, verification, risk
 tier, and local review evidence.
 
 Before publication, show the user the [Decision summary](#decision-summary).
+
+## After publication
+
+After publication, compare the PR's current remote source head with the local
+reviewed head; a successful push or PR creation alone does not establish the
+match. Record the PR and published head. If publication creates a different
+commit or any later edit changes the head, invalidate the affected review
+evidence, return to local verification and review under
+[Local Review](local-review.md)'s Repeat and advance, and republish through the
+existing PR.
+
+Advance to the merge only when the current published head is covered by the
+most recent full review and the follow-ups completed since it under Local
+Review's Repeat and advance and has current verification, plus the calling
+workflow's additions. An existing PR does not need another creation, and an
+open PR is not a merged PR.
 
 ## Merge confirmation
 

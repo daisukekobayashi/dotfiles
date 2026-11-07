@@ -37,79 +37,43 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
 1. Resolve issue numbers, repository instructions, dirty state, and existing
    worktrees/PRs. Require at least one actual issue target. Check that the
    component skills and the local reviewers, including `change-security-review`,
-   are available. The normal
-   installation is `base,github`; the GitHub profile alone does not supply the
-   preflight and review skills. Report a missing prerequisite rather
-   than silently installing it or skipping a required phase.
-2. Use `github-issue-start` with the per-issue workflow below as its implementation
-   brief. Have it prepare the worktree and baseline and dispatch the issue's
-   worker before the shared understanding; implementation begins only after
-   preflight. Preserve its issue classification,
-   dependency checks, and one-issue/one-branch/one-worktree ownership.
-3. Let `github-issue-start` own worker dispatch; do not launch duplicate workers.
-   Parallelize only independent issues and within the host's available capacity.
-   When delegation is unavailable, report that limitation and handle safe issues
-   sequentially, calling `github-issue-start` separately for each single issue
-   instead of entering its multi-worker path. Local reviews still require their
-   own delegation capabilities. For unsafe or dependent groups, honor the start
-   skill's stop condition and present a proposed order or independent subset
-   for the user.
-4. Follow [Worker Dialogue](../delivery-common/references/worker-dialogue.md)
-   for each issue: its worker drafts `shared-understanding`, and the coordinator
-   asks the user one issue at a time. Forward a user's skip. Pass on only issues
-   whose status is `confirmed`, `corrected`, or `skipped`; report the others as
-   waiting for the user with their open points. Route workers' material design
-   questions and approval requests through the coordinator, with the affected
-   issue clearly identified; no worker asks the user directly.
-5. Keep a progress record per issue under
+   are available. The normal installation is `base,github`; the GitHub profile
+   alone does not supply the preflight and review skills. A missing one stops
+   under [Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites).
+2. Use `github-issue-start` with the per-issue workflow below as its
+   implementation brief, under
+   [Worker Dialogue](../delivery-common/references/worker-dialogue.md)'s Assign
+   the worker.
+3. Follow Worker Dialogue for each issue's shared understanding and preflight.
+4. Keep a progress record per issue under
    [Delivery Completion](../delivery-common/references/completion.md), adding
    the hosted review round count and the PR trigger and thread identifiers.
 
-On resume, reconcile the record with actual local and GitHub state. Stop and
+On resume, follow Delivery Completion's Resume with GitHub state. Stop and
 report the recorded branch unless it is a **safe branch name** before running
 any command with it: run `node <script> -- '<branch>'`, where `<script>` is
 [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
 resolved from this skill's directory, and continue only on exit 0. Write a name
 into this or any command only when it uses solely ASCII letters, digits, `/`,
-`.`, `_`, and `-`; any other name is not safe, without running the check. Reuse
-matching worktrees and PRs, preserve successful writebacks, and verify the
-current head before reusing review evidence. Pass the PR/head/trigger record to
-the cycle and resume its earliest incomplete phase. A pending review on the same
-head resumes waiting rather than posting another trigger. A recorded
-understanding check result carries forward. A progress file is evidence, not
-authorization.
+`.`, `_`, and `-`; any other name is not safe, without running the check.
+Preserve successful writebacks. Pass the PR/head/trigger record to the cycle and
+resume its earliest incomplete phase. A pending review on the same head resumes
+waiting rather than posting another trigger.
 
 ## Per-Issue Workflow
 
 ### 1. Preflight, implement, and verify
 
-Set the tentative tier under [Risk Tier](../delivery-common/references/risk-tier.md)
-first. Use `design-preflight-with-docs` for this issue in its worktree before editing the
-implementation, drafted by the worker and asked by the coordinator under Worker
-Dialogue. Forward any requested mode or question limit; otherwise use the mode
-the tier's Tier procedure selects. Give it the issue's
-shared understanding result: its agreed decisions and agreed issue changes are settled scope, and its preflight items open the
-design questions. Inherit its completion and documentation criteria without an additional
-interview. Carry forward settled decisions on resume. Leave material unanswered
-decisions pending and continue only work that does not depend on them.
-
-Implement the issue's acceptance criteria and confirmed examples, following the resulting design and
-repository conventions. Run the smallest relevant checks. Record actual results
-and material coverage limits; a successful baseline is not implementation
-verification. Complete this phase only with an implementation and verification
-evidence ready for review, or an explicit blocker.
+Use `design-preflight-with-docs` for this issue, drafted by the worker and asked
+by the coordinator under Worker Dialogue, then implement and verify under its
+[Preflight and implementation](../delivery-common/references/worker-dialogue.md#preflight-and-implementation).
 
 ### 2. Run local reviews and verify fixes
 
-Follow [Local Review](../delivery-common/references/local-review.md) to set the
-risk tier, select the host's reviewers, and run an initial full review with every
-selected reviewer on the same base, issue, and implementation snapshot. Reviewers
-remain read-only. Wait for all completed results before the implementation owner
-edits.
-
-Assess the findings under Local Review's Assess findings.
-After fixes, follow Local Review's Repeat and advance for focused follow-up,
-escalation to a full review, and advancement.
+Run the local reviews the
+[Risk Tier](../delivery-common/references/risk-tier.md#tier-procedure) selects
+under [Local Review](../delivery-common/references/local-review.md): the initial
+full review, Assess findings, and Repeat and advance.
 
 ### 3. Publish and complete hosted Codex review
 
@@ -117,7 +81,9 @@ Coordinate publication and show the decision summary under Delivery
 Completion's Before publication.
 Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
--> confirm remote head -> Writeback ordering, and stop-on-failure behavior.
+-> confirm remote head -> Writeback ordering, and stop-on-failure behavior; its
+remote head confirmation is the check under Delivery Completion's
+[After publication](../delivery-common/references/completion.md#after-publication).
 Pass the earlier local and hosted dispositions from the progress record, and
 have its follow-up assess hosted findings with Local Review's Assess findings.
 
@@ -128,7 +94,7 @@ disposition missing from the progress record from the PR's review threads,
 including resolved ones, before advancing, and add its self-closures to the
 list; report history that cannot be recovered as a blocker to a complete
 decision summary. Record the returned status, PR, published head, reviewed head,
-dispositions, and unresolved items. An open PR is not a merged PR.
+dispositions, and unresolved items.
 
 If hosted follow-up changed the implementation, return to the local review phase
 for focused follow-up or a full review under Local Review's Repeat and advance.
@@ -140,12 +106,10 @@ local focused follow-up covering the new head is sufficient; record the head the
 hosted review covered and why the remaining delta did not need another hosted
 round. To request another review,
 reuse the existing PR and call the cycle again for that target; it does not
-request another review automatically. If any other edit or new commit changes
-the head, refresh the affected review coverage. Advance only when the current
-published head is covered by the most recent full review and the follow-ups
-completed since it under Local Review's Repeat and advance, has completed hosted
-review or the recorded non-material delta above, worthwhile fixes are verified
-and published, and remaining thread dispositions clearly close them.
+request another review automatically. Advance under Delivery Completion's After
+publication, adding that the published head has completed hosted review or the
+recorded non-material delta above, worthwhile fixes are verified and published,
+and remaining thread dispositions clearly close them.
 
 ### 4. Confirm and perform the merge
 
@@ -156,9 +120,6 @@ the cleanup targets. After approval, merge through the available GitHub tool or
 CLI.
 
 ### 5. Confirm cleanup and verify completion
-
-Before cleanup, keep this issue's follow-up candidates under Delivery
-Completion.
 
 Use `github-worktree-cleanup` for this issue's branch and worktree. Pass the
 verified merge evidence. Let it inspect runtime resources, show exact
@@ -175,10 +136,9 @@ than a fully completed issue delivery.
 
 ## Bounds and Handoffs
 
-Local review rounds follow Local Review's Repeat and advance; hosted-fix
-follow-ups use the same local budget. Hosted Codex review rounds per issue
-follow the Risk Tier's Tier procedure across this delivery, including resumes.
-A hosted round requires actual output. Apply
+Hosted-fix follow-ups use the same local review budget.
+Hosted Codex review rounds per issue follow the Risk Tier's Tier procedure
+across this delivery, including resumes. A hosted round requires actual output. Apply
 Delivery Completion's Bounds, adding a hosted limit reached with required work
 remaining as a stop condition. At a hosted limit, include the remaining-findings
 classification from Local Review's Assess findings. Ask before extending the
