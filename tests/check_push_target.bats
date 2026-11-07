@@ -115,6 +115,54 @@ check() {
   [ "${output}" = mirror ]
 }
 
+@test "resolve rejects URLs whose user or host part could hide another host" {
+  local url
+  for url in 'https://evil.invalid#@github.com/owner/repo' 'https://evil.invalid?@github.com/owner/repo' 'https://evil.invalid\@github.com/owner/repo' 'https://evil.invalid%23@github.com/owner/repo' 'ssh://evil.invalid#@github.com/owner/repo' 'evil.invalid#@github.com:owner/repo' 'https://github.com/owner/repo#x' 'https://github.com/owner/repo?x' 'https://a@b@github.com/owner/repo'; do
+    git remote remove origin 2>/dev/null || true
+    git remote add origin "${url}"
+    check resolve --github github.com owner/repo
+    [ "${status}" -eq 3 ]
+  done
+  for url in 'https://evil.invalid#@dev.azure.com/my-org/My%20Project/_git/my-repo' 'https://evil.invalid?@dev.azure.com/my-org/My%20Project/_git/my-repo' 'evil.invalid#@ssh.dev.azure.com:v3/my-org/My%20Project/my-repo'; do
+    git remote remove origin 2>/dev/null || true
+    git remote add origin "${url}"
+    check resolve --azure my-org 'My Project' my-repo
+    [ "${status}" -eq 3 ]
+  done
+}
+
+@test "resolve ignores a port in the GitHub host" {
+  git remote add origin https://ghe.example.com:8443/owner/repo.git
+  check resolve --github GHE.example.com:8443 owner/repo
+  [ "${status}" -eq 0 ]
+  [ "${output}" = $'origin\nowner/repo' ]
+  check resolve --github ghe.example.com owner/repo
+  [ "${status}" -eq 0 ]
+}
+
+@test "resolve decodes the Azure DevOps names the caller passes" {
+  git remote add origin 'https://dev.azure.com/my-org/My%20Project/_git/my-repo'
+  check resolve --azure my-org 'My%20Project' my-repo
+  [ "${status}" -eq 0 ]
+  [ "${output}" = origin ]
+  check resolve --azure my-org 'My%ZZProject' my-repo
+  [ "${status}" -eq 2 ]
+  check resolve --azure my-org '' my-repo
+  [ "${status}" -eq 2 ]
+}
+
+@test "pre and post outside a repository report a status other than usage, pass, or check failed" {
+  cd "${BATS_TEST_TMPDIR}" || return 1
+  GIT_CEILING_DIRECTORIES="${BATS_TEST_TMPDIR}" check pre --branch feat/1-x --remote origin --base main
+  [ "${status}" -ne 0 ]
+  [ "${status}" -ne 2 ]
+  [ "${status}" -ne 3 ]
+  GIT_CEILING_DIRECTORIES="${BATS_TEST_TMPDIR}" check post --branch feat/1-x --remote origin
+  [ "${status}" -ne 0 ]
+  [ "${status}" -ne 2 ]
+  [ "${status}" -ne 3 ]
+}
+
 @test "pre accepts no upstream, the same branch on the remote, and the PR base" {
   check pre --branch feat/1-x --remote origin --base main
   [ "${status}" -eq 0 ]

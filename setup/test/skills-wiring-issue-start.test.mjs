@@ -116,6 +116,14 @@ test("publish skills check the branch name and resolve the push remote with the 
   assert.match(azure, /accepted remote URL shapes from the common context/, "azure: URL shapes from the common context");
 });
 
+test("azure-devops-pr-publish writes the Azure DevOps names into the push target check only when safe", async () => {
+  const skill = await readText(path.join(repoRoot, "skills", "local", "azure-devops-pr-publish", "SKILL.md"));
+  const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+
+  assert.ok(context, "missing step 2");
+  assert.match(context, /with the resolved organization, project, and repository, writing each into the command only when it uses solely ASCII letters, digits, space, `\.`, `_`, and `-` \(otherwise stop and report\)/, "org, project, and repo written only when safe");
+});
+
 test("publish skills drop the fork-layout lookups", async () => {
   for (const publish of ["github-pr-publish", "azure-devops-pr-publish"]) {
     const context = flat((await readText(path.join(repoRoot, "skills", "local", publish, "SKILL.md"))).match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);

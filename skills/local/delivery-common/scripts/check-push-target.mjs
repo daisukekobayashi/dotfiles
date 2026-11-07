@@ -29,11 +29,15 @@
 //   on line 2.
 //   GitHub URLs: `https://[user@]<host>/<owner>/<repo>`, `ssh://` and `git://`
 //   forms, and `[user@]<host>:<owner>/<repo>`; the scheme, user, port, letter
-//   case, and a trailing `.git` or `/` are ignored. An SSH host alias names
-//   another host and does not match.
+//   case, and a trailing `.git` or `/` are ignored, including a port in <host>.
+//   An SSH host alias names another host and does not match.
 //   Azure URLs: exactly the accepted remote URL shapes in
 //   azure-devops-common/references/context.md, after decoding percent-encoding
 //   and ignoring letter case, the `user@` part, and a trailing `.git` or `/`.
+//   <org>, <project>, and <repo> are decoded the same way.
+//   A URL with `#`, `?`, `\`, or whitespace, or with other characters in its
+//   user or host part, never matches, so the host compared is the one git
+//   connects to.
 //
 // pre
 //   Reads `branch.<branch>.remote` and `branch.<branch>.merge` with
@@ -50,7 +54,8 @@
 // Exit status:
 //   0  the check passed
 //   2  usage error: an unknown subcommand or option, a missing or repeated
-//      option, or a branch or remote name that is not a safe name
+//      option, a branch or remote name that is not a safe name, or a
+//      repository identity that does not parse or decode
 //   3  the check failed; the reason, and for resolve the candidate remotes,
 //      are reported on stderr. For resolve the caller asks the user to name
 //      the remote; for pre and post it stops and reports.
@@ -124,11 +129,27 @@ const git = (args, { allowMissing = false } = {}) => {
 
 const stripSuffix = (path) => path.replace(/\/+$/, "").replace(/\.git$/i, "");
 
+// A URL with a fragment, query, backslash, or whitespace can name a different
+// host to git than to a simple parser (`https://evil#@github.com/...` connects
+// to `evil`), so such a URL never matches.
+const AMBIGUOUS_URL = /[#?\\\s]/;
+// Userinfo and host allow only plain characters, so the host below is the one
+// git connects to.
+const USERINFO = "[A-Za-z0-9._~-]+(?::[A-Za-z0-9._~%-]*)?@";
+const HOST = "[A-Za-z0-9.-]+";
+const SCHEME_AUTHORITY = new RegExp(`^(?:${USERINFO})?(${HOST})(?::\\d*)?$`);
+const SCP_URL = new RegExp(`^(?:${USERINFO})?(${HOST}):(.*)$`);
+
 // Splits a remote URL into a lower-cased host and its path, or null.
 const splitUrl = (url) => {
-  const scheme = url.match(/^([a-z][a-z0-9+.-]*):\/\/(?:[^@/]*@)?([^/:]+)(?::\d*)?\/(.*)$/i);
-  if (scheme) return { host: scheme[2].toLowerCase(), path: scheme[3] };
-  const scp = url.match(/^(?:[^@/:]+@)?([^/:]+):(?!\/\/)(.*)$/);
+  if (AMBIGUOUS_URL.test(url)) return null;
+  const scheme = url.match(/^[a-z][a-z0-9+.-]*:\/\/([^/]*)\/(.*)$/i);
+  if (scheme) {
+    const authority = scheme[1].match(SCHEME_AUTHORITY);
+    return authority ? { host: authority[1].toLowerCase(), path: scheme[2] } : null;
+  }
+  if (url.includes("://")) return null;
+  const scp = url.match(SCP_URL);
   if (scp) return { host: scp[1].toLowerCase(), path: scp[2] };
   return null;
 };
@@ -200,13 +221,16 @@ const resolve = (args) => {
   let host;
   let expected;
   if (github) {
-    host = github[0].toLowerCase();
-    const repo = parseGithub(`https://${host}/${github[1]}`);
-    if (!host || !repo) usage(`not a GitHub repository: ${JSON.stringify(`${github[0]} ${github[1]}`)}`);
+    // The hostname, without a port, as URLs are compared without one.
+    host = github[0].match(/^([A-Za-z0-9.-]+)(?::\d*)?$/)?.[1]?.toLowerCase();
+    const repo = host && parseGithub(`https://${host}/${github[1]}`);
+    if (!repo) usage(`not a GitHub repository: ${JSON.stringify(`${github[0]} ${github[1]}`)}`);
     expected = `${repo.owner}/${repo.repo}`;
   } else {
-    if (azure.some((part) => part === "")) usage("empty Azure DevOps organization, project, or repository");
-    expected = azure.join("/").toLowerCase();
+    // Decode the caller's names the same way as the URL side.
+    const decoded = azure.map(decode);
+    if (decoded.some((part) => !part)) usage(`not an Azure DevOps organization, project, and repository: ${JSON.stringify(azure)}`);
+    expected = decoded.join("/").toLowerCase();
   }
 
   const remotes = git(["remote"]);
@@ -238,6 +262,9 @@ const resolve = (args) => {
 };
 
 const readUpstream = (branch) => {
+  // Outside a repository `git config --get-all` also exits 1, which would read
+  // as no upstream.
+  git(["rev-parse", "--git-dir"]);
   const remotes = git(["config", "--get-all", `branch.${branch}.remote`], { allowMissing: true });
   const merges = git(["config", "--get-all", `branch.${branch}.merge`], { allowMissing: true });
   if (remotes.length > 1 || merges.length > 1) {

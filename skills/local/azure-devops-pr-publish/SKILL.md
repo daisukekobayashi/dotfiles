@@ -62,9 +62,11 @@ Still stop and ask before:
      with an explicit `<branch>:refs/heads/<branch>` refspec; with more than one
      remote and none named, ask. Run `node <push-script> resolve --azure '<org>'
      '<project>' '<repo>'` with the resolved organization, project, and
-     repository, adding `--remote '<name>'` when the user names a remote that
-     uses solely ASCII letters, digits, `/`, `.`, `_`, and `-` (ask again for
-     any other name), where `<push-script>` is
+     repository, writing each into the command only when it uses solely ASCII
+     letters, digits, space, `.`, `_`, and `-` (otherwise stop and report),
+     adding `--remote '<name>'` when the user names a remote that uses solely
+     ASCII letters, digits, `/`, `.`, `_`, and `-` (ask again for any other
+     name), where `<push-script>` is
      [`check-push-target.mjs`](../delivery-common/scripts/check-push-target.mjs)
      resolved from this skill's directory. It matches the accepted remote URL
      shapes from the common context. On exit 0, its output is `<remote>`. On
