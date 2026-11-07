@@ -123,7 +123,11 @@ have its follow-up assess hosted findings with Local Review's Assess findings.
 
 After the cycle returns, record its Final Report's Not applied items in the
 progress record and add their self-closures to the list under Local Review's
-Assess findings. Record the returned status, PR, published head, reviewed head,
+Assess findings. On resume, for each recorded hosted round, recover any
+disposition missing from the progress record from the PR's review threads,
+including resolved ones, before advancing, and add its self-closures to the
+list; report history that cannot be recovered as a blocker to a complete
+decision summary. Record the returned status, PR, published head, reviewed head,
 dispositions, and unresolved items. An acknowledgement or an `eyes` reaction is
 not a completed review. An open PR is not a merged PR.
 

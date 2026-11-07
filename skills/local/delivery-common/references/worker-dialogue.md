@@ -41,9 +41,11 @@ For each target, in this order:
    selects, and returns its draft with the tier and its ratings.
 5. The coordinator verifies the preflight draft the same way. For a Low
    tentative tier, apply Risk Tier's
-   [Low check](risk-tier.md#set-and-update-the-tier) before asking, and the
-   [Tier procedure](risk-tier.md#tier-procedure)'s Design preflight row when
-   Low is confirmed. Then ask the draft's questions under the preflight's
+   [Low check](risk-tier.md#set-and-update-the-tier) before asking. When the
+   confirmed tier's [Tier procedure](risk-tier.md#tier-procedure) column
+   selects a different preflight mode than the draft used, have the worker
+   redraft in that mode before asking; for a confirmed Low tier, apply its
+   Design preflight row. Then ask the draft's questions under the preflight's
    question budget. When an answer changes a dependent question, have the
    worker revise that question before asking it. Send the settled decisions to
    the worker.

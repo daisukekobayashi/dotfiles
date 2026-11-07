@@ -453,7 +453,7 @@ test("delivery shows material self-closures before publication and at merge", as
   assert.match(riskTier, /The \[Decision summary\]\(completion\.md#decision-summary\) shows the recommended human review from the column \[Tier procedure\]\(#tier-procedure\) applies\. It adds to repository-required approvals and never replaces them\./);
   assert.doesNotMatch(riskTier, /before PR publication and in the merge confirmation|to the user before publication and in the merge confirmation/, "risk-tier.md lists decision-summary fields");
 
-  assert.match(github, /After the cycle returns, record its Final Report's Not applied items in the progress record and add their self-closures to the list under Local Review's Assess findings\./);
+  assert.match(github, /After the cycle returns, record its Final Report's Not applied items in the progress record and add their self-closures to the list under Local Review's Assess findings\. On resume, for each recorded hosted round, recover any disposition missing from the progress record from the PR's review threads, including resolved ones, before advancing, and add its self-closures to the list; report history that cannot be recovered as a blocker to a complete decision summary\./);
   assert.doesNotMatch(github, /progress record location|persisted items/, "github-issue-delivery keeps the hosted persistence clauses");
   for (const [delivery, skill] of [["github-issue-delivery", github], ["azure-devops-work-item-delivery", azure]]) {
     assert.doesNotMatch(skill, /`none` when it is empty|`downgraded`|`reclassified`|heaviest tier/, `${delivery} restates the self-closure or decision-summary policy`);
@@ -536,7 +536,7 @@ test("the risk tier table scales the delivery procedure", async () => {
 
   const dialogue = flat(await readText(path.join(deliveryCommon, "references", "worker-dialogue.md")));
   assert.match(dialogue, /The worker sets the tentative tier under \[Risk Tier\]\(risk-tier\.md\), runs `design-preflight-with-docs` in draft mode/);
-  assert.match(dialogue, /For a Low tentative tier, apply Risk Tier's \[Low check\]\(risk-tier\.md#set-and-update-the-tier\) before asking, and the \[Tier procedure\]\(risk-tier\.md#tier-procedure\)'s Design preflight row when Low is confirmed\./);
+  assert.match(dialogue, /For a Low tentative tier, apply Risk Tier's \[Low check\]\(risk-tier\.md#set-and-update-the-tier\) before asking\. When the confirmed tier's \[Tier procedure\]\(risk-tier\.md#tier-procedure\) column selects a different preflight mode than the draft used, have the worker redraft in that mode before asking; for a confirmed Low tier, apply its Design preflight row\./);
   assert.doesNotMatch(dialogue, /falls back to Medium|read back the draft's direction/, "worker-dialogue.md restates the Low check or the Design preflight row");
   assert.match(flat(riskTier), /\*\*Low check:\*\* when a rating gives Low, tentative or final, the coordinator independently checks it against the diff, or the planned paths for a tentative tier, and the sensitive paths at the recorded base before it presents a Low draft or applies any other Low procedure, and records the basis\. When it cannot confirm Low, use Medium\./);
   assert.match(localReview, /set its final tier under \[Risk Tier\]\(risk-tier\.md#set-and-update-the-tier\) and record it with the selected reviewers/);
