@@ -236,9 +236,6 @@ try {
 
   $Env:SETUP_HOME = $setupContext.HomeDir
   $Env:SETUP_DOTFILES_ROOT = $setupContext.DotfilesRoot
-  if ([string]::IsNullOrWhiteSpace($Env:SETUP_TMPDIR)) {
-    $Env:SETUP_TMPDIR = [System.IO.Path]::GetTempPath()
-  }
 
   $hadSkipUserLocalSkillLinks = Test-Path Env:SETUP_SKIP_USER_LOCAL_SKILL_LINKS
   $previousSkipUserLocalSkillLinks = $Env:SETUP_SKIP_USER_LOCAL_SKILL_LINKS
