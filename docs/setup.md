@@ -36,7 +36,7 @@ SETUP_HOME=/tmp/dotfiles-home SETUP_DRY_RUN=1 ./setup.sh all
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SETUP_HOME` | `$HOME` | Home directory to install into |
-| `SETUP_TMPDIR` | `$TMPDIR` or `/tmp` | Temporary directory for setup |
+| `SETUP_TMPDIR` | `$TMPDIR` or `/tmp` | Temporary directory for setup; not used for skill installs |
 | `SETUP_DOTFILES_ROOT` | checkout root | Dotfiles source directory |
 | `SETUP_DRY_RUN` | `0` | `1` prints commands without side effects |
 | `SETUP_STRICT` | `0` | `1` stops at the first failed step |
