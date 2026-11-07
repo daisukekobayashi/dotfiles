@@ -25,13 +25,17 @@
 //   [--remote <name>]                 a remote the user or caller named
 //
 // <targets>: `--worktree <path>` or `--no-worktree`, and `--temp <path>` once
-// per run-owned temporary file the caller found from launch information.
+// per run-owned temporary file the caller found from launch information; a
+// repeated --temp path is a usage error.
 //
 // remote
 //   The **remote branch deletion check**. The branch is kept when the PR's
 //   head repository is a fork, when no remote is resolved by the push target
 //   rule (`check-push-target.mjs resolve` with the head repository and any
-//   named remote), when the PR is not merged (skipped with --preview, before
+//   named remote), when a named remote does not name the PR head repository
+//   (for GitHub, the `<owner>/<repo>` its URLs name; a named Azure DevOps
+//   remote is always kept, because the push target rule takes it as given),
+//   when the PR is not merged (skipped with --preview, before
 //   the merge), when the branch is the default branch, protected, or under
 //   policy, when another open PR uses it, or when
 //   `git ls-remote --heads <remote> refs/heads/<branch>` is not exactly
@@ -46,8 +50,12 @@
 //   projects from `list-stacks.sh <worktree>` with their volumes from
 //   `docker volume ls`, and the temporary paths with their resolved targets.
 //   The listings are the read-only scripts of worktree-runtime-cleanup, run
-//   from this skill tree. Writes the manifest as JSON to --out, which must be
-//   outside the worktree, and prints the targets. With --preview it is a
+//   from this skill tree. A lookup that exits non-zero or writes to stderr,
+//   and list-processes.sh without /proc and lsof, cannot run; it never counts
+//   as an empty listing. The manifest also records the PR head repository.
+//   Writes the manifest as JSON to --out, a new file outside the worktree
+//   created with mode 0600 (an existing path, including a symlink, is a usage
+//   error), and prints the targets. With --preview it is a
 //   Caller preview for a combined merge and cleanup confirmation: the remote
 //   check runs as before the merge, and a listing that cannot run fails the
 //   check. Without --preview a listing that cannot run is recorded and printed
@@ -58,7 +66,8 @@
 //   confirmed manifest (the Caller preview when the confirmation was combined,
 //   otherwise the manifest the user confirmed). Processes are compared by PID,
 //   start time, and cwd; Compose projects by name, working_dir, and volumes;
-//   temporary paths by path and resolved target; the rest exactly. The one
+//   temporary paths by path and resolved target; each list as a multiset;
+//   the rest, including the PR head repository, exactly. The one
 //   tolerated difference is a confirmed remote branch that no longer exists,
 //   reported as already deleted by the host. A listing that cannot run is a
 //   difference for a Caller preview, and for any other manifest unless it
@@ -72,17 +81,17 @@
 //   0  the check passed
 //   2  usage error: an unknown subcommand or option, a missing or repeated
 //      option, an unsafe branch or remote name, a malformed fact, a manifest
-//      path inside the worktree or at a symlink, or an unreadable confirmed
-//      manifest
+//      path inside the worktree or that already exists, or an unreadable
+//      confirmed manifest
 //   3  the check failed: remote keeps the remote branch (cleanup continues
 //      without it); manifest --preview has a listing that cannot run; compare
 //      found a difference. The reasons are reported on stderr.
 // Any other status, including 1, which node uses for a missing script or an
 // uncaught error and this script uses when git or check-push-target.mjs cannot
-// run, means the check could not run and stops the cleanup.
+// run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -204,7 +213,18 @@ const resolveRemote = (facts) => {
   if (facts.remote !== undefined) args.push("--remote", facts.remote);
   const result = spawnSync(process.execPath, args, { encoding: "utf8" });
   const stderr = (result.stderr ?? "").trim();
-  if (result.status === 0) return { remote: result.stdout.split("\n")[0] };
+  if (result.status === 0) {
+    const [remote, head] = result.stdout.split("\n");
+    if (facts.remote === undefined) return { remote };
+    // With a named remote the push target rule accepts any repository on the
+    // host (GitHub) or the remote as given (Azure DevOps), so bind it to the
+    // PR head repository here.
+    if (facts.provider === "github") {
+      if (head?.toLowerCase() === facts.repository[1].toLowerCase()) return { remote };
+      return { remote: null, reason: `remote ${JSON.stringify(remote)} names ${head || "no repository"}, not the PR head repository ${facts.repository[1]}` };
+    }
+    return { remote: null, reason: `remote ${JSON.stringify(remote)} was named, and a named Azure DevOps remote is not checked against the PR repository` };
+  }
   if (result.status === 3) return { remote: null, reason: `no remote resolved by the push target rule: ${stderr}` };
   if (result.status === 2) usage(`check-push-target.mjs: ${stderr}`);
   return cannotRun(`check-push-target.mjs exited ${result.status ?? result.signal}: ${stderr || result.error?.message || ""}`);
@@ -260,14 +280,6 @@ const remoteCommand = (args) => {
   if (result.status === "kept") fail([`remote branch kept: ${result.reason}`]);
 };
 
-const lstatOrNull = (target) => {
-  try {
-    return lstatSync(target);
-  } catch {
-    return null;
-  }
-};
-
 const realpathOrNull = (target) => {
   try {
     return realpathSync(target);
@@ -285,8 +297,11 @@ const readTargets = (options) => {
     worktree = realpathOrNull(worktreeOption[0]);
     if (!worktree) usage(`--worktree not found: ${JSON.stringify(worktreeOption[0])}`);
   }
+  const seen = new Set();
   const temps = (options["--temp"] ?? []).map(([given]) => {
     if (!path.isAbsolute(given)) usage(`--temp is not an absolute path: ${JSON.stringify(given)}`);
+    if (seen.has(given)) usage(`repeated --temp: ${JSON.stringify(given)}`);
+    seen.add(given);
     return { path: given, resolved: realpathOrNull(given) };
   });
   return { worktree, temps };
@@ -295,14 +310,32 @@ const readTargets = (options) => {
 // Runs a read-only listing script of worktree-runtime-cleanup and returns its
 // rows split at tabs, or { unavailable } when it cannot run or prints a row
 // with fewer than `columns` fields.
+// Runs a read-only lookup and returns its stdout, or { unavailable }. Any
+// output on stderr also makes it unavailable: list-processes.sh reports a
+// missing /proc and lsof there but exits 0, so an empty stdout alone never
+// shows that nothing was found.
+const runLookup = (label, command, args) => {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  const stderr = (result.stderr ?? "").trim();
+  if (result.status !== 0 || stderr !== "") {
+    const reason = (stderr || result.error?.message || "").split("\n")[0];
+    return { unavailable: `${label} ${result.status === 0 ? "reported an error" : `exited ${result.status ?? result.signal}`}${reason ? `: ${reason}` : ""}` };
+  }
+  return { stdout: result.stdout };
+};
+
+const onPath = (name) =>
+  (process.env.PATH ?? "").split(path.delimiter).some((dir) => dir !== "" && existsSync(path.join(dir, name)));
+
 const runListing = (name, worktree, columns) => {
   const script = path.join(runtimeScripts, name);
   if (!existsSync(script)) return { unavailable: `${name} not found` };
-  const result = spawnSync("bash", [script, worktree], { encoding: "utf8" });
-  if (result.status !== 0) {
-    const reason = (result.stderr || result.error?.message || "").trim().split("\n")[0];
-    return { unavailable: `${name} exited ${result.status ?? result.signal}${reason ? `: ${reason}` : ""}` };
+  // list-processes.sh needs /proc or lsof, and exits 0 without either.
+  if (name === "list-processes.sh" && !existsSync("/proc/self") && !onPath("lsof")) {
+    return { unavailable: `${name} cannot run: neither /proc nor lsof is available` };
   }
+  const result = runLookup(name, "bash", [script, worktree]);
+  if (result.unavailable) return result;
   const rows = result.stdout.split("\n").filter((line) => line !== "").map((line) => line.split("\t"));
   if (rows.some((row) => row.length < columns)) return { unavailable: `${name} printed a row with fewer than ${columns} columns` };
   return { rows };
@@ -325,11 +358,8 @@ const listCompose = (worktree) => {
   const items = [];
   // <project> <running>/<total> <working_dir> <reason>
   for (const [project, counts, workingDir, ...reason] of listing.rows) {
-    const volumes = spawnSync("docker", ["volume", "ls", "--filter", `label=com.docker.compose.project=${project}`, "--format", "{{.Name}}"], { encoding: "utf8" });
-    if (volumes.status !== 0) {
-      const why = (volumes.stderr || volumes.error?.message || "").trim().split("\n")[0];
-      return { status: "unavailable", reason: `docker volume ls exited ${volumes.status ?? volumes.signal}${why ? `: ${why}` : ""}`, items: [] };
-    }
+    const volumes = runLookup("docker volume ls", "docker", ["volume", "ls", "--filter", `label=com.docker.compose.project=${project}`, "--format", "{{.Name}}"]);
+    if (volumes.unavailable) return { status: "unavailable", reason: volumes.unavailable, items: [] };
     items.push({
       project,
       counts,
@@ -341,12 +371,16 @@ const listCompose = (worktree) => {
   return { status: "ok", items };
 };
 
+// The PR head repository as compared across manifests.
+const repositoryOf = (facts) => facts.repository.join("/").toLowerCase();
+
 const buildManifest = (facts, targets, { preview }) => {
   const none = { status: "none", reason: "no worktree", items: [] };
   return {
     version: MANIFEST_VERSION,
     preview,
     provider: facts.provider,
+    repository: repositoryOf(facts),
     worktree: targets.worktree,
     branch: facts.branch,
     remote: checkRemote(facts, { preview }),
@@ -380,6 +414,32 @@ const formatTargets = (manifest) => {
   return `${lines.join("\n")}\n`;
 };
 
+const isSymlinkPath = (target) => {
+  try {
+    return readlinkSync(target) !== undefined;
+  } catch {
+    return false;
+  }
+};
+
+// Creates the file exclusively with mode 0600 and writes through that
+// descriptor, so a symlink or file planted at the path, even after the checks
+// above, is never followed or overwritten.
+const writeNewFile = (file, text) => {
+  let fd;
+  try {
+    fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
+  } catch (error) {
+    if (error.code === "EEXIST" || error.code === "ELOOP") usage(`--out already exists: ${JSON.stringify(file)}`);
+    return cannotRun(`cannot create ${JSON.stringify(file)}: ${error.message}`);
+  }
+  try {
+    writeSync(fd, text);
+  } finally {
+    closeSync(fd);
+  }
+};
+
 const isInside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
 
 const manifestCommand = (args) => {
@@ -393,8 +453,7 @@ const manifestCommand = (args) => {
   if (!outDir) usage(`--out directory not found: ${JSON.stringify(path.dirname(out))}`);
   const outReal = path.join(outDir, path.basename(out));
   if (targets.worktree && isInside(outReal, targets.worktree)) usage(`--out is inside the worktree: ${JSON.stringify(out)}`);
-  // A symlink could point the write into the worktree or elsewhere.
-  if (lstatOrNull(outReal)?.isSymbolicLink()) usage(`--out is a symlink: ${JSON.stringify(out)}`);
+  if (existsSync(outReal) || isSymlinkPath(outReal)) usage(`--out already exists: ${JSON.stringify(out)}`);
 
   const preview = Boolean(options["--preview"]);
   const manifest = buildManifest(facts, targets, { preview });
@@ -402,7 +461,7 @@ const manifestCommand = (args) => {
   if (preview && unavailable.length > 0) {
     fail(unavailable.map((section) => `${section} cannot be listed for a Caller preview: ${manifest[section].reason}`));
   }
-  writeFileSync(outReal, `${JSON.stringify(manifest, null, 2)}\n`);
+  writeNewFile(outReal, `${JSON.stringify(manifest, null, 2)}\n`);
   process.stdout.write(formatTargets(manifest));
 };
 
@@ -417,7 +476,16 @@ const readConfirmed = (file) => {
   return manifest;
 };
 
-const sameSet = (a, b) => a.length === b.length && a.every((key) => b.includes(key));
+// Keys in a but not matched one for one in b, so duplicates count.
+const unmatched = (a, b) => {
+  const rest = [...b];
+  return a.filter((key) => {
+    const i = rest.indexOf(key);
+    if (i === -1) return true;
+    rest.splice(i, 1);
+    return false;
+  });
+};
 
 const compareRuntime = (section, confirmed, current, keyOf, differences) => {
   const before = confirmed[section];
@@ -432,8 +500,8 @@ const compareRuntime = (section, confirmed, current, keyOf, differences) => {
   }
   const beforeKeys = before.items.map(keyOf);
   const afterKeys = after.items.map(keyOf);
-  for (const key of afterKeys.filter((k) => !beforeKeys.includes(k))) differences.push(`${section}: new or changed ${key}`);
-  for (const key of beforeKeys.filter((k) => !afterKeys.includes(k))) differences.push(`${section}: confirmed ${key} is gone or changed`);
+  for (const key of unmatched(afterKeys, beforeKeys)) differences.push(`${section}: new or changed ${key}`);
+  for (const key of unmatched(beforeKeys, afterKeys)) differences.push(`${section}: confirmed ${key} is gone or changed`);
 };
 
 const compareCommand = (args) => {
@@ -445,7 +513,7 @@ const compareCommand = (args) => {
   const current = buildManifest(facts, targets, { preview: false });
 
   const differences = [];
-  for (const field of ["provider", "worktree", "branch"]) {
+  for (const field of ["provider", "repository", "worktree", "branch"]) {
     if (confirmed[field] !== current[field]) differences.push(`${field}: confirmed ${JSON.stringify(confirmed[field])}, now ${JSON.stringify(current[field])}`);
   }
 
@@ -465,7 +533,9 @@ const compareCommand = (args) => {
   compareRuntime("processes", confirmed, current, (item) => `process pid ${item.pid} started ${item.started} cwd ${item.cwd}`, differences);
   compareRuntime("compose", confirmed, current, (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${item.volumes.join(",") || "-"}`, differences);
   const tempKey = (temp) => `${temp.path} -> ${temp.resolved ?? "(missing)"}`;
-  if (!sameSet((confirmed.temps ?? []).map(tempKey), current.temps.map(tempKey))) {
+  const confirmedTemps = (confirmed.temps ?? []).map(tempKey);
+  const currentTemps = current.temps.map(tempKey);
+  if (unmatched(confirmedTemps, currentTemps).length > 0 || unmatched(currentTemps, confirmedTemps).length > 0) {
     differences.push(`temporary paths: confirmed ${JSON.stringify((confirmed.temps ?? []).map(tempKey))}, now ${JSON.stringify(current.temps.map(tempKey))}`);
   }
 

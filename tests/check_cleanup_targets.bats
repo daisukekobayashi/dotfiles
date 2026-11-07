@@ -107,6 +107,7 @@ remote_with() {
 preview() {
   local -a args
   mapfile -t args < <(facts OPEN)
+  rm -f "${state}/preview.json"
   check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/preview.json" --preview "$@"
 }
 
@@ -114,6 +115,23 @@ compare() {
   local -a args
   mapfile -t args < <(facts)
   check compare "${args[@]}" --worktree "${worktree}" --confirmed "${1:-${state}/preview.json}" "${@:2}"
+}
+
+# The mode bits of a file, in octal.
+mode_of() {
+  node -e 'process.stdout.write((require("fs").statSync(process.argv[1]).mode & 0o777).toString(8))' "$1"
+}
+
+# A PATH with the commands these tests need but no lsof.
+path_without_lsof() {
+  local dir="${root}/nolsof" name
+  mkdir -p "${dir}"
+  for name in bash env cat awk sort cut grep sed tr basename dirname git ps id uniq; do
+    ln -sf "$(command -v "${name}")" "${dir}/${name}"
+  done
+  ln -sf "${root}/bin/docker" "${dir}/docker"
+  ln -sf "${root}/bin/fake-ssh" "${dir}/fake-ssh"
+  printf '%s' "${dir}"
 }
 
 start_in() {
@@ -370,4 +388,125 @@ start_in() {
   printf '{"version":2}\n' >"${state}/bad.json"
   compare "${state}/bad.json"
   [ "${status}" -eq 2 ]
+}
+
+@test "a named GitHub remote must name the PR head repository" {
+  git remote add other git@github.com:other/repo.git
+  remote_with --remote other
+  [ "${status}" -eq 3 ]
+  [ "${output}" = $'kept\t-' ]
+  [[ "${stderr}" == *'remote "other" names other/repo, not the PR head repository owner/repo'* ]]
+
+  remote_with --remote origin
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "proposed"$'\t'"origin"$'\t'"${head}" ]
+}
+
+@test "a named Azure DevOps remote is kept" {
+  git remote set-url origin git@ssh.dev.azure.com:v3/org/project/repo
+  git remote add other git@ssh.dev.azure.com:v3/org/project/other
+  check remote --azure org project repo --branch feat/1-x --pr-state completed --pr-head "${head}" \
+    --cross-repo false --default-branch main --protected false --open-prs 0 --remote other
+  [ "${status}" -eq 3 ]
+  [ "${output}" = $'kept\t-' ]
+  [[ "${stderr}" == *"a named Azure DevOps remote is not checked against the PR repository"* ]]
+}
+
+@test "compare stops when the PR head repository differs" {
+  preview
+  [ "${status}" -eq 0 ]
+  local -a args
+  mapfile -t args < <(facts)
+  args[2]=other/repo
+  check compare "${args[@]}" --worktree "${worktree}" --confirmed "${state}/preview.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *'repository: confirmed "github.com/owner/repo", now "github.com/other/repo"'* ]]
+}
+
+@test "a listing that writes to stderr and exits 0 is unavailable, not empty" {
+  printf '#!/usr/bin/env bash\necho "Neither /proc nor lsof is available" >&2\nexit 0\n' \
+    >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
+  preview
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"list-processes.sh reported an error: Neither /proc nor lsof is available"* ]]
+
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"processes"$'\t'"unverified: list-processes.sh reported an error"* ]]
+}
+
+@test "docker volume ls writing to stderr makes Compose unavailable" {
+  printf 'wt\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  cat >"${root}/bin/docker" <<'DOCKER'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -a") cat "${FAKE_DOCKER_PS}" ;;
+  "volume ls") echo "permission denied" >&2 ;;
+esac
+DOCKER
+  preview
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"compose cannot be listed for a Caller preview: docker volume ls reported an error: permission denied"* ]]
+}
+
+@test "without /proc and lsof the process listing is unavailable" {
+  [ ! -d /proc/self ] || skip "this host has /proc"
+  local -a args
+  mapfile -t args < <(facts OPEN)
+  run --separate-stderr env PATH="$(path_without_lsof)" "$(command -v node)" "${script}" manifest "${args[@]}" \
+    --worktree "${worktree}" --out "${state}/preview.json" --preview
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh cannot run: neither /proc nor lsof is available"* ]]
+}
+
+@test "manifest creates --out as a new 0600 file and refuses an existing path" {
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/m.json"
+  [ "${status}" -eq 0 ]
+  [ "$(mode_of "${state}/m.json")" = 600 ]
+
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/m.json"
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"--out already exists"* ]]
+
+  printf 'keep\n' >"${root}/victim"
+  ln -s "${root}/victim" "${state}/planted.json"
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/planted.json"
+  [ "${status}" -eq 2 ]
+  [ "$(cat "${root}/victim")" = keep ]
+}
+
+@test "manifest never writes through a symlink planted after its checks" {
+  printf 'keep\n' >"${root}/victim"
+  # The listing runs after the --out checks and before the write.
+  cat >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh" <<LISTING
+#!/usr/bin/env bash
+ln -s "${root}/victim" "${state}/raced.json"
+LISTING
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/raced.json"
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"--out already exists"* ]]
+  [ "$(cat "${root}/victim")" = keep ]
+}
+
+@test "temporary paths are compared one for one" {
+  local -a args
+  mapfile -t args < <(facts)
+  touch "${root}/a.pid" "${root}/b.pid"
+  check manifest "${args[@]}" --worktree "${worktree}" --temp "${root}/a.pid" --temp "${root}/a.pid" --out "${state}/dup.json"
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"repeated --temp"* ]]
+
+  check manifest "${args[@]}" --worktree "${worktree}" --temp "${root}/a.pid" --out "${state}/one.json"
+  [ "${status}" -eq 0 ]
+  # A confirmed manifest listing A twice does not match A and B.
+  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); m.temps = [m.temps[0], m.temps[0]]; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/one.json" "${state}/twice.json"
+  check compare "${args[@]}" --worktree "${worktree}" --temp "${root}/a.pid" --temp "${root}/b.pid" --confirmed "${state}/twice.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"temporary paths"* ]]
 }

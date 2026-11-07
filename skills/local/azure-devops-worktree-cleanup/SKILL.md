@@ -48,7 +48,8 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    `node <cleanup-script> remote <facts>`, where `<facts>` is
    `--azure '<org>' '<project>' '<repo>' --branch <branch> --pr-state <status> --pr-head <lastMergeSourceCommit> --cross-repo <true when forkSource is set> --default-branch '<default branch>' --protected <true when any policy applies> --open-prs <other active PRs>`
    with the default branch without `refs/heads/`, plus `--remote '<name>'`
-   when the user names one, writing the organization, project, and repository
+   when the user names one (the check then keeps the remote branch, because a
+   named Azure DevOps remote is not checked against the PR repository), writing the organization, project, and repository
    percent-decoded and only when each uses solely ASCII letters, digits, space,
    `.`, `_`, and `-`, and every other value only when it uses solely ASCII
    letters, digits, `/`, `:`, `.`, `_`, and `-` (otherwise stop and report),
@@ -62,8 +63,8 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    `node <cleanup-script> manifest <facts> --worktree '<path>' --out '<file>'`
    (`--no-worktree` when there is none), adding `--temp '<path>'` for each
    run-owned temporary file `../worktree-runtime-cleanup/SKILL.md` identifies,
-   with `<file>` in agent-work storage or `/tmp` outside the worktree, and show
-   the targets it prints, including any `unverified` section; any non-zero
+   with `<file>` a new path in agent-work storage or `/tmp` outside the
+   worktree, and show the targets it prints, including any `unverified` section; any non-zero
    status stops the cleanup. Under a caller's combined confirmation, skip this
    build: the Caller preview manifest is the confirmed manifest. A caller's
    combined confirmation from Caller preview counts only when the user gave it
