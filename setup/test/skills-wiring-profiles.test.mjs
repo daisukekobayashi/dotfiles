@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -209,6 +209,49 @@ test("the shared safe branch name check resolves and runs in copied base and pro
       }
       assert.notEqual(callers.length, 0, `${provider}: no skill runs the shared check`);
     }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("every shared delivery-common script link resolves and runs in copied base and provider profiles", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "shared-script-profile-test."));
+  const linkPattern = /\]\(((?:\.\.\/)+delivery-common\/scripts\/[A-Za-z0-9-]+\.mjs)\)/g;
+  try {
+    const base = await readRepoProfile("base");
+    const linked = new Set();
+    for (const provider of ["github", "azure-devops", "beads"]) {
+      const profile = await readRepoProfile(provider);
+      const skillsDir = path.join(root, provider, "skills");
+      await mkdir(skillsDir, { recursive: true });
+      const installed = [...new Set([...base.local, ...profile.local])];
+      for (const name of installed) {
+        await cp(path.join(repoRoot, "skills", "local", name), path.join(skillsDir, name), {
+          recursive: true,
+        });
+      }
+
+      for (const name of installed) {
+        const docs = [path.join(skillsDir, name, "SKILL.md")];
+        const references = path.join(skillsDir, name, "references");
+        if (existsSync(references)) {
+          for (const entry of await readdir(references)) {
+            if (entry.endsWith(".md")) docs.push(path.join(references, entry));
+          }
+        }
+        for (const doc of docs) {
+          if (!existsSync(doc)) continue;
+          for (const [, link] of (await readText(doc)).matchAll(linkPattern)) {
+            const script = path.resolve(path.dirname(doc), link);
+            assert.equal(existsSync(script), true, `${provider}/${path.relative(skillsDir, doc)}: missing ${link}`);
+            const usage = spawnSync(process.execPath, [script], { encoding: "utf8" });
+            assert.equal(usage.status, 2, `${provider}/${path.relative(skillsDir, doc)}: ${link} did not run`);
+            linked.add(path.basename(script));
+          }
+        }
+      }
+    }
+    assert.ok(linked.has("check-push-target.mjs"), "no skill links the shared push target check");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

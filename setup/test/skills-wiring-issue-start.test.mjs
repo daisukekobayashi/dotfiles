@@ -69,7 +69,10 @@ test("start skills restrict branch names to shell-safe characters", async () => 
   }
 });
 
-test("publish skills push with an explicit refspec and recheck the upstream", async () => {
+const pushScriptClause = "where `<push-script>` is [`check-push-target.mjs`](../delivery-common/scripts/check-push-target.mjs) resolved from this skill's directory";
+const pushTargetRule = "push only to the remote the user names, or the single remote that names the repository, with an explicit `<branch>:refs/heads/<branch>` refspec; with more than one remote and none named, ask.";
+
+test("publish skills check the upstream with the push target script around a visible push", async () => {
   for (const publish of ["github-pr-publish", "azure-devops-pr-publish"]) {
     const skill = await readText(path.join(repoRoot, "skills", "local", publish, "SKILL.md"));
     const push = flat(skill.match(/^7\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
@@ -77,20 +80,20 @@ test("publish skills push with an explicit refspec and recheck the upstream", as
     assert.ok(push, `${publish}: missing push step`);
     assert.match(push, /`<remote>` is the [^.]*remote resolved in step 2\./, `${publish}: remote binding`);
     assert.match(push, /PR base branch is the existing PR's (base|target), otherwise[^.]*default branch unless the user specifies another/, `${publish}: base definition`);
-    assert.match(push, upstreamRead, `${publish}: upstream read`);
-    assert.doesNotMatch(push, /%\(upstream/, `${publish}: upstream format atoms need a remote-tracking ref`);
-    assert.doesNotMatch(push, /git config --get branch/, `${publish}: --get returns the last of several values`);
-    assert.match(push, /Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, either local \(remote `\.`\) or remote-tracking\./, `${publish}: accepted upstreams`);
-    assert.match(push, /Stop and report any other upstream/, `${publish}: report other upstream`);
-    assert.match(push, /`git push -u <remote> <branch>:refs\/heads\/<branch>`/, `${publish}: explicit refspec`);
+    const pre = push.indexOf("`node <push-script> pre --branch '<branch>' --remote '<remote>' --base '<");
+    const run = push.indexOf("`git push -u <remote> <branch>:refs/heads/<branch>`");
+    const post = push.indexOf("`node <push-script> post --branch '<branch>' --remote '<remote>'`");
+    assert.ok(pre >= 0 && run > pre && post > run, `${publish}: pre check, visible push, post check in order`);
+    assert.match(push, /Continue only on exit 0, and report the note it prints when the push replaces a PR base upstream\. On exit 3, stop and report the upstream it names; it may back an existing PR\./, `${publish}: pre outcome`);
+    assert.match(push, /stop and report unless it exits 0\./, `${publish}: post outcome`);
+    assert.match(push, /stop and report an existing PR's (base|target) that does not use solely ASCII letters, digits, `\/`, `\.`, `_`, and `-`/, `${publish}: existing base written only when safe`);
     assert.doesNotMatch(push, /`git push -u <remote> <branch>`/, `${publish}: bare push follows push.default=upstream to the base`);
     assert.doesNotMatch(push, /normal push/, `${publish}: every push case uses the refspec`);
-    assert.match(push, /sets the upstream for the same branch name/, `${publish}: first-push upstream`);
-    assert.match(push, /Re-read the upstream; stop and report unless the remote is `<remote>` and the merge ref is `refs\/heads\/<branch>`\./, `${publish}: post-push recheck`);
+    assert.doesNotMatch(push, /git config --get-all|Re-read the upstream/, `${publish}: upstream prose moved into the script`);
   }
 });
 
-test("publish skills check the branch name and resolve one push remote", async () => {
+test("publish skills check the branch name and resolve the push remote with the push target script", async () => {
   for (const publish of ["github-pr-publish", "azure-devops-pr-publish"]) {
     const skill = await readText(path.join(repoRoot, "skills", "local", publish, "SKILL.md"));
     const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
@@ -98,35 +101,29 @@ test("publish skills check the branch name and resolve one push remote", async (
     assert.ok(context, `${publish}: missing step 2`);
     assert.match(context, safeBranchRun("the branch", "'<branch>'"), `${publish}: safe branch name`);
     assert.match(context, /leading `\+`[^.]*force push/, `${publish}: + refspec refused`);
-    assert.match(context, /Use the remote the user names\./, `${publish}: user-named remote`);
-    assert.match(context, /Otherwise `<remote>` is the one remote whose fetch URL and every push URL \(`git remote -v`\)/, `${publish}: URL-matched remote`);
-    assert.match(context, /Stop and report the candidates when more than one remote matches\./, `${publish}: several matches stop`);
-    assert.match(context, /When none matches, as with an SSH host alias, stop and ask the user to name the remote\./, `${publish}: no match asks for a remote`);
+    assert.match(context, new RegExp(escapeRegExp(`by the **push target rule**: ${pushTargetRule}`)), `${publish}: push target rule`);
+    assert.match(context, new RegExp(escapeRegExp(pushScriptClause)), `${publish}: script link`);
+    assert.match(context, /adding `--remote '<name>'` when the user names a remote that uses solely ASCII letters, digits, `\/`, `\.`, `_`, and `-` \(ask again for any other name\)/, `${publish}: user-named remote written only when safe`);
+    assert.match(context, /On exit 3, stop and ask the user to name the remote, listing the candidates it reports; stop and report any other status\./, `${publish}: exit handling`);
+    assert.doesNotMatch(context, /git remote -v|ignoring the scheme|decoding percent-encoding|letter case/, `${publish}: URL normalization moved into the script`);
   }
 
   const github = flat(await readText(path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md")));
-  assert.match(github, /ignoring the scheme, user, letter case, and a trailing `\.git` or `\/`/, "github: URL normalization");
+  assert.match(github, /`node <push-script> resolve --github '<host>' '<owner>\/<repo>'` with the resolved repository's `url` host and `nameWithOwner`/, "github: resolve run");
+  assert.match(github, /On exit 0, line 1 is `<remote>` and line 2 is the head repository `<owner>\/<repo>`\./, "github: resolve output");
   const azure = flat(await readText(path.join(repoRoot, "skills", "local", "azure-devops-pr-publish", "SKILL.md")));
-  assert.match(azure, /accepted remote URL shapes/, "azure: URL shapes from the common context");
-  assert.match(azure, /decoding percent-encoding \(`My%20Project` is `My Project`\) and ignoring letter case, the `user@` part, and a trailing `\.git` or `\/`/, "azure: URL normalization");
+  assert.match(azure, /`node <push-script> resolve --azure '<org>' '<project>' '<repo>'` with the resolved organization, project, and repository/, "azure: resolve run");
+  assert.match(azure, /accepted remote URL shapes from the common context/, "azure: URL shapes from the common context");
 });
 
-test("github-pr-publish stops in an unresolved fork layout", async () => {
-  const skill = await readText(path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md"));
-  const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+test("publish skills drop the fork-layout lookups", async () => {
+  for (const publish of ["github-pr-publish", "azure-devops-pr-publish"]) {
+    const context = flat((await readText(path.join(repoRoot, "skills", "local", publish, "SKILL.md"))).match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
 
-  assert.ok(context, "missing step 2");
-  assert.doesNotMatch(context, /set-default|shows no default/, "gh's default names the PR base, not the push target");
-  assert.match(context, /Check every other remote: stop and ask the user to name the remote when its repository or the resolved repository has a parent/, "any parent asks for a remote");
-  assert.match(context, /has a parent, when its fetch URL and push URLs name different repositories \(normalized as above\), or when the check cannot finish/, "split fetch and push repositories stop");
-  assert.match(context, /`gh repo view <owner>\/<repo> --json parent,isFork`/, "parent lookup");
-  assert.match(context, /Look up the resolved repository and each other remote's repository with `gh repo view <owner>\/<repo> --json parent,isFork`;/, "both repositories looked up");
-  assert.match(context, /a repository \*\*has a parent\*\* when `parent` is not null or `isFork` is true/, "isFork counts as a parent");
-  assert.match(context, /rule out a fork layout when at least one other remote exists[^.]*\. With no other remote, skip this check\./, "a lone remote skips the check");
-  assert.match(context, /cannot rule out a fork of a fork or a cousin fork/, "fork of a fork stops");
-  assert.doesNotMatch(context, /fork network|both are forks with the same parent/, "direct-parent comparison removed");
-  assert.match(context, /any of its fetch or push URLs does not name an `<owner>\/<repo>` on the resolved repository's host/, "every remote URL checked");
-  assert.match(context, /or a parent lookup fails[^.]*a failed lookup is not "no parent"/, "failed lookup fails closed");
+    assert.ok(context, `${publish}: missing step 2`);
+    assert.doesNotMatch(context, /parent,isFork|fork layout|has a parent|fork of a fork|set-default/, `${publish}: fork-layout check removed`);
+    assert.match(context, /with more than one remote and none named, ask\./, `${publish}: several remotes ask instead`);
+  }
 });
 
 test("PR create and cleanup skills check the branch name in step 1", async () => {
