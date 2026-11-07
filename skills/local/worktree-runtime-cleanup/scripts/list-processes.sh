@@ -24,11 +24,12 @@
 # A --cwd argument is read exactly from /proc. Without /proc, ps joins the
 # arguments with spaces, so the value after the first --cwd may end at any
 # later space: each such reading is a candidate. ps prints a control byte as
-# "^X" or "\ooo" but a literal "^" or "\" as is, so a candidate is read only up
-# to its first "\", "^", or "M-". PATH mode lists "--cwd under target" when
-# every candidate is PATH or below it, and "--cwd ambiguous" when only some may
-# be; a "--cwd ambiguous" row never establishes ownership. --stale lists
-# "--cwd missing" only when every candidate, read in full, is missing.
+# "^X", "\ooo", or "?" but a literal "^", "\", or "?" as is, so a candidate is
+# read only up to its first "\", "^", "?", or "M-". PATH mode lists
+# "--cwd under target" when every candidate is PATH or below it, and
+# "--cwd ambiguous" when only some may be; such a row never establishes
+# ownership. --stale lists "--cwd missing" only when every candidate, read in
+# full, is missing.
 # The script and its ancestors are never listed. It only reads process state;
 # it never sends signals.
 #
@@ -40,7 +41,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -238,10 +239,10 @@ cwd_argument() {
   arg_cwds+=("${prefix}${value}")
 }
 
-# Prints the part of a ps candidate before its first "\", "^", or "M-", or the
-# whole candidate when it has none.
+# Prints the part of a ps candidate before its first "\", "^", "?", or "M-", or
+# the whole candidate when it has none.
 readable_prefix() {
-  local cut="${1%%[\\^]*}"
+  local cut="${1%%[\\^?]*}"
   [[ "${cut}" == *M-* ]] && cut="${cut%%M-*}"
   printf '%s' "${cut}"
 }
