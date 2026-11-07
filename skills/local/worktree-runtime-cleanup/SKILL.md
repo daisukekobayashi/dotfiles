@@ -73,7 +73,9 @@ cleanup session, so discover them from process state.
 `change-review`, `change-adversarial-review`, and `change-security-review`
 follow this section around each Codex companion run for a target worktree. The
 run owns the brokers it starts, so stopping them needs no confirmation; the stop
-covers only the processes recorded below and sends only SIGTERM.
+covers only the processes recorded below and sends only SIGTERM. Runs started
+together for one worktree as a set count as one run: record the first list
+before any starts and the second after all end.
 
 1. Before the run, record `scripts/list-processes.sh <worktree>` in this
    skill's directory.
