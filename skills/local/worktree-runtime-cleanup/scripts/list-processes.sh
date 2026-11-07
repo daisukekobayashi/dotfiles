@@ -23,10 +23,16 @@
 # "cwd ambiguous" row never establishes ownership.
 # The script and its ancestors are never listed. It only reads process state;
 # it never sends signals.
+#
+# Exit status: 0 with no output when no process matches. When processes cannot
+# be listed, because there is neither /proc nor lsof or lsof does not report
+# this script's own process, it prints nothing on stdout, a message on stderr,
+# and exits 1: the listing is unavailable, never empty. lsof output cut short
+# after this script's own process goes undetected.
 set -euo pipefail
 
 usage() {
-  sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -51,11 +57,16 @@ case "${1:-}" in
     ;;
 esac
 
+# Ends a complete listing; a record always starts with a decimal pid.
+listing_end="end"
+
 # pid<TAB>cwd<NUL>raw<NUL> for every process of the current user, so a cwd
 # may contain any byte but NUL. raw is set only for an ambiguous lsof name;
-# see lsof_name.
+# see lsof_name. Only a complete listing ends with the listing_end record.
+# lsof's exit status is not trusted, as it may exit 1 with usable rows: the
+# listing is complete when it reports the cwd of this script's own process.
 list_cwds() {
-  local dir pid cwd field decoded raw
+  local dir pid cwd field decoded raw seen
   if [[ -d /proc/self ]]; then
     for dir in /proc/[0-9]*; do
       [[ -O "${dir}" ]] || continue
@@ -65,8 +76,10 @@ list_cwds() {
       cwd="${cwd%$'\n'x}"
       printf '%s\t%s\0\0' "${pid}" "${cwd}"
     done
+    printf '%s\0\0' "${listing_end}"
   elif command -v lsof >/dev/null 2>&1; then
-    lsof -w -a -u "$(id -u)" -d cwd -F0pn 2>/dev/null |
+    lsof -w -a -u "$(id -u)" -d cwd -F0pn 2>/dev/null | {
+      seen=""
       while IFS= read -r -d '' field; do
         field="${field#$'\n'}"
         case "${field}" in
@@ -74,9 +87,16 @@ list_cwds() {
           n*)
             lsof_name "${field#n}"
             printf '%s\t%s\0%s\0' "${pid}" "${decoded}" "${raw}"
+            [[ "${pid}" != "$$" || -z "${field#n}" ]] || seen=1
             ;;
         esac
       done
+      if [[ -n "${seen}" ]]; then
+        printf '%s\0\0' "${listing_end}"
+      else
+        echo "lsof did not report the cwd of this process; processes cannot be listed" >&2
+      fi
+    }
   else
     echo "Neither /proc nor lsof is available" >&2
     exit 1
@@ -292,10 +312,30 @@ while [[ -n "${pid}" && "${pid}" != "0" ]]; do
   pid="$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')" || break
 done
 
+# Read the whole listing before printing any row, so a listing that fails
+# part way prints nothing.
+records=()
+raws=()
+complete=""
 while IFS= read -r -d '' record; do
+  IFS= read -r -d '' raw || break
+  if [[ "${record}" == "${listing_end}" ]]; then
+    complete=1
+    break
+  fi
+  records+=("${record}")
+  raws+=("${raw}")
+done < <(list_cwds)
+if [[ -z "${complete}" ]]; then
+  echo "The process listing is incomplete; nothing is listed" >&2
+  exit 1
+fi
+
+for ((i = 0; i < ${#records[@]}; i++)); do
+  record="${records[i]}"
+  raw="${raws[i]}"
   pid="${record%%$'\t'*}"
   cwd="${record#*$'\t'}"
-  IFS= read -r -d '' raw || break
   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
   # A process that exits mid-listing is skipped rather than ending the list:
   # each lookup below fails for it, and set -e would otherwise stop the script.
@@ -334,4 +374,4 @@ while IFS= read -r -d '' record; do
   command="$(ps -ww -o args= -p "${pid}" 2>/dev/null | cut -c1-200)" || continue
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${pid}" "${ppid}" "${tty}" "${started}" "$(encode_cwd "${cwd}")" "${reason}" "${command}"
-done < <(list_cwds)
+done

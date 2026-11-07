@@ -35,7 +35,8 @@ cleanup session, so discover them from process state.
 
 1. Resolve the target worktree and list candidates with
    `scripts/list-processes.sh` in this skill's directory. The script only reads
-   process state.
+   process state. A non-zero exit means the listing is unavailable, never
+   empty: report the processes as unverified.
    - A worktree path given: `list-processes.sh <path>`.
    - No argument: `list-processes.sh` targets the current worktree root.
    - `--stale` given: `list-processes.sh --stale` lists processes whose cwd or
@@ -104,8 +105,9 @@ covers only the processes recorded below and sends only SIGTERM.
    [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
    handles them before the worktree is removed.
 
-When `list-processes.sh` cannot run, such as without bash, `/proc`, or `lsof`,
-report the teardown as unverified and leave it to cleanup.
+When `list-processes.sh` cannot run or exits non-zero, such as without bash,
+`/proc`, or a working `lsof`, its listing is unavailable, never empty: report
+the teardown as unverified and leave it to cleanup.
 
 ## Compose Stacks
 
