@@ -247,11 +247,23 @@ test("every shared delivery-common script link resolves and runs in copied base 
             const usage = spawnSync(process.execPath, [script], { encoding: "utf8" });
             assert.equal(usage.status, 2, `${provider}/${path.relative(skillsDir, doc)}: ${link} did not run`);
             linked.add(path.basename(script));
+            if (path.basename(script) === "check-cleanup-targets.mjs") {
+              // The cleanup target check runs the push target check and the
+              // read-only runtime listings from the same installed tree.
+              for (const dependency of [
+                "check-push-target.mjs",
+                "../../worktree-runtime-cleanup/scripts/list-processes.sh",
+                "../../worktree-runtime-cleanup/scripts/list-stacks.sh",
+              ]) {
+                assert.equal(existsSync(path.resolve(path.dirname(script), dependency)), true, `${provider}: ${link} needs ${dependency}`);
+              }
+            }
           }
         }
       }
     }
     assert.ok(linked.has("check-push-target.mjs"), "no skill links the shared push target check");
+    assert.ok(linked.has("check-cleanup-targets.mjs"), "no skill links the shared cleanup target check");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

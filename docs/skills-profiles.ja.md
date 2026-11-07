@@ -294,6 +294,33 @@ remote URL の形のいずれかである必要があります。`pre` と `post
 記録した remote がない状態で再開した `github-pr-codex-review-cycle` がこの
 スクリプトを実行します。`tests/check_push_target.bats` がスクリプトをテストします。
 
+`check-cleanup-targets.mjs` は `github-worktree-cleanup` と
+`azure-devops-worktree-cleanup` の**リモートブランチ削除の確認**と
+**クリーンアップ対象マニフェスト**を扱います。`remote` は、PR の head リポジトリが
+fork でなく、push 先のルールで remote が解決でき、PR がマージ済み（Azure DevOps
+では completed）で、ブランチが既定ブランチでも保護やポリシーの対象でもなく、
+ほかの open な PR が使っておらず、`git ls-remote` が PR の head とちょうど一致する
+ときだけリモートブランチの削除を提案し、lease に使う SHA を出力します。それ以外は
+リモートブランチを残します。クリーンアップ対象マニフェストは、worktree、ローカル
+ブランチ、そのリモートブランチの判定結果、`worktree-runtime-cleanup` の読み取り
+専用の一覧が報告するプロセスと Compose プロジェクト（ボリュームを含む）、呼び出し
+側が渡す実行時の一時ファイルのパスを記録します。`manifest` はこれを worktree の
+外に JSON で書き出し、確認のために対象を出力します。`--preview` を付けると、
+マージとクリーンアップをまとめて確認するための、マージ前の Caller preview に
+なります。`compare` はどの削除よりも直前にマニフェストを作り直し、確認済みの
+マニフェストとの差分があれば失敗します。許容する差分は、ホストがマージ時に
+削除したものなど、確認したリモートブランチがもう存在しない場合だけです。一覧を
+実行できないときは、Caller preview とその compare では失敗し、それ以外では
+未検証として報告し、確認時にも未検証だった場合だけ通ります。プロバイダーの情報は
+呼び出し側が `gh` または `az` で調べて渡し、照会が失敗したらクリーンアップを
+止めます。スクリプトは git、プロセス、Docker の状態だけを読み、`git ls-remote`
+は自分で実行し、何も削除、停止、シグナル送信しません。終了コード 0 は確認が
+通ったこと、2 は使い方の誤り、3 は確認が失敗したことを意味します。`remote` では
+リモートブランチを残してクリーンアップを続け、`manifest --preview` と `compare`
+ではクリーンアップを止めます。それ以外の終了コードは確認を実行できなかったことを
+意味し、クリーンアップを止めます。`tests/check_cleanup_targets.bats` がスクリプトを
+テストします。
+
 ## Profile Format
 
 Profile は JSON にします。Bash で無理に parse せず、Node で処理できるようにします。
