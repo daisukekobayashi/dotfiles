@@ -550,10 +550,49 @@ test("the risk tier table scales the delivery procedure", async () => {
     const preview = cleanupSkill.match(/## Caller preview ([\s\S]*?)(?= ## |$)/)?.[1];
     assert.ok(preview, `${cleanup}: missing Caller preview`);
     assert.match(preview, /Remove and stop nothing\./, cleanup);
-    assert.match(preview, /must match the preview exactly/, cleanup);
-    assert.match(preview, /runtime resources with their identifiers: each process's PID, start time, and cwd as `list-processes\.sh` reports them, each Compose project with its `working_dir` and volumes, and each temporary file path/, cleanup);
-    assert.match(preview, /The one tolerated difference is a previewed remote branch that no longer exists, [^:]+: drop it and report it as already deleted by the host\./, cleanup);
+    assert.match(preview, /then run step 6's `manifest` command with `--preview`/, cleanup);
+    assert.match(preview, /lists each process's PID, start time, and cwd as `list-processes\.sh` reports them, each Compose project with its `working_dir` and volumes, and each temporary file path/, cleanup);
+    assert.match(preview, /on any non-zero status return no preview, so cleanup keeps its own confirmation\./, cleanup);
+    assert.match(preview, /step 7's compare against the preview manifest decides whether the targets match the preview\./, cleanup);
+    assert.match(preview, /The one tolerated difference is a previewed remote branch that no longer exists, [^:]+: compare drops it and reports it as already deleted by the host\./, cleanup);
     assert.match(preview, /A combined confirmation authorizes stopping or removing only runtime resources whose identifiers match the preview; any new or different resource needs its own confirmation\./, cleanup);
-    assert.match(cleanupSkill, /Show runtime resources with the identifiers \[Caller preview\]\(#caller-preview\) lists\. A caller's combined confirmation from Caller preview counts only when the user gave it in their own message and explicitly accepted these resources, and they match the preview as Caller preview defines; otherwise show them and ask again\./, cleanup);
+    assert.match(cleanupSkill, /Under a caller's combined confirmation, skip this build: the Caller preview manifest is the confirmed manifest\. A caller's combined confirmation from Caller preview counts only when the user gave it in their own message and explicitly accepted these resources, and they match the preview as Caller preview defines; otherwise show them and ask again\./, cleanup);
   }
+});
+
+test("both worktree cleanup skills run the shared cleanup target checks in one line per step", async () => {
+  const link = "[`check-cleanup-targets.mjs`](../delivery-common/scripts/check-cleanup-targets.mjs) resolved from this skill's directory";
+  const steps = {};
+  for (const [cleanup, provider] of [
+    ["github-worktree-cleanup", "--github '<host>' '<owner>/<repo>'"],
+    ["azure-devops-worktree-cleanup", "--azure '<org>' '<project>' '<repo>'"],
+  ]) {
+    const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
+    const step5 = skill.match(/ 5\. (Run the \*\*remote branch deletion check\*\*\.[\s\S]*?) 6\. /)?.[1];
+    const step6 = skill.match(/ 6\. (Build the \*\*cleanup target manifest\*\*[\s\S]*?) 7\. /)?.[1];
+    const step7to10 = skill.match(/ 7\. (Remove the local worktree first[\s\S]*?) ## Caller preview /)?.[1];
+    assert.ok(step5 && step6 && step7to10, `${cleanup}: missing step 5, 6, or 7-10`);
+
+    assert.match(step5, /if any lookup fails, stop the whole cleanup\. Then run `node <cleanup-script> remote <facts>`, where `<facts>` is `/, cleanup);
+    assert.ok(step5.includes(`\`${provider} --branch <branch> --pr-state `), `${cleanup}: provider facts`);
+    assert.ok(step5.includes(`and \`<cleanup-script>\` is ${link}.`), `${cleanup}: script link`);
+    assert.ok(step5.endsWith("Exit 0 proposes deleting the remote branch or reports it absent; exit 3 keeps it, so report the reason and continue without it; any other status stops the whole cleanup."), cleanup);
+    assert.doesNotMatch(skill, /git ls-remote --heads|returns no other PR|A later push means unmerged work/, `${cleanup}: deletion conditions moved to the script`);
+    assert.doesNotMatch(skill, /must match the preview exactly/, `${cleanup}: matching moved to compare`);
+
+    steps[cleanup] = { step6, step7to10 };
+  }
+
+  const github = steps["github-worktree-cleanup"];
+  const azure = steps["azure-devops-worktree-cleanup"];
+  assert.equal(azure.step6, github.step6, "step 6 differs between providers");
+  assert.equal(azure.step7to10, github.step7to10, "steps 7-10 differ between providers");
+  assert.match(github.step6, /^Build the \*\*cleanup target manifest\*\* and require explicit confirmation of it: run `node <cleanup-script> manifest <facts> --worktree '<path>' --out '<file>'`/);
+  assert.match(github.step6, /any non-zero status stops the cleanup\./);
+  assert.match(github.step7to10, /Before any removal, run `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'`/);
+  assert.match(github.step7to10, /Exit 0 continues; exit 3 means the targets changed, so remove nothing and confirm the new targets at step 6; any other status stops the cleanup\./);
+  assert.match(github.step7to10, /conditioned on the SHA in compare's `lease <remote> <sha>` line; without that line, delete none: `git push --force-with-lease=refs\/heads\/<branch>:<sha> <remote> :refs\/heads\/<branch>`\./);
+
+  const deliveryCommon = flat(await readText(path.join(repoRoot, "skills", "local", "delivery-common", "SKILL.md")));
+  assert.match(deliveryCommon, /\[`scripts\/check-cleanup-targets\.mjs`\]\(scripts\/check-cleanup-targets\.mjs\) is the shared \*\*remote branch deletion check\*\* and \*\*cleanup target manifest\*\*/);
 });

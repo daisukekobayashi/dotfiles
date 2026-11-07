@@ -310,6 +310,34 @@ DevOps publish skills, `github-pr-create` on direct invocation, and
 `github-pr-codex-review-cycle` on a resume without the captured remote run it.
 `tests/check_push_target.bats` covers the script.
 
+`check-cleanup-targets.mjs` holds the **remote branch deletion check** and the
+**cleanup target manifest** for `github-worktree-cleanup` and
+`azure-devops-worktree-cleanup`. `remote` proposes deleting the remote branch
+only when the PR's head repository is not a fork, the push target rule resolves
+its remote and that remote names the PR head repository (a named Azure DevOps
+remote is always kept, because the rule takes it as given),
+the PR is merged (completed on Azure DevOps), the branch is not the default
+branch, protected, or under policy, no other open PR uses it, and
+`git ls-remote` returns exactly the PR head, and then prints the SHA to lease
+against; otherwise it keeps the remote branch. The cleanup target manifest records the worktree, local branch, that
+remote branch result, the processes and Compose projects with their volumes that
+`worktree-runtime-cleanup`'s read-only listings report, and the run-owned
+temporary paths the caller passes. It also records the PR head repository. `manifest` writes it as JSON to a new
+file outside the worktree, created with mode 0600, and prints the targets for confirmation; with `--preview` it is the
+Caller preview for a combined merge and cleanup confirmation, made before the
+merge. `compare` builds it again right before any removal and fails on any
+difference from the confirmed manifest, except a confirmed remote branch that no
+longer exists, such as one the host deleted on merge. A listing that cannot run or reports an error on stderr
+fails a Caller preview and its compare; otherwise it is reported as unverified
+and must be unverified at confirmation as well. The caller looks up the provider
+facts with `gh` or `az` and passes them in, stopping the cleanup when a lookup
+fails; the script reads only git, process, and Docker state, runs `git ls-remote`
+itself, and never deletes, stops, or signals anything. Exit 0 means the check
+passed, 2 is a usage error, and 3 means the check failed: `remote` keeps the
+remote branch and cleanup continues without it, while `manifest --preview` and
+`compare` stop the cleanup. Any other status means the check could not run and
+stops the cleanup. `tests/check_cleanup_targets.bats` covers the script.
+
 ## Profile Format
 
 Profiles are JSON so setup can process them with Node without adding a parser dependency.
