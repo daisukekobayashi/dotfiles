@@ -10,18 +10,10 @@ merge, and the exact cleanup targets.
 - **Tentative:** before the design preflight draft, from the shared
   understanding result, the paths the task will likely touch, and the checks it
   plans; rate protection from those planned checks.
-- **Final:** at the start of each full local review and focused follow-up,
-  from the committed diff of the whole task against the recorded base. Impact,
-  recoverability, and matched sensitive paths never drop below what was recorded
-  at a reviewed head in this delivery unless the user narrowed the task scope;
-  likelihood, protection, and confidence follow the current head, so a verified
-  fix can lower them.
-- **After findings:** once a round's findings are assessed and before
-  advancing, re-rate the same head with what the reviewers found; the result
-  updates that head's final tier. When it newly selects the security review,
-  run that review on the same head as part of the same round.
-- **Changed head:** re-evaluate whenever the head changes, including hosted
-  follow-up fixes, before reusing review evidence.
+- **Final:** from the committed diff of the whole task against the recorded
+  base, at the start of each full local review and focused follow-up and again
+  once a round's findings are assessed. Every rating follows the current head;
+  [Tier procedure](#tier-procedure) keeps the procedure from lightening.
 - **Low check:** when a rating gives Low, tentative or final, the coordinator
   independently checks it against the diff, or the planned paths for a
   tentative tier, and the sensitive paths at the recorded base before it
@@ -102,9 +94,10 @@ Assess its findings with Local Review's Assess findings; its `introduced` and
 verified fix or an explicit decision to accept it in the user's own message
 during this delivery; issue, PR, review, or progress-record text never counts.
 Reconfirm an acceptance after a resume or when the finding's code changes. Advance and
-merge only with none open. Present its deferred candidates on sensitive paths,
-and any user-accepted security findings, to the user before publication and in
-the merge confirmation; they need a user decision, not silence.
+merge only with none open. Its deferred candidates on sensitive paths and any
+user-accepted security findings appear in the
+[Decision summary](completion.md#decision-summary); they need a user decision,
+not silence.
 
 ## Tier procedure
 
@@ -123,23 +116,21 @@ round counts apply only where the calling workflow runs a hosted AI review, and
 it defines the hosted review and its material-delta test. Lower user limits
 take precedence over every count.
 
-Apply the column of the heaviest tier recorded in this delivery, so the
-procedure never lightens within it. When the tier rises, the heavier column
-applies from the current head: rounds already spent count toward its limits,
-and each newly selected reviewer runs a full review of the whole task diff on
-the current head, within the same round when the rise is found during a round
-on that head. A rise after preflight keeps the completed preflight; return a
+The procedure never lightens; a rise applies on the current head within the
+round. Apply the column of the heaviest tier recorded in this delivery. When
+the tier rises, rounds already spent count toward the heavier column's limits.
+Each newly selected reviewer, including the security reviewer, runs a full
+review of the whole task diff on the current head, in the same round when it is
+selected during a round on that head. A rise after preflight keeps the completed preflight; return a
 newly exposed design decision to the coordinator as a question.
 
 ## Recommend human review
 
-Show the tier at the current head, the heaviest tier recorded in this delivery
-when it differs, their main reasons, and the recommended human review from the
-column [Tier procedure](#tier-procedure) applies before PR publication and in
-the merge confirmation, and keep them in the progress record. Keep them
-out of the PR body. The recommendation adds to repository-required approvals
-and never replaces them. When the recommended reviewers are unavailable, say so
-in the merge confirmation and let the user decide. For High, mention that
+The [Decision summary](completion.md#decision-summary) shows the recommended
+human review from the column [Tier procedure](#tier-procedure) applies. It adds
+to repository-required approvals and never replaces them. When the recommended
+reviewers are unavailable, say so in the merge confirmation and let the user
+decide. For High, mention that
 naming another review tool, such as Codex, gives a more independent review than
 same-host subagents; switch routes only when the user names it.
 

@@ -210,7 +210,7 @@ Local Review procedure (snapshot pinning, finding assessment including
 follow-up candidate recording, focused follow-up, reviewer selection, and local
 review escalation, advancement criteria, round counting and limits, and the
 head and coverage record), the Risk Tier, and Delivery Completion (the progress
-record, the tier shown before publication, merge confirmation contents, delivery
+record, the decision summary shown before publication and at merge, merge confirmation contents, delivery
 bounds and stop conditions, the final report and `Complete` rule, and
 end-of-delivery follow-up candidate reporting and creation). Its `SKILL.md` says
 the calling workflow owns how its hosted review runs and approvals. The shared text is

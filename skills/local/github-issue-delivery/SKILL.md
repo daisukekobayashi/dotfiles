@@ -113,21 +113,17 @@ escalation to a full review, and advancement.
 
 ### 3. Publish and complete hosted Codex review
 
-Coordinate publication and show the tier under Delivery Completion's Before
-publication.
+Coordinate publication and show the decision summary under Delivery
+Completion's Before publication.
 Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
 -> confirm remote head -> Writeback ordering, and stop-on-failure behavior.
 Pass the earlier local and hosted dispositions from the progress record, and
 have its follow-up assess hosted findings with Local Review's Assess findings.
 
-Pass the progress record location to the cycle so that, before its Writeback,
-it persists the prepared record's items not `applied` (the head Codex reviewed,
-thread, finding, reviewer label, triage class, disposition, and reason) there.
-When the cycle returns the items instead, record them there and confirm to the
-cycle. Add their self-closures to the list under Local Review's Assess
-findings; on resume, use the persisted items for the current hosted-reviewed
-head. Record the returned status, PR, published head, reviewed head,
+After the cycle returns, record its Final Report's Not applied items in the
+progress record and add their self-closures to the list under Local Review's
+Assess findings. Record the returned status, PR, published head, reviewed head,
 dispositions, and unresolved items. An acknowledgement or an `eyes` reaction is
 not a completed review. An open PR is not a merged PR.
 
