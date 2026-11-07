@@ -21,6 +21,14 @@
 # under PATH may still list it as "--cwd under target". --stale lists every
 # ambiguous cwd as "cwd ambiguous" instead of calling it missing. A
 # "cwd ambiguous" row never establishes ownership.
+# A --cwd argument is read exactly from /proc. Without /proc, ps joins the
+# arguments with spaces, so the value after the first --cwd may end at any
+# later space: each such reading is a candidate. ps prints a control byte as
+# "^X" or "\ooo" but a literal "^" or "\" as is, so a candidate is read only up
+# to its first "\", "^", or "M-". PATH mode lists "--cwd under target" when
+# every candidate is PATH or below it, and "--cwd ambiguous" when only some may
+# be; a "--cwd ambiguous" row never establishes ownership. --stale lists
+# "--cwd missing" only when every candidate, read in full, is missing.
 # The script and its ancestors are never listed. It only reads process state;
 # it never sends signals.
 #
@@ -32,7 +40,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -177,32 +185,104 @@ encode_cwd() {
   printf '%s' "${out}"
 }
 
-# Prints the value of a --cwd argument, if any. A cmdline that cannot be opened
-# or read, as when the process exits meanwhile, counts as no --cwd and prints
-# nothing on stderr; the ps lookups later skip a process that has exited.
+# Sets arg_cwds to the candidate values of the first --cwd argument, and
+# arg_from_ps when they come from ps; see the header. arg_cwds is empty
+# without a --cwd. A cmdline that cannot be opened or read, as when the process
+# exits meanwhile, counts as no --cwd and prints nothing on stderr; the ps
+# lookups later skip a process that has exited.
 cwd_argument() {
-  local pid="$1" prev="" arg
+  local pid="$1" prev="" arg text value prefix=""
+  arg_cwds=()
+  arg_from_ps=""
   if [[ -r "/proc/${pid}/cmdline" ]]; then
     while IFS= read -r -d '' arg; do
       case "${arg}" in
         --cwd=*)
-          printf '%s\n' "${arg#--cwd=}"
-          return
+          [[ -n "${arg#--cwd=}" ]] && arg_cwds=("${arg#--cwd=}")
+          return 0
           ;;
       esac
       if [[ "${prev}" == "--cwd" ]]; then
-        printf '%s\n' "${arg}"
-        return
+        [[ -n "${arg}" ]] && arg_cwds=("${arg}")
+        return 0
       fi
       prev="${arg}"
     done 2>/dev/null <"/proc/${pid}/cmdline" || true
-  else
-    ps -ww -o args= -p "${pid}" 2>/dev/null |
-      awk '{ for (i = 1; i <= NF; i++) {
-        if ($i ~ /^--cwd=/) { sub(/^--cwd=/, "", $i); print $i; exit }
-        if ($i == "--cwd" && i < NF) { print $(i + 1); exit }
-      } }'
+    return 0
   fi
+  arg_from_ps=1
+  # LC_ALL=C keeps ps from printing bytes as they are in a multibyte locale.
+  text=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
+  while [[ "${text}" == *" --cwd"* ]]; do
+    text="${text#*" --cwd"}"
+    case "${text}" in
+      =*)
+        value="${text#=}"
+        break
+        ;;
+      " "?*)
+        value="${text# }"
+        break
+        ;;
+    esac
+  done
+  [[ -n "${value:-}" ]] || return 0
+  while [[ "${value}" == *" "* ]]; do
+    prefix+="${value%%" "*}"
+    [[ -n "${prefix}" ]] && arg_cwds+=("${prefix}")
+    prefix+=" "
+    value="${value#*" "}"
+  done
+  arg_cwds+=("${prefix}${value}")
+}
+
+# Prints the part of a ps candidate before its first "\", "^", or "M-", or the
+# whole candidate when it has none.
+readable_prefix() {
+  local cut="${1%%[\\^]*}"
+  [[ "${cut}" == *M-* ]] && cut="${cut%%M-*}"
+  printf '%s' "${cut}"
+}
+
+# Sets arg_under to "all", "some", or "" for the --cwd candidates in PATH mode.
+# A candidate cut short by readable_prefix is under the target when its
+# readable part already is; it may be when the target extends that part.
+classify_arg_under() {
+  local i cand cut under=0 maybe=0
+  arg_under=""
+  for ((i = 0; i < ${#arg_cwds[@]}; i++)); do
+    cand="${arg_cwds[i]}"
+    cut="${cand}"
+    [[ -n "${arg_from_ps}" ]] && cut="$(readable_prefix "${cand}")"
+    if [[ "${cut}" == "${cand}" ]]; then
+      if under_target "${cand}"; then
+        under=$((under + 1))
+      fi
+    elif [[ "${cut}" == "${target}/"* ]]; then
+      under=$((under + 1))
+    elif [[ "${#cut}" -lt "${#target}" && "${target}" == "${cut}"* ]]; then
+      maybe=$((maybe + 1))
+    fi
+  done
+  if ((${#arg_cwds[@]} > 0 && under == ${#arg_cwds[@]})); then
+    arg_under="all"
+  elif ((under + maybe > 0)); then
+    arg_under="some"
+  fi
+}
+
+# True when every --cwd candidate is missing; a candidate cut short by
+# readable_prefix is never known to be missing.
+all_args_missing() {
+  local i cand
+  ((${#arg_cwds[@]} > 0)) || return 1
+  for ((i = 0; i < ${#arg_cwds[@]}; i++)); do
+    cand="${arg_cwds[i]}"
+    if [[ -n "${arg_from_ps}" && "$(readable_prefix "${cand}")" != "${cand}" ]]; then
+      return 1
+    fi
+    is_missing "${cand}" || return 1
+  done
 }
 
 # Linux marks a removed cwd with a " (deleted)" suffix.
@@ -341,7 +421,7 @@ for ((i = 0; i < ${#records[@]}; i++)); do
   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
   # A process that exits mid-listing is skipped rather than ending the list:
   # each lookup below fails for it, and set -e would otherwise stop the script.
-  arg_cwd="$(cwd_argument "${pid}")" || continue
+  cwd_argument "${pid}"
   reason=""
   case "${mode}" in
     path)
@@ -352,8 +432,12 @@ for ((i = 0; i < ${#records[@]}; i++)); do
       elif under_target "${cwd}"; then
         reason="cwd under target"
       fi
-      if [[ -z "${reason}" && -n "${arg_cwd}" ]] && under_target "${arg_cwd}"; then
-        reason="--cwd under target"
+      if [[ -z "${reason}" ]]; then
+        classify_arg_under
+        case "${arg_under}" in
+          all) reason="--cwd under target" ;;
+          some) reason="--cwd ambiguous" ;;
+        esac
       fi
       ;;
     stale)
@@ -361,7 +445,7 @@ for ((i = 0; i < ${#records[@]}; i++)); do
         reason="cwd ambiguous"
       elif is_missing "${cwd}"; then
         reason="cwd missing"
-      elif [[ -n "${arg_cwd}" ]] && is_missing "${arg_cwd}"; then
+      elif all_args_missing; then
         reason="--cwd missing"
       fi
       ;;
