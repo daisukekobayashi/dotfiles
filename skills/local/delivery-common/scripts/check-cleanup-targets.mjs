@@ -51,7 +51,8 @@
 //   `docker volume ls`, and the temporary paths with their resolved targets.
 //   The listings are the read-only scripts of worktree-runtime-cleanup, run
 //   from this skill tree. A lookup that exits non-zero or writes to stderr,
-//   and list-processes.sh without /proc and lsof, cannot run; it never counts
+//   and list-processes.sh without /proc and without an lsof that reports
+//   this script's own cwd, cannot run; it never counts
 //   as an empty listing. The manifest also records the PR head repository.
 //   Writes the manifest as JSON to --out, a new file outside the worktree
 //   created with mode 0600 (an existing path, including a symlink, is a usage
@@ -66,7 +67,8 @@
 //   confirmed manifest (the Caller preview when the confirmation was combined,
 //   otherwise the manifest the user confirmed). Processes are compared by PID,
 //   start time, and cwd; Compose projects by name, working_dir, and volumes;
-//   temporary paths by path and resolved target; each list as a multiset;
+//   temporary paths by path and resolved target; each list as a multiset of
+//   identity tuples;
 //   the rest, including the PR head repository, exactly. The one
 //   tolerated difference is a confirmed remote branch that no longer exists,
 //   reported as already deleted by the host. A listing that cannot run is a
@@ -324,15 +326,32 @@ const runLookup = (label, command, args) => {
   return { stdout: result.stdout };
 };
 
-const onPath = (name) =>
-  (process.env.PATH ?? "").split(path.delimiter).some((dir) => dir !== "" && existsSync(path.join(dir, name)));
+// Without /proc, list-processes.sh reads cwds from lsof but discards its
+// errors and exit status, so a failing lsof looks like an empty listing.
+// Returns a reason unless lsof reports the cwd of this process.
+const lsofUnavailable = () => {
+  let out;
+  try {
+    out = execFileSync("lsof", ["-w", "-a", "-p", String(process.pid), "-d", "cwd", "-Fn"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const reason = (error.stderr || error.message || "").toString().trim().split("\n")[0];
+    return `lsof cannot list cwds${reason ? `: ${reason}` : ""}`;
+  }
+  const cwd = realpathOrNull(process.cwd());
+  const names = out.split("\n").filter((line) => line.startsWith("n")).map((line) => line.slice(1));
+  return names.includes(cwd) ? null : "lsof did not report the cwd of a known process";
+};
 
 const runListing = (name, worktree, columns) => {
   const script = path.join(runtimeScripts, name);
   if (!existsSync(script)) return { unavailable: `${name} not found` };
-  // list-processes.sh needs /proc or lsof, and exits 0 without either.
-  if (name === "list-processes.sh" && !existsSync("/proc/self") && !onPath("lsof")) {
-    return { unavailable: `${name} cannot run: neither /proc nor lsof is available` };
+  // list-processes.sh needs /proc or a working lsof, and exits 0 without.
+  if (name === "list-processes.sh" && !existsSync("/proc/self")) {
+    const reason = lsofUnavailable();
+    if (reason) return { unavailable: `${name} cannot run: ${reason}` };
   }
   const result = runLookup(name, "bash", [script, worktree]);
   if (result.unavailable) return result;
@@ -372,7 +391,7 @@ const listCompose = (worktree) => {
 };
 
 // The PR head repository as compared across manifests.
-const repositoryOf = (facts) => facts.repository.join("/").toLowerCase();
+const repositoryOf = (facts) => facts.repository.map((part) => part.toLowerCase());
 
 const buildManifest = (facts, targets, { preview }) => {
   const none = { status: "none", reason: "no worktree", items: [] };
@@ -476,18 +495,20 @@ const readConfirmed = (file) => {
   return manifest;
 };
 
-// Keys in a but not matched one for one in b, so duplicates count.
-const unmatched = (a, b) => {
-  const rest = [...b];
-  return a.filter((key) => {
-    const i = rest.indexOf(key);
+// Items of a not matched one for one in b, so duplicates count. Items match
+// when the JSON of their identity tuples is equal, so no delimiter inside a
+// field can make two different tuples collide.
+const unmatched = (a, b, identity) => {
+  const rest = b.map((item) => JSON.stringify(identity(item)));
+  return a.filter((item) => {
+    const i = rest.indexOf(JSON.stringify(identity(item)));
     if (i === -1) return true;
     rest.splice(i, 1);
     return false;
   });
 };
 
-const compareRuntime = (section, confirmed, current, keyOf, differences) => {
+const compareRuntime = (section, confirmed, current, identity, label, differences) => {
   const before = confirmed[section];
   const after = current[section];
   if (after.status === "unavailable" || before.status === "unavailable") {
@@ -498,10 +519,8 @@ const compareRuntime = (section, confirmed, current, keyOf, differences) => {
     }
     return;
   }
-  const beforeKeys = before.items.map(keyOf);
-  const afterKeys = after.items.map(keyOf);
-  for (const key of unmatched(afterKeys, beforeKeys)) differences.push(`${section}: new or changed ${key}`);
-  for (const key of unmatched(beforeKeys, afterKeys)) differences.push(`${section}: confirmed ${key} is gone or changed`);
+  for (const item of unmatched(after.items, before.items, identity)) differences.push(`${section}: new or changed ${label(item)}`);
+  for (const item of unmatched(before.items, after.items, identity)) differences.push(`${section}: confirmed ${label(item)} is gone or changed`);
 };
 
 const compareCommand = (args) => {
@@ -514,7 +533,7 @@ const compareCommand = (args) => {
 
   const differences = [];
   for (const field of ["provider", "repository", "worktree", "branch"]) {
-    if (confirmed[field] !== current[field]) differences.push(`${field}: confirmed ${JSON.stringify(confirmed[field])}, now ${JSON.stringify(current[field])}`);
+    if (JSON.stringify(confirmed[field]) !== JSON.stringify(current[field])) differences.push(`${field}: confirmed ${JSON.stringify(confirmed[field])}, now ${JSON.stringify(current[field])}`);
   }
 
   let hostDeleted = false;
@@ -530,13 +549,22 @@ const compareCommand = (args) => {
     differences.push(`remote branch: confirmed ${JSON.stringify(describeRemote(before))}, now ${JSON.stringify(describeRemote(after))}${after.reason ? ` (${after.reason})` : ""}`);
   }
 
-  compareRuntime("processes", confirmed, current, (item) => `process pid ${item.pid} started ${item.started} cwd ${item.cwd}`, differences);
-  compareRuntime("compose", confirmed, current, (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${item.volumes.join(",") || "-"}`, differences);
-  const tempKey = (temp) => `${temp.path} -> ${temp.resolved ?? "(missing)"}`;
-  const confirmedTemps = (confirmed.temps ?? []).map(tempKey);
-  const currentTemps = current.temps.map(tempKey);
-  if (unmatched(confirmedTemps, currentTemps).length > 0 || unmatched(currentTemps, confirmedTemps).length > 0) {
-    differences.push(`temporary paths: confirmed ${JSON.stringify((confirmed.temps ?? []).map(tempKey))}, now ${JSON.stringify(current.temps.map(tempKey))}`);
+  compareRuntime(
+    "processes", confirmed, current,
+    (item) => [item.pid, item.started, item.cwd],
+    (item) => `process pid ${item.pid} started ${item.started} cwd ${item.cwd}`,
+    differences,
+  );
+  compareRuntime(
+    "compose", confirmed, current,
+    (item) => [item.project, item.working_dir, item.volumes],
+    (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${JSON.stringify(item.volumes)}`,
+    differences,
+  );
+  const tempIdentity = (temp) => [temp.path, temp.resolved];
+  const confirmedTemps = confirmed.temps ?? [];
+  if (unmatched(confirmedTemps, current.temps, tempIdentity).length > 0 || unmatched(current.temps, confirmedTemps, tempIdentity).length > 0) {
+    differences.push(`temporary paths: confirmed ${JSON.stringify(confirmedTemps.map(tempIdentity))}, now ${JSON.stringify(current.temps.map(tempIdentity))}`);
   }
 
   if (differences.length > 0) fail(["the cleanup targets differ from the confirmed manifest:", ...differences]);

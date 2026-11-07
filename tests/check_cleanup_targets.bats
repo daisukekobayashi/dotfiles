@@ -420,7 +420,7 @@ start_in() {
   args[2]=other/repo
   check compare "${args[@]}" --worktree "${worktree}" --confirmed "${state}/preview.json"
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *'repository: confirmed "github.com/owner/repo", now "github.com/other/repo"'* ]]
+  [[ "${stderr}" == *'repository: confirmed ["github.com","owner/repo"], now ["github.com","other/repo"]'* ]]
 }
 
 @test "a listing that writes to stderr and exits 0 is unavailable, not empty" {
@@ -458,7 +458,7 @@ DOCKER
   run --separate-stderr env PATH="$(path_without_lsof)" "$(command -v node)" "${script}" manifest "${args[@]}" \
     --worktree "${worktree}" --out "${state}/preview.json" --preview
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh cannot run: neither /proc nor lsof is available"* ]]
+  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh cannot run: lsof cannot list cwds"* ]]
 }
 
 @test "manifest creates --out as a new 0600 file and refuses an existing path" {
@@ -507,6 +507,37 @@ LISTING
   # A confirmed manifest listing A twice does not match A and B.
   node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); m.temps = [m.temps[0], m.temps[0]]; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/one.json" "${state}/twice.json"
   check compare "${args[@]}" --worktree "${worktree}" --temp "${root}/a.pid" --temp "${root}/b.pid" --confirmed "${state}/twice.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"temporary paths"* ]]
+}
+
+@test "a failing lsof makes the process listing unavailable" {
+  [ ! -d /proc/self ] || skip "this host has /proc"
+  printf '#!/usr/bin/env bash\necho "lsof: WARNING: can'"'"'t stat() fuse" >&2\nexit 1\n' >"${root}/bin/lsof"
+  chmod +x "${root}/bin/lsof"
+  preview
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh cannot run: lsof cannot list cwds"* ]]
+
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/bin/lsof"
+  preview
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"lsof did not report the cwd of a known process"* ]]
+}
+
+@test "temporary paths are compared as path and target pairs" {
+  local review="${root}/review"
+  mkdir -p "${review}"
+  local -a args
+  mapfile -t args < <(facts)
+  # Confirmed: a missing path named "a -> <review>/b". Current: a path "a"
+  # that resolves to a file named "b -> (missing)". Joined as
+  # "<path> -> <target>", both read "<review>/a -> <review>/b -> (missing)".
+  check manifest "${args[@]}" --worktree "${worktree}" --temp "${review}/a -> ${review}/b" --out "${state}/confirmed.json"
+  [ "${status}" -eq 0 ]
+  touch "${review}/b -> (missing)"
+  ln -s "${review}/b -> (missing)" "${review}/a"
+  check compare "${args[@]}" --worktree "${worktree}" --temp "${review}/a" --confirmed "${state}/confirmed.json"
   [ "${status}" -eq 3 ]
   [[ "${stderr}" == *"temporary paths"* ]]
 }
