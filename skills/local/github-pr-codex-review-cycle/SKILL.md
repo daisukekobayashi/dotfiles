@@ -130,16 +130,21 @@ Still stop and ask before:
      the check.
    - Use a normal commit, then push with
      `git push <remote> <branch>:refs/heads/<branch>`. `<remote>` is the push
-     remote captured in step 2, used as is. On resume without it, read
-     `<remote>` with `git config --get-all branch.<branch>.remote`, which
-     publication set with `-u`, and continue only on exactly one value. Use it
-     only when its URLs name the PR's head repository
-     (`gh pr view --json headRepository,headRepositoryOwner`), compared as in
-     `github-pr-publish` step 2. Otherwise, as with an SSH host alias, stop
-     before the push and ask the user to confirm or name the remote; use a
-     remote the user names as given. The explicit remote and refspec keep
-     `branch.<branch>.pushRemote` or `remote.pushDefault` from sending the
-     fixes away from the PR head.
+     remote captured in step 2, used as is. On resume without it, resolve
+     `<remote>` by the push target rule in `github-pr-publish` step 2: run
+     `node <push-script> resolve --github '<host>' '<owner>/<repo>'` with the
+     PR URL's host and the PR's head repository
+     (`gh pr view --json headRepository,headRepositoryOwner`), writing the
+     host into the command only when it uses solely ASCII letters, digits,
+     `.`, and `-`, optionally followed by `:` and digits, and `<owner>/<repo>`
+     only when it uses solely ASCII letters, digits, `.`, `_`, `-`, and one
+     `/` (otherwise stop and report), where `<push-script>` is
+     [`check-push-target.mjs`](../delivery-common/scripts/check-push-target.mjs)
+     resolved from this skill's directory, and use line 1 on exit 0.
+     Otherwise stop before the push and ask the user to confirm or name the
+     remote; use a remote the user names as given. The explicit remote and
+     refspec keep `branch.<branch>.pushRemote` or `remote.pushDefault` from
+     sending the fixes away from the PR head.
    - If verification is unsuccessful or unavailable, stop before commit or push.
      If verification, commit, or push fails, stop before reply or resolution.
    - Confirm the fixes are present in the remote PR head and add the published

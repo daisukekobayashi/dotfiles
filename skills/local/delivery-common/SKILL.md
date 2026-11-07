@@ -28,3 +28,9 @@ snapshot, and tier to that caller.
 **safe branch name** check. The start, delivery, PR, and cleanup skills of every
 provider, including Beads, run it from their own step; its header gives the
 usage and exit codes.
+
+[`scripts/check-push-target.mjs`](scripts/check-push-target.mjs) is the shared
+**push target rule** check. The PR publish skills of both providers, and
+`github-pr-create` and `github-pr-codex-review-cycle`, run it to resolve the push
+remote and to check the upstream before and after the push; its header gives the
+usage and exit codes.

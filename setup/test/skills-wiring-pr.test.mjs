@@ -47,13 +47,11 @@ test("Codex review cycle pushes review fixes to the publication remote", async (
     "branch checked before the refspec",
   );
   assert.ok(push.indexOf("check-branch-name.mjs") < push.indexOf("git push <remote>"), "branch checked before the push");
-  assert.match(push, /On resume without it, read `<remote>` with `git config --get-all branch\.<branch>\.remote`[^.]*exactly one value/, "resume reads the upstream remote");
-  assert.match(push, /`gh pr view --json headRepository,headRepositoryOwner`/, "resume checks the PR head repository");
-  assert.match(push, /`<remote>` is the push remote captured in step 2, used as is\./, "captured remote skips the URL check");
-  assert.match(push, /exactly one value\. Use it only when its URLs name the PR's head repository/, "URL check only on resume");
-  assert.match(push, /Otherwise, as with an SSH host alias, stop before the push and ask the user to confirm or name the remote; use a remote the user names as given\./, "unconfirmed resume remote asks the user");
-  assert.doesNotMatch(push, /Then stop unless that remote's URLs/, "ambiguous check could reject the captured remote");
-  assert.doesNotMatch(push, /resolve it as `github-pr-publish` step 2 does/, "URL matching can pick the parent in a fork layout");
+  assert.match(push, /`<remote>` is the push remote captured in step 2, used as is\./, "captured remote skips the resolution");
+  assert.match(push, /On resume without it, resolve `<remote>` by the push target rule in `github-pr-publish` step 2: run `node <push-script> resolve --github '<host>' '<owner>\/<repo>'` with the PR URL's host and the PR's head repository \(`gh pr view --json headRepository,headRepositoryOwner`\)/, "resume resolves against the PR head repository");
+  assert.match(push, /\[`check-push-target\.mjs`\]\(\.\.\/delivery-common\/scripts\/check-push-target\.mjs\) resolved from this skill's directory, and use line 1 on exit 0\./, "resume uses the shared script");
+  assert.match(push, /Otherwise stop before the push and ask the user to confirm or name the remote; use a remote the user names as given\./, "unresolved resume remote asks the user");
+  assert.doesNotMatch(push, /compared as in `github-pr-publish` step 2|git config --get-all branch\.<branch>\.remote/, "resume prose replaced by the script");
   assert.doesNotMatch(push, /normal push/, "a plain push follows pushRemote away from the PR head");
   assert.match(push, /Confirm the fixes are present in the remote PR head/);
 });
@@ -100,22 +98,14 @@ test("PR create opens a fork PR with the head owner and reuses only its own head
 
   assert.match(context, /the push remote and `<owner>\/<repo>` that `github-pr-publish` passes, as given/, "publish handoff used as given");
   assert.match(context, /`gh repo view --json nameWithOwner,url,defaultBranchRef`\. This is the PR \*\*base repository\*\*; `<base host>` is the host of its `url`\./, "base host comes from the base url");
-  assert.match(context, /Otherwise, when neither is given and the skill is invoked directly:/, "derivation and stop only without a user-named head");
-  assert.match(context, /Then read `<remote>` with `git config --get-all branch\.<branch>\.remote` and continue only on exactly one value/, "direct call derives from the upstream");
-  assert.match(context, /every push URL \(`git remote -v`\) name on `<base host>`/, "URL matching uses the base host");
-  assert.match(context, /normalized as in `github-pr-publish` step 2/);
-  assert.match(context, /When the head repository cannot be determined[^.]*stop and ask the user to name the head `<owner>\/<repo>` or the remote; do not fall back to a bare `--head <branch>`/);
+  assert.match(context, /Otherwise, when the skill is invoked directly, resolve it by the push target rule in `github-pr-publish` step 2: run `node <push-script> resolve --github '<base host>' '<owner>\/<repo>'` with the base repository's `nameWithOwner`/, "direct call resolves with the shared script");
+  assert.match(context, /\[`check-push-target\.mjs`\]\(\.\.\/delivery-common\/scripts\/check-push-target\.mjs\) resolved from this skill's directory\. On exit 0, line 2 is the head repository\./);
+  assert.match(context, /Otherwise stop and ask the user to name the head `<owner>\/<repo>` or the remote; do not fall back to a bare `--head <branch>`/);
   assert.match(context, /\*\*safe owner name\*\*, using only `\[A-Za-z0-9-\]` and not starting with `-`/);
   assert.match(context, /before any command uses it, including an owner that `github-pr-publish` passes/);
-  assert.match(context, /\*\*cross-repository\*\* when the head repository differs from the base repository, compared case-insensitively/);
-  assert.match(context, /Stop and report when the owners match but the repository names differ/, "same-owner fork stops");
-  assert.match(context, /`gh api --hostname <base host> users\/<owner> --jq \.type`[^.]*stop and report when it is `Organization`/, "org-owned head stops; lookup on the base host");
-  assert.match(context, /continue only on exactly one value\. Confirm that `<remote>` holds this branch at local `HEAD`:/, "upstream check follows the remote read, before head derivation");
-  assert.match(context, /`git config --get-all branch\.<branch>\.merge` prints exactly one value, `refs\/heads\/<branch>`/, "merge ref must be the same branch");
-  assert.match(context, /`git ls-remote <remote> refs\/heads\/<branch>` prints exactly one line whose ref is exactly `refs\/heads\/<branch>` and whose SHA equals `git rev-parse HEAD`/, "head remote must hold local HEAD");
-  assert.match(context, /Otherwise, including when `git ls-remote` fails, stop and ask the user to name the head `<owner>\/<repo>` or the remote/, "stale or unverifiable head stops");
-  assert.match(context, /the effective push remote is `branch\.<branch>\.pushRemote`, or `remote\.pushDefault` when that is unset; when it is set and names a different remote than `branch\.<branch>\.remote`, stop and ask the user to name the head `<owner>\/<repo>` or the remote/, "divergent effective push remote stops");
-  assert.match(context, /`git remote set-url`[^.]*renamed or transferred repository/, "stop suggests updating a stale remote URL");
+  assert.match(context, /\*\*cross-repository\*\* when the head repository differs from the base repository, compared case-insensitively\./);
+  assert.doesNotMatch(context, /pushRemote|pushDefault|git ls-remote|normalized as in/, "direct-call derivation replaced by the script");
+  assert.doesNotMatch(context, /owners match but the repository names differ|users\/<owner>|Organization|set-url/, "same-owner and Organization stops removed");
 
   assert.match(reuse, /`gh pr view --json number,url,state,headRefName,baseRefName,headRepository,headRepositoryOwner`/);
   assert.match(reuse, /If a PR exists and its head repository is the head repository \(`headRepositoryOwner\.login`\/`headRepository\.name`, compared case-insensitively\), return that PR/);
@@ -127,9 +117,9 @@ test("PR create opens a fork PR with the head owner and reuses only its own head
   assert.match(verify, /Stop and report unless the PR's head repository is the head repository\./, "verification checks the head");
   assert.match(create, /^- Do not create or reuse a PR whose head repository is not the head repository\.$/m, "guardrail");
 
-  assert.match(resolve, /Resolve the \*\*head repository\*\*/);
-  assert.match(resolve, /For a user-named remote, it is the `<owner>\/<repo>` that its fetch URL and every push URL name on the resolved repository's host, normalized as above/, "user-named remote URL normalization");
-  assert.match(resolve, /stop and ask the user to name the head `<owner>\/<repo>`/);
+  assert.match(resolve, /Resolve the push remote and the \*\*head repository\*\*/);
+  assert.match(resolve, /On exit 0, line 1 is `<remote>` and line 2 is the head repository `<owner>\/<repo>`\./, "head repository from the shared script");
+  assert.doesNotMatch(resolve, /normalized as above/, "user-named remote URL normalization moved into the script");
   assert.match(handoff, /Pass the push remote and the head repository `<owner>\/<repo>` from step 2/);
   assert.match(report, /`gh pr view <number> --json number,url,title,state,baseRefName,headRefName`/);
 });

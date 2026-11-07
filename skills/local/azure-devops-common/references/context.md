@@ -31,7 +31,12 @@ Accepted remote URL shapes:
 
 Resolution rules:
 
-- Prefer the current branch upstream remote when multiple remotes exist.
+- Choose the push remote by the push target rule in
+  [`azure-devops-pr-publish`](../../azure-devops-pr-publish/SKILL.md) step 2:
+  the remote the user names, or the single remote that names the target; with
+  more than one remote and none named, ask. The shared
+  [`check-push-target.mjs`](../../delivery-common/scripts/check-push-target.mjs)
+  accepts exactly the remote URL shapes above.
 - Compare git remote context with `az devops configure --list` defaults.
 - Stop if organization, project, or repository cannot be resolved to one target.
 - Stop if git remote context conflicts with `az devops` defaults.

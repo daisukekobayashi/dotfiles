@@ -57,15 +57,22 @@ Still stop and ask before:
      exit 0. Write a name into this or any command only when it uses solely
      ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not
      safe, without running the check.
-   - Resolve the push remote. Use the remote the user names. Otherwise
-     `<remote>` is the one remote whose fetch URL and every push URL
-     (`git remote -v`) name the resolved organization, project, and repository
-     in one of the accepted remote URL shapes from the common context, after
-     decoding percent-encoding (`My%20Project` is `My Project`) and ignoring
-     letter case, the `user@` part, and a trailing `.git` or `/`. Stop and
-     report the candidates when more than one remote matches. When none
-     matches, as with an SSH host alias, stop and ask the user to name the
-     remote.
+   - Resolve the push remote by the **push target rule**: push only to the
+     remote the user names, or the single remote that names the repository,
+     with an explicit `<branch>:refs/heads/<branch>` refspec; with more than one
+     remote and none named, ask. Run `node <push-script> resolve --azure '<org>'
+     '<project>' '<repo>'` with the resolved organization, project, and
+     repository, percent-decoded (`My Project`, not `My%20Project`), writing
+     each into the command only when it uses solely ASCII letters, digits,
+     space, `.`, `_`, and `-` (otherwise stop and report),
+     adding `--remote '<name>'` when the user names a remote that uses solely
+     ASCII letters, digits, `/`, `.`, `_`, and `-` (ask again for any other
+     name), where `<push-script>` is
+     [`check-push-target.mjs`](../delivery-common/scripts/check-push-target.mjs)
+     resolved from this skill's directory. It matches the accepted remote URL
+     shapes from the common context. On exit 0, its output is `<remote>`. On
+     exit 3, stop and ask the user to name the remote, listing the candidates
+     it reports; stop and report any other status.
 3. Inspect local state:
    - `git status --short --branch`
    - `git diff --stat`
@@ -88,19 +95,16 @@ Still stop and ask before:
      is the existing PR's target, otherwise the target
      `azure-devops-pr-create` uses: the default branch unless the user
      specifies another target.
-   - Read the upstream with `git config --get-all branch.<branch>.remote` and
-     `git config --get-all branch.<branch>.merge`; no output means no upstream,
-     and more than one value for either key means stop and report.
-   - Continue when there is no upstream, the same branch name on `<remote>`, or
-     the PR base branch, either local (remote `.`) or remote-tracking. Stop and
-     report any other upstream, such as a differently named branch or another
-     remote; it may back an existing PR.
-   - Push with `git push -u <remote> <branch>:refs/heads/<branch>`. The
-     explicit refspec keeps a base upstream or `push.default=upstream` from
-     sending the branch to the base. This sets the upstream for the same branch
-     name; report it when it replaced the PR base branch.
-   - Re-read the upstream; stop and report unless the remote is `<remote>`
-     and the merge ref is `refs/heads/<branch>`.
+   - Before the push, run `node <push-script> pre --branch '<branch>' --remote
+     '<remote>' --base '<target>'` with the PR base branch and the script from
+     step 2; stop and report an existing PR's target that does not use solely
+     ASCII letters, digits, `/`, `.`, `_`, and `-`. Continue only on exit 0,
+     and report the note it prints when the push replaces a PR base upstream.
+     On exit 3, stop and report the upstream it names; it may back an existing
+     PR.
+   - Push with `git push -u <remote> <branch>:refs/heads/<branch>`.
+   - After the push, run `node <push-script> post --branch '<branch>' --remote
+     '<remote>'`; stop and report unless it exits 0.
 8. Use `azure-devops-pr-create` to create or resolve the PR.
    - Pass along the actual publication request, exact target, existing approvals,
      known Work Item IDs, completion scope, and the user's state-transition intent.

@@ -271,6 +271,29 @@ stderr に出力）です。それ以外の終了コードは、`node` がスク
 のスキルのベースブランチは、このスクリプトの対象外です。
 `tests/check_branch_name.bats` がスクリプトをテストします。
 
+`check-push-target.mjs` は**push 先のルール**を確認します。push するのは、
+ユーザーが指定した remote か、リポジトリを指す唯一の remote だけで、
+`<branch>:refs/heads/<branch>` の refspec を明示します。remote が複数あり指定が
+ないときは、そのうち1つだけがリポジトリを指していても確認します。fork 構成では
+`gh repo view` が親リポジトリを解決することがあり、一致する1つの remote が親で
+ある可能性があるためです。確認すれば remote ごとの API 照会なしにすべての fork
+構成を扱え、作成した PR の head リポジトリは引き続き `github-pr-create` が
+検証します。呼び出し側は解決したリポジトリ（`--github <host> <owner>/<repo>` または
+`--azure <org> <project> <repo>`）を渡し、スクリプトはローカルの git 設定と
+remote の URL だけを読みます。`gh`、`az`、ネットワークは使いません。`resolve`
+は1行目に remote を、GitHub では2行目に head の `<owner>/<repo>` を出力します。
+Azure DevOps の URL は `azure-devops-common/references/context.md` の受け付ける
+remote URL の形のいずれかである必要があります。`pre` と `post` は push の前後で
+ブランチの upstream を確認します。push 自体はスキルの中で
+`git push -u <remote> <branch>:refs/heads/<branch>` として見えるコマンドのまま
+残し、承認や権限のルールが引き続き確認できるようにします。終了コード 0 は確認が
+通ったこと、2 は使い方の誤り、3 は確認が失敗したことを意味します。`resolve` の後
+では呼び出し側がユーザーに remote の指定を求め、`pre` と `post` の後では止めて
+報告します。それ以外の終了コードは確認を実行できなかったことを意味し、push を
+止めます。GitHub と Azure DevOps の公開スキル、直接呼ばれた `github-pr-create`、
+記録した remote がない状態で再開した `github-pr-codex-review-cycle` がこの
+スクリプトを実行します。`tests/check_push_target.bats` がスクリプトをテストします。
+
 ## Profile Format
 
 Profile は JSON にします。Bash で無理に parse せず、Node で処理できるようにします。

@@ -287,6 +287,29 @@ head owner (which `github-pr-create` checks with its own rule), and base
 branches outside the PR create and publish skills are not checked by it.
 `tests/check_branch_name.bats` covers the script.
 
+`check-push-target.mjs` enforces the **push target rule**: push only to the
+remote the user named, or the single remote that names the repository, with an
+explicit `<branch>:refs/heads/<branch>` refspec; with more than one remote and
+none named, ask, even when exactly one of them names the repository. In a fork
+layout `gh repo view` can resolve the parent, so the one matching remote may be
+the parent; asking covers every fork layout without per-remote API lookups, and
+`github-pr-create` still verifies the created PR's head repository. The caller
+passes the repository it resolved (`--github <host> <owner>/<repo>` or
+`--azure <org> <project> <repo>`), and the script reads only local git
+configuration and remote URLs, with no `gh`, `az`, or network call. `resolve`
+prints the remote on line 1 and, for GitHub, the head `<owner>/<repo>` on
+line 2; Azure DevOps URLs must use one of the accepted remote URL shapes in
+`azure-devops-common/references/context.md`. `pre` and `post` check the
+branch's upstream before and after the push, which stays a visible
+`git push -u <remote> <branch>:refs/heads/<branch>` command in the skill so
+approval and permission rules still see it. Exit 0 means the check passed, 2 is
+a usage error, and 3 means the check failed: the caller asks the user to name the
+remote after `resolve`, and stops and reports after `pre` or `post`. Any other
+status means the check could not run and stops the push. The GitHub and Azure
+DevOps publish skills, `github-pr-create` on direct invocation, and
+`github-pr-codex-review-cycle` on a resume without the captured remote run it.
+`tests/check_push_target.bats` covers the script.
+
 ## Profile Format
 
 Profiles are JSON so setup can process them with Node without adding a parser dependency.
