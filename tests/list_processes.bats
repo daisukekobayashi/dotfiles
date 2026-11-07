@@ -566,15 +566,21 @@ check_unreadable_cmdline() {
   [ -z "$(row_for "${opaque}")" ]
 }
 
+# The script reads a ps --cwd only up to a "^" or "?", the ways macOS ps and
+# procps in a UTF-8 locale print a control byte. procps 4.0.4 under LC_ALL=C
+# prints it as ".", which no marker can tell from a literal ".".
 @test "list-processes ps fallback lists a --cwd that may extend into the target as ambiguous" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
-  local lister base dir_pid
+  local lister base dir_pid rendered
   lister="$(ps_script)"
   base="${target}/w"
   target="$(mkdir -p "${base}"$'\x01' && cd "${base}"$'\x01' && pwd -P)"
   start_with_args --cwd "${target}/x"
   dir_pid="${started_pid}"
   wait_for_runners "${dir_pid}"
+  rendered="$(LC_ALL=C ps -ww -o args= -p "${dir_pid}")"
+  [[ "${rendered}" == *"${base}"[\^?]* ]] ||
+    skip "ps renders a control byte without \"^\" or \"?\": ${rendered##*"${base}"}"
 
   run -0 "${lister}" "${target}"
   [ "$(row_for "${dir_pid}" | cut -f6)" = "--cwd ambiguous" ]
