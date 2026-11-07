@@ -98,6 +98,53 @@ path_without_lsof() {
   printf '%s' "${bin}"
 }
 
+# The same script with both /proc reads disabled, so it reads the cwd from lsof
+# and the --cwd argument from ps.
+ps_script() {
+  local copy="${BATS_TEST_TMPDIR}/list-processes-ps.sh"
+  sed -e 's|\[\[ -d /proc/self \]\]|false|' \
+    -e 's|\[\[ -r "/proc/${pid}/cmdline" \]\]|false|' "${script}" >"${copy}"
+  ! grep -qF '/proc/${pid}/cmdline" ]]' "${copy}"
+  chmod +x "${copy}"
+  printf '%s' "${copy}"
+}
+
+# Starts a process in $outside with the arguments "$@", and sets started_pid.
+# The runner is written once per test, since rewriting it races with a runner
+# still starting, and bash runs it directly so no shebang or env is involved.
+# sleep alone rejects extra arguments on macOS.
+start_with_args() {
+  local runner="${BATS_TEST_TMPDIR}/argv-runner"
+  if [[ ! -e "${runner}" ]]; then
+    cat >"${runner}.tmp" <<'EOF'
+trap 'kill "${child}" 2>/dev/null; exit 0' TERM
+sleep 60 &
+child=$!
+wait "${child}"
+EOF
+    mv "${runner}.tmp" "${runner}"
+  fi
+  (cd "${outside}" && exec bash "${runner}" "$@") &
+  started_pid=$!
+  pids+=("${started_pid}")
+}
+
+# Waits up to about 10 seconds until ps shows each pid in "$@" running the
+# argv runner, so a slow start is not read as a missing row.
+wait_for_runners() {
+  local pid tries
+  for pid in "$@"; do
+    for ((tries = 0; tries < 100; tries++)); do
+      [[ "$(ps -ww -o args= -p "${pid}" 2>/dev/null)" == *argv-runner* ]] && break
+      sleep 0.1
+    done
+    [[ "$(ps -ww -o args= -p "${pid}" 2>/dev/null)" == *argv-runner* ]] || {
+      echo "runner ${pid} did not start"
+      return 1
+    }
+  done
+}
+
 # Asserts the output has one 7-field row per line and none forged for $1.
 assert_no_forged_row() {
   local decoy="$1" line
@@ -456,4 +503,103 @@ check_unreadable_cmdline() {
   [ "${status}" -eq 1 ]
   [ -z "${output}" ]
   [[ "${stderr}" == *"Neither /proc nor lsof is available"* ]]
+}
+
+@test "list-processes ps fallback never matches a --cwd cut at a space" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister sibling deeper equal_eq
+  lister="$(ps_script)"
+  mkdir -p "${target}/a" "${target}/a b"
+  start_with_args --cwd "${target}/a b"
+  sibling="${started_pid}"
+  start_with_args --cwd "${target}/a/x" --pid-file "${outside}/p"
+  deeper="${started_pid}"
+  start_with_args "--cwd=${target}/a b/y"
+  equal_eq="${started_pid}"
+  wait_for_runners "${sibling}" "${deeper}" "${equal_eq}"
+
+  # "<target>/a b" may read as "<target>/a", but it is not under it.
+  run -0 "${lister}" "${target}/a"
+  [ "$(row_for "${sibling}" | cut -f6)" = "--cwd ambiguous" ]
+  [ "$(row_for "${deeper}" | cut -f6)" = "--cwd under target" ]
+  [ "$(row_for "${equal_eq}" | cut -f6)" = "--cwd ambiguous" ]
+
+  # The spaced target itself is never missed, nor claimed from "<target>/a".
+  run -0 "${lister}" "${target}/a b"
+  [ "$(row_for "${sibling}" | cut -f6)" = "--cwd ambiguous" ]
+  [ "$(row_for "${equal_eq}" | cut -f6)" = "--cwd ambiguous" ]
+  [ -z "$(row_for "${deeper}")" ]
+}
+
+@test "list-processes ps fallback reports --cwd missing only when every reading is" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister kept gone
+  lister="$(ps_script)"
+  mkdir -p "${outside}/kept b"
+  start_with_args --cwd "${outside}/kept b"
+  kept="${started_pid}"
+  start_with_args --cwd "${outside}/gone b"
+  gone="${started_pid}"
+  wait_for_runners "${kept}" "${gone}"
+
+  run -0 "${lister}" --stale
+  [ -z "$(row_for "${kept}")" ]
+  [ "$(row_for "${gone}" | cut -f6)" = "--cwd missing" ]
+}
+
+# ps prints a newline as "\012" and a literal "\012" alike, so such a --cwd is
+# read only up to the backslash.
+@test "list-processes ps fallback reads a --cwd only up to an escape-like byte" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister under opaque
+  lister="$(ps_script)"
+  start_with_args --cwd "${target}/a\\012b c"
+  under="${started_pid}"
+  start_with_args --cwd "${outside}/gone\\012x"
+  opaque="${started_pid}"
+  wait_for_runners "${under}" "${opaque}"
+
+  run -0 "${lister}" "${target}"
+  [ "$(row_for "${under}" | cut -f6)" = "--cwd under target" ]
+
+  run -0 "${lister}" --stale
+  [ -z "$(row_for "${opaque}")" ]
+}
+
+# The script reads a ps --cwd only up to a "^" or "?", the ways macOS ps and
+# procps in a UTF-8 locale print a control byte. procps 4.0.4 under LC_ALL=C
+# prints it as ".", which no marker can tell from a literal ".".
+@test "list-processes ps fallback lists a --cwd that may extend into the target as ambiguous" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister base dir_pid rendered
+  lister="$(ps_script)"
+  base="${target}/w"
+  target="$(mkdir -p "${base}"$'\x01' && cd "${base}"$'\x01' && pwd -P)"
+  start_with_args --cwd "${target}/x"
+  dir_pid="${started_pid}"
+  wait_for_runners "${dir_pid}"
+  rendered="$(LC_ALL=C ps -ww -o args= -p "${dir_pid}")"
+  [[ "${rendered}" == *"${base}"[\^?]* ]] ||
+    skip "ps renders a control byte without \"^\" or \"?\": ${rendered##*"${base}"}"
+
+  run -0 "${lister}" "${target}"
+  [ "$(row_for "${dir_pid}" | cut -f6)" = "--cwd ambiguous" ]
+}
+
+# ps prints "--cwd= --watch" and an empty --cwd before "--watch" alike, as
+# text that also reads as a --cwd of " --watch"; the empty reading keeps
+# --stale from calling either missing.
+@test "list-processes ps fallback never calls a --cwd that may be empty missing" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister eq empty
+  lister="$(ps_script)"
+  start_with_args --cwd= --watch
+  eq="${started_pid}"
+  start_with_args --cwd "" --watch
+  empty="${started_pid}"
+  wait_for_runners "${eq}" "${empty}"
+
+  run -0 "${lister}" --stale
+  [ -z "$(row_for "${eq}")" ]
+  [ -z "$(row_for "${empty}")" ]
 }
