@@ -458,7 +458,7 @@ DOCKER
   run --separate-stderr env PATH="$(path_without_lsof)" "$(command -v node)" "${script}" manifest "${args[@]}" \
     --worktree "${worktree}" --out "${state}/preview.json" --preview
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh cannot run: lsof cannot list cwds"* ]]
+  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh exited 1: Neither /proc nor lsof is available"* ]]
 }
 
 @test "manifest creates --out as a new 0600 file and refuses an existing path" {
@@ -517,12 +517,12 @@ LISTING
   chmod +x "${root}/bin/lsof"
   preview
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh cannot run: lsof cannot list cwds"* ]]
+  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh exited 1: lsof did not report the cwd of this process"* ]]
 
   printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/bin/lsof"
   preview
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"lsof did not report the cwd of a known process"* ]]
+  [[ "${stderr}" == *"processes cannot be listed for a Caller preview: list-processes.sh exited 1: lsof did not report the cwd of this process"* ]]
 }
 
 @test "temporary paths are compared as path and target pairs" {

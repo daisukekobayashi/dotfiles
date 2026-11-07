@@ -50,10 +50,9 @@
 //   projects from `list-stacks.sh <worktree>` with their volumes from
 //   `docker volume ls`, and the temporary paths with their resolved targets.
 //   The listings are the read-only scripts of worktree-runtime-cleanup, run
-//   from this skill tree. A lookup that exits non-zero or writes to stderr,
-//   and list-processes.sh without /proc and without an lsof that reports
-//   this script's own cwd, cannot run; it never counts
-//   as an empty listing. The manifest also records the PR head repository.
+//   from this skill tree. A lookup that exits non-zero or writes to stderr
+//   cannot run; it never counts as an empty listing. The manifest also
+//   records the PR head repository.
 //   Writes the manifest as JSON to --out, a new file outside the worktree
 //   created with mode 0600 (an existing path, including a symlink, is a usage
 //   error), and prints the targets. With --preview it is a
@@ -313,9 +312,8 @@ const readTargets = (options) => {
 // rows split at tabs, or { unavailable } when it cannot run or prints a row
 // with fewer than `columns` fields.
 // Runs a read-only lookup and returns its stdout, or { unavailable }. Any
-// output on stderr also makes it unavailable: list-processes.sh reports a
-// missing /proc and lsof there but exits 0, so an empty stdout alone never
-// shows that nothing was found.
+// output on stderr also makes it unavailable: a lookup that reports an error
+// there but exits 0 never counts as finding nothing.
 const runLookup = (label, command, args) => {
   const result = spawnSync(command, args, { encoding: "utf8" });
   const stderr = (result.stderr ?? "").trim();
@@ -326,33 +324,9 @@ const runLookup = (label, command, args) => {
   return { stdout: result.stdout };
 };
 
-// Without /proc, list-processes.sh reads cwds from lsof but discards its
-// errors and exit status, so a failing lsof looks like an empty listing.
-// Returns a reason unless lsof reports the cwd of this process.
-const lsofUnavailable = () => {
-  let out;
-  try {
-    out = execFileSync("lsof", ["-w", "-a", "-p", String(process.pid), "-d", "cwd", "-Fn"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch (error) {
-    const reason = (error.stderr || error.message || "").toString().trim().split("\n")[0];
-    return `lsof cannot list cwds${reason ? `: ${reason}` : ""}`;
-  }
-  const cwd = realpathOrNull(process.cwd());
-  const names = out.split("\n").filter((line) => line.startsWith("n")).map((line) => line.slice(1));
-  return names.includes(cwd) ? null : "lsof did not report the cwd of a known process";
-};
-
 const runListing = (name, worktree, columns) => {
   const script = path.join(runtimeScripts, name);
   if (!existsSync(script)) return { unavailable: `${name} not found` };
-  // list-processes.sh needs /proc or a working lsof, and exits 0 without.
-  if (name === "list-processes.sh" && !existsSync("/proc/self")) {
-    const reason = lsofUnavailable();
-    if (reason) return { unavailable: `${name} cannot run: ${reason}` };
-  }
   const result = runLookup(name, "bash", [script, worktree]);
   if (result.unavailable) return result;
   const rows = result.stdout.split("\n").filter((line) => line !== "").map((line) => line.split("\t"));

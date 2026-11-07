@@ -58,6 +58,35 @@ EOF
   printf '%s' "${bin}"
 }
 
+# An lsof on PATH that exits $FAKE_LSOF_STATUS. With $FAKE_LSOF_PID set it
+# reports only that pid, with cwd $FAKE_LSOF_CWD; otherwise it runs the real lsof.
+fake_lsof() {
+  local bin="${BATS_TEST_TMPDIR}/lsof-bin" real
+  real="$(command -v lsof || true)"
+  mkdir -p "${bin}"
+  cat >"${bin}/lsof" <<EOF
+#!/usr/bin/env bash
+if [[ -n "\${FAKE_LSOF_PID:-}" ]]; then
+  printf 'p%s\\0fcwd\\0n%s\\0\\n' "\${FAKE_LSOF_PID}" "\${FAKE_LSOF_CWD}"
+else
+  "${real}" "\$@"
+fi
+exit "\${FAKE_LSOF_STATUS:-0}"
+EOF
+  chmod +x "${bin}/lsof"
+  printf '%s' "${bin}"
+}
+
+# A PATH with the commands the script needs, but no lsof.
+path_without_lsof() {
+  local bin="${BATS_TEST_TMPDIR}/nolsof-bin" name
+  mkdir -p "${bin}"
+  for name in bash env sed ps id tr cut awk readlink; do
+    ln -sf "$(command -v "${name}")" "${bin}/${name}"
+  done
+  printf '%s' "${bin}"
+}
+
 # Asserts the output has one 7-field row per line and none forged for $1.
 assert_no_forged_row() {
   local decoy="$1" line
@@ -339,4 +368,47 @@ check_lone_backslash_lsof() {
 @test "list-processes lsof path never reads a lone backslash after caret notation" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
   check_lone_backslash_lsof
+}
+
+@test "list-processes fails without output when lsof omits its own process" {
+  local bin code sleeper
+  bin="$(fake_lsof)"
+  start_in "${target}"
+  sleeper="${started_pid}"
+  sleep 0.3
+
+  # The reported row is under the target, so a partial listing would print it.
+  for code in 0 1; do
+    run --separate-stderr env PATH="${bin}:${PATH}" FAKE_LSOF_PID="${sleeper}" \
+      FAKE_LSOF_CWD="${target}" FAKE_LSOF_STATUS="${code}" "$(lsof_script)" "${target}"
+    [ "${status}" -eq 1 ]
+    [ -z "${output}" ] || {
+      echo "printed a partial listing after lsof exited ${code}: ${output}"
+      return 1
+    }
+    [[ "${stderr}" == *"lsof did not report the cwd of this process"* ]]
+  done
+}
+
+@test "list-processes accepts an lsof that exits 1 after reporting its own process" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local bin sleeper
+  bin="$(fake_lsof)"
+  start_in "${target}"
+  sleeper="${started_pid}"
+  sleep 0.3
+
+  run -0 --separate-stderr env PATH="${bin}:${PATH}" FAKE_LSOF_STATUS=1 "$(lsof_script)" "${target}"
+  [ -z "${stderr}" ]
+  [ "$(row_for "${sleeper}" | cut -f6)" = "cwd under target" ]
+}
+
+@test "list-processes fails without output when neither /proc nor lsof is available" {
+  start_in "${target}"
+  sleep 0.3
+
+  run --separate-stderr env PATH="$(path_without_lsof)" "$(lsof_script)" "${target}"
+  [ "${status}" -eq 1 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"Neither /proc nor lsof is available"* ]]
 }
