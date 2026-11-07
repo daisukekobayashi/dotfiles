@@ -177,7 +177,9 @@ encode_cwd() {
   printf '%s' "${out}"
 }
 
-# Prints the value of a --cwd argument, if any.
+# Prints the value of a --cwd argument, if any. A cmdline that cannot be opened
+# or read, as when the process exits meanwhile, counts as no --cwd and prints
+# nothing on stderr; the ps lookups later skip a process that has exited.
 cwd_argument() {
   local pid="$1" prev="" arg
   if [[ -r "/proc/${pid}/cmdline" ]]; then
@@ -193,7 +195,7 @@ cwd_argument() {
         return
       fi
       prev="${arg}"
-    done <"/proc/${pid}/cmdline"
+    done 2>/dev/null <"/proc/${pid}/cmdline" || true
   else
     ps -ww -o args= -p "${pid}" 2>/dev/null |
       awk '{ for (i = 1; i <= NF; i++) {
