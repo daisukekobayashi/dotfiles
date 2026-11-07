@@ -45,8 +45,9 @@ cleanup session, so discover them from process state.
    Add dev servers/watchers known from existing launch information, tool
    sessions, or explicit user-provided targets. A cwd or `--cwd` under the
    target establishes ownership; a port or process name alone is insufficient.
-   A row with reason `cwd ambiguous` never establishes ownership, because its
-   cwd may name another directory: report it as uncertain.
+   A row with reason `cwd ambiguous` or `--cwd ambiguous` never establishes
+   ownership, because its cwd or `--cwd` may name another directory: report it
+   as uncertain.
    Interactive shells, terminal panes, and agent sessions with a tty (such as
    `zsh`, `claude`, or `codex` TUIs) are not runtimes: report them and leave them
    running. Report other uncertain candidates and leave them running too.
