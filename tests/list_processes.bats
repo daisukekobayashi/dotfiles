@@ -560,3 +560,21 @@ check_unreadable_cmdline() {
   run -0 "${lister}" "${target}"
   [ "$(row_for "${dir_pid}" | cut -f6)" = "--cwd ambiguous" ]
 }
+
+# ps prints "--cwd= --watch" and an empty --cwd before "--watch" alike, as
+# text that also reads as a --cwd of " --watch"; the empty reading keeps
+# --stale from calling either missing.
+@test "list-processes ps fallback never calls a --cwd that may be empty missing" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister eq empty
+  lister="$(ps_script)"
+  start_with_args --cwd= --watch
+  eq="${started_pid}"
+  start_with_args --cwd "" --watch
+  empty="${started_pid}"
+  sleep 0.3
+
+  run -0 "${lister}" --stale
+  [ -z "$(row_for "${eq}")" ]
+  [ -z "$(row_for "${empty}")" ]
+}

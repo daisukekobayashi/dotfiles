@@ -187,7 +187,9 @@ encode_cwd() {
 
 # Sets arg_cwds to the candidate values of the first --cwd argument, and
 # arg_from_ps when they come from ps; see the header. arg_cwds is empty
-# without a --cwd. A cmdline that cannot be opened or read, as when the process
+# without a --cwd. A ps candidate may be empty, as for "--cwd= --watch" or an
+# empty argument before "--watch": that reading has no --cwd, so it is never
+# under the target or missing. A cmdline that cannot be opened or read, as when the process
 # exits meanwhile, counts as no --cwd and prints nothing on stderr; the ps
 # lookups later skip a process that has exited.
 cwd_argument() {
@@ -229,7 +231,7 @@ cwd_argument() {
   [[ -n "${value:-}" ]] || return 0
   while [[ "${value}" == *" "* ]]; do
     prefix+="${value%%" "*}"
-    [[ -n "${prefix}" ]] && arg_cwds+=("${prefix}")
+    arg_cwds+=("${prefix}")
     prefix+=" "
     value="${value#*" "}"
   done
@@ -271,13 +273,14 @@ classify_arg_under() {
   fi
 }
 
-# True when every --cwd candidate is missing; a candidate cut short by
-# readable_prefix is never known to be missing.
+# True when every --cwd candidate is missing; an empty candidate, or one cut
+# short by readable_prefix, is never known to be missing.
 all_args_missing() {
   local i cand
   ((${#arg_cwds[@]} > 0)) || return 1
   for ((i = 0; i < ${#arg_cwds[@]}; i++)); do
     cand="${arg_cwds[i]}"
+    [[ -n "${cand}" ]] || return 1
     if [[ -n "${arg_from_ps}" && "$(readable_prefix "${cand}")" != "${cand}" ]]; then
       return 1
     fi
