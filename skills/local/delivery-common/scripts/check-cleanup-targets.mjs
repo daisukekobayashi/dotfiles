@@ -33,9 +33,8 @@
 //   head repository is a fork, when no remote is resolved by the push target
 //   rule (`check-push-target.mjs resolve` with the head repository and any
 //   named remote), when a named remote does not name the PR head repository
-//   (for GitHub, the `<owner>/<repo>` its URLs name; a named Azure DevOps
-//   remote is always kept, because the push target rule takes it as given),
-//   when the PR is not merged (skipped with --preview, before
+//   (for GitHub, the `<owner>/<repo>` its URLs name; for Azure DevOps, the
+//   push target rule checks it), when the PR is not merged (skipped with --preview, before
 //   the merge), when the branch is the default branch, protected, or under
 //   policy, when another open PR uses it, or when
 //   `git ls-remote --heads <remote> refs/heads/<branch>` is not exactly
@@ -216,15 +215,12 @@ const resolveRemote = (facts) => {
   const stderr = (result.stderr ?? "").trim();
   if (result.status === 0) {
     const [remote, head] = result.stdout.split("\n");
-    if (facts.remote === undefined) return { remote };
-    // With a named remote the push target rule accepts any repository on the
-    // host (GitHub) or the remote as given (Azure DevOps), so bind it to the
-    // PR head repository here.
-    if (facts.provider === "github") {
-      if (head?.toLowerCase() === facts.repository[1].toLowerCase()) return { remote };
-      return { remote: null, reason: `remote ${JSON.stringify(remote)} names ${head || "no repository"}, not the PR head repository ${facts.repository[1]}` };
-    }
-    return { remote: null, reason: `remote ${JSON.stringify(remote)} was named, and a named Azure DevOps remote is not checked against the PR repository` };
+    // The push target rule binds a named Azure DevOps remote to the PR
+    // repository; a named GitHub remote may name any repository on the host,
+    // so bind it to the PR head repository here.
+    if (facts.remote === undefined || facts.provider === "azure") return { remote };
+    if (head?.toLowerCase() === facts.repository[1].toLowerCase()) return { remote };
+    return { remote: null, reason: `remote ${JSON.stringify(remote)} names ${head || "no repository"}, not the PR head repository ${facts.repository[1]}` };
   }
   if (result.status === 3) return { remote: null, reason: `no remote resolved by the push target rule: ${stderr}` };
   if (result.status === 2) usage(`check-push-target.mjs: ${stderr}`);

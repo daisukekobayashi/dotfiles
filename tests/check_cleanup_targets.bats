@@ -402,14 +402,19 @@ start_in() {
   [ "${output}" = "proposed"$'\t'"origin"$'\t'"${head}" ]
 }
 
-@test "a named Azure DevOps remote is kept" {
+@test "a named Azure DevOps remote is used only when it names the PR repository" {
   git remote set-url origin git@ssh.dev.azure.com:v3/org/project/repo
   git remote add other git@ssh.dev.azure.com:v3/org/project/other
   check remote --azure org project repo --branch feat/1-x --pr-state completed --pr-head "${head}" \
     --cross-repo false --default-branch main --protected false --open-prs 0 --remote other
   [ "${status}" -eq 3 ]
   [ "${output}" = $'kept\t-' ]
-  [[ "${stderr}" == *"a named Azure DevOps remote is not checked against the PR repository"* ]]
+  [[ "${stderr}" == *'no remote resolved by the push target rule: remote "other" does not name org/project/repo in its fetch and every push URL'* ]]
+
+  check remote --azure org project repo --branch feat/1-x --pr-state completed --pr-head "${head}" \
+    --cross-repo false --default-branch main --protected false --open-prs 0 --remote origin
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "proposed"$'\t'"origin"$'\t'"${head}" ]
 }
 
 @test "compare stops when the PR head repository differs" {

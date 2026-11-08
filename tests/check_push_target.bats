@@ -115,6 +115,30 @@ check() {
   [ "${output}" = mirror ]
 }
 
+@test "resolve uses a user-named Azure DevOps remote only when every URL names the repository" {
+  git remote add origin 'https://dev.azure.com/my-org/My%20Project/_git/my-repo'
+  git remote add mirror 'git@ssh.dev.azure.com:v3/my-org/My%20Project/my-repo'
+  git remote add other 'git@ssh.dev.azure.com:v3/my-org/My%20Project/other'
+  check resolve --azure my-org 'My Project' my-repo --remote mirror
+  [ "${status}" -eq 0 ]
+  [ "${output}" = mirror ]
+  check resolve --azure my-org 'My Project' my-repo --remote other
+  [ "${status}" -eq 3 ]
+  [ "${output}" = "" ]
+  [[ "${stderr}" == 'remote "other" does not name my-org/my project/my-repo in its fetch and every push URL' ]]
+  # A push URL naming another repository fails, though the fetch URL matches.
+  git remote set-url --push mirror 'git@ssh.dev.azure.com:v3/my-org/My%20Project/other'
+  check resolve --azure my-org 'My Project' my-repo --remote mirror
+  [ "${status}" -eq 3 ]
+  # A URL outside the accepted shapes fails, though it names the repository.
+  git remote set-url origin 'https://my-org.visualstudio.com/My%20Project/_git/my-repo'
+  check resolve --azure my-org 'My Project' my-repo --remote origin
+  [ "${status}" -eq 3 ]
+  check resolve --azure my-org 'My Project' my-repo --remote missing
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == 'remote not found: "missing"' ]]
+}
+
 @test "resolve rejects URLs whose user or host part could hide another host" {
   local url
   for url in 'https://evil.invalid#@github.com/owner/repo' 'https://evil.invalid?@github.com/owner/repo' 'https://evil.invalid\@github.com/owner/repo' 'https://evil.invalid%23@github.com/owner/repo' 'ssh://evil.invalid#@github.com/owner/repo' 'evil.invalid#@github.com:owner/repo' 'https://github.com/owner/repo#x' 'https://github.com/owner/repo?x' 'https://a@b@github.com/owner/repo'; do

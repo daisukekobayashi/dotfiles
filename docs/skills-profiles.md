@@ -306,7 +306,10 @@ passes the repository it resolved (`--github <host> <owner>/<repo>` or
 configuration and remote URLs, with no `gh`, `az`, or network call. `resolve`
 prints the remote on line 1 and, for GitHub, the head `<owner>/<repo>` on
 line 2; Azure DevOps URLs must use one of the accepted remote URL shapes in
-`azure-devops-common/references/context.md`. `pre` and `post` check the
+`azure-devops-common/references/context.md`. A named GitHub remote may name
+any one `<owner>/<repo>` on the host, which becomes the head repository; a
+named Azure DevOps remote must name the given repository in its fetch and every
+push URL. `pre` and `post` check the
 branch's upstream before and after the push, which stays a visible
 `git push -u <remote> <branch>:refs/heads/<branch>` command in the skill so
 approval and permission rules still see it. Exit 0 means the check passed, 2 is
@@ -321,8 +324,7 @@ DevOps publish skills, `github-pr-create` on direct invocation, and
 **cleanup target manifest** for `github-worktree-cleanup` and
 `azure-devops-worktree-cleanup`. `remote` proposes deleting the remote branch
 only when the PR's head repository is not a fork, the push target rule resolves
-its remote and that remote names the PR head repository (a named Azure DevOps
-remote is always kept, because the rule takes it as given),
+its remote and that remote names the PR head repository,
 the PR is merged (completed on Azure DevOps), the branch is not the default
 branch, protected, or under policy, no other open PR uses it, and
 `git ls-remote` returns exactly the PR head, and then prints the SHA to lease

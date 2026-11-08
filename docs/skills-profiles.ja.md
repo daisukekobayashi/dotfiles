@@ -291,7 +291,10 @@ stderr に出力）です。それ以外の終了コードは、`node` がスク
 remote の URL だけを読みます。`gh`、`az`、ネットワークは使いません。`resolve`
 は1行目に remote を、GitHub では2行目に head の `<owner>/<repo>` を出力します。
 Azure DevOps の URL は `azure-devops-common/references/context.md` の受け付ける
-remote URL の形のいずれかである必要があります。`pre` と `post` は push の前後で
+remote URL の形のいずれかである必要があります。指定された GitHub の remote は
+ホスト上のどの `<owner>/<repo>` を指してもよく、それが head リポジトリになります。
+指定された Azure DevOps の remote は、fetch とすべての push の URL が渡された
+リポジトリを指す必要があります。`pre` と `post` は push の前後で
 ブランチの upstream を確認します。push 自体はスキルの中で
 `git push -u <remote> <branch>:refs/heads/<branch>` として見えるコマンドのまま
 残し、承認や権限のルールが引き続き確認できるようにします。終了コード 0 は確認が
@@ -305,8 +308,8 @@ remote URL の形のいずれかである必要があります。`pre` と `post
 `check-cleanup-targets.mjs` は `github-worktree-cleanup` と
 `azure-devops-worktree-cleanup` の**リモートブランチ削除の確認**と
 **クリーンアップ対象マニフェスト**を扱います。`remote` は、PR の head リポジトリが
-fork でなく、push 先のルールで remote が解決でき、その remote が PR の head リポジトリを指し
-（指定された Azure DevOps の remote はそのまま使われるため、常に残します）、PR がマージ済み（Azure DevOps
+fork でなく、push 先のルールで remote が解決でき、その remote が PR の head リポジトリを指し、
+PR がマージ済み（Azure DevOps
 では completed）で、ブランチが既定ブランチでも保護やポリシーの対象でもなく、
 ほかの open な PR が使っておらず、`git ls-remote` が PR の head とちょうど一致する
 ときだけリモートブランチの削除を提案し、lease に使う SHA を出力します。それ以外は
