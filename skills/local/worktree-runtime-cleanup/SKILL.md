@@ -85,7 +85,7 @@ before any starts and the second after all end.
    from the first list, by PID and start time, and its `cwd` column in the
    second list equals exactly the target worktree root. The companion starts
    the broker with its cwd set to the `--cwd` path, so the untruncated `cwd`
-   column carries that path. The `command` column is cut to 200 characters and
+   column carries that path. The `command` column is cut to 200 bytes and
    never establishes ownership. A missing, unreadable, or ` (deleted)` cwd is
    not an exact match, nor is a `cwd` column containing a backslash: the script
    escapes control bytes and backslashes in the path, and a `cwd ambiguous`

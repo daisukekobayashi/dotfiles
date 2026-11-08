@@ -12,6 +12,9 @@
 #   <pid> <ppid> <tty> <started> <cwd> <reason> <command>
 # <tty> is "?" for processes without a controlling terminal, such as detached
 # brokers and daemons. <started> lets callers detect PID reuse before stopping.
+# <command> is the ps argument line under the caller's locale, cut to 200
+# bytes, so it may end inside a multibyte character. It never establishes
+# ownership.
 # <cwd> is escaped so every process stays on one line: newline as \n, tab as
 # \t, backslash as \\, and other control bytes as \xNN; other bytes are as-is.
 # Without /proc, lsof prints a control byte and a literal "^A" to "^_" alike.
@@ -52,7 +55,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,54p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -631,7 +634,11 @@ for ((i = 0; i < ${#records[@]}; i++)); do
   tty="$(ps -o tty= -p "${pid}" 2>/dev/null | tr -d ' ')" || continue
   [[ -z "${tty}" || "${tty}" == "??" ]] && tty="?"
   started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')" || continue
-  command="$(ps -ww -o args= -p "${pid}" 2>/dev/null | cut -c1-200)" || continue
+  # Only ps failing means the process exited. ps keeps the caller's locale so it
+  # prints text as is; cut in a multibyte locale rejects an invalid byte, so it
+  # runs under LC_ALL=C, and a row never depends on it.
+  args="$(ps -ww -o args= -p "${pid}" 2>/dev/null)" || continue
+  command="$(printf '%s\n' "${args}" | LC_ALL=C cut -b1-200)" || command=""
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${pid}" "${ppid}" "${tty}" "${started}" "$(encode_cwd "${cwd}")" "${reason}" "${command}"
 done
