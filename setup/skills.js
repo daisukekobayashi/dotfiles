@@ -790,16 +790,25 @@ function runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir
         removeStagingDir(workDir);
     }
 }
-// Identifies one file system entry. The skills CLI replaces a same-name skill
-// by removing and recopying it, which gives the entry a new identity even when
-// the content is the same.
+// Identifies one file system entry and everything inside it, without following
+// symbolic links. Removing and recopying an entry gives it a new identity even
+// when the content is the same, and the change time also catches a write,
+// added or removed file, or permission change inside an entry that keeps its
+// inode, and an inode reused on a file system without birth times.
 function entryIdentity(entryPath) {
     const stat = fs.lstatSync(entryPath, { bigint: true, throwIfNoEntry: false });
     if (!stat) {
         return undefined;
     }
     const type = stat.isSymbolicLink() ? `link:${fs.readlinkSync(entryPath)}` : stat.isDirectory() ? "dir" : "file";
-    return `${stat.dev}:${stat.ino}:${stat.birthtimeNs}:${type}`;
+    const identity = `${stat.dev}:${stat.ino}:${stat.birthtimeNs}:${stat.ctimeNs}:${type}`;
+    if (!stat.isDirectory()) {
+        return identity;
+    }
+    const children = fs.readdirSync(entryPath).sort().map((name) => {
+        return `${JSON.stringify(name)}=${entryIdentity(path.join(entryPath, name)) ?? "missing"}`;
+    });
+    return `${identity}{${children.join(",")}}`;
 }
 function entryIdentities(directory) {
     const identities = new Map();

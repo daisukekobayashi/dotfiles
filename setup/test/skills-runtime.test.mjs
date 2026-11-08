@@ -1496,6 +1496,52 @@ done
   });
 }
 
+// A later install changes an earlier entry without removing it, so the entry
+// keeps its inode and birth time; only what is inside it changes.
+const inPlaceChanges = {
+  "rewrites a file with different content": 'printf "%s" "${source_name}" > "${dir}/shared-helper/SKILL.md"',
+  "rewrites a file with the same content": 'printf helper > "${dir}/shared-helper/SKILL.md"',
+  "adds a file": 'printf extra > "${dir}/shared-helper/extra.md"',
+  "rewrites a nested file": 'printf later > "${dir}/shared-helper/scripts/run.sh"',
+  "changes a file's permissions": 'chmod 600 "${dir}/shared-helper/SKILL.md"',
+};
+
+for (const [label, command] of Object.entries(inPlaceChanges)) {
+  test(`project scope fails when a later install ${label} in an earlier entry and restores the project`, posixOnly, async () => {
+    const fixture = await createFixture({
+      npxSuffix: `for dir in .agents/skills .claude/skills; do
+  if [ "\${source_name}" = anthropics/skills ]; then
+    mkdir -p "\${dir}/shared-helper/scripts"
+    printf helper > "\${dir}/shared-helper/SKILL.md"
+    printf earlier > "\${dir}/shared-helper/scripts/run.sh"
+  else
+    ${command}
+  fi
+done
+`,
+    });
+    try {
+      const previous = path.join(fixture.project, ".agents", "skills", "previous");
+      await mkdir(previous, { recursive: true });
+      await writeFile(path.join(previous, "SKILL.md"), "previous skill\n");
+
+      const result = runSkills(
+        ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+        fixture,
+        { cwd: fixture.project },
+      );
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /skill entry collision in project install: shared-helper \(anthropics\/skills, vercel-labs\/skills\)/);
+      assert.deepEqual(await readdir(path.join(fixture.project, ".agents", "skills")), ["previous"]);
+      assert.equal(existsSync(path.join(fixture.project, ".claude", "skills")), false);
+      assert.equal(existsSync(path.join(fixture.project, "skills-lock.json")), false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
 // The install leaves an agent skills directory, or a directory on the way to
 // it, as something other than a directory. A link to a directory that holds
 // every requested skill passes the SKILL.md check, so only this check stops it.
