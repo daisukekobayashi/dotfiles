@@ -109,6 +109,34 @@ ps_script() {
   printf '%s' "${copy}"
 }
 
+# Prints the UTF-8 locale the script's ps fallback uses, or nothing.
+utf8_locale() {
+  local loc
+  for loc in C.UTF-8 en_US.UTF-8; do
+    if [[ "$(LC_ALL="${loc}" locale charmap 2>/dev/null)" == "UTF-8" ]]; then
+      printf '%s' "${loc}"
+      return 0
+    fi
+  done
+}
+
+# Skips unless a UTF-8 locale exists and ps under LC_ALL=C prints the non-ASCII
+# bytes of pid $1 in the meta notation "M-x", as macOS ps does.
+require_ps_meta_notation() {
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  [[ "$(LC_ALL=C ps -ww -o args= -p "$1")" == *M-* ]] ||
+    skip "ps does not print a byte >= 0x80 as \"M-x\" under LC_ALL=C"
+}
+
+# A PATH whose locale command reports no UTF-8 locale.
+path_without_utf8() {
+  local bin="${BATS_TEST_TMPDIR}/noutf8-bin"
+  mkdir -p "${bin}"
+  printf '#!/bin/sh\necho US-ASCII\n' >"${bin}/locale"
+  chmod +x "${bin}/locale"
+  printf '%s:%s' "${bin}" "${PATH}"
+}
+
 # Starts a process in $outside with the arguments "$@", and sets started_pid.
 # The runner is written once per test, since rewriting it races with a runner
 # still starting, and bash runs it directly so no shebang or env is involved.
@@ -568,7 +596,8 @@ check_unreadable_cmdline() {
 
 # The script reads a ps --cwd only up to a "^" or "?", the ways macOS ps and
 # procps in a UTF-8 locale print a control byte. procps 4.0.4 under LC_ALL=C
-# prints it as ".", which no marker can tell from a literal ".".
+# prints it as ".", which no marker can tell from a literal "."; the script
+# then cuts the line where that reading and the UTF-8 one disagree.
 @test "list-processes ps fallback lists a --cwd that may extend into the target as ambiguous" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
   local lister base dir_pid rendered
@@ -579,11 +608,71 @@ check_unreadable_cmdline() {
   dir_pid="${started_pid}"
   wait_for_runners "${dir_pid}"
   rendered="$(LC_ALL=C ps -ww -o args= -p "${dir_pid}")"
-  [[ "${rendered}" == *"${base}"[\^?]* ]] ||
-    skip "ps renders a control byte without \"^\" or \"?\": ${rendered##*"${base}"}"
+  [[ -n "$(utf8_locale)" || "${rendered}" == *"${base}"[\^?]* ]] ||
+    skip "no UTF-8 locale, and ps renders a control byte without \"^\" or \"?\": ${rendered##*"${base}"}"
 
   run -0 "${lister}" "${target}"
   [ "$(row_for "${dir_pid}" | cut -f6)" = "--cwd ambiguous" ]
+}
+
+# Under LC_ALL=C, ps prints the non-ASCII bytes of "作業" and "ム" (which ends
+# in 0xa0) as "M-x" and "\240"; the UTF-8 reading gives them as they are.
+@test "list-processes ps fallback reads a non-ASCII --cwd that both ps readings agree on" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister base under gone
+  lister="$(ps_script)"
+  base="$(mkdir -p "${target}/作業ム" && cd "${target}/作業ム" && pwd -P)"
+  start_with_args --cwd "${base}/x y"
+  under="${started_pid}"
+  start_with_args --cwd "${outside}/消えたム"
+  gone="${started_pid}"
+  wait_for_runners "${under}" "${gone}"
+  require_ps_meta_notation "${under}"
+
+  run -0 "${lister}" "${base}"
+  [ "$(row_for "${under}" | cut -f6)" = "--cwd under target" ]
+
+  run -0 "${lister}" --stale
+  [ "$(row_for "${gone}" | cut -f6)" = "--cwd missing" ]
+
+  # Without a UTF-8 locale the bytes stay unread, as under LC_ALL=C alone.
+  run -0 env PATH="$(path_without_utf8)" "${lister}" "${base}"
+  [ "$(row_for "${under}" | cut -f6)" = "--cwd ambiguous" ]
+  run -0 env PATH="$(path_without_utf8)" "${lister}" --stale
+  [ -z "$(row_for "${gone}")" ]
+}
+
+# macOS ps in a UTF-8 locale prints U+2427 as the text "-$-'", with no marker,
+# and invalid UTF-8 such as 0xff as it is; neither is read past. The runs that
+# list a 0xff use LC_ALL=C, since cut in a UTF-8 locale rejects the command
+# column of such a process and the script then drops its row.
+@test "list-processes ps fallback never reads a character that ps prints as other text" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister symbol forged invalid symbol_pid invalid_pid gone_pid
+  lister="$(ps_script)"
+  symbol="${outside}/x"$'\xe2\x90\xa7'
+  forged="${outside}/x-\$-'"
+  invalid="${target}/b"$'\xff'
+  mkdir -p "${symbol}" 2>/dev/null || skip "the file system rejects U+2427"
+  start_with_args --cwd "${symbol}"
+  symbol_pid="${started_pid}"
+  start_with_args --cwd "${invalid}/x"
+  invalid_pid="${started_pid}"
+  start_with_args --cwd "${outside}/gone"$'\xff'
+  gone_pid="${started_pid}"
+  wait_for_runners "${symbol_pid}" "${invalid_pid}" "${gone_pid}"
+
+  run -0 "${lister}" --stale
+  [ -z "$(row_for "${symbol_pid}")" ]
+  run -0 env LC_ALL=C "${lister}" --stale
+  [ -z "$(row_for "${gone_pid}")" ]
+
+  mkdir -p "${forged}"
+  run -0 "${lister}" "${forged}"
+  [ "$(row_for "${symbol_pid}" | cut -f6)" != "--cwd under target" ]
+
+  run -0 env LC_ALL=C "${lister}" "${invalid}"
+  [ "$(row_for "${invalid_pid}" | cut -f6)" = "--cwd ambiguous" ]
 }
 
 # ps prints "--cwd= --watch" and an empty --cwd before "--watch" alike, as
