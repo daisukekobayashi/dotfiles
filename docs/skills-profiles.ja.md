@@ -30,7 +30,7 @@ Git リポジトリ内のどこから実行しても、`git rev-parse --show-top
 
 Project scope では `--profile` を必須にします。未指定の場合は、暗黙の default を入れずにエラーにします。
 
-外部 skill はリポジトリ root で公式の `skills` CLI を使ってインストールします。生成される外部 skill 実体と root の `skills-lock.json` は CLI に管理させます。
+外部 skill は、project 外の private なステージングディレクトリで公式の `skills` CLI を実行してインストールし、生成された `skills-lock.json` と agent skill ディレクトリを project に移動します。
 
 自作 local skill は `skills-lock.json` には入れません。dotfiles から、選択した agent の project skill ディレクトリへ symlink します。
 
@@ -666,7 +666,7 @@ npx skills add <owner/repo> \
   --yes
 ```
 
-これはリポジトリ root で実行し、`skills-lock.json` と agent ごとの project output path は CLI に管理させます。
+setup はこれを project 外の private なステージングディレクトリで実行し、生成された `skills-lock.json` と agent skill ディレクトリを project に移動します。
 
 既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、profile 管理版に置き換えます。ただし、選択されなくなった、または存在しなくなった skill を指す `skills/local` へのリンクと、その未編集の管理コピーは戻さず、backup にだけ残します。編集済みのコピーは warning を出して残します。予約名の既存 entry も他の entry と同様に戻します。予約名で失敗するのは install が生成した entry だけです。Git の dirty state は warning に留め、実行自体は止めません。
 
