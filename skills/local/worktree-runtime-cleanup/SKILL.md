@@ -36,9 +36,9 @@ cleanup session, so discover them from process state.
 1. Resolve the target worktree and list candidates with
    `scripts/list-processes.sh` in this skill's directory. The script only reads
    process state. A non-zero exit means the listing is unavailable, never
-   empty: report the processes as unverified. A row can contain invalid UTF-8,
-   from a `command` cut mid-character or from invalid argv, so read the output
-   under `LC_ALL=C` in shell tools.
+   empty: report the processes as unverified. A row can contain invalid UTF-8.
+   Run the script under the caller's locale and apply `LC_ALL=C` to the tool
+   that reads its output, as in `list-processes.sh <path> | LC_ALL=C cut -f1`.
    - A worktree path given: `list-processes.sh <path>`.
    - No argument: `list-processes.sh` targets the current worktree root.
    - `--stale` given: `list-processes.sh --stale` lists processes whose cwd or
@@ -81,7 +81,9 @@ together for one worktree as a set count as one run: record the first list
 before any starts and the second after all end.
 
 1. Before the run, record `scripts/list-processes.sh <worktree>` in this
-   skill's directory.
+   skill's directory. Take both lists under the same locale, because `started`
+   follows it, and apply `LC_ALL=C` only to a tool that reads them, as in
+   `list-processes.sh <worktree> | LC_ALL=C cut -f1`.
 2. After the run, whether it succeeded or failed, list again. A process running
    `app-server-broker.mjs` is a broker this run started only when it is absent
    from the first list, by PID and start time, and its `cwd` column in the

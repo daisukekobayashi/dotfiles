@@ -14,8 +14,9 @@
 # brokers and daemons. <started> lets callers detect PID reuse before stopping.
 # <command> is the ps argument line under the caller's locale, cut to 200
 # bytes, so it may end inside a multibyte character. It never establishes
-# ownership. A row can hold invalid UTF-8 from that cut or from invalid argv,
-# so a shell reader should read the output under LC_ALL=C.
+# ownership. A row can contain invalid UTF-8. Run this script under the
+# caller's locale and apply LC_ALL=C to the tool that reads its output, as in
+# "list-processes.sh <path> | LC_ALL=C cut -f1".
 # <cwd> is escaped so every process stays on one line: newline as \n, tab as
 # \t, backslash as \\, and other control bytes as \xNN; other bytes are as-is.
 # Without /proc, lsof prints a control byte and a literal "^A" to "^_" alike.
@@ -56,7 +57,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,56p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
