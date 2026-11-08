@@ -497,13 +497,14 @@ check_unreadable_cmdline() {
 @test "list-processes keeps a row with an empty command when cut fails" {
   local bin="${BATS_TEST_TMPDIR}/failing-cut" pid
   mkdir -p "${bin}"
-  printf '#!/bin/sh\nexit 1\n' >"${bin}/cut"
+  printf '#!/bin/sh\necho "cut: failed" >&2\nexit 1\n' >"${bin}/cut"
   chmod +x "${bin}/cut"
   start_in "${target}"
   pid="${started_pid}"
   sleep 0.3
 
-  run -0 env PATH="${bin}:${PATH}" "${script}" "${target}"
+  run -0 --separate-stderr env PATH="${bin}:${PATH}" "${script}" "${target}"
+  [ -z "${stderr}" ]
   [ "$(row_for "${pid}" | LC_ALL=C cut -f6)" = "cwd under target" ]
   [ "$(row_for "${pid}" | LC_ALL=C awk -F '\t' '{ print NF }')" -eq 7 ]
   [ -z "$(row_for "${pid}" | LC_ALL=C cut -f7-)" ]

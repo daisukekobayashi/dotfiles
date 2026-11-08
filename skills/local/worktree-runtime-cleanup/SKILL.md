@@ -36,7 +36,9 @@ cleanup session, so discover them from process state.
 1. Resolve the target worktree and list candidates with
    `scripts/list-processes.sh` in this skill's directory. The script only reads
    process state. A non-zero exit means the listing is unavailable, never
-   empty: report the processes as unverified.
+   empty: report the processes as unverified. A row can contain invalid UTF-8,
+   from a `command` cut mid-character or from invalid argv, so read the output
+   under `LC_ALL=C` in shell tools.
    - A worktree path given: `list-processes.sh <path>`.
    - No argument: `list-processes.sh` targets the current worktree root.
    - `--stale` given: `list-processes.sh --stale` lists processes whose cwd or
