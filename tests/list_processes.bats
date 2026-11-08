@@ -770,6 +770,48 @@ check_unreadable_cmdline() {
   [ "$(row_for "${pid}" | cut -f6)" = "--cwd under target" ]
 }
 
+# procps prints a control byte as "." under LC_ALL=C and "?" under UTF-8. The
+# readings differ there, so a --cwd is never read past that byte, nor at all
+# when they differ before it, however long the line; a line is read only up
+# to its first byte >= 0x80 past 4096 bytes.
+@test "list-processes ps fallback never reads a --cwd past where the readings differ" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister bin pid dotted pad short_pad long_pad
+  lister="$(ps_script)"
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  bin="$(sequenced_ps)"
+  start_with_args --cwd placeholder
+  pid="${started_pid}"
+  wait_for_runners "${pid}"
+  dotted="${target}/w."
+  mkdir -p "${dotted}/x" "${target}/日"
+  short_pad="$(printf 'a%.0s' {1..3000})"
+  long_pad="$(printf 'a%.0s' {1..5000})"
+
+  # Prints the reason for $pid when ps prints $1, $2, then $3 for its args.
+  reason_for() {
+    rm -f "${BATS_TEST_TMPDIR}/count-differ"
+    run -0 env PATH="${bin}:${PATH}" FAKE_PID="${pid}" \
+      FAKE_PS_COUNT="${BATS_TEST_TMPDIR}/count-differ" \
+      FAKE_ARGS_1="$1" FAKE_ARGS_2="$2" FAKE_ARGS_3="${3:-}" "${lister}" "$4"
+    row_for "${pid}" | cut -f6
+  }
+
+  for pad in "" "${short_pad}" "${long_pad}"; do
+    [ "$(reason_for "bash argv-runner -p x${pad} --cwd ${dotted}/x" \
+      "bash argv-runner -p x${pad} --cwd ${target}/w?/x" "" "${dotted}")" = "--cwd ambiguous" ]
+  done
+  [ "$(reason_for "bash argv-runner .x --cwd ${dotted}/x" \
+    "bash argv-runner ?x --cwd ${dotted}/x" "" "${dotted}")" = "--cwd ambiguous" ]
+
+  [ "$(reason_for "bash argv-runner -p ${short_pad} --cwd ${target}/M-fM^WM-%" \
+    "bash argv-runner -p ${short_pad} --cwd ${target}/日" \
+    "bash argv-runner -p ${short_pad} --cwd ${target}/M-fM^WM-%" "${target}/日")" = "--cwd under target" ]
+  [ "$(reason_for "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" \
+    "bash argv-runner -p ${long_pad} --cwd ${target}/日" \
+    "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" "${target}/日")" = "--cwd ambiguous" ]
+}
+
 # ps prints "--cwd= --watch" and an empty --cwd before "--watch" alike, as
 # text that also reads as a --cwd of " --watch"; the empty reading keeps
 # --stale from calling either missing.

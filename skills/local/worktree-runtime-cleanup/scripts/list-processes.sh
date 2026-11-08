@@ -34,8 +34,9 @@
 # equals the first, so argv changed once between the readings is never read
 # as a mix of two values; argv a process rewrites more than once between
 # them can still be, but such a process could put any --cwd in its argv. A
-# line longer than 4096 bytes that the readings differ on is read under
-# LC_ALL=C alone. PATH mode lists
+# line the readings differ on is cut at its first byte >= 0x80 past 4096
+# bytes, and a --cwd value that starts past where the line is cut is
+# unreadable. PATH mode lists
 # "--cwd under target" when every candidate is PATH or below it, and
 # "--cwd ambiguous" when only some may be; such a row never establishes
 # ownership. --stale lists "--cwd missing" only when every candidate, read in
@@ -51,7 +52,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -217,8 +218,8 @@ probe_utf8_locale() {
 # before either ends, and ps_line_raw when it keeps a byte >= 0x80. An ASCII
 # byte agrees when $2 has the same byte. A byte >= 0x80 agrees only within a
 # valid UTF-8 sequence of $1 whose bytes $2 prints as "M-x", "M^x", "M^?", or
-# "\240" each. The "?" makes readable_prefix cut the line there. A differing $1
-# longer than ps_line_max bytes is not read: ps_line is "?" alone.
+# "\240" each. The "?" makes readable_prefix cut the line there. A byte >=
+# 0x80 after the first ps_line_max bytes of a differing $1 is not read.
 ps_line_max=4096
 confirmed_reading() {
   local LC_ALL=C u="$1" c="$2" out="" head n k code lo hi enc ch
@@ -226,10 +227,6 @@ confirmed_reading() {
   if [[ "${u}" == "${c}" ]]; then
     ps_line="${u}"
     if [[ "${u}" == *[$'\x80'-$'\xff']* ]]; then ps_line_raw=1; fi
-    return 0
-  fi
-  if ((${#u} > ps_line_max)); then
-    ps_line="?"
     return 0
   fi
   while [[ -n "${u}" ]]; do
@@ -253,6 +250,7 @@ confirmed_reading() {
       c="${c:${#head}}"
       continue
     fi
+    ((${#out} < ps_line_max)) || break
     printf -v code '%d' "'${u:0:1}"
     # Bash 3.2 may print a byte >= 0x80 as negative; codes are 0 to 255.
     code=$((code & 255))
@@ -304,6 +302,14 @@ confirmed_reading() {
   else
     ps_line="${out}"
   fi
+}
+
+# Sets ps_line to the ps line $1 up to its first byte >= 0x80, followed by "?".
+ascii_prefix() {
+  local LC_ALL=C line
+  # Byte matching: LC_ALL=C applies only after the local above.
+  line="${1%%[$'\x80'-$'\xff']*}"
+  ps_line="${line}?"
 }
 
 # Sets value to the text after the first " --cwd=" or " --cwd " in the ps
@@ -365,12 +371,13 @@ cwd_argument() {
     # argv may change between the readings; see the header.
     if [[ -n "${ps_line_raw}" ]]; then
       recheck=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
-      [[ "${recheck}" == "${text}" ]] || ps_line="?"
+      [[ "${recheck}" == "${text}" ]] || ascii_prefix "${ps_line}"
     fi
     ps_cwd_value "${ps_line}"
   fi
-  # A UTF-8 reading cut before the value starts tells nothing about it.
-  [[ -n "${value}" && "${value}" != "?" ]] || ps_cwd_value "${text}"
+  # A --cwd past where the UTF-8 reading is cut is unreadable; see the header.
+  [[ "${ps_utf8}" == "C" || -n "${value}" ]] || value="?"
+  [[ "${ps_utf8}" != "C" ]] || ps_cwd_value "${text}"
   [[ -n "${value}" ]] || return 0
   while [[ "${value}" == *" "* ]]; do
     prefix+="${value%%" "*}"
