@@ -673,7 +673,7 @@ npx skills add <owner/repo> \
 
 user scope では、各インストールが生成したエントリを、指定していないものも含めてすべて1つのステージング view にコピーします。2つのインストールが同じ名前のエントリを生成した場合は `skill entry collision in user staging: <entry> (<earlier source>, <later source>)` で失敗し、user view を入れ替えません。インストールがそのステージングディレクトリの `.agents/skills` または `.agents` をシンボリックリンク、またはディレクトリ以外のものにした場合は、`skill entry collision in user staging: <path> (<source>, symbolic link)` または `skill entry collision in user staging: <path> (<source>, not a directory)` で失敗し、そこから何もコピーせず、user view を入れ替えません。
 
-project scope では、各インストールを1つのプライベートディレクトリで順に実行し、CLI はそこにある同じ名前の skill を削除してコピーし直します。先のインストールが生成したエントリを後のインストールが削除または置き換えた場合は、内容が同じでも `skill entry collision in project install: <entry> (<earlier source>, <later source>)` で失敗し、backup から project を復元します。インストールがそのディレクトリの `.agents/skills`、`.claude/skills`、`.agents`、`.claude` をシンボリックリンク、またはディレクトリ以外のものにした場合は、`skill entry collision in project install: <path> (<source>, symbolic link)` または `skill entry collision in project install: <path> (<source>, not a directory)` で失敗し、backup から project を復元します。
+project scope では、各インストールを1つのプライベートディレクトリで順に実行します。先のインストールが生成したエントリを後のインストールが削除、置き換え、またはその中身を変更した場合 (ファイルのその場での書き換え、ファイルの追加、権限の変更など) は、内容が同じでも `skill entry collision in project install: <entry> (<earlier source>, <later source>)` で失敗し、backup から project を復元します。インストールがそのディレクトリの `.agents/skills`、`.claude/skills`、`.agents`、`.claude` をシンボリックリンク、またはディレクトリ以外のものにした場合は、`skill entry collision in project install: <path> (<source>, symbolic link)` または `skill entry collision in project install: <path> (<source>, not a directory)` で失敗し、backup から project を復元します。
 
 ## Local Skills
 
