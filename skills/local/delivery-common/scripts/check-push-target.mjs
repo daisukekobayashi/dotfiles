@@ -24,7 +24,7 @@
 //   after `insteadOf` rewriting) must name the given repository. With
 //   --remote, the named remote must exist; for --github, its fetch and push
 //   URLs must all name one `<owner>/<repo>` on <host>, which becomes the head
-//   repository, and for --azure it is used as given.
+//   repository, and for --azure they must all name the given repository.
 //   Prints the remote on line 1 and, for --github, the head `<owner>/<repo>`
 //   on line 2.
 //   Accepted URL forms, each split the way git splits it so that the host
@@ -264,6 +264,9 @@ const resolve = (args) => {
   if (named !== undefined) {
     if (!remotes.includes(named)) fail([`remote not found: ${JSON.stringify(named)}`]);
     if (azure) {
+      if (!remoteUrls(named).every((url) => parseAzure(url) === expected)) {
+        fail([`remote ${JSON.stringify(named)} does not name ${expected} in its fetch and every push URL`]);
+      }
       process.stdout.write(`${named}\n`);
       return;
     }

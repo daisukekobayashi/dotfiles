@@ -48,8 +48,7 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    `node <cleanup-script> remote <facts>`, where `<facts>` is
    `--azure '<org>' '<project>' '<repo>' --branch <branch> --pr-state <status> --pr-head <lastMergeSourceCommit> --cross-repo <true when forkSource is set> --default-branch '<default branch>' --protected <true when any policy applies> --open-prs <other active PRs>`
    with the default branch without `refs/heads/`, plus `--remote '<name>'`
-   when the user names one (the check then keeps the remote branch, because a
-   named Azure DevOps remote is not checked against the PR repository), writing the organization, project, and repository
+   when the user names one, writing the organization, project, and repository
    percent-decoded and only when each uses solely ASCII letters, digits, space,
    `.`, `_`, and `-`, and every other value only when it uses solely ASCII
    letters, digits, `/`, `:`, `.`, `_`, and `-` (otherwise stop and report),
