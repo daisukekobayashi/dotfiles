@@ -16,8 +16,8 @@
 # bytes, so it may end inside a multibyte character. It never establishes
 # ownership. A row can contain invalid UTF-8. Run this script under the
 # caller's locale, check its exit status, and only then apply LC_ALL=C to the
-# tool that reads its saved output, as in
-# "list-processes.sh <path> >list && LC_ALL=C cut -f1 list".
+# tool that reads its saved output, as in:
+#   list="$(mktemp)" && list-processes.sh <path> >"$list" && LC_ALL=C cut -f1 "$list"
 # <cwd> is escaped so every process stays on one line: newline as \n, tab as
 # \t, backslash as \\, and other control bytes as \xNN; other bytes are as-is.
 # Without /proc, lsof prints a control byte and a literal "^A" to "^_" alike.

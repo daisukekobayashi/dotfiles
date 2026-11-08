@@ -39,7 +39,7 @@ cleanup session, so discover them from process state.
    empty: report the processes as unverified. A row can contain invalid UTF-8.
    Run the script under the caller's locale, check its exit status, and only
    then apply `LC_ALL=C` to the tool that reads its saved output, as in
-   `list-processes.sh <path> >list && LC_ALL=C cut -f1 list`.
+   `list="$(mktemp)" && list-processes.sh <path> >"$list" && LC_ALL=C cut -f1 "$list"`.
    - A worktree path given: `list-processes.sh <path>`.
    - No argument: `list-processes.sh` targets the current worktree root.
    - `--stale` given: `list-processes.sh --stale` lists processes whose cwd or
@@ -83,8 +83,8 @@ before any starts and the second after all end.
 
 1. Before the run, record `scripts/list-processes.sh <worktree>` in this
    skill's directory. Take both lists under the same locale, because `started`
-   follows it. Save each full list, check its exit status, and only then read
-   it with `LC_ALL=C` tools.
+   follows it. Save each full list outside the worktree, check its exit status,
+   and only then read it with `LC_ALL=C` tools.
 2. After the run, whether it succeeded or failed, list again. A process running
    `app-server-broker.mjs` is a broker this run started only when it is absent
    from the first list, by PID and start time, and its `cwd` column in the
