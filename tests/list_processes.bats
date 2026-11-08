@@ -736,6 +736,31 @@ check_unreadable_cmdline() {
   }
 }
 
+# Bytes >= 0x80 are read only within a window at the start of a line, so a
+# dense run of them before a long ASCII run costs little.
+@test "list-processes ps fallback reads non-ASCII before a long ASCII run without slowing down" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  local lister dense start plain_time long_time pid
+  lister="$(ps_script)"
+  start="${SECONDS}"
+  run -0 "${lister}" "${target}"
+  plain_time=$((SECONDS - start))
+  dense="$(printf 'é%.0s' {1..2000})"
+  start_with_args "x${dense}$(printf 'a%.0s' {1..40000})" --cwd "${target}"
+  pid="${started_pid}"
+  wait_for_runners "${pid}"
+
+  start="${SECONDS}"
+  run -0 "${lister}" "${target}"
+  long_time=$((SECONDS - start))
+  [ -n "$(row_for "${pid}" | cut -f6)" ]
+  ((long_time - plain_time < 4)) || {
+    echo "listing took ${long_time}s with the long line, ${plain_time}s without"
+    return 1
+  }
+}
+
 # The first reading under LC_ALL=C sees a literal "x-$-'/M-CM-)", and the
 # UTF-8 one and the second LC_ALL=C one see "x<U+2427>/é", which macOS ps
 # prints as "x-$-'/é" and "xM-bM^PM-'/M-CM-)". Read together, the first two
@@ -810,6 +835,23 @@ check_unreadable_cmdline() {
   [ "$(reason_for "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" \
     "bash argv-runner -p ${long_pad} --cwd ${target}/日" \
     "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" "${target}/日")" = "--cwd ambiguous" ]
+}
+
+# A line with no --cwd value, which the readings agree on in full, has no
+# --cwd at all; only a line cut before its value has an unreadable one.
+@test "list-processes ps fallback lists no --cwd for a line without a value" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister bare ish
+  lister="$(ps_script)"
+  start_with_args --cwd
+  bare="${started_pid}"
+  start_with_args --cwdish "${target}"
+  ish="${started_pid}"
+  wait_for_runners "${bare}" "${ish}"
+
+  run -0 "${lister}" "${target}"
+  [ -z "$(row_for "${bare}")" ]
+  [ -z "$(row_for "${ish}")" ]
 }
 
 # ps prints "--cwd= --watch" and an empty --cwd before "--watch" alike, as

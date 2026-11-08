@@ -215,21 +215,38 @@ probe_utf8_locale() {
 
 # Sets ps_line to the ps line $1, read under a UTF-8 locale, up to where it
 # agrees with $2, read under LC_ALL=C, followed by "?" when they disagree
-# before either ends, and ps_line_raw when it keeps a byte >= 0x80. An ASCII
-# byte agrees when $2 has the same byte. A byte >= 0x80 agrees only within a
-# valid UTF-8 sequence of $1 whose bytes $2 prints as "M-x", "M^x", "M^?", or
-# "\240" each. The "?" makes readable_prefix cut the line there. A byte >=
+# before either ends, ps_line_cut when it adds that "?", and ps_line_raw
+# when it keeps a byte >= 0x80. An ASCII byte agrees when $2 has the same
+# byte. A byte >= 0x80 agrees only within a valid UTF-8 sequence of $1 whose
+# bytes $2 prints as "M-x", "M^x", "M^?", or "\240" each. The "?" makes readable_prefix cut the line there. A byte >=
 # 0x80 after the first ps_line_max bytes of a differing $1 is not read.
 ps_line_max=4096
 confirmed_reading() {
-  local LC_ALL=C u="$1" c="$2" out="" head n k code lo hi enc ch
+  local LC_ALL=C u="$1" c="$2" out="" head n k code lo hi enc ch rest_u rest_c
   ps_line_raw=""
+  ps_line_cut=""
   if [[ "${u}" == "${c}" ]]; then
     ps_line="${u}"
     if [[ "${u}" == *[$'\x80'-$'\xff']* ]]; then ps_line_raw=1; fi
     return 0
   fi
-  while [[ -n "${u}" ]]; do
+  # Each step copies what is left of u and c, so the steps that may read a
+  # byte >= 0x80 run on a window: the first ps_line_max + 3 bytes of $1 hold
+  # every byte they may read, and $2 prints each byte in at most 4 bytes. The
+  # rest joins only once the window is used up, when just an ASCII run can
+  # still agree.
+  rest_u="${u:ps_line_max + 3}"
+  rest_c="${c:4 * (ps_line_max + 3)}"
+  u="${u:0:ps_line_max + 3}"
+  c="${c:0:4 * (ps_line_max + 3)}"
+  while :; do
+    if [[ -z "${u}" ]]; then
+      [[ -n "${rest_u}" ]] || break
+      u="${rest_u}"
+      c+="${rest_c}"
+      rest_u=""
+      rest_c=""
+    fi
     # Compare the ASCII run up to the next byte >= 0x80 at once, keeping the
     # longest common prefix, found by bisection, when it differs.
     head="${u%%[$'\x80'-$'\xff']*}"
@@ -297,8 +314,9 @@ confirmed_reading() {
     u="${u:n}"
     c="${c:${#enc}}"
   done
-  if [[ -n "${u}" || -n "${c}" ]]; then
+  if [[ -n "${u}${c}${rest_u}${rest_c}" ]]; then
     ps_line="${out}?"
+    ps_line_cut=1
   else
     ps_line="${out}"
   fi
@@ -310,6 +328,7 @@ ascii_prefix() {
   # Byte matching: LC_ALL=C applies only after the local above.
   line="${1%%[$'\x80'-$'\xff']*}"
   ps_line="${line}?"
+  ps_line_cut=1
 }
 
 # Sets value to the text after the first " --cwd=" or " --cwd " in the ps
@@ -376,7 +395,7 @@ cwd_argument() {
     ps_cwd_value "${ps_line}"
   fi
   # A --cwd past where the UTF-8 reading is cut is unreadable; see the header.
-  [[ "${ps_utf8}" == "C" || -n "${value}" ]] || value="?"
+  [[ "${ps_utf8}" == "C" || -n "${value}" || -z "${ps_line_cut}" ]] || value="?"
   [[ "${ps_utf8}" != "C" ]] || ps_cwd_value "${text}"
   [[ -n "${value}" ]] || return 0
   while [[ "${value}" == *" "* ]]; do
