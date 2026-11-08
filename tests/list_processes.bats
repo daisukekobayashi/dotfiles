@@ -128,6 +128,39 @@ require_ps_meta_notation() {
     skip "ps does not print a byte >= 0x80 as \"M-x\" under LC_ALL=C"
 }
 
+# A ps on PATH that prints $FAKE_ARGS_1, $FAKE_ARGS_2, ... in turn for the args
+# of pid $FAKE_PID, counting those calls in the file $FAKE_PS_COUNT, as when
+# the process rewrites its argv between them. Other calls, and calls past the
+# last value set, run the real ps.
+sequenced_ps() {
+  local bin="${BATS_TEST_TMPDIR}/seq-bin" real
+  real="$(command -v ps)"
+  mkdir -p "${bin}"
+  cat >"${bin}/ps" <<EOF
+#!/usr/bin/env bash
+prev="" field="" pid=""
+for arg in "\$@"; do
+  case "\${prev}" in
+    -o) field="\${arg}" ;;
+    -p) pid="\${arg}" ;;
+  esac
+  prev="\${arg}"
+done
+if [[ "\${pid}" == "\${FAKE_PID}" && "\${field}" == "args=" ]]; then
+  n=\$((\$(cat "\${FAKE_PS_COUNT}" 2>/dev/null || echo 0) + 1))
+  echo "\${n}" >"\${FAKE_PS_COUNT}"
+  var="FAKE_ARGS_\${n}"
+  if [[ -n "\${!var:-}" ]]; then
+    printf '%s\\n' "\${!var}"
+    exit 0
+  fi
+fi
+exec "${real}" "\$@"
+EOF
+  chmod +x "${bin}/ps"
+  printf '%s' "${bin}"
+}
+
 # A PATH whose locale command reports no UTF-8 locale.
 path_without_utf8() {
   local bin="${BATS_TEST_TMPDIR}/noutf8-bin"
@@ -673,6 +706,68 @@ check_unreadable_cmdline() {
 
   run -0 env LC_ALL=C "${lister}" "${invalid}"
   [ "$(row_for "${invalid_pid}" | cut -f6)" = "--cwd ambiguous" ]
+}
+
+# A line the two readings differ on is walked in runs, and one longer than
+# 4096 bytes is read under LC_ALL=C alone, so a long argument line costs little.
+@test "list-processes ps fallback reads a long argument line without slowing down" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister base short long start plain_time long_time
+  lister="$(ps_script)"
+  base="$(mkdir -p "${target}/作業" && cd "${target}/作業" && pwd -P)"
+  start="${SECONDS}"
+  run -0 "${lister}" "${base}"
+  plain_time=$((SECONDS - start))
+  start_with_args -p "$(printf 'a%.0s' {1..3000})" --cwd "${base}/x"
+  short="${started_pid}"
+  start_with_args -p "$(printf 'a%.0s' {1..30000})" --cwd "${base}/x"
+  long="${started_pid}"
+  wait_for_runners "${short}" "${long}"
+  require_ps_meta_notation "${short}"
+
+  start="${SECONDS}"
+  run -0 "${lister}" "${base}"
+  long_time=$((SECONDS - start))
+  [ "$(row_for "${short}" | cut -f6)" = "--cwd under target" ]
+  [ "$(row_for "${long}" | cut -f6)" = "--cwd ambiguous" ]
+  ((long_time - plain_time < 3)) || {
+    echo "listing took ${long_time}s with long lines, ${plain_time}s without"
+    return 1
+  }
+}
+
+# The first reading under LC_ALL=C sees a literal "x-$-'/M-CM-)", and the
+# UTF-8 one and the second LC_ALL=C one see "x<U+2427>/é", which macOS ps
+# prints as "x-$-'/é" and "xM-bM^PM-'/M-CM-)". Read together, the first two
+# would give "x-$-'/é", a value argv never held.
+@test "list-processes ps fallback never reads a --cwd mixed from two argv values" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister bin pid mixed
+  lister="$(ps_script)"
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  bin="$(sequenced_ps)"
+  start_with_args --cwd placeholder
+  pid="${started_pid}"
+  wait_for_runners "${pid}"
+  mixed="${target}/x-\$-'/é"
+  mkdir -p "${mixed}" "${target}/日"
+
+  run -0 env PATH="${bin}:${PATH}" FAKE_PID="${pid}" \
+    FAKE_PS_COUNT="${BATS_TEST_TMPDIR}/count-mixed" \
+    FAKE_ARGS_1="bash argv-runner --cwd ${target}/x-\$-'/M-CM-)" \
+    FAKE_ARGS_2="bash argv-runner --cwd ${mixed}" \
+    FAKE_ARGS_3="bash argv-runner --cwd ${target}/xM-bM^PM-'/M-CM-)" \
+    "${lister}" "${mixed}"
+  [ "$(row_for "${pid}" | cut -f6)" = "--cwd ambiguous" ]
+
+  # Unchanged argv: both LC_ALL=C readings agree, so the bytes are read.
+  run -0 env PATH="${bin}:${PATH}" FAKE_PID="${pid}" \
+    FAKE_PS_COUNT="${BATS_TEST_TMPDIR}/count-same" \
+    FAKE_ARGS_1="bash argv-runner --cwd ${target}/M-fM^WM-%" \
+    FAKE_ARGS_2="bash argv-runner --cwd ${target}/日" \
+    FAKE_ARGS_3="bash argv-runner --cwd ${target}/M-fM^WM-%" \
+    "${lister}" "${target}/日"
+  [ "$(row_for "${pid}" | cut -f6)" = "--cwd under target" ]
 }
 
 # ps prints "--cwd= --watch" and an empty --cwd before "--watch" alike, as
