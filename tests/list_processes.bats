@@ -109,6 +109,67 @@ ps_script() {
   printf '%s' "${copy}"
 }
 
+# Prints the UTF-8 locale the script's ps fallback uses, or nothing.
+utf8_locale() {
+  local loc
+  for loc in C.UTF-8 en_US.UTF-8; do
+    if [[ "$(LC_ALL="${loc}" locale charmap 2>/dev/null)" == "UTF-8" ]]; then
+      printf '%s' "${loc}"
+      return 0
+    fi
+  done
+}
+
+# Skips unless a UTF-8 locale exists and ps under LC_ALL=C prints the non-ASCII
+# bytes of pid $1 in the meta notation "M-x", as macOS ps does.
+require_ps_meta_notation() {
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  [[ "$(LC_ALL=C ps -ww -o args= -p "$1")" == *M-* ]] ||
+    skip "ps does not print a byte >= 0x80 as \"M-x\" under LC_ALL=C"
+}
+
+# A ps on PATH that prints $FAKE_ARGS_1, $FAKE_ARGS_2, ... in turn for the args
+# of pid $FAKE_PID, counting those calls in the file $FAKE_PS_COUNT, as when
+# the process rewrites its argv between them. Other calls, and calls past the
+# last value set, run the real ps.
+sequenced_ps() {
+  local bin="${BATS_TEST_TMPDIR}/seq-bin" real
+  real="$(command -v ps)"
+  mkdir -p "${bin}"
+  cat >"${bin}/ps" <<EOF
+#!/usr/bin/env bash
+prev="" field="" pid=""
+for arg in "\$@"; do
+  case "\${prev}" in
+    -o) field="\${arg}" ;;
+    -p) pid="\${arg}" ;;
+  esac
+  prev="\${arg}"
+done
+if [[ "\${pid}" == "\${FAKE_PID}" && "\${field}" == "args=" ]]; then
+  n=\$((\$(cat "\${FAKE_PS_COUNT}" 2>/dev/null || echo 0) + 1))
+  echo "\${n}" >"\${FAKE_PS_COUNT}"
+  var="FAKE_ARGS_\${n}"
+  if [[ -n "\${!var:-}" ]]; then
+    printf '%s\\n' "\${!var}"
+    exit 0
+  fi
+fi
+exec "${real}" "\$@"
+EOF
+  chmod +x "${bin}/ps"
+  printf '%s' "${bin}"
+}
+
+# A PATH whose locale command reports no UTF-8 locale.
+path_without_utf8() {
+  local bin="${BATS_TEST_TMPDIR}/noutf8-bin"
+  mkdir -p "${bin}"
+  printf '#!/bin/sh\necho US-ASCII\n' >"${bin}/locale"
+  chmod +x "${bin}/locale"
+  printf '%s:%s' "${bin}" "${PATH}"
+}
+
 # Starts a process in $outside with the arguments "$@", and sets started_pid.
 # The runner is written once per test, since rewriting it races with a runner
 # still starting, and bash runs it directly so no shebang or env is involved.
@@ -568,7 +629,8 @@ check_unreadable_cmdline() {
 
 # The script reads a ps --cwd only up to a "^" or "?", the ways macOS ps and
 # procps in a UTF-8 locale print a control byte. procps 4.0.4 under LC_ALL=C
-# prints it as ".", which no marker can tell from a literal ".".
+# prints it as ".", which no marker can tell from a literal "."; the script
+# then cuts the line where that reading and the UTF-8 one disagree.
 @test "list-processes ps fallback lists a --cwd that may extend into the target as ambiguous" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
   local lister base dir_pid rendered
@@ -579,11 +641,217 @@ check_unreadable_cmdline() {
   dir_pid="${started_pid}"
   wait_for_runners "${dir_pid}"
   rendered="$(LC_ALL=C ps -ww -o args= -p "${dir_pid}")"
-  [[ "${rendered}" == *"${base}"[\^?]* ]] ||
-    skip "ps renders a control byte without \"^\" or \"?\": ${rendered##*"${base}"}"
+  [[ -n "$(utf8_locale)" || "${rendered}" == *"${base}"[\^?]* ]] ||
+    skip "no UTF-8 locale, and ps renders a control byte without \"^\" or \"?\": ${rendered##*"${base}"}"
 
   run -0 "${lister}" "${target}"
   [ "$(row_for "${dir_pid}" | cut -f6)" = "--cwd ambiguous" ]
+}
+
+# Under LC_ALL=C, ps prints the non-ASCII bytes of "作業" and "ム" (which ends
+# in 0xa0) as "M-x" and "\240"; the UTF-8 reading gives them as they are.
+@test "list-processes ps fallback reads a non-ASCII --cwd that both ps readings agree on" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister base under gone
+  lister="$(ps_script)"
+  base="$(mkdir -p "${target}/作業ム" && cd "${target}/作業ム" && pwd -P)"
+  start_with_args --cwd "${base}/x y"
+  under="${started_pid}"
+  start_with_args --cwd "${outside}/消えたム"
+  gone="${started_pid}"
+  wait_for_runners "${under}" "${gone}"
+  require_ps_meta_notation "${under}"
+
+  run -0 "${lister}" "${base}"
+  [ "$(row_for "${under}" | cut -f6)" = "--cwd under target" ]
+
+  run -0 "${lister}" --stale
+  [ "$(row_for "${gone}" | cut -f6)" = "--cwd missing" ]
+
+  # Without a UTF-8 locale the bytes stay unread, as under LC_ALL=C alone.
+  run -0 env PATH="$(path_without_utf8)" "${lister}" "${base}"
+  [ "$(row_for "${under}" | cut -f6)" = "--cwd ambiguous" ]
+  run -0 env PATH="$(path_without_utf8)" "${lister}" --stale
+  [ -z "$(row_for "${gone}")" ]
+}
+
+# macOS ps in a UTF-8 locale prints U+2427 as the text "-$-'", with no marker,
+# and invalid UTF-8 such as 0xff as it is; neither is read past. The runs that
+# list a 0xff use LC_ALL=C, since cut in a UTF-8 locale rejects the command
+# column of such a process and the script then drops its row.
+@test "list-processes ps fallback never reads a character that ps prints as other text" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister symbol forged invalid symbol_pid invalid_pid gone_pid
+  lister="$(ps_script)"
+  symbol="${outside}/x"$'\xe2\x90\xa7'
+  forged="${outside}/x-\$-'"
+  invalid="${target}/b"$'\xff'
+  mkdir -p "${symbol}" 2>/dev/null || skip "the file system rejects U+2427"
+  start_with_args --cwd "${symbol}"
+  symbol_pid="${started_pid}"
+  start_with_args --cwd "${invalid}/x"
+  invalid_pid="${started_pid}"
+  start_with_args --cwd "${outside}/gone"$'\xff'
+  gone_pid="${started_pid}"
+  wait_for_runners "${symbol_pid}" "${invalid_pid}" "${gone_pid}"
+
+  run -0 "${lister}" --stale
+  [ -z "$(row_for "${symbol_pid}")" ]
+  run -0 env LC_ALL=C "${lister}" --stale
+  [ -z "$(row_for "${gone_pid}")" ]
+
+  mkdir -p "${forged}"
+  run -0 "${lister}" "${forged}"
+  [ "$(row_for "${symbol_pid}" | cut -f6)" != "--cwd under target" ]
+
+  run -0 env LC_ALL=C "${lister}" "${invalid}"
+  [ "$(row_for "${invalid_pid}" | cut -f6)" = "--cwd ambiguous" ]
+}
+
+# A line the two readings differ on is walked in runs, and one longer than
+# 4096 bytes is read under LC_ALL=C alone, so a long argument line costs little.
+@test "list-processes ps fallback reads a long argument line without slowing down" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister base short long start plain_time long_time
+  lister="$(ps_script)"
+  base="$(mkdir -p "${target}/作業" && cd "${target}/作業" && pwd -P)"
+  start="${SECONDS}"
+  run -0 "${lister}" "${base}"
+  plain_time=$((SECONDS - start))
+  start_with_args -p "$(printf 'a%.0s' {1..3000})" --cwd "${base}/x"
+  short="${started_pid}"
+  start_with_args -p "$(printf 'a%.0s' {1..30000})" --cwd "${base}/x"
+  long="${started_pid}"
+  wait_for_runners "${short}" "${long}"
+  require_ps_meta_notation "${short}"
+
+  start="${SECONDS}"
+  run -0 "${lister}" "${base}"
+  long_time=$((SECONDS - start))
+  [ "$(row_for "${short}" | cut -f6)" = "--cwd under target" ]
+  [ "$(row_for "${long}" | cut -f6)" = "--cwd ambiguous" ]
+  ((long_time - plain_time < 3)) || {
+    echo "listing took ${long_time}s with long lines, ${plain_time}s without"
+    return 1
+  }
+}
+
+# Bytes >= 0x80 are read only within a window at the start of a line, so a
+# dense run of them before a long ASCII run costs little.
+@test "list-processes ps fallback reads non-ASCII before a long ASCII run without slowing down" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  local lister dense start plain_time long_time pid
+  lister="$(ps_script)"
+  start="${SECONDS}"
+  run -0 "${lister}" "${target}"
+  plain_time=$((SECONDS - start))
+  dense="$(printf 'é%.0s' {1..2000})"
+  start_with_args "x${dense}$(printf 'a%.0s' {1..40000})" --cwd "${target}"
+  pid="${started_pid}"
+  wait_for_runners "${pid}"
+
+  start="${SECONDS}"
+  run -0 "${lister}" "${target}"
+  long_time=$((SECONDS - start))
+  [ -n "$(row_for "${pid}" | cut -f6)" ]
+  ((long_time - plain_time < 4)) || {
+    echo "listing took ${long_time}s with the long line, ${plain_time}s without"
+    return 1
+  }
+}
+
+# The first reading under LC_ALL=C sees a literal "x-$-'/M-CM-)", and the
+# UTF-8 one and the second LC_ALL=C one see "x<U+2427>/é", which macOS ps
+# prints as "x-$-'/é" and "xM-bM^PM-'/M-CM-)". Read together, the first two
+# would give "x-$-'/é", a value argv never held.
+@test "list-processes ps fallback never reads a --cwd mixed from two argv values" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister bin pid mixed
+  lister="$(ps_script)"
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  bin="$(sequenced_ps)"
+  start_with_args --cwd placeholder
+  pid="${started_pid}"
+  wait_for_runners "${pid}"
+  mixed="${target}/x-\$-'/é"
+  mkdir -p "${mixed}" "${target}/日"
+
+  run -0 env PATH="${bin}:${PATH}" FAKE_PID="${pid}" \
+    FAKE_PS_COUNT="${BATS_TEST_TMPDIR}/count-mixed" \
+    FAKE_ARGS_1="bash argv-runner --cwd ${target}/x-\$-'/M-CM-)" \
+    FAKE_ARGS_2="bash argv-runner --cwd ${mixed}" \
+    FAKE_ARGS_3="bash argv-runner --cwd ${target}/xM-bM^PM-'/M-CM-)" \
+    "${lister}" "${mixed}"
+  [ "$(row_for "${pid}" | cut -f6)" = "--cwd ambiguous" ]
+
+  # Unchanged argv: both LC_ALL=C readings agree, so the bytes are read.
+  run -0 env PATH="${bin}:${PATH}" FAKE_PID="${pid}" \
+    FAKE_PS_COUNT="${BATS_TEST_TMPDIR}/count-same" \
+    FAKE_ARGS_1="bash argv-runner --cwd ${target}/M-fM^WM-%" \
+    FAKE_ARGS_2="bash argv-runner --cwd ${target}/日" \
+    FAKE_ARGS_3="bash argv-runner --cwd ${target}/M-fM^WM-%" \
+    "${lister}" "${target}/日"
+  [ "$(row_for "${pid}" | cut -f6)" = "--cwd under target" ]
+}
+
+# procps prints a control byte as "." under LC_ALL=C and "?" under UTF-8. The
+# readings differ there, so a --cwd is never read past that byte, nor at all
+# when they differ before it, however long the line; a line is read only up
+# to its first byte >= 0x80 past 4096 bytes.
+@test "list-processes ps fallback never reads a --cwd past where the readings differ" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister bin pid dotted pad short_pad long_pad
+  lister="$(ps_script)"
+  [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+  bin="$(sequenced_ps)"
+  start_with_args --cwd placeholder
+  pid="${started_pid}"
+  wait_for_runners "${pid}"
+  dotted="${target}/w."
+  mkdir -p "${dotted}/x" "${target}/日"
+  short_pad="$(printf 'a%.0s' {1..3000})"
+  long_pad="$(printf 'a%.0s' {1..5000})"
+
+  # Prints the reason for $pid when ps prints $1, $2, then $3 for its args.
+  reason_for() {
+    rm -f "${BATS_TEST_TMPDIR}/count-differ"
+    run -0 env PATH="${bin}:${PATH}" FAKE_PID="${pid}" \
+      FAKE_PS_COUNT="${BATS_TEST_TMPDIR}/count-differ" \
+      FAKE_ARGS_1="$1" FAKE_ARGS_2="$2" FAKE_ARGS_3="${3:-}" "${lister}" "$4"
+    row_for "${pid}" | cut -f6
+  }
+
+  for pad in "" "${short_pad}" "${long_pad}"; do
+    [ "$(reason_for "bash argv-runner -p x${pad} --cwd ${dotted}/x" \
+      "bash argv-runner -p x${pad} --cwd ${target}/w?/x" "" "${dotted}")" = "--cwd ambiguous" ]
+  done
+  [ "$(reason_for "bash argv-runner .x --cwd ${dotted}/x" \
+    "bash argv-runner ?x --cwd ${dotted}/x" "" "${dotted}")" = "--cwd ambiguous" ]
+
+  [ "$(reason_for "bash argv-runner -p ${short_pad} --cwd ${target}/M-fM^WM-%" \
+    "bash argv-runner -p ${short_pad} --cwd ${target}/日" \
+    "bash argv-runner -p ${short_pad} --cwd ${target}/M-fM^WM-%" "${target}/日")" = "--cwd under target" ]
+  [ "$(reason_for "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" \
+    "bash argv-runner -p ${long_pad} --cwd ${target}/日" \
+    "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" "${target}/日")" = "--cwd ambiguous" ]
+}
+
+# A line with no --cwd value, which the readings agree on in full, has no
+# --cwd at all; only a line cut before its value has an unreadable one.
+@test "list-processes ps fallback lists no --cwd for a line without a value" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister bare ish
+  lister="$(ps_script)"
+  start_with_args --cwd
+  bare="${started_pid}"
+  start_with_args --cwdish "${target}"
+  ish="${started_pid}"
+  wait_for_runners "${bare}" "${ish}"
+
+  run -0 "${lister}" "${target}"
+  [ -z "$(row_for "${bare}")" ]
+  [ -z "$(row_for "${ish}")" ]
 }
 
 # ps prints "--cwd= --watch" and an empty --cwd before "--watch" alike, as

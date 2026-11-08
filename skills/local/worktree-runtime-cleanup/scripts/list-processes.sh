@@ -25,7 +25,18 @@
 # arguments with spaces, so the value after the first --cwd may end at any
 # later space: each such reading is a candidate. ps prints a control byte as
 # "^X", "\ooo", or "?" but a literal "^", "\", or "?" as is, so a candidate is
-# read only up to its first "\", "^", "?", or "M-". PATH mode lists
+# read only up to its first "\", "^", "?", or "M-". Under LC_ALL=C, ps prints
+# a byte >= 0x80 as "M-x", "M^x", or "\240". When a UTF-8 locale exists, a
+# second ps reading under it gives such bytes as they are, but only within
+# valid UTF-8 that both readings agree on; the line ends where they first
+# disagree, since that ps may print a character as text that names other
+# bytes. Such bytes are read only when a third ps reading under LC_ALL=C
+# equals the first, so argv changed once between the readings is never read
+# as a mix of two values; argv a process rewrites more than once between
+# them can still be, but such a process could put any --cwd in its argv. A
+# line the readings differ on is cut at its first byte >= 0x80 past 4096
+# bytes, and a --cwd value that starts past where the line is cut is
+# unreadable. PATH mode lists
 # "--cwd under target" when every candidate is PATH or below it, and
 # "--cwd ambiguous" when only some may be; such a row never establishes
 # ownership. --stale lists "--cwd missing" only when every candidate, read in
@@ -41,7 +52,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,51p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -186,6 +197,160 @@ encode_cwd() {
   printf '%s' "${out}"
 }
 
+# The UTF-8 locale of the second ps reading in cwd_argument: "" until probed,
+# "C" when there is none.
+ps_utf8=""
+
+# Sets ps_utf8 to the first of C.UTF-8 and en_US.UTF-8 whose charmap is UTF-8.
+probe_utf8_locale() {
+  local loc
+  ps_utf8="C"
+  for loc in C.UTF-8 en_US.UTF-8; do
+    if [[ "$(LC_ALL="${loc}" locale charmap 2>/dev/null)" == "UTF-8" ]]; then
+      ps_utf8="${loc}"
+      return 0
+    fi
+  done
+}
+
+# Sets ps_line to the ps line $1, read under a UTF-8 locale, up to where it
+# agrees with $2, read under LC_ALL=C, followed by "?" when they disagree
+# before either ends, ps_line_cut when it adds that "?", and ps_line_raw
+# when it keeps a byte >= 0x80. An ASCII byte agrees when $2 has the same
+# byte. A byte >= 0x80 agrees only within a valid UTF-8 sequence of $1 whose
+# bytes $2 prints as "M-x", "M^x", "M^?", or "\240" each. The "?" makes readable_prefix cut the line there. A byte >=
+# 0x80 after the first ps_line_max bytes of a differing $1 is not read.
+ps_line_max=4096
+confirmed_reading() {
+  local LC_ALL=C u="$1" c="$2" out="" head n k code lo hi enc ch rest_u rest_c
+  ps_line_raw=""
+  ps_line_cut=""
+  if [[ "${u}" == "${c}" ]]; then
+    ps_line="${u}"
+    if [[ "${u}" == *[$'\x80'-$'\xff']* ]]; then ps_line_raw=1; fi
+    return 0
+  fi
+  # Each step copies what is left of u and c, so the steps that may read a
+  # byte >= 0x80 run on a window: the first ps_line_max + 3 bytes of $1 hold
+  # every byte they may read, and $2 prints each byte in at most 4 bytes. The
+  # rest joins only once the window is used up, when just an ASCII run can
+  # still agree.
+  rest_u="${u:ps_line_max + 3}"
+  rest_c="${c:4 * (ps_line_max + 3)}"
+  u="${u:0:ps_line_max + 3}"
+  c="${c:0:4 * (ps_line_max + 3)}"
+  while :; do
+    if [[ -z "${u}" ]]; then
+      [[ -n "${rest_u}" ]] || break
+      u="${rest_u}"
+      c+="${rest_c}"
+      rest_u=""
+      rest_c=""
+    fi
+    # Compare the ASCII run up to the next byte >= 0x80 at once, keeping the
+    # longest common prefix, found by bisection, when it differs.
+    head="${u%%[$'\x80'-$'\xff']*}"
+    if [[ -n "${head}" ]]; then
+      if [[ "${c:0:${#head}}" != "${head}" ]]; then
+        lo=0
+        hi=${#head}
+        while ((lo < hi)); do
+          k=$(((lo + hi + 1) / 2))
+          if [[ "${c:0:k}" == "${head:0:k}" ]]; then lo=${k}; else hi=$((k - 1)); fi
+        done
+        out+="${head:0:lo}"
+        u="${u:lo}"
+        break
+      fi
+      out+="${head}"
+      u="${u:${#head}}"
+      c="${c:${#head}}"
+      continue
+    fi
+    ((${#out} < ps_line_max)) || break
+    printf -v code '%d' "'${u:0:1}"
+    # Bash 3.2 may print a byte >= 0x80 as negative; codes are 0 to 255.
+    code=$((code & 255))
+    # n is the length of the UTF-8 sequence, and lo to hi the range of its
+    # second byte, which excludes overlong forms and surrogates.
+    n=0 lo=128 hi=191
+    if ((code >= 0xc2 && code <= 0xdf)); then
+      n=2
+    elif ((code >= 0xe0 && code <= 0xef)); then
+      n=3
+      if ((code == 0xe0)); then lo=160; fi
+      if ((code == 0xed)); then hi=159; fi
+    elif ((code >= 0xf0 && code <= 0xf4)); then
+      n=4
+      if ((code == 0xf0)); then lo=144; fi
+      if ((code == 0xf4)); then hi=143; fi
+    fi
+    ((n > 0 && n <= ${#u})) || break
+    enc=""
+    for ((k = 0; k < n; k++)); do
+      printf -v code '%d' "'${u:k:1}"
+      code=$((code & 255))
+      if ((k == 1 && (code < lo || code > hi) || k > 1 && (code < 128 || code > 191))); then
+        enc=""
+        break
+      fi
+      if ((code == 255)); then
+        enc+="M^?"
+      elif ((code == 160)); then
+        enc+='\240'
+      elif ((code < 160)); then
+        printf -v ch '\\x%02x' $((code - 64))
+        printf -v ch '%b' "${ch}"
+        enc+="M^${ch}"
+      else
+        printf -v ch '\\x%02x' $((code - 128))
+        printf -v ch '%b' "${ch}"
+        enc+="M-${ch}"
+      fi
+    done
+    [[ -n "${enc}" && "${c:0:${#enc}}" == "${enc}" ]] || break
+    out+="${u:0:n}"
+    ps_line_raw=1
+    u="${u:n}"
+    c="${c:${#enc}}"
+  done
+  if [[ -n "${u}${c}${rest_u}${rest_c}" ]]; then
+    ps_line="${out}?"
+    ps_line_cut=1
+  else
+    ps_line="${out}"
+  fi
+}
+
+# Sets ps_line to the ps line $1 up to its first byte >= 0x80, followed by "?".
+ascii_prefix() {
+  local LC_ALL=C line
+  # Byte matching: LC_ALL=C applies only after the local above.
+  line="${1%%[$'\x80'-$'\xff']*}"
+  ps_line="${line}?"
+  ps_line_cut=1
+}
+
+# Sets value to the text after the first " --cwd=" or " --cwd " in the ps
+# line $1, or to "" when there is none.
+ps_cwd_value() {
+  local text="$1"
+  value=""
+  while [[ "${text}" == *" --cwd"* ]]; do
+    text="${text#*" --cwd"}"
+    case "${text}" in
+      =*)
+        value="${text#=}"
+        break
+        ;;
+      " "?*)
+        value="${text# }"
+        break
+        ;;
+    esac
+  done
+}
+
 # Sets arg_cwds to the candidate values of the first --cwd argument, and
 # arg_from_ps when they come from ps; see the header. arg_cwds is empty
 # without a --cwd. A ps candidate may be empty, as for "--cwd= --watch" or an
@@ -194,7 +359,7 @@ encode_cwd() {
 # exits meanwhile, counts as no --cwd and prints nothing on stderr; the ps
 # lookups later skip a process that has exited.
 cwd_argument() {
-  local pid="$1" prev="" arg text value prefix=""
+  local pid="$1" prev="" arg text utf8_text recheck value="" prefix=""
   arg_cwds=()
   arg_from_ps=""
   if [[ -r "/proc/${pid}/cmdline" ]]; then
@@ -214,22 +379,25 @@ cwd_argument() {
     return 0
   fi
   arg_from_ps=1
-  # LC_ALL=C keeps ps from printing bytes as they are in a multibyte locale.
+  # LC_ALL=C keeps ps from printing bytes as they are in a multibyte locale;
+  # the UTF-8 reading supplies them only where confirmed_reading agrees.
   text=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
-  while [[ "${text}" == *" --cwd"* ]]; do
-    text="${text#*" --cwd"}"
-    case "${text}" in
-      =*)
-        value="${text#=}"
-        break
-        ;;
-      " "?*)
-        value="${text# }"
-        break
-        ;;
-    esac
-  done
-  [[ -n "${value:-}" ]] || return 0
+  [[ "${text}" == *" --cwd"* ]] || return 0
+  [[ -n "${ps_utf8}" ]] || probe_utf8_locale
+  if [[ "${ps_utf8}" != "C" ]]; then
+    utf8_text=" $(LC_ALL="${ps_utf8}" ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
+    confirmed_reading "${utf8_text}" "${text}"
+    # argv may change between the readings; see the header.
+    if [[ -n "${ps_line_raw}" ]]; then
+      recheck=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
+      [[ "${recheck}" == "${text}" ]] || ascii_prefix "${ps_line}"
+    fi
+    ps_cwd_value "${ps_line}"
+  fi
+  # A --cwd past where the UTF-8 reading is cut is unreadable; see the header.
+  [[ "${ps_utf8}" == "C" || -n "${value}" || -z "${ps_line_cut}" ]] || value="?"
+  [[ "${ps_utf8}" != "C" ]] || ps_cwd_value "${text}"
+  [[ -n "${value}" ]] || return 0
   while [[ "${value}" == *" "* ]]; do
     prefix+="${value%%" "*}"
     arg_cwds+=("${prefix}")
@@ -242,7 +410,9 @@ cwd_argument() {
 # Prints the part of a ps candidate before its first "\", "^", "?", or "M-", or
 # the whole candidate when it has none.
 readable_prefix() {
-  local cut="${1%%[\\^?]*}"
+  local LC_ALL=C cut
+  # Byte matching: LC_ALL=C applies only after the local above.
+  cut="${1%%[\\^?]*}"
   [[ "${cut}" == *M-* ]] && cut="${cut%%M-*}"
   printf '%s' "${cut}"
 }
@@ -251,7 +421,7 @@ readable_prefix() {
 # A candidate cut short by readable_prefix is under the target when its
 # readable part already is; it may be when the target extends that part.
 classify_arg_under() {
-  local i cand cut under=0 maybe=0
+  local LC_ALL=C i cand cut under=0 maybe=0
   arg_under=""
   for ((i = 0; i < ${#arg_cwds[@]}; i++)); do
     cand="${arg_cwds[i]}"
