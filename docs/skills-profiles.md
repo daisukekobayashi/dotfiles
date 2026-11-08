@@ -30,7 +30,7 @@ Expected command shape:
 
 Project scope requires an explicit `--profile`. If it is omitted, setup should fail rather than installing an implicit default.
 
-External skills are installed by the official `skills` CLI from the repository root. The CLI owns generated external skill files and the repository root `skills-lock.json`.
+Setup runs the official `skills` CLI for external skills in a private staging directory outside the project, then moves the generated `skills-lock.json` and agent skill directories into the project.
 
 Custom local skills are not written into `skills-lock.json`. They are linked from dotfiles into each selected agent's project skill directory.
 
@@ -687,7 +687,7 @@ npx skills add <owner/repo> \
   --yes
 ```
 
-Run this from the repository root and let the CLI manage `skills-lock.json` and agent-specific project output paths.
+Setup runs this in a private staging directory outside the project, then moves the generated `skills-lock.json` and agent skill directories into the project.
 
 If an existing `skills-lock.json` or agent skill directory will be replaced, create a backup first and restore it if installation fails. On successful installs, copy back pre-existing agent skill entries that were not recreated by the selected profile. Entries with the same name as profile-managed skills are replaced by the profile-managed version. Links into `skills/local` for skills that are no longer selected or no longer exist, and unchanged managed copies of them, are not copied back; they stay only in the backup. Edited copies are kept with a warning. Pre-existing entries with a reserved name are copied back like any other entry; only entries an install produces fail on a reserved name. Dirty Git state should produce a warning, not block execution.
 
