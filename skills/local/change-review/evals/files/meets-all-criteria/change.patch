@@ -1,0 +1,75 @@
+diff --git a/README.md b/README.md
+index 124f059..2a4e64e 100644
+--- a/README.md
++++ b/README.md
+@@ -11,6 +11,7 @@ python3 export.py orders.csv
+ | Flag | Meaning |
+ | --- | --- |
+ | `--region REGION` | Print only rows for this region |
++| `-s`, `--since YYYY-MM-DD` | Print only rows dated on or after this date |
+ 
+ Run the tests with `python3 -m unittest`.
+ 
+diff --git a/export.py b/export.py
+index 30e5622..61e11b1 100644
+--- a/export.py
++++ b/export.py
+@@ -1,21 +1,33 @@
+ import argparse
+ import csv
++import datetime
+ 
+ 
+-def rows(path, region=None):
++def parse_date(value):
++    try:
++        return datetime.date.fromisoformat(value)
++    except ValueError:
++        raise argparse.ArgumentTypeError(f"invalid date: {value}")
++
++
++def rows(path, region=None, since=None):
+     with open(path, newline="") as source:
+         for row in csv.DictReader(source):
+-            if region is None or row["region"] == region:
+-                yield row
++            if region is not None and row["region"] != region:
++                continue
++            if since is not None and datetime.date.fromisoformat(row["date"]) < since:
++                continue
++            yield row
+ 
+ 
+ def main(argv=None):
+     parser = argparse.ArgumentParser()
+     parser.add_argument("path")
+     parser.add_argument("--region")
++    parser.add_argument("-s", "--since", type=parse_date)
+     args = parser.parse_args(argv)
+ 
+-    for row in rows(args.path, args.region):
++    for row in rows(args.path, args.region, args.since):
+         print(",".join(row.values()))
+ 
+ 
+diff --git a/test_export.py b/test_export.py
+index fc97b2e..ad3851a 100644
+--- a/test_export.py
++++ b/test_export.py
+@@ -19,6 +19,16 @@ class ExportTest(unittest.TestCase):
+     def test_region_filters_rows(self):
+         self.assertEqual([line[0] for line in run("--region", "east")], ["1", "3"])
+ 
++    def test_since_filters_rows(self):
++        self.assertEqual([line[0] for line in run("--since", "2024-02-20")], ["2", "3"])
++
++    def test_invalid_since_exits_with_status_2(self):
++        err = io.StringIO()
++        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
++            run("--since", "not-a-date")
++        self.assertEqual(caught.exception.code, 2)
++        self.assertIn("invalid date", err.getvalue())
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
