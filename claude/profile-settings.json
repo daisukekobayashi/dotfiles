@@ -6,9 +6,21 @@
     "sessionUrl": false
   },
   "permissions": {
+    "ask": [
+      "Bash(gh pr merge *)",
+      "Bash(git push * main)",
+      "Bash(git push * main *)",
+      "Bash(git push *:main)",
+      "Bash(git push *:main *)",
+      "Bash(git push *+main)",
+      "Bash(git push *+main *)",
+      "Bash(git push *refs/heads/main)",
+      "Bash(git push *refs/heads/main *)"
+    ],
     "deny": [
-      "Read(./.env)",
-      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(!**/.env.example)",
       "Read(./secrets/**)"
     ]
   },

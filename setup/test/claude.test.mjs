@@ -841,3 +841,29 @@ fs.renameSync = (source, target) => {
   assert.equal(fs.readFileSync(path.join(f.destination, ".dotfiles-env.json"), "utf8"), before['.dotfiles-env.json']);
   assert.equal(fs.readdirSync(f.destination).some(name => name.startsWith('.dotfiles-claude-stage-')), true);
 });
+
+test("shared and profile settings keep one permission rule set with the carve-out after its deny rules", () => {
+  const permissions = name => JSON.parse(fs.readFileSync(path.join(repo, "claude", name), "utf8")).permissions;
+  const shared = permissions("settings.json");
+  assert.deepEqual(permissions("profile-settings.json"), shared);
+  const { ask, deny } = shared;
+  assert.deepEqual(ask, [
+    "Bash(gh pr merge *)",
+    "Bash(git push * main)",
+    "Bash(git push * main *)",
+    "Bash(git push *:main)",
+    "Bash(git push *:main *)",
+    "Bash(git push *+main)",
+    "Bash(git push *+main *)",
+    "Bash(git push *refs/heads/main)",
+    "Bash(git push *refs/heads/main *)",
+  ]);
+  assert.deepEqual(deny, [
+    "Read(**/.env)",
+    "Read(**/.env.*)",
+    "Read(!**/.env.example)",
+    "Read(./secrets/**)",
+  ]);
+  assert.ok(deny.indexOf("Read(!**/.env.example)") > deny.indexOf("Read(**/.env.*)"));
+  assert.ok(deny.indexOf("Read(**/.env.*)") >= 0);
+});
