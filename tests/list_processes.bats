@@ -175,7 +175,13 @@ path_without_utf8() {
 # still starting, and bash runs it directly so no shebang or env is involved.
 # sleep alone rejects extra arguments on macOS.
 start_with_args() {
-  local runner="${BATS_TEST_TMPDIR}/argv-runner"
+  start_with_args_in "${outside}" "$@"
+}
+
+# The same with its cwd in $1.
+start_with_args_in() {
+  local dir="$1" runner="${BATS_TEST_TMPDIR}/argv-runner"
+  shift
   if [[ ! -e "${runner}" ]]; then
     cat >"${runner}.tmp" <<'EOF'
 trap 'kill "${child}" 2>/dev/null; exit 0' TERM
@@ -185,7 +191,7 @@ wait "${child}"
 EOF
     mv "${runner}.tmp" "${runner}"
   fi
-  (cd "${outside}" && exec bash "${runner}" "$@") &
+  (cd "${dir}" && exec bash "${runner}" "$@") &
   started_pid=$!
   pids+=("${started_pid}")
 }
@@ -227,7 +233,7 @@ assert_no_forged_row() {
 }
 
 row_for() {
-  awk -F '\t' -v pid="$1" '$1 == pid' <<<"${output}"
+  LC_ALL=C awk -F '\t' -v pid="$1" '$1 == pid' <<<"${output}"
 }
 
 # $2 is the expected reason: the 0x01 in the name makes an lsof cwd ambiguous.
@@ -453,6 +459,57 @@ check_unreadable_cmdline() {
   done
 }
 
+# macOS cut in a UTF-8 locale rejects 0xff; the script used to drop such a row.
+@test "list-processes lists a process with invalid UTF-8 argv under a UTF-8 caller" {
+  local loc cwd_pid arg_pid
+  loc="$(utf8_locale)"
+  [[ -n "${loc}" ]] || skip "no UTF-8 locale"
+  start_with_args_in "${target}" $'a\xffb'
+  cwd_pid="${started_pid}"
+  start_with_args --cwd "${target}/b"$'\xff'"/x"
+  arg_pid="${started_pid}"
+  wait_for_runners "${cwd_pid}" "${arg_pid}"
+
+  run -0 --separate-stderr env LC_ALL="${loc}" "${script}" "${target}"
+  [ -z "${stderr}" ]
+  [ "$(row_for "${cwd_pid}" | LC_ALL=C cut -f6)" = "cwd under target" ]
+  [ "$(row_for "${arg_pid}" | LC_ALL=C cut -f6)" = "--cwd under target" ]
+}
+
+@test "list-processes cuts the command column at 200 bytes under a UTF-8 caller" {
+  local loc long long_pid short_pid expected
+  loc="$(utf8_locale)"
+  [[ -n "${loc}" ]] || skip "no UTF-8 locale"
+  long="$(printf '作%.0s' {1..150})"
+  start_with_args_in "${target}" "${long}"
+  long_pid="${started_pid}"
+  start_with_args_in "${target}" "作業"
+  short_pid="${started_pid}"
+  wait_for_runners "${long_pid}" "${short_pid}"
+
+  run -0 --separate-stderr env LC_ALL="${loc}" "${script}" "${target}"
+  [ -z "${stderr}" ]
+  [ "$(printf '%s' "$(row_for "${long_pid}" | LC_ALL=C cut -f7-)" | LC_ALL=C wc -c | tr -d ' ')" -eq 200 ]
+  expected="$(LC_ALL="${loc}" ps -ww -o args= -p "${short_pid}" | LC_ALL=C cut -b1-200)"
+  [ "$(row_for "${short_pid}" | LC_ALL=C cut -f7-)" = "${expected}" ]
+}
+
+@test "list-processes keeps a row with an empty command when cut fails" {
+  local bin="${BATS_TEST_TMPDIR}/failing-cut" pid
+  mkdir -p "${bin}"
+  printf '#!/bin/sh\necho "cut: failed" >&2\nexit 1\n' >"${bin}/cut"
+  chmod +x "${bin}/cut"
+  start_in "${target}"
+  pid="${started_pid}"
+  sleep 0.3
+
+  run -0 --separate-stderr env PATH="${bin}:${PATH}" "${script}" "${target}"
+  [ -z "${stderr}" ]
+  [ "$(row_for "${pid}" | LC_ALL=C cut -f6)" = "cwd under target" ]
+  [ "$(row_for "${pid}" | LC_ALL=C awk -F '\t' '{ print NF }')" -eq 7 ]
+  [ -z "$(row_for "${pid}" | LC_ALL=C cut -f7-)" ]
+}
+
 @test "list-processes escapes a crafted cwd instead of forging a row" {
   if [[ -d /proc/self ]]; then
     check_crafted_cwd "${script}" "cwd under target"
@@ -676,9 +733,7 @@ check_unreadable_cmdline() {
 }
 
 # macOS ps in a UTF-8 locale prints U+2427 as the text "-$-'", with no marker,
-# and invalid UTF-8 such as 0xff as it is; neither is read past. The runs that
-# list a 0xff use LC_ALL=C, since cut in a UTF-8 locale rejects the command
-# column of such a process and the script then drops its row.
+# and invalid UTF-8 such as 0xff as it is; neither is read past.
 @test "list-processes ps fallback never reads a character that ps prints as other text" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
   local lister symbol forged invalid symbol_pid invalid_pid gone_pid
@@ -697,15 +752,14 @@ check_unreadable_cmdline() {
 
   run -0 "${lister}" --stale
   [ -z "$(row_for "${symbol_pid}")" ]
-  run -0 env LC_ALL=C "${lister}" --stale
   [ -z "$(row_for "${gone_pid}")" ]
 
   mkdir -p "${forged}"
   run -0 "${lister}" "${forged}"
   [ "$(row_for "${symbol_pid}" | cut -f6)" != "--cwd under target" ]
 
-  run -0 env LC_ALL=C "${lister}" "${invalid}"
-  [ "$(row_for "${invalid_pid}" | cut -f6)" = "--cwd ambiguous" ]
+  run -0 "${lister}" "${invalid}"
+  [ "$(row_for "${invalid_pid}" | LC_ALL=C cut -f6)" = "--cwd ambiguous" ]
 }
 
 # A line the two readings differ on is walked in runs, and one longer than
@@ -754,7 +808,7 @@ check_unreadable_cmdline() {
   start="${SECONDS}"
   run -0 "${lister}" "${target}"
   long_time=$((SECONDS - start))
-  [ -n "$(row_for "${pid}" | cut -f6)" ]
+  [ -n "$(row_for "${pid}" | LC_ALL=C cut -f6)" ]
   ((long_time - plain_time < 4)) || {
     echo "listing took ${long_time}s with the long line, ${plain_time}s without"
     return 1
