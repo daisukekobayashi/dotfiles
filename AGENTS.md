@@ -1,5 +1,24 @@
 # Agent Instructions
 
+## Verification
+
+```bash
+npm --prefix setup ci              # restore dependencies in a fresh worktree
+npm --prefix setup test
+scripts/check-skills-build.sh
+bats tests
+bats tests/compose_rules.bats      # one file
+```
+
+`bats` needs Bash 4.1 or later, and `tests/setup_suite.bash` stops the run on
+older Bash. On macOS, put Homebrew bash ahead of `/bin/bash` 3.2 on `PATH`.
+
+`scripts/check-skills-build.sh` checks the committed setup runtime against its
+TypeScript sources: it rebuilds `setup/*.js` in place and fails on a difference
+or an untracked runtime file.
+
+`docs/testing.md` covers static, focused, Windows, and opt-in E2E checks.
+
 ## Delivery sensitive paths
 
 - exclude `skills/**/*.md` from agent instruction files
