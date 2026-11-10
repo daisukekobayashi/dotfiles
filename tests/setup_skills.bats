@@ -78,9 +78,10 @@ teardown() {
     skills
 
   [ "$status" -eq 0 ]
-  [ -d "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/frontend-design" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/playwright-cli" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
+  [ ! -e "${TEST_DOTFILES}/.agents/user/skills/writing-partner" ]
   [ -L "${TEST_DOTFILES}/.agents/user/skills/repo-execution-context" ]
   [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/repo-execution-context")" = "${TEST_DOTFILES}/skills/local/repo-execution-context" ]
   [ -L "${TEST_DOTFILES}/.agents/user/skills/local-runtime-port-isolation" ]
@@ -93,7 +94,7 @@ teardown() {
   [ "$(readlink "${TEST_HOME}/.claude/skills")" = "${TEST_DOTFILES}/.agents/user/skills" ]
   [ -L "${TEST_HOME}/.gemini/skills" ]
   [ "$(readlink "${TEST_HOME}/.gemini/skills")" = "/tmp/stale-gemini-skills" ]
-  grep -F 'skills add vercel-labs/skills' "${TEST_LOG}"
+  grep -F 'skills add anthropics/skills' "${TEST_LOG}"
   grep -F 'skills add microsoft/playwright-cli' "${TEST_LOG}"
   grep -F 'skills add upstash/context7' "${TEST_LOG}"
 }
@@ -127,7 +128,9 @@ teardown() {
 
   [ "$status" -eq 0 ]
   [ ! -e "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
-  [ ! -e "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
+  [ ! -e "${TEST_DOTFILES}/.agents/user/skills/frontend-design" ]
+  [ -L "${TEST_DOTFILES}/.agents/user/skills/writing-partner" ]
+  [ "$(readlink "${TEST_DOTFILES}/.agents/user/skills/writing-partner")" = "${TEST_DOTFILES}/skills/local/writing-partner" ]
   [ ! -e "${TEST_LOG}" ]
 }
 
@@ -144,8 +147,9 @@ teardown() {
     skills --scope user --profile workbench
 
   [ "$status" -eq 0 ]
-  [ -d "${TEST_DOTFILES}/.agents/user/skills/find-skills" ]
+  [ -d "${TEST_DOTFILES}/.agents/user/skills/frontend-design" ]
   [ -L "${TEST_DOTFILES}/.agents/user/skills/repo-execution-context" ]
+  [ -L "${TEST_DOTFILES}/.agents/user/skills/writing-partner" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/context7-cli" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/playwright-cli" ]
   [ -d "${TEST_DOTFILES}/.agents/user/skills/agent-browser" ]
