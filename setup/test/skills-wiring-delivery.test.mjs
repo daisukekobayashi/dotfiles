@@ -770,6 +770,35 @@ test("a missing prerequisite has one home that delivery links", async () => {
   }
 });
 
+test("foreground checks have one home that workers and reviewers reach", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const commonRaw = await readText(path.join(localRoot, "delivery-common", "SKILL.md"));
+  const home = flat(commonRaw.match(/\n## Foreground Checks\n[\s\S]*?(?=\n## |$)/)?.[0]);
+  assert.ok(home, "delivery-common: missing Foreground Checks");
+  assert.match(home, /runs every command whose result it awaits, including tests, builds, watchers, and review tool runs, in the foreground with a time bound, and never ends its turn waiting on a background job\./);
+  assert.match(home, /The coordinator acts on each agent's turn-end notice when it arrives instead of deferring it to a later check\./);
+  assert.match(home, /An idle agent whose last message says it is waiting has returned no result: check whether the job it names is running, then resume the agent once/);
+  assert.match(home, /If it ends its turn waiting again, or the job is hung, report the target as `Blocked` under Delivery Completion's \[Bounds\]\(references\/completion\.md#bounds\)\./);
+  assert.match(home, /Where the host gives no notice when an agent's turn ends, report that limitation and do not end your own turn while an agent is outstanding\./);
+  assert.match(commonRaw, /^description: .*handles an agent that went idle waiting on a background job/m);
+
+  const fromCommon = "[Foreground Checks](../SKILL.md#foreground-checks)";
+  const fromSkill = "[Foreground Checks](../delivery-common/SKILL.md#foreground-checks)";
+  const linking = {
+    "worker-dialogue.md": [path.join(localRoot, "delivery-common", "references", "worker-dialogue.md"), fromCommon],
+    "local-review.md": [path.join(localRoot, "delivery-common", "references", "local-review.md"), fromCommon],
+    "github-issue-start": [path.join(localRoot, "github-issue-start", "SKILL.md"), fromSkill],
+    "azure-devops-work-item-start": [path.join(localRoot, "azure-devops-work-item-start", "SKILL.md"), fromSkill],
+  };
+  for (const [name, [file, link]] of Object.entries(linking)) {
+    const text = flat(await readText(file));
+    assert.ok(text.includes(link), `${name}: links Foreground Checks`);
+    assert.doesNotMatch(text, /never ends its turn waiting on a background job|has returned no result/, `${name} restates Foreground Checks`);
+  }
+  const localReview = flat(await readText(linking["local-review.md"][0]));
+  assert.match(localReview, /Include \[Foreground Checks\]\(\.\.\/SKILL\.md#foreground-checks\) in every reviewer brief, for full reviews and focused follow-ups/);
+});
+
 test("skills profile docs keep one deliberate delivery restatement", async () => {
   const english = await readText(path.join(repoRoot, "docs", "skills-profiles.md"));
   const layering = flat(english.match(/\n### Delivery Policy Layering\n[\s\S]*?(?=\n### )/)?.[0]);
