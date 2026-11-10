@@ -48,17 +48,23 @@
 # ownership. --stale lists "--cwd missing" only when every candidate, read in
 # full, is missing.
 # The script and its ancestors are never listed. It only reads process state;
-# it never sends signals.
+# it never sends signals. It checks whether a process still exists with
+# "kill -0", which sends none.
 #
 # Exit status: 0 with no output when no process matches. When processes cannot
 # be listed, because there is neither /proc nor lsof or lsof does not report
 # this script's own process, it prints nothing on stdout, a message on stderr,
 # and exits 1: the listing is unavailable, never empty. lsof output cut short
-# after this script's own process goes undetected.
+# after this script's own process goes undetected. A ps lookup that decides or
+# fills a row (its --cwd argument, ppid, tty, lstart, or args) may fail, or
+# give no ppid, because the process exited meanwhile: such a process is
+# skipped with nothing on stderr. When it fails for a process that still
+# exists, or "kill -0" cannot tell whether the process exited, the listing is
+# unavailable in the same way.
 set -euo pipefail
 
 usage() {
-  sed -n '2,57p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,63p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 mode="path"
@@ -362,12 +368,14 @@ ps_cwd_value() {
 # without a --cwd. A ps candidate may be empty, as for "--cwd= --watch" or an
 # empty argument before "--watch": that reading has no --cwd, so it is never
 # under the target or missing. A cmdline that cannot be opened or read, as when the process
-# exits meanwhile, counts as no --cwd and prints nothing on stderr; the ps
-# lookups later skip a process that has exited.
+# exits meanwhile, counts as no --cwd and prints nothing on stderr. A ps
+# reading that fails sets arg_failed instead, for the caller to check with
+# skip_if_exited.
 cwd_argument() {
   local pid="$1" prev="" arg text utf8_text recheck value="" prefix=""
   arg_cwds=()
   arg_from_ps=""
+  arg_failed=""
   if [[ -r "/proc/${pid}/cmdline" ]]; then
     while IFS= read -r -d '' arg; do
       case "${arg}" in
@@ -387,15 +395,24 @@ cwd_argument() {
   arg_from_ps=1
   # LC_ALL=C keeps ps from printing bytes as they are in a multibyte locale;
   # the UTF-8 reading supplies them only where confirmed_reading agrees.
-  text=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
+  text=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || {
+    arg_failed=1
+    return 0
+  }
   [[ "${text}" == *" --cwd"* ]] || return 0
   [[ -n "${ps_utf8}" ]] || probe_utf8_locale
   if [[ "${ps_utf8}" != "C" ]]; then
-    utf8_text=" $(LC_ALL="${ps_utf8}" ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
+    utf8_text=" $(LC_ALL="${ps_utf8}" ps -ww -o args= -p "${pid}" 2>/dev/null)" || {
+      arg_failed=1
+      return 0
+    }
     confirmed_reading "${utf8_text}" "${text}"
     # argv may change between the readings; see the header.
     if [[ -n "${ps_line_raw}" ]]; then
-      recheck=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || return 0
+      recheck=" $(LC_ALL=C ps -ww -o args= -p "${pid}" 2>/dev/null)" || {
+        arg_failed=1
+        return 0
+      }
       [[ "${recheck}" == "${text}" ]] || ascii_prefix "${ps_line}"
     fi
     ps_cwd_value "${ps_line}"
@@ -565,6 +582,21 @@ maybe_under_target() {
   return 1
 }
 
+# Returns when process $1 no longer exists, after its ps lookup $2 failed;
+# otherwise the listing is unavailable. kill -0 sends no signal. It fails alike
+# for a process that is gone and one it may not signal, as under a sandbox, so
+# only its "No such process" message, read under LC_ALL=C, means gone.
+skip_if_exited() {
+  local LC_ALL=C pid="$1" lookup="$2" err
+  if err="$(kill -0 "${pid}" 2>&1)"; then
+    echo "ps could not read the ${lookup} of live process ${pid}; processes cannot be listed" >&2
+    exit 1
+  fi
+  [[ "${err}" == *"No such process"* ]] && return 0
+  echo "Cannot tell whether process ${pid} exited after its ${lookup} lookup failed; processes cannot be listed" >&2
+  exit 1
+}
+
 # The caller's shell usually runs inside the target; never list it.
 ancestors=" "
 pid=$$
@@ -593,15 +625,19 @@ if [[ -z "${complete}" ]]; then
   exit 1
 fi
 
+# Rows are printed only once every one is read, so a listing that turns out
+# unavailable part way prints nothing on stdout.
+rows=()
 for ((i = 0; i < ${#records[@]}; i++)); do
   record="${records[i]}"
   raw="${raws[i]}"
   pid="${record%%$'\t'*}"
   cwd="${record#*$'\t'}"
   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
-  # A process that exits mid-listing is skipped rather than ending the list:
-  # each lookup below fails for it, and set -e would otherwise stop the script.
-  cwd_argument "${pid}"
+  # A ps lookup fails for a process that exits mid-listing. skip_if_exited
+  # skips it rather than ending the list, and ends the list when it still
+  # exists; see the header. The --cwd argument is read only when it decides
+  # the row, so a failure that could not change the listing never ends it.
   reason=""
   case "${mode}" in
     path)
@@ -613,6 +649,11 @@ for ((i = 0; i < ${#records[@]}; i++)); do
         reason="cwd under target"
       fi
       if [[ -z "${reason}" ]]; then
+        cwd_argument "${pid}"
+        if [[ -n "${arg_failed}" ]]; then
+          skip_if_exited "${pid}" "--cwd argument"
+          continue
+        fi
         classify_arg_under
         case "${arg_under}" in
           all) reason="--cwd under target" ;;
@@ -625,24 +666,46 @@ for ((i = 0; i < ${#records[@]}; i++)); do
         reason="cwd ambiguous"
       elif is_missing "${cwd}"; then
         reason="cwd missing"
-      elif all_args_missing; then
-        reason="--cwd missing"
+      else
+        cwd_argument "${pid}"
+        if [[ -n "${arg_failed}" ]]; then
+          skip_if_exited "${pid}" "--cwd argument"
+          continue
+        fi
+        if all_args_missing; then
+          reason="--cwd missing"
+        fi
       fi
       ;;
   esac
   [[ -z "${reason}" ]] && continue
 
-  ppid="$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')" || continue
-  [[ -z "${ppid}" ]] && continue
-  tty="$(ps -o tty= -p "${pid}" 2>/dev/null | tr -d ' ')" || continue
+  # ps gives no ppid only for a process that is gone, so an empty one counts
+  # as a failed lookup.
+  if ! ppid="$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')" || [[ -z "${ppid}" ]]; then
+    skip_if_exited "${pid}" ppid
+    continue
+  fi
+  if ! tty="$(ps -o tty= -p "${pid}" 2>/dev/null | tr -d ' ')"; then
+    skip_if_exited "${pid}" tty
+    continue
+  fi
   [[ -z "${tty}" || "${tty}" == "??" ]] && tty="?"
-  started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')" || continue
-  # Only ps failing means the process exited. ps keeps the caller's locale so it
-  # prints text as is; cut in a multibyte locale rejects an invalid byte, so it
-  # runs under LC_ALL=C. A row never depends on cut, and cut stays off stderr,
-  # since check-cleanup-targets.mjs calls a listing with any stderr unavailable.
-  args="$(ps -ww -o args= -p "${pid}" 2>/dev/null)" || continue
+  if ! started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')"; then
+    skip_if_exited "${pid}" lstart
+    continue
+  fi
+  # ps keeps the caller's locale so it prints text as is; cut in a multibyte
+  # locale rejects an invalid byte, so it runs under LC_ALL=C. A row never
+  # depends on cut, and cut stays off stderr, since check-cleanup-targets.mjs
+  # calls a listing with any stderr unavailable.
+  if ! args="$(ps -ww -o args= -p "${pid}" 2>/dev/null)"; then
+    skip_if_exited "${pid}" args
+    continue
+  fi
   command="$({ printf '%s\n' "${args}" | LC_ALL=C cut -b1-200; } 2>/dev/null)" || command=""
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "${pid}" "${ppid}" "${tty}" "${started}" "$(encode_cwd "${cwd}")" "${reason}" "${command}"
+  rows+=("${row}")
 done
+((${#rows[@]} == 0)) || printf '%s\n' "${rows[@]}"

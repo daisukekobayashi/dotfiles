@@ -46,8 +46,11 @@ cmdline_script() {
   printf '%s' "${copy}"
 }
 
-# A ps on PATH that fails for pid $FAIL_PID and field $FAIL_FIELD, as ps does
-# for a process that exits between the cwd read and that lookup.
+# A ps on PATH that fails the lookup of field $FAIL_FIELD for pid $FAIL_PID.
+# With $FAIL_CALL set, only that call of the field fails, counting the calls in
+# the file $FAIL_COUNT. With $FAIL_KILL set, it first ends the process and waits
+# until it is gone, as when the process exits between the cwd read and that
+# lookup. With $FAIL_EMPTY set, it prints nothing and succeeds instead.
 fake_ps() {
   local bin="${BATS_TEST_TMPDIR}/bin" real
   real="$(command -v ps)"
@@ -62,11 +65,62 @@ for arg in "\$@"; do
   esac
   prev="\${arg}"
 done
-[[ "\${pid}" == "\${FAIL_PID}" && "\${field}" == "\${FAIL_FIELD}" ]] && exit 1
+if [[ "\${pid}" == "\${FAIL_PID:-}" && "\${field}" == "\${FAIL_FIELD:-}" ]]; then
+  if [[ -n "\${FAIL_CALL:-}" ]]; then
+    n=\$((\$(cat "\${FAIL_COUNT}" 2>/dev/null || echo 0) + 1))
+    echo "\${n}" >"\${FAIL_COUNT}"
+    [[ "\${n}" == "\${FAIL_CALL}" ]] || exec "${real}" "\$@"
+  fi
+  if [[ -n "\${FAIL_KILL:-}" ]]; then
+    kill "\${pid}" 2>/dev/null
+    for ((i = 0; i < 200; i++)); do
+      kill -0 "\${pid}" 2>/dev/null || break
+      sleep 0.05
+    done
+  fi
+  [[ -n "\${FAIL_EMPTY:-}" ]] && exit 0
+  exit 1
+fi
 exec "${real}" "\$@"
 EOF
   chmod +x "${bin}/ps"
   printf '%s' "${bin}"
+}
+
+# The same script with the liveness check of pid $EPERM_PID pointed at pid 1,
+# which this user may not signal, so kill -0 fails without saying the process
+# is gone. Other processes, such as ones that exit during the listing, keep
+# the real check.
+eperm_script() {
+  local copy="${BATS_TEST_TMPDIR}/list-processes-eperm.sh"
+  sed 's|kill -0 "${pid}"|kill -0 "$([[ "${pid}" == "${EPERM_PID:-}" ]] \&\& echo 1 \|\| echo "${pid}")"|' \
+    "${script}" >"${copy}"
+  grep -qF 'EPERM_PID' "${copy}"
+  chmod +x "${copy}"
+  printf '%s' "${copy}"
+}
+
+# Prints each bash to run the script under, one per line: the one on PATH and
+# /bin/bash when its version differs, as Bash 3.2 does on macOS.
+bash_shells() {
+  local path_bash
+  path_bash="$(command -v bash)"
+  printf '%s\n' "${path_bash}"
+  if [[ -x /bin/bash && "$(/bin/bash -c 'echo "${BASH_VERSION}"')" != "$("${path_bash}" -c 'echo "${BASH_VERSION}"')" ]]; then
+    printf '%s\n' /bin/bash
+  fi
+}
+
+# Prints a locale other than C that this system has, or nothing, so kill's
+# message is checked where the caller's locale might translate it.
+translated_locale() {
+  local loc
+  for loc in de_DE fr_FR ja_JP; do
+    if locale -a 2>/dev/null | grep -qiE "^${loc}\.utf-?8$"; then
+      printf '%s.UTF-8' "${loc}"
+      return 0
+    fi
+  done
 }
 
 # An lsof on PATH that exits $FAKE_LSOF_STATUS. With $FAKE_LSOF_PID set it
@@ -180,8 +234,27 @@ start_with_args() {
 
 # The same with its cwd in $1.
 start_with_args_in() {
-  local dir="$1" runner="${BATS_TEST_TMPDIR}/argv-runner"
+  local dir="$1" runner
   shift
+  runner="$(argv_runner)"
+  (cd "${dir}" && exec bash "${runner}" "$@") &
+  started_pid=$!
+  pids+=("${started_pid}")
+}
+
+# The same as an orphan, so it is reaped as soon as it exits, and kill -0 no
+# longer finds it, as for a process that is not this test's child.
+start_detached_with_args_in() {
+  local dir="$1" runner
+  shift
+  runner="$(argv_runner)"
+  started_pid="$( (cd "${dir}" && exec bash "${runner}" "$@") </dev/null >/dev/null 2>&1 & echo $!)"
+  pids+=("${started_pid}")
+}
+
+# Writes the argv runner once and prints its path.
+argv_runner() {
+  local runner="${BATS_TEST_TMPDIR}/argv-runner"
   if [[ ! -e "${runner}" ]]; then
     cat >"${runner}.tmp" <<'EOF'
 trap 'kill "${child}" 2>/dev/null; exit 0' TERM
@@ -191,9 +264,7 @@ wait "${child}"
 EOF
     mv "${runner}.tmp" "${runner}"
   fi
-  (cd "${dir}" && exec bash "${runner}" "$@") &
-  started_pid=$!
-  pids+=("${started_pid}")
+  printf '%s' "${runner}"
 }
 
 # Waits up to about 10 seconds until ps shows each pid in "$@" running the
@@ -439,24 +510,193 @@ check_unreadable_cmdline() {
   check_unreadable_cmdline "${checked}" "${BATS_TEST_TMPDIR}/cmdline-gone"
 }
 
-@test "list-processes skips a process that exits during its metadata lookup" {
-  local bin field gone kept
+# Runs the lister $1 under the bash $2 with the fake ps, the environment
+# assignments in the rest of the arguments up to "--", and the script
+# arguments after it, keeping stderr apart.
+run_lookup() {
+  local lister="$1" shell="$2" bin
+  shift 2
   bin="$(fake_ps)"
-  start_in "${target}"
-  gone="${started_pid}"
-  start_in "${target}"
-  kept="${started_pid}"
-  sleep 0.3
+  local -a assigns=()
+  while [[ "$1" != "--" ]]; do
+    assigns+=("$1")
+    shift
+  done
+  shift
+  run --separate-stderr env PATH="${bin}:${PATH}" "${assigns[@]}" "${shell}" "${lister}" "$@"
+}
 
-  for field in ppid= tty= lstart= args=; do
-    run -0 env PATH="${bin}:${PATH}" FAIL_PID="${gone}" FAIL_FIELD="${field}" \
-      "${script}" "${target}"
-    [ -z "$(row_for "${gone}")" ] || {
-      echo "listed after its ${field} lookup failed: ${output}"
+@test "list-processes skips a process that exits during its lookups" {
+  local shell field gone kept loc
+  loc="$(translated_locale)"
+
+  # Each listing takes seconds, so every run gets fresh processes.
+  while IFS= read -r shell; do
+    for field in ppid= tty= lstart= args= empty-ppid; do
+      start_in "${target}"
+      kept="${started_pid}"
+      start_detached_with_args_in "${target}"
+      gone="${started_pid}"
+      wait_for_runners "${gone}"
+      if [[ "${field}" == empty-ppid ]]; then
+        run_lookup "${script}" "${shell}" ${loc:+LC_ALL="${loc}"} FAIL_PID="${gone}" \
+          FAIL_FIELD=ppid= FAIL_KILL=1 FAIL_EMPTY=1 -- "${target}"
+      else
+        run_lookup "${script}" "${shell}" ${loc:+LC_ALL="${loc}"} FAIL_PID="${gone}" \
+          FAIL_FIELD="${field}" FAIL_KILL=1 -- "${target}"
+      fi
+      [ "${status}" -eq 0 ] && [ -z "${stderr}" ] || {
+        echo "${shell} ${field}: status ${status}, stderr: ${stderr}"
+        return 1
+      }
+      [ -z "$(row_for "${gone}")" ] || {
+        echo "${shell}: listed after its ${field} lookup failed: ${output}"
+        return 1
+      }
+      [ "$(row_for "${kept}" | wc -l | tr -d ' ')" -eq 1 ]
+    done
+  done < <(bash_shells)
+}
+
+@test "list-processes is unavailable when a lookup fails for a live process" {
+  local shell field live name
+
+  # Each listing takes seconds, so every run gets fresh processes.
+  while IFS= read -r shell; do
+    for field in ppid= tty= lstart= args= empty-ppid; do
+      start_in "${target}"
+      live="${started_pid}"
+      start_in "${target}"
+      sleep 0.3
+      if [[ "${field}" == empty-ppid ]]; then
+        name=ppid
+        run_lookup "${script}" "${shell}" FAIL_PID="${live}" FAIL_FIELD=ppid= FAIL_EMPTY=1 -- "${target}"
+      else
+        name="${field%=}"
+        run_lookup "${script}" "${shell}" FAIL_PID="${live}" FAIL_FIELD="${field}" -- "${target}"
+      fi
+      [ "${status}" -eq 1 ] && [ -z "${output}" ] &&
+        [ "${stderr}" = "ps could not read the ${name} of live process ${live}; processes cannot be listed" ] || {
+        echo "${shell} ${field}: status ${status}, stdout: ${output}, stderr: ${stderr}"
+        return 1
+      }
+    done
+  done < <(bash_shells)
+}
+
+@test "list-processes is unavailable when it cannot tell whether a process exited" {
+  local shell live gone
+  ! kill -0 1 2>/dev/null || skip "this user may signal pid 1"
+
+  while IFS= read -r shell; do
+    start_in "${target}"
+    live="${started_pid}"
+    sleep 0.3
+    run_lookup "$(eperm_script)" "${shell}" EPERM_PID="${live}" FAIL_PID="${live}" FAIL_FIELD=lstart= -- "${target}"
+    [ "${status}" -eq 1 ] && [ -z "${output}" ] &&
+      [ "${stderr}" = "Cannot tell whether process ${live} exited after its lstart lookup failed; processes cannot be listed" ] || {
+      echo "${shell} live: status ${status}, stdout: ${output}, stderr: ${stderr}"
       return 1
     }
-    [ "$(row_for "${kept}" | wc -l | tr -d ' ')" -eq 1 ]
-  done
+
+    start_detached_with_args_in "${target}"
+    gone="${started_pid}"
+    wait_for_runners "${gone}"
+    run_lookup "$(eperm_script)" "${shell}" EPERM_PID="${gone}" FAIL_PID="${gone}" FAIL_FIELD=lstart= \
+      FAIL_KILL=1 -- "${target}"
+    [ "${status}" -eq 1 ] && [ -z "${output}" ] &&
+      [ "${stderr}" = "Cannot tell whether process ${gone} exited after its lstart lookup failed; processes cannot be listed" ] || {
+      echo "${shell} gone: status ${status}, stdout: ${output}, stderr: ${stderr}"
+      return 1
+    }
+  done < <(bash_shells)
+}
+
+@test "list-processes ps fallback treats a failed --cwd reading like any other lookup" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister shell live stale gone call name missing
+  lister="$(ps_script)"
+  missing="${BATS_TEST_TMPDIR}/missing"
+
+  # The second reading is under a UTF-8 locale; without one the next args
+  # call is the row's own lookup. Each listing takes seconds, so every run
+  # gets fresh processes.
+  while IFS= read -r shell; do
+    for call in 1 2; do
+      start_with_args --cwd "${target}/x"
+      live="${started_pid}"
+      wait_for_runners "${live}"
+      name="--cwd argument"
+      [[ "${call}" == 2 && -z "$(utf8_locale)" ]] && name=args
+      rm -f "${BATS_TEST_TMPDIR}/count"
+      run_lookup "${lister}" "${shell}" FAIL_PID="${live}" FAIL_FIELD=args= FAIL_CALL="${call}" \
+        FAIL_COUNT="${BATS_TEST_TMPDIR}/count" -- "${target}"
+      [ "${status}" -eq 1 ] && [ -z "${output}" ] &&
+        [ "${stderr}" = "ps could not read the ${name} of live process ${live}; processes cannot be listed" ] || {
+        echo "${shell} call ${call}: status ${status}, stdout: ${output}, stderr: ${stderr}"
+        return 1
+      }
+
+      start_detached_with_args_in "${outside}" --cwd "${target}/x"
+      gone="${started_pid}"
+      wait_for_runners "${gone}"
+      rm -f "${BATS_TEST_TMPDIR}/count"
+      run_lookup "${lister}" "${shell}" FAIL_PID="${gone}" FAIL_FIELD=args= FAIL_CALL="${call}" \
+        FAIL_COUNT="${BATS_TEST_TMPDIR}/count" FAIL_KILL=1 -- "${target}"
+      [ "${status}" -eq 0 ] && [ -z "${stderr}" ] && [ -z "$(row_for "${gone}")" ] || {
+        echo "${shell} call ${call} gone: status ${status}, stdout: ${output}, stderr: ${stderr}"
+        return 1
+      }
+      [ "$(row_for "${live}" | cut -f6)" = "--cwd under target" ]
+    done
+
+    start_with_args --cwd "${missing}"
+    stale="${started_pid}"
+    wait_for_runners "${stale}"
+    rm -f "${BATS_TEST_TMPDIR}/count"
+    run_lookup "${lister}" "${shell}" FAIL_PID="${stale}" FAIL_FIELD=args= FAIL_CALL=1 \
+      FAIL_COUNT="${BATS_TEST_TMPDIR}/count" -- --stale
+    [ "${status}" -eq 1 ] && [ -z "${output}" ] &&
+      [ "${stderr}" = "ps could not read the --cwd argument of live process ${stale}; processes cannot be listed" ] || {
+      echo "${shell} --stale: status ${status}, stdout: ${output}, stderr: ${stderr}"
+      return 1
+    }
+  done < <(bash_shells)
+}
+
+@test "list-processes ps fallback fails closed when the third --cwd reading fails" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister live
+  lister="$(ps_script)"
+  mkdir -p "${target}/日"
+  start_with_args --cwd "${target}/日"
+  live="${started_pid}"
+  wait_for_runners "${live}"
+  require_ps_meta_notation "${live}"
+
+  run_lookup "${lister}" bash FAIL_PID="${live}" FAIL_FIELD=args= FAIL_CALL=3 \
+    FAIL_COUNT="${BATS_TEST_TMPDIR}/count" -- "${target}"
+  [ "${status}" -eq 1 ]
+  [ -z "${output}" ]
+  [ "${stderr}" = "ps could not read the --cwd argument of live process ${live}; processes cannot be listed" ]
+}
+
+# A --cwd reading that could not change the row is never made, so its failure
+# never makes the listing unavailable.
+@test "list-processes ps fallback reads no --cwd for a process its cwd already lists" {
+  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+  local lister pid
+  lister="$(ps_script)"
+  start_with_args_in "${target}" --cwd "${outside}"
+  pid="${started_pid}"
+  wait_for_runners "${pid}"
+
+  run_lookup "${lister}" bash FAIL_PID="${pid}" FAIL_FIELD=args= FAIL_CALL=99 \
+    FAIL_COUNT="${BATS_TEST_TMPDIR}/count" -- "${target}"
+  [ "${status}" -eq 0 ]
+  [ "$(row_for "${pid}" | cut -f6)" = "cwd under target" ]
+  # Only the row's own args lookup ran.
+  [ "$(cat "${BATS_TEST_TMPDIR}/count")" -eq 1 ]
 }
 
 # macOS cut in a UTF-8 locale rejects 0xff; the script used to drop such a row.
