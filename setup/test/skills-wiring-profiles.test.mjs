@@ -53,7 +53,6 @@ const baseLocalSkills = [
   "learning-partner",
   "local-runtime-port-isolation",
   "worktree-runtime-cleanup",
-  "writing-partner",
 ];
 const beadsLocalSkills = [
   "beads-issue-create",
@@ -63,7 +62,7 @@ const beadsLocalSkills = [
 ];
 
 test("repository profiles keep provider workflow skills separated", async () => {
-  for (const profileName of ["base", "github", "azure", "azure-devops", "beads"]) {
+  for (const profileName of ["base", "github", "azure", "azure-devops", "beads", "docs"]) {
     assert.equal(existsSync(path.join(repoRoot, "skills", "profiles", `${profileName}.json`)), true);
   }
 
@@ -72,6 +71,7 @@ test("repository profiles keep provider workflow skills separated", async () => 
   const azure = await readRepoProfile("azure");
   const azureDevOps = await readRepoProfile("azure-devops");
   const beads = await readRepoProfile("beads");
+  const docs = await readRepoProfile("docs");
 
   assert.equal(base.description, "Provider-neutral baseline workflow skills for repository work.");
   assert.deepEqual(skillsForSource(base, "obra/superpowers"), []);
@@ -100,6 +100,11 @@ test("repository profiles keep provider workflow skills separated", async () => 
     "writing-for-agents",
   ]);
   assert.deepEqual(base.local, baseLocalSkills);
+  for (const skillName of ["code-review-expert", "find-skills", "web-design-guidelines", "writing-partner"]) {
+    assert.equal(base.external.some((entry) => entry.skills.includes(skillName)) || base.local.includes(skillName), false, `${skillName} should not be in base`);
+  }
+  assert.deepEqual(docs.external, []);
+  assert.deepEqual(docs.local, ["writing-partner"]);
   for (const skillName of githubLocalSkills) {
     assert.equal(base.local.includes(skillName), false, `${skillName} should not be in base`);
   }

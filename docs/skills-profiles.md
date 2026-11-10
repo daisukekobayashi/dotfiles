@@ -386,8 +386,7 @@ Provider-neutral workflow skills used broadly across repositories.
 
 Include:
 
-- `find-skills`
-- `frontend-design`, `webapp-testing`, and `web-design-guidelines` for UI creation, testing, and review
+- `frontend-design` and `webapp-testing` for UI creation and testing
 - `playwright-cli` for browser automation and `context7-cli` for library documentation lookup
 - selected published Matt Pocock Engineering and Productivity skills
 - `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
@@ -606,7 +605,7 @@ GitHub to Azure DevOps workflow mapping:
 
 Frontend, UI, React, Tailwind, SEO, Remotion, and web design skills.
 
-`frontend-design`, `webapp-testing`, and `web-design-guidelines` are also included in `base`. They remain here so `frontend` can be used independently; combining `base,frontend` deduplicates them.
+`frontend-design` and `webapp-testing` are also included in `base`. They remain here so `frontend` can be used independently; combining `base,frontend` deduplicates them.
 
 Browser automation is intentionally not included here by default because it is useful outside frontend development.
 
@@ -635,7 +634,11 @@ Research-specific skills:
 
 ### `docs`
 
-Reserved profile with no skills of its own. The profile name remains available for existing selections and includes; `context7-cli` is included in `base`.
+Writing and documentation support skills:
+
+- `writing-partner`
+
+`context7-cli` for library documentation lookup is included in `base`.
 
 ## CLI Behavior
 
