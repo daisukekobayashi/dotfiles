@@ -1,8 +1,8 @@
 diff --git a/export.py b/export.py
-index 30e5622..daa69b4 100644
+index 30e5622..7ac920a 100644
 --- a/export.py
 +++ b/export.py
-@@ -1,21 +1,33 @@
+@@ -1,21 +1,36 @@
  import argparse
  import csv
 +import datetime
@@ -11,9 +11,12 @@ index 30e5622..daa69b4 100644
 -def rows(path, region=None):
 +def parse_date(value):
 +    try:
-+        return datetime.date.fromisoformat(value)
++        parsed = datetime.date.fromisoformat(value)
 +    except ValueError:
++        parsed = None
++    if parsed is None or parsed.isoformat() != value:
 +        raise argparse.ArgumentTypeError(f"invalid date: {value}")
++    return parsed
 +
 +
 +def rows(path, region=None, since=None):
