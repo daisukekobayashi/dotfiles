@@ -97,3 +97,7 @@ implementation tactics, return contract, boundary, compatibility, and security
 decisions as questions, and list every default they chose. The coordinator asks
 those questions like preflight questions and checks the listed defaults for a
 decision that should have been a question.
+
+Workers run their checks under
+[Foreground Checks](../SKILL.md#foreground-checks), and the coordinator handles
+each worker's turn-end result under it.

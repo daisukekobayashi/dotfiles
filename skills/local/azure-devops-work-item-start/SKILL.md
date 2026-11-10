@@ -103,6 +103,8 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      look low-risk, and continues only work that does not depend on them. It
      never asks the user directly, and its report lists open questions and
      every default it chose.
+   - A worker runs checks under
+     [Foreground Checks](../delivery-common/SKILL.md#foreground-checks).
 7. Report each Work Item summary, branch, worktree path, base commit, baseline
    command/result, worker assignment when applicable, and next implementation step.
 

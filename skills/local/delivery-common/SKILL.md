@@ -1,6 +1,6 @@
 ---
 name: delivery-common
-description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, stops at a bound or a missing prerequisite, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
+description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, stops at a bound or a missing prerequisite, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
 ---
 
 # Delivery Common
@@ -20,7 +20,8 @@ resume, the decision summary shown before publication and at merge, the
 published-head check and advance after publication, the merge confirmation,
 bounds, the final report and `Complete` rule, and follow-up candidates. Apply
 [Missing Prerequisites](#missing-prerequisites) whenever a phase lacks what it
-needs.
+needs, and [Foreground Checks](#foreground-checks) to every delegated worker
+and reviewer and to each result they return.
 
 The calling workflow owns implementation, assessment decisions, how its hosted
 review runs, publication, and approvals;
@@ -55,6 +56,28 @@ does not depend on it continues under Delivery Completion's
 [Bounds](references/completion.md#bounds). The delivery skills of both
 providers and [Local Review](references/local-review.md) link this section
 instead of restating it.
+
+## Foreground Checks
+
+A delegated worker or reviewer runs every command whose result it awaits,
+including tests, builds, watchers, and review tool runs, in the foreground with
+a time bound, and never ends its turn waiting on a background job. It ends a
+turn only with a completed result, a question, or a blocker; a command that
+reaches its time bound is a failed check to report.
+
+The coordinator acts on each agent's turn-end notice when it arrives instead of
+deferring it to a later check. An idle agent whose last message says it is
+waiting has returned no result: check whether the job it names is running, then
+resume the agent once, telling it to finish the command in the foreground with a
+time bound and return the result. If it ends its turn waiting again, or the job
+is hung, report the target as `Blocked` under Delivery Completion's
+[Bounds](references/completion.md#bounds). Where the host gives no notice when
+an agent's turn ends, report that limitation and do not end your own turn while
+an agent is outstanding.
+
+The start skills' worker rules, [Worker Dialogue](references/worker-dialogue.md),
+and [Local Review](references/local-review.md) link this section instead of
+restating it.
 
 ## Shared Scripts
 
