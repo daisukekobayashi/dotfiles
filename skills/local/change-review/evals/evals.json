@@ -1,0 +1,72 @@
+{
+  "skill_name": "change-review",
+  "supporting_skills": ["delivery-common", "worktree-runtime-cleanup"],
+  "evals": [
+    {
+      "id": 1,
+      "name": "misses-one-criterion",
+      "prompt": "Review the branch change in change.patch for material defects, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings, test gaps, coverage, and a verdict.",
+      "expected_output": "A finding cites criterion 2 of ISSUE.md: an invalid --since value raises an uncaught ValueError and exits 1 instead of exiting 2 with an error. Coverage lists criteria 1 and 3 as met and criterion 2 as unmet or partial. The verdict is not Approve.",
+      "fixture": "files/sample-export",
+      "overlay": "files/misses-one-criterion",
+      "files": ["files/sample-export", "files/misses-one-criterion"],
+      "assertions": [
+        "A finding reports that an invalid --since value does not exit with status 2",
+        "That finding cites criterion 2 of ISSUE.md by number or quoted text",
+        "Coverage and Residual Risk states a result for each of the three criteria, with criterion 2 unmet or partial",
+        "The finding uses the High, Medium, or Low label and is tagged introduced",
+        "The verdict is Request changes or Comment, not Approve",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "meets-all-criteria",
+      "prompt": "Review the branch change in change.patch for material defects, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings, test gaps, coverage, and a verdict.",
+      "expected_output": "No finding reports an unmet criterion or a breached mandatory rule. The unrequested -s alias is documented and harmless, so it is not a finding. Coverage lists all three criteria as met and the mandatory rules as checked. The verdict is not Request changes.",
+      "fixture": "files/sample-export",
+      "overlay": "files/meets-all-criteria",
+      "files": ["files/sample-export", "files/meets-all-criteria"],
+      "assertions": [
+        "No finding reports an unmet or partial acceptance criterion",
+        "No finding reports a breach of a mandatory rule in CONTRIBUTING.md",
+        "The unrequested -s alias is not reported as a finding",
+        "Coverage and Residual Risk states that all three criteria were checked and met",
+        "The verdict is not Request changes",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "breaches-mandatory-rule",
+      "prompt": "Review the branch change in change.patch for material defects, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings, test gaps, coverage, and a verdict.",
+      "expected_output": "All three criteria are met, but --since has no row in the README Options table. A finding cites the CONTRIBUTING.md rule. The verdict is not Approve.",
+      "fixture": "files/sample-export",
+      "overlay": "files/breaches-mandatory-rule",
+      "files": ["files/sample-export", "files/breaches-mandatory-rule"],
+      "assertions": [
+        "A finding reports that --since has no row in the README Options table",
+        "That finding cites the mandatory rule in CONTRIBUTING.md by source and quoted text or description",
+        "Coverage and Residual Risk states that all three criteria were checked and met",
+        "The suggestion to prefer short functions is not reported as a rule breach",
+        "The verdict is Request changes or Comment, not Approve",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "no-issue-available",
+      "prompt": "Review the branch change in change.patch for material defects. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings, test gaps, coverage, and a verdict.",
+      "expected_output": "Coverage states that acceptance criteria were not checked because no issue is available, without inventing criteria. The mandatory rules are still checked, so a finding cites the CONTRIBUTING.md rule for the missing README row.",
+      "fixture": "files/sample-export",
+      "overlay": "files/no-issue-available",
+      "files": ["files/sample-export", "files/no-issue-available"],
+      "assertions": [
+        "Coverage and Residual Risk states that acceptance criteria were not checked because no issue is available",
+        "The report neither invents acceptance criteria nor reports any as met",
+        "A finding reports that --since has no row in the README Options table and cites the rule in CONTRIBUTING.md",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    }
+  ]
+}
