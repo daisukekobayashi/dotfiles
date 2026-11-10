@@ -1,5 +1,5 @@
 {
-  "description": "Reserved documentation profile; library documentation lookup is included in base.",
+  "description": "Writing and documentation support skills.",
   "external": [],
-  "local": []
+  "local": ["writing-partner"]
 }

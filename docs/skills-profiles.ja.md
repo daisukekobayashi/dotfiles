@@ -372,8 +372,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 
 含めるもの:
 
-- `find-skills`
-- UI 作成・テスト・レビュー用の `frontend-design`、`webapp-testing`、`web-design-guidelines`
+- UI 作成・テスト用の `frontend-design`、`webapp-testing`
 - ブラウザ自動操作用の `playwright-cli` と、ライブラリドキュメント参照用の `context7-cli`
 - 公開済みの Matt Pocock Engineering / Productivity skill から選択したもの
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
@@ -585,7 +584,7 @@ GitHub と Azure DevOps の workflow 対応:
 
 Frontend、UI、React、Tailwind、SEO、Remotion、web design 系。
 
-`frontend-design`、`webapp-testing`、`web-design-guidelines` は `base` にも含めます。`frontend` 単独でも使えるようにここにも残し、`base,frontend` を組み合わせた場合は重複を除きます。
+`frontend-design`、`webapp-testing` は `base` にも含めます。`frontend` 単独でも使えるようにここにも残し、`base,frontend` を組み合わせた場合は重複を除きます。
 
 Browser automation は frontend 開発以外でも使うため、ここにはデフォルトでは含めません。
 
@@ -614,7 +613,11 @@ Research 固有の skill:
 
 ### `docs`
 
-現在は固有の skill を持たない予約 profile です。既存の指定や includes との互換性のため、profile 名は維持します。`context7-cli` は `base` に含めます。
+執筆とドキュメント作成を支援する skill:
+
+- `writing-partner`
+
+ライブラリドキュメント参照用の `context7-cli` は `base` に含めます。
 
 ## CLI Behavior
 

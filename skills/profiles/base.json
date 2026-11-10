@@ -14,14 +14,6 @@
       "skills": ["context7-cli"]
     },
     {
-      "source": "vercel-labs/agent-skills",
-      "skills": ["web-design-guidelines"]
-    },
-    {
-      "source": "vercel-labs/skills",
-      "skills": ["find-skills"]
-    },
-    {
       "source": "mattpocock/skills",
       "skills": [
         "ask-matt",
@@ -54,10 +46,6 @@
     {
       "source": "github/awesome-copilot",
       "skills": ["git-commit"]
-    },
-    {
-      "source": "sanyuan0704/code-review-expert",
-      "skills": ["code-review-expert"]
     }
   ],
   "local": [
@@ -72,7 +60,6 @@
     "shared-understanding",
     "learning-partner",
     "local-runtime-port-isolation",
-    "worktree-runtime-cleanup",
-    "writing-partner"
+    "worktree-runtime-cleanup"
   ]
 }
