@@ -176,14 +176,14 @@ walk_script() {
   printf '%s' "${copy}"
 }
 
-# Prints the fewest microseconds of three confirmed_reading calls on a long
-# line and the fewest of three on its short control, separated by a space. The
-# lines are given as the UTF-8 reading $1 and the LC_ALL=C reading $2 of the
-# long line, then $3 and $4 of the control. The calls alternate between the two,
-# so runner contention for part of the timing slows both, and stop after a long
-# call of 10s or more, which no runner noise explains. They run in a separate
-# bash, out of reach of the debug trap bats sets, and fail when a call sets no
-# ps_line.
+# Prints the microseconds of up to three rounds of confirmed_reading calls, each
+# a call on a long line and then one on its short control, as space-separated
+# "long control" pairs. The lines are given as the UTF-8 reading $1 and the
+# LC_ALL=C reading $2 of the long line, then $3 and $4 of the control. A round
+# times both lines moments apart, so runner contention slows both, and the
+# rounds stop after a long call of 10s or more, which no runner noise explains.
+# They run in a separate bash, out of reach of the debug trap bats sets, and
+# fail when a call sets no ps_line.
 walk_times() {
   # shellcheck disable=SC2016 # expanded by the inner bash
   "${BASH}" -c '
@@ -200,30 +200,32 @@ walk_times() {
       }
       printf "%s" $((end - start))
     }
-    long=""
-    control=""
+    rounds=""
     for _ in 1 2 3; do
       t="$(time_call "$2" "$3")" || exit 1
-      if [[ -z "${long}" ]] || ((t < long)); then long="${t}"; fi
       c="$(time_call "$4" "$5")" || exit 1
-      if [[ -z "${control}" ]] || ((c < control)); then control="${c}"; fi
+      rounds+="${rounds:+ }${t} ${c}"
       ((t < 10000000)) || break
     done
-    printf "%s %s" "${long}" "${control}"
+    printf "%s" "${rounds}"
   ' walk "$(walk_script)" "$1" "$2" "$3" "$4"
 }
 
-# Fails when the walk of a long line took at least floor_ms milliseconds and at
-# least ratio times the walk of its short control, given in microseconds as
-# "long_us control_us". Both walks run on the same runner moments apart, so a
-# slow runner slows both; the floor keeps a walk too short to time reliably
+# Fails when, in every round walk_times printed as $1, the walk of the long
+# line took at least floor_ms milliseconds and at least ratio times the walk of
+# its control in the same round. A round compares walks timed moments apart, so
+# a slow runner slows both; the floor keeps a walk too short to time reliably
 # from failing on its ratio alone.
 check_walk_time() {
-  local long_us="${1% *}" control_us="${1#* }" ratio="$2" floor_ms="$3"
-  ((long_us < floor_ms * 1000 || long_us < ratio * control_us)) || {
-    echo "walk took ${long_us}us on the long line, ${control_us}us on its control"
-    return 1
-  }
+  local ratio="$2" floor_ms="$3" rounds long_us control_us i
+  read -r -a rounds <<<"$1"
+  for ((i = 0; i + 1 < ${#rounds[@]}; i += 2)); do
+    long_us="${rounds[i]}"
+    control_us="${rounds[i + 1]}"
+    ((long_us >= floor_ms * 1000 && long_us >= ratio * control_us)) || return 0
+  done
+  echo "walk took long/control microseconds in each round: $1"
+  return 1
 }
 
 # Prints the UTF-8 locale the script's ps fallback uses, or nothing.
