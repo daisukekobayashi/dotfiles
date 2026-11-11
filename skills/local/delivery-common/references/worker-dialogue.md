@@ -23,7 +23,8 @@ target. The same worker drafts the shared understanding, drafts the preflight,
 and implements, keeping its context. Continue it through the host's mechanism
 for messaging an existing agent. When it cannot be continued, such as after a
 resume, dispatch a fresh worker for the same worktree with the recorded drafts
-and results.
+and results, except those that Delivery Completion's
+[Resume](completion.md#resume) discards.
 
 Without delegation, report the limitation and process targets one at a time.
 The coordinator runs `shared-understanding` and `design-preflight-with-docs`
@@ -45,7 +46,11 @@ For each target, in this order:
    points one at a time. Relay a follow-up that needs code reading to the same
    worker. Forward a user's skip. Send the result to the worker.
 3. Continue only with a status of `confirmed`, `corrected`, or `skipped`; report
-   other targets as waiting for the user with their open points.
+   other targets as waiting for the user with their open points. For
+   `unresolved (goal unsettled)`, the next action is the user's: run the
+   discovery skill that `shared-understanding` step 5 recommends, update the
+   task with its outcome, then resume the delivery. The delivery keeps the
+   target's worktree and branch and leaves the task text to the user.
 4. The worker sets the tentative tier under [Risk Tier](risk-tier.md), runs
    `design-preflight-with-docs` in draft mode with the shared understanding
    result in the mode the tier's [Tier procedure](risk-tier.md#tier-procedure)

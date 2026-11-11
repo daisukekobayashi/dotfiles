@@ -32,6 +32,8 @@ Write the overview for a user who has not reread the issue.
 
 - State in one sentence what changes and why, and ask the user to confirm or
   correct it. When the user corrects it, revise the overview before step 3.
+  When a further correction refines the sentence, revise it again and
+  continue; when the goal is unsettled under step 5, go to step 5.
 - Show one typical case as **before / after**: a concrete situation (input,
   operation, or state, using real names and values from the repository) and the
   observable result before and after the change.
@@ -80,8 +82,13 @@ decide after that explanation stays open.
 - Carry durable design decisions (contracts, data formats, boundaries,
   compatibility) to design preflight; leave small implementation tactics to
   implementation.
-- When the discussion shows that the problem itself is unsettled, recommend
-  `find-unknowns` and close as `unresolved`.
+- The goal is **unsettled** when the user cannot confirm any revision of the
+  one-sentence overview and cannot say what should change, or indicates during
+  steps 2-4 that the goal or problem itself is not decided. Stop there and
+  recommend discovery:
+  `find-unknowns` when the problem itself is unclear, or `grilling` when the
+  user holds a candidate goal or plan to stress-test. Close as
+  `unresolved (goal unsettled)`.
 
 The user may skip at any point; close as `skipped`. When interaction is
 unavailable, close as `not run`; the judgments belong to the user alone.
@@ -120,9 +127,10 @@ The check is complete when its status is one of:
 - `confirmed`: the user accepted every consequential decision and settled every
   undecided point, with no change to the issue.
 - `corrected`: the same, with at least one agreed issue change.
-- `unresolved`: a consequential decision or point remains open, or the problem
-  itself is unsettled. An open point closes here, never as `confirmed` or
-  `skipped`.
+- `unresolved`: a consequential decision or point remains open, or the goal is
+  unsettled. An open point closes here, never as `confirmed` or `skipped`.
+  Write an unsettled goal as `Status: unresolved (goal unsettled)`, and every
+  other open point as plain `unresolved`.
 - `skipped`: the user explicitly skipped the check.
 - `not run`: interaction was unavailable.
 
