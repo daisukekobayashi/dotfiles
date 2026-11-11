@@ -565,6 +565,7 @@ test("Codex review runs stop only the broker tree they started", async () => {
   assert.match(brokers, /its `cwd` column in the second list equals exactly the target worktree root/);
   assert.match(brokers, /The `command` column is cut to 200 bytes and never establishes ownership/);
   assert.match(brokers, /A missing, unreadable, or ` \(deleted\)` cwd is not an exact match/);
+  assert.match(brokers, /nor is a `cwd` column containing a backslash: the script escapes control bytes and backslashes in the path, and a `cwd ambiguous` row always carries one\./);
   assert.doesNotMatch(brokers, /`--cwd` argument, or its cwd when it has none/);
   assert.match(brokers, /prefix matching never establishes ownership here/);
   assert.match(brokers, /Report any other listed broker, whether pre-existing or under the target without equaling it, and leave it running\./);
@@ -573,6 +574,9 @@ test("Codex review runs stop only the broker tree they started", async () => {
   assert.match(brokers, /Never signal a process outside the recorded tree, and never use SIGKILL\./);
   assert.match(brokers, /Leftovers do not change the review result/);
   assert.match(brokers, /report the teardown as unverified and leave it to cleanup/);
+  const daemons = flat(runtime.match(/## Dev Servers, Watchers, and Tool Daemons\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.ok(daemons, "worktree-runtime-cleanup: missing Dev Servers, Watchers, and Tool Daemons");
+  assert.match(daemons, /A row with reason `cwd ambiguous` or `--cwd ambiguous` never establishes ownership, because its cwd or `--cwd` may name another directory: report it as uncertain\./);
   assert.match(flat(runtime), /Review skills that run Codex follow only \[Brokers Started by a Codex Review\]\(#brokers-started-by-a-codex-review\)/);
 
   const localReview = flat(await readText(
