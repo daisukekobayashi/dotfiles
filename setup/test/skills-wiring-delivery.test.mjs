@@ -405,6 +405,39 @@ test("delivery workers draft the understanding and preflight for the coordinator
   assert.match(withDocs, /write documentation only after the coordinator returns the user's answers\./);
 });
 
+test("an unsettled goal routes a delivery target back to discovery", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = async (...parts) => flat(await readText(path.join(localRoot, ...parts)));
+  const check = await read("shared-understanding", "SKILL.md");
+  const dialogue = await read("delivery-common", "references", "worker-dialogue.md");
+  const completion = await read("delivery-common", "references", "completion.md");
+
+  // shared-understanding owns the condition, the discovery selector, and the status marker.
+  assert.match(check, /When the user cannot confirm the revised sentence either, the goal is unsettled; go to step 5\./);
+  assert.match(check, /The goal is \*\*unsettled\*\* when the user cannot confirm the one-sentence overview after a correction, or indicates during steps 2-4 that the goal or problem itself is not decided\./);
+  assert.match(check, /recommend discovery: `find-unknowns` when the problem itself is unclear, or `grilling` when the user holds a candidate goal or plan to stress-test\. Close as `unresolved \(goal unsettled\)`\./);
+  assert.match(check, /Write an unsettled goal as `Status: unresolved \(goal unsettled\)`, and every other open point as plain `unresolved`\./);
+  for (const status of ["confirmed", "corrected", "unresolved", "skipped", "not run"]) {
+    assert.match(check, new RegExp(`- \`${status}\`:`), `shared-understanding keeps the status ${status}`);
+  }
+
+  // Worker Dialogue adds only the delivery steps after the status gate and names the selector's home.
+  const gate = dialogue.indexOf("Continue only with a status of `confirmed`, `corrected`, or `skipped`");
+  const route = dialogue.indexOf("For `unresolved (goal unsettled)`, the next action is the user's:");
+  const tier = dialogue.indexOf("4. The worker sets the tentative tier");
+  assert.ok(gate >= 0 && gate < route && route < tier, `worker-dialogue.md: goal-unsettled route order ${[gate, route, tier]}`);
+  assert.match(dialogue, /run the discovery skill that `shared-understanding` step 5 recommends, update the task with its outcome, then resume the delivery\. The delivery keeps the target's worktree and branch and leaves the task text to the user\./);
+  assert.doesNotMatch(dialogue, /grilling|find-unknowns/, "worker-dialogue.md restates the discovery selector");
+
+  // Delivery Completion's Resume re-runs the check instead of carrying the stale result forward.
+  assert.match(completion, /A recorded shared understanding result and settled preflight decisions carry forward, except an `unresolved \(goal unsettled\)` result: discard it and the target's drafts, and have the worker run `shared-understanding` again from step 1 on the current task\./);
+
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const skill = await read(delivery, "SKILL.md");
+    assert.doesNotMatch(skill, /goal unsettled|find-unknowns|grilling/, `${delivery} restates the discovery route`);
+  }
+});
+
 test("delivery-common owns the shared completion policy", async () => {
   const localRoot = path.join(repoRoot, "skills", "local");
   const read = (...parts) => readText(path.join(localRoot, ...parts));

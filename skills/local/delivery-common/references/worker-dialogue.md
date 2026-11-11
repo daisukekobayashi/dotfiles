@@ -45,7 +45,11 @@ For each target, in this order:
    points one at a time. Relay a follow-up that needs code reading to the same
    worker. Forward a user's skip. Send the result to the worker.
 3. Continue only with a status of `confirmed`, `corrected`, or `skipped`; report
-   other targets as waiting for the user with their open points.
+   other targets as waiting for the user with their open points. For
+   `unresolved (goal unsettled)`, the next action is the user's: run the
+   discovery skill that `shared-understanding` step 5 recommends, update the
+   task with its outcome, then resume the delivery. The delivery keeps the
+   target's worktree and branch and leaves the task text to the user.
 4. The worker sets the tentative tier under [Risk Tier](risk-tier.md), runs
    `design-preflight-with-docs` in draft mode with the shared understanding
    result in the mode the tier's [Tier procedure](risk-tier.md#tier-procedure)

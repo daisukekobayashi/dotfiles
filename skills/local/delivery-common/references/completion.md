@@ -24,8 +24,11 @@ state. The calling workflow checks a recorded branch name before any command
 uses it. Reuse matching worktrees and PRs, and verify the current head before
 reusing review evidence. Resume the earliest incomplete phase; a completed PR
 resumes completion checks rather than publication. A recorded shared
-understanding result and settled preflight decisions carry forward. A progress
-record is evidence, not authorization. Apply the calling workflow's additions.
+understanding result and settled preflight decisions carry forward, except an
+`unresolved (goal unsettled)` result: discard it and the target's drafts, and
+have the worker run `shared-understanding` again from step 1 on the current
+task. A progress record is evidence, not authorization. Apply the calling
+workflow's additions.
 
 ## Decision summary
 
