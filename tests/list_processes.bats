@@ -1099,13 +1099,19 @@ run_lookup() {
   lister="$(ps_script)"
   [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
   bin="$(sequenced_ps)"
-  start_with_args --cwd placeholder
-  pid="${started_pid}"
-  wait_for_runners "${pid}"
   dotted="${target}/w."
   mkdir -p "${dotted}/x" "${target}/日"
   short_pad="$(printf 'a%.0s' {1..3000})"
   long_pad="$(printf 'a%.0s' {1..5000})"
+
+  # Each listing takes seconds, so every reading gets a fresh process: one
+  # process for all of them can exit before the last. It starts here, not in
+  # reason_for, whose command substitution would wait on its output.
+  fresh_pid() {
+    start_with_args --cwd placeholder
+    pid="${started_pid}"
+    wait_for_runners "${pid}"
+  }
 
   # Prints the reason for $pid when ps prints $1, $2, then $3 for its args.
   reason_for() {
@@ -1117,15 +1123,19 @@ run_lookup() {
   }
 
   for pad in "" "${short_pad}" "${long_pad}"; do
+    fresh_pid
     [ "$(reason_for "bash argv-runner -p x${pad} --cwd ${dotted}/x" \
       "bash argv-runner -p x${pad} --cwd ${target}/w?/x" "" "${dotted}")" = "--cwd ambiguous" ]
   done
+  fresh_pid
   [ "$(reason_for "bash argv-runner .x --cwd ${dotted}/x" \
     "bash argv-runner ?x --cwd ${dotted}/x" "" "${dotted}")" = "--cwd ambiguous" ]
 
+  fresh_pid
   [ "$(reason_for "bash argv-runner -p ${short_pad} --cwd ${target}/M-fM^WM-%" \
     "bash argv-runner -p ${short_pad} --cwd ${target}/日" \
     "bash argv-runner -p ${short_pad} --cwd ${target}/M-fM^WM-%" "${target}/日")" = "--cwd under target" ]
+  fresh_pid
   [ "$(reason_for "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" \
     "bash argv-runner -p ${long_pad} --cwd ${target}/日" \
     "bash argv-runner -p ${long_pad} --cwd ${target}/M-fM^WM-%" "${target}/日")" = "--cwd ambiguous" ]
