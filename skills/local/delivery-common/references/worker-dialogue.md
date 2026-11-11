@@ -23,7 +23,8 @@ target. The same worker drafts the shared understanding, drafts the preflight,
 and implements, keeping its context. Continue it through the host's mechanism
 for messaging an existing agent. When it cannot be continued, such as after a
 resume, dispatch a fresh worker for the same worktree with the recorded drafts
-and results.
+and results, except those that Delivery Completion's
+[Resume](completion.md#resume) discards.
 
 Without delegation, report the limitation and process targets one at a time.
 The coordinator runs `shared-understanding` and `design-preflight-with-docs`

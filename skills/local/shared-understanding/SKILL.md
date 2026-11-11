@@ -32,8 +32,8 @@ Write the overview for a user who has not reread the issue.
 
 - State in one sentence what changes and why, and ask the user to confirm or
   correct it. When the user corrects it, revise the overview before step 3.
-  When the user cannot confirm the revised sentence either, the goal is
-  unsettled; go to step 5.
+  When a further correction refines the sentence, revise it again and
+  continue; when the goal is unsettled under step 5, go to step 5.
 - Show one typical case as **before / after**: a concrete situation (input,
   operation, or state, using real names and values from the repository) and the
   observable result before and after the change.
@@ -82,9 +82,10 @@ decide after that explanation stays open.
 - Carry durable design decisions (contracts, data formats, boundaries,
   compatibility) to design preflight; leave small implementation tactics to
   implementation.
-- The goal is **unsettled** when the user cannot confirm the one-sentence
-  overview after a correction, or indicates during steps 2-4 that the goal or
-  problem itself is not decided. Stop there and recommend discovery:
+- The goal is **unsettled** when the user cannot confirm any revision of the
+  one-sentence overview and cannot say what should change, or indicates during
+  steps 2-4 that the goal or problem itself is not decided. Stop there and
+  recommend discovery:
   `find-unknowns` when the problem itself is unclear, or `grilling` when the
   user holds a candidate goal or plan to stress-test. Close as
   `unresolved (goal unsettled)`.

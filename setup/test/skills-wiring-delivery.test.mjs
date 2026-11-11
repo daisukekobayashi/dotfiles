@@ -413,8 +413,8 @@ test("an unsettled goal routes a delivery target back to discovery", async () =>
   const completion = await read("delivery-common", "references", "completion.md");
 
   // shared-understanding owns the condition, the discovery selector, and the status marker.
-  assert.match(check, /When the user cannot confirm the revised sentence either, the goal is unsettled; go to step 5\./);
-  assert.match(check, /The goal is \*\*unsettled\*\* when the user cannot confirm the one-sentence overview after a correction, or indicates during steps 2-4 that the goal or problem itself is not decided\./);
+  assert.match(check, /When a further correction refines the sentence, revise it again and continue; when the goal is unsettled under step 5, go to step 5\./);
+  assert.match(check, /The goal is \*\*unsettled\*\* when the user cannot confirm any revision of the one-sentence overview and cannot say what should change, or indicates during steps 2-4 that the goal or problem itself is not decided\./);
   assert.match(check, /recommend discovery: `find-unknowns` when the problem itself is unclear, or `grilling` when the user holds a candidate goal or plan to stress-test\. Close as `unresolved \(goal unsettled\)`\./);
   assert.match(check, /Write an unsettled goal as `Status: unresolved \(goal unsettled\)`, and every other open point as plain `unresolved`\./);
   for (const status of ["confirmed", "corrected", "unresolved", "skipped", "not run"]) {
@@ -428,6 +428,8 @@ test("an unsettled goal routes a delivery target back to discovery", async () =>
   assert.ok(gate >= 0 && gate < route && route < tier, `worker-dialogue.md: goal-unsettled route order ${[gate, route, tier]}`);
   assert.match(dialogue, /run the discovery skill that `shared-understanding` step 5 recommends, update the task with its outcome, then resume the delivery\. The delivery keeps the target's worktree and branch and leaves the task text to the user\./);
   assert.doesNotMatch(dialogue, /grilling|find-unknowns/, "worker-dialogue.md restates the discovery selector");
+  // A fresh worker after a resume never receives the result and drafts that Resume discards.
+  assert.match(dialogue, /dispatch a fresh worker for the same worktree with the recorded drafts and results, except those that Delivery Completion's \[Resume\]\(completion\.md#resume\) discards\./);
 
   // Delivery Completion's Resume re-runs the check instead of carrying the stale result forward.
   assert.match(completion, /A recorded shared understanding result and settled preflight decisions carry forward, except an `unresolved \(goal unsettled\)` result: discard it and the target's drafts, and have the worker run `shared-understanding` again from step 1 on the current task\./);
