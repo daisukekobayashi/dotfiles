@@ -176,36 +176,50 @@ walk_script() {
   printf '%s' "${copy}"
 }
 
-# Prints the fewest microseconds of three confirmed_reading calls on the UTF-8
-# reading $1 and the LC_ALL=C reading $2, stopping after a call of 10s or more,
-# which no runner noise explains. The calls run in a separate bash, out of
-# reach of the debug trap bats sets, and fail when they set no ps_line.
-walk_time() {
+# Prints the fewest microseconds of three confirmed_reading calls on a long
+# line and the fewest of three on its short control, separated by a space. The
+# lines are given as the UTF-8 reading $1 and the LC_ALL=C reading $2 of the
+# long line, then $3 and $4 of the control. The calls alternate between the two,
+# so runner contention for part of the timing slows both, and stop after a long
+# call of 10s or more, which no runner noise explains. They run in a separate
+# bash, out of reach of the debug trap bats sets, and fail when a call sets no
+# ps_line.
+walk_times() {
   # shellcheck disable=SC2016 # expanded by the inner bash
   "${BASH}" -c '
     source "$1" || exit 1
-    best=""
-    for _ in 1 2 3; do
+    # Prints the microseconds of one call on $1 and $2.
+    time_call() {
+      local start end
       start="${EPOCHREALTIME/[.,]/}"
-      confirmed_reading "$2" "$3"
+      confirmed_reading "$1" "$2"
       end="${EPOCHREALTIME/[.,]/}"
-      if [[ -z "${best}" ]] || ((end - start < best)); then
-        best=$((end - start))
-      fi
-      ((end - start < 10000000)) || break
+      [[ -n "${ps_line}" ]] || {
+        echo "confirmed_reading set no ps_line" >&2
+        return 1
+      }
+      printf "%s" $((end - start))
+    }
+    long=""
+    control=""
+    for _ in 1 2 3; do
+      t="$(time_call "$2" "$3")" || exit 1
+      if [[ -z "${long}" ]] || ((t < long)); then long="${t}"; fi
+      c="$(time_call "$4" "$5")" || exit 1
+      if [[ -z "${control}" ]] || ((c < control)); then control="${c}"; fi
+      ((t < 10000000)) || break
     done
-    [[ -n "${ps_line}" ]] || exit 1
-    printf "%s" "${best}"
-  ' walk "$(walk_script)" "$1" "$2"
+    printf "%s %s" "${long}" "${control}"
+  ' walk "$(walk_script)" "$1" "$2" "$3" "$4"
 }
 
 # Fails when the walk of a long line took at least floor_ms milliseconds and at
 # least ratio times the walk of its short control, given in microseconds as
-# long_us and control_us. Both walks run on the same runner moments apart, so a
+# "long_us control_us". Both walks run on the same runner moments apart, so a
 # slow runner slows both; the floor keeps a walk too short to time reliably
 # from failing on its ratio alone.
 check_walk_time() {
-  local long_us="$1" control_us="$2" ratio="$3" floor_ms="$4"
+  local long_us="${1% *}" control_us="${1#* }" ratio="$2" floor_ms="$3"
   ((long_us < floor_ms * 1000 || long_us < ratio * control_us)) || {
     echo "walk took ${long_us}us on the long line, ${control_us}us on its control"
     return 1
@@ -1057,7 +1071,7 @@ run_lookup() {
 # the short one; in runs, about 0.01s and 0.001s.
 @test "list-processes ps fallback reads a long argument line without slowing down" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
-  local lister base short long name name_c long_us control_us
+  local lister base short long name name_c times
   lister="$(ps_script)"
   base="$(mkdir -p "${target}/作業" && cd "${target}/作業" && pwd -P)"
   start_with_args -p "$(printf 'a%.0s' {1..3000})" --cwd "${base}/x"
@@ -1075,11 +1089,11 @@ run_lookup() {
   # "作業" and how macOS ps prints its bytes under LC_ALL=C.
   name="作業"
   name_c='M-dM-=M^\M-fM-%M--'
-  long_us="$(walk_time " -p $(printf 'a%.0s' {1..30000}) --cwd /t/${name}/x" \
-    " -p $(printf 'a%.0s' {1..30000}) --cwd /t/${name_c}/x")"
-  control_us="$(walk_time " -p $(printf 'a%.0s' {1..3000}) --cwd /t/${name}/x" \
+  times="$(walk_times " -p $(printf 'a%.0s' {1..30000}) --cwd /t/${name}/x" \
+    " -p $(printf 'a%.0s' {1..30000}) --cwd /t/${name_c}/x" \
+    " -p $(printf 'a%.0s' {1..3000}) --cwd /t/${name}/x" \
     " -p $(printf 'a%.0s' {1..3000}) --cwd /t/${name_c}/x")"
-  check_walk_time "${long_us}" "${control_us}" 20 1000
+  check_walk_time "${times}" 20 1000
 }
 
 # Bytes >= 0x80 are read only within a window at the start of a line, so a
@@ -1089,7 +1103,7 @@ run_lookup() {
 @test "list-processes ps fallback reads non-ASCII before a long ASCII run without slowing down" {
   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
   [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
-  local lister dense dense_c pid long_us control_us
+  local lister dense dense_c pid times
   lister="$(ps_script)"
   dense="$(printf 'é%.0s' {1..2000})"
   start_with_args "x${dense}$(printf 'a%.0s' {1..40000})" --cwd "${target}"
@@ -1102,10 +1116,9 @@ run_lookup() {
   ((BASH_VERSINFO[0] >= 5)) || skip "Bash ${BASH_VERSION} has no EPOCHREALTIME"
   # How macOS ps prints the bytes of "é" under LC_ALL=C.
   dense_c="$(printf 'M-CM-)%.0s' {1..2000})"
-  long_us="$(walk_time "x${dense}$(printf 'a%.0s' {1..40000})" \
-    "x${dense_c}$(printf 'a%.0s' {1..40000})")"
-  control_us="$(walk_time "x${dense}a" "x${dense_c}a")"
-  check_walk_time "${long_us}" "${control_us}" 3 1000
+  times="$(walk_times "x${dense}$(printf 'a%.0s' {1..40000})" \
+    "x${dense_c}$(printf 'a%.0s' {1..40000})" "x${dense}a" "x${dense_c}a")"
+  check_walk_time "${times}" 3 1000
 }
 
 # The first reading under LC_ALL=C sees a literal "x-$-'/M-CM-)", and the
