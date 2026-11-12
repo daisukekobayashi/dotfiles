@@ -144,7 +144,8 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual(settings["sandbox"]["network"]["deniedDomains"], ["*"])
         self.assertEqual(execution["fresh_tmpdir"],
                          {"env": "CLAUDE_CODE_TMPDIR", "max_per_uid_path_bytes": 44})
-        self.assertTrue(any("no sandbox.network key" in check for check in execution["pre_run_checks"]))
+        self.assertTrue(any("no sandbox key and no permissions.allow rule" in check
+                            for check in execution["pre_run_checks"]))
         self.assertTrue(any("Delete" in check for check in execution["post_run_checks"]))
         self.assertNotIn("danger", " ".join(execution["claude_extra_args"]).lower())
         self.assertNotIn("bypassPermissions", execution["claude_extra_args"])
