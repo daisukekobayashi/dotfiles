@@ -18,12 +18,22 @@
       "Read Grep Glob Bash"
     ],
     "claude_settings": "claude-settings.json",
-    "fresh_tmpdir_env": "CLAUDE_CODE_TMPDIR",
-    "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Each run also gets a new, empty directory outside the shared temp root as the environment variable named in fresh_tmpdir_env, so no run can read another run's scratch files. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and that temp directory, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed.",
+    "fresh_tmpdir": {
+      "env": "CLAUDE_CODE_TMPDIR",
+      "max_per_uid_path_bytes": 44
+    },
+    "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Each run gets a new, empty directory as the environment variable named in fresh_tmpdir.env, with a path short enough that <dir>/claude-<uid> stays within max_per_uid_path_bytes; a longer path makes the CLI fall back to the shared /tmp/claude-<uid>. This keeps runs from sharing fixed-name scratch directories; it does not stop a run from deliberately reading another run's workspace or temp directory, because the sandbox allows reads outside its deny list. The contamination rule covers that. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and the run's temp directory, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed.",
     "known_constraints": [
       "macOS ps (setuid) cannot run under the sandbox, so the listing tests in tests/list_processes.bats cannot run; lsof and Bash 5 work. The timing defects in cases 1 and 2 reproduce through confirmed_reading, which is pure Bash, so they remain reproducible under load."
     ],
-    "contamination": "Exclude a run whose transcript shows access to a repository or installed skill outside the workspace, gh, or the network, and rerun it once under the same conditions. Report a second contaminated run as missing coverage."
+    "pre_run_checks": [
+      "The effective user, project, and managed Claude settings set no sandbox.network.httpProxyPort or socksProxyPort, allow no network domain, and allow no WebFetch; record the result and do not start runs otherwise."
+    ],
+    "post_run_checks": [
+      "<dir>/claude-<uid> exists under the run's fresh temp directory, showing that the run's TMPDIR did not fall back to the shared temp root; exclude the run otherwise.",
+      "Delete the run's workspace and temp directory once its transcript, final answer, and file hashes are retained."
+    ],
+    "contamination": "Exclude a run whose transcript shows access to a repository or installed skill outside the workspace, another run's workspace or temp directory, the shared temp root, gh, or the network, and rerun it once under the same conditions. Report a second contaminated run as missing coverage."
   },
   "evals": [
     {

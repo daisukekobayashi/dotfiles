@@ -142,7 +142,10 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertTrue(settings["sandbox"]["enabled"])
         self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])
         self.assertEqual(settings["sandbox"]["network"]["deniedDomains"], ["*"])
-        self.assertEqual(execution["fresh_tmpdir_env"], "CLAUDE_CODE_TMPDIR")
+        self.assertEqual(execution["fresh_tmpdir"],
+                         {"env": "CLAUDE_CODE_TMPDIR", "max_per_uid_path_bytes": 44})
+        self.assertTrue(any("ProxyPort" in check for check in execution["pre_run_checks"]))
+        self.assertTrue(any("Delete" in check for check in execution["post_run_checks"]))
         self.assertNotIn("danger", " ".join(execution["claude_extra_args"]).lower())
         self.assertNotIn("bypassPermissions", execution["claude_extra_args"])
         files = suite.parent / "files"
