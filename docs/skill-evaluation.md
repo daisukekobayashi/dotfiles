@@ -38,9 +38,9 @@ The `change-adversarial-review` suite is built from defects that real delivery
 review rounds found, plus sound controls. Its `execution` object in
 `evals.json` records how to run it: Claude with `claude-opus-5-5` at effort
 high, three runs per case and condition with a 30-minute limit each, and the
-same command grant for both conditions. Before the runs, check that the
-effective Claude settings set no sandbox proxy port and allow no network domain
-or WebFetch, and record the result. Each run gets a new, empty
+same command grant for both conditions. Before the runs, check that no Claude
+settings source other than `claude-settings.json` sets any `sandbox.network`
+key or allows a network domain or WebFetch, and record the result. Each run gets a new, empty
 `CLAUDE_CODE_TMPDIR` whose `claude-<uid>` subpath stays within 44 bytes, since a
 longer path falls back to the shared temp root; a run whose temp directory fell
 back is excluded. The fresh directory keeps runs from sharing fixed-name

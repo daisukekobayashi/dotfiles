@@ -43,8 +43,8 @@ Claude Code: /evaluate-skill maintain-verification-skill
 `change-adversarial-review` の課題は、実際の delivery のレビューで見つかった欠陥と、
 欠陥のない対照から作っています。実行方法は `evals.json` の `execution` に記録します。
 Claude の `claude-opus-5-5`(effort high)で、ケースと条件ごとに3回(各30分まで)実行し、
-両条件に同じコマンド権限を与えます。実行前に、有効な Claude 設定がサンドボックスの
-プロキシポートを設定せず、ネットワークのドメインや WebFetch を許可していないことを確認して記録します。
+両条件に同じコマンド権限を与えます。実行前に、`claude-settings.json` 以外の Claude 設定が
+`sandbox.network` のキーを設定せず、ネットワークのドメインや WebFetch を許可していないことを確認して記録します。
 各実行には空の `CLAUDE_CODE_TMPDIR` を新しく与え、その `claude-<uid>` のパスを44バイト以内にします。
 長いパスでは共有の一時ディレクトリに戻るため、戻った実行は除外します。
 新しい一時ディレクトリは決まった名前の作業ディレクトリの共有を防ぎますが、
