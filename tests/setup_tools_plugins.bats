@@ -731,13 +731,13 @@ EOF
 }
 
 @test "linux and wsl mise configs install betterleaks through github backend" {
-  run grep -F 'betterleaks = "1.6.0"' "$(repo_root)/mise/config.linux.toml" "$(repo_root)/mise/config.wsl.toml"
+  run grep -F 'betterleaks = "1.10.0"' "$(repo_root)/mise/config.linux.toml" "$(repo_root)/mise/config.wsl.toml"
   [ "$status" -ne 0 ]
 
-  run grep -F '"github:betterleaks/betterleaks" = "1.6.0"' "$(repo_root)/mise/config.linux.toml"
+  run grep -F '"github:betterleaks/betterleaks" = "1.10.0"' "$(repo_root)/mise/config.linux.toml"
   [ "$status" -eq 0 ]
 
-  run grep -F '"github:betterleaks/betterleaks" = "1.6.0"' "$(repo_root)/mise/config.wsl.toml"
+  run grep -F '"github:betterleaks/betterleaks" = "1.10.0"' "$(repo_root)/mise/config.wsl.toml"
   [ "$status" -eq 0 ]
 }
 

@@ -1,15 +1,15 @@
 [tools]
 java = "temurin-25.0.5+8.0.LTS"
-dotnet = "10.0.400"
-python = "3.14.8"
-node = "24.22.0"
-pnpm = "12.16.1"
-ruby = "3.4.11"
-go = "1.27.3"
+dotnet = "10.0.404"
+python = "3.14.10"
+node = "24.22.3"
+pnpm = "12.18.0"
+ruby = "3.4.12"
+go = "1.27.4"
 rust = "1.99.1"
 erlang = "28.5"
-elixir = "1.20.4-otp-28"
-ghcup = "0.1.50"
+elixir = "1.20.5-otp-28"
+ghcup = "0.1.50.2"
 bun = "1.4.4"
 
 [env]
