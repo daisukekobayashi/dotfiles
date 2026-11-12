@@ -9,6 +9,7 @@ ruff = "0.17"
 uv = "0.13"
 yt-dlp = "2026.10.26"
 azure = "2"
+just = "1.59.0"
 
 [tools."http:gcloud"]
 version = "591.0.0"
