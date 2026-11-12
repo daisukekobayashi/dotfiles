@@ -12,6 +12,6 @@
     "autoAllowBashIfSandboxed": true,
     "allowUnsandboxedCommands": false,
     "filesystem": {"denyRead": ["~/.dotfiles", "~/.claude", "~/.agents"]},
-    "network": {"allowedDomains": []}
+    "network": {"allowedDomains": [], "deniedDomains": ["*"]}
   }
 }

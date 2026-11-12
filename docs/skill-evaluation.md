@@ -37,10 +37,12 @@ and label mappings belong in `/tmp` or ignored storage.
 The `change-adversarial-review` suite is built from defects that real delivery
 review rounds found, plus sound controls. Its `execution` object in
 `evals.json` records how to run it: Claude with `claude-opus-5-5` at effort
-high, three runs per case and condition, and the same command grant for both
-conditions. Candidates may run commands in the workspace under the OS sandbox in
-`claude-settings.json`, which limits writes to the workspace and temp
-directories, blocks the network, and blocks reads of the real repository and
+high, three runs per case and condition with a 30-minute limit each, and the
+same command grant for both conditions. Each run gets a new, empty
+`CLAUDE_CODE_TMPDIR`, so no run can read another run's scratch files.
+Candidates may run commands in the workspace under the OS sandbox in
+`claude-settings.json`, which limits writes to the workspace and that temp
+directory, blocks the network, and blocks reads of the real repository and
 installed skills. macOS `ps` cannot run under that sandbox; the timing cases
 still reproduce through pure Bash. A run whose transcript reaches outside the
 workspace is excluded and rerun once.

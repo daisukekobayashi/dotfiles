@@ -141,6 +141,8 @@ class SkillEvaluationTests(unittest.TestCase):
         settings = json.loads((suite.parent / settings_name).read_text())
         self.assertTrue(settings["sandbox"]["enabled"])
         self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])
+        self.assertEqual(settings["sandbox"]["network"]["deniedDomains"], ["*"])
+        self.assertEqual(execution["fresh_tmpdir_env"], "CLAUDE_CODE_TMPDIR")
         self.assertNotIn("danger", " ".join(execution["claude_extra_args"]).lower())
         self.assertNotIn("bypassPermissions", execution["claude_extra_args"])
         files = suite.parent / "files"

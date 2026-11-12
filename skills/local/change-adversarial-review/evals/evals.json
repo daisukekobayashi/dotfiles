@@ -6,7 +6,7 @@
     "model": "claude-opus-5-5",
     "effort": "high",
     "runs_per_condition": 3,
-    "run_timeout_minutes": 20,
+    "run_timeout_minutes": 30,
     "claude_extra_args": [
       "--model",
       "claude-opus-5-5",
@@ -18,7 +18,8 @@
       "Read Grep Glob Bash"
     ],
     "claude_settings": "claude-settings.json",
-    "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and temp directories, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed.",
+    "fresh_tmpdir_env": "CLAUDE_CODE_TMPDIR",
+    "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Each run also gets a new, empty directory outside the shared temp root as the environment variable named in fresh_tmpdir_env, so no run can read another run's scratch files. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and that temp directory, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed.",
     "known_constraints": [
       "macOS ps (setuid) cannot run under the sandbox, so the listing tests in tests/list_processes.bats cannot run; lsof and Bash 5 work. The timing defects in cases 1 and 2 reproduce through confirmed_reading, which is pure Bash, so they remain reproducible under load."
     ],

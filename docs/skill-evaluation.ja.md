@@ -42,9 +42,10 @@ Claude Code: /evaluate-skill maintain-verification-skill
 
 `change-adversarial-review` の課題は、実際の delivery のレビューで見つかった欠陥と、
 欠陥のない対照から作っています。実行方法は `evals.json` の `execution` に記録します。
-Claude の `claude-opus-5-5`(effort high)で、ケースと条件ごとに3回実行し、
-両条件に同じコマンド権限を与えます。候補は `claude-settings.json` の OS サンドボックス下で
-ワークスペース内のコマンドを実行できます。書き込みはワークスペースと一時ディレクトリに限り、
+Claude の `claude-opus-5-5`(effort high)で、ケースと条件ごとに3回(各30分まで)実行し、
+両条件に同じコマンド権限を与えます。各実行には空の `CLAUDE_CODE_TMPDIR` を新しく与え、
+ほかの実行の作業ファイルを読めないようにします。候補は `claude-settings.json` の OS サンドボックス下で
+ワークスペース内のコマンドを実行できます。書き込みはワークスペースとその一時ディレクトリに限り、
 ネットワークと、実リポジトリおよびインストール済みスキルの読み取りを禁止します。
 macOS の `ps` はこのサンドボックス下では動きませんが、計時のケースは Bash だけで再現できます。
 ワークスペース外に触れた実行は除外し、同じ条件で1回だけ再実行します。
