@@ -34,6 +34,17 @@ Reusable cases remain in `skills/local/<target>/evals/evals.json`. The initial
 regression, and an unavailable prerequisite. Run-specific transcripts, scores,
 and label mappings belong in `/tmp` or ignored storage.
 
+The `change-adversarial-review` suite is built from defects that real delivery
+review rounds found, plus sound controls. Its `execution` object in
+`evals.json` records how to run it: Claude with `claude-opus-5-5` at effort
+high, three runs per case and condition, and the same command grant for both
+conditions. Candidates may run commands in the workspace under the OS sandbox in
+`claude-settings.json`, which limits writes to the workspace and temp
+directories, blocks the network, and blocks reads of the real repository and
+installed skills. macOS `ps` cannot run under that sandbox; the timing cases
+still reproduce through pure Bash. A run whose transcript reaches outside the
+workspace is excluded and rerun once.
+
 `bats tests/setup_pstack_skills.bats tests/skill_evals.bats` checks both agent
 layouts and preparation behavior. Those checks do not establish real-model
 effectiveness. Native skill discovery/triggering is a separate check from the

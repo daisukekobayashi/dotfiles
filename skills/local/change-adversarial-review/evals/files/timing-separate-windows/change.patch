@@ -1,0 +1,141 @@
+diff --git a/tests/list_processes.bats b/tests/list_processes.bats
+index b857fe7..88ee639 100644
+--- a/tests/list_processes.bats
++++ b/tests/list_processes.bats
+@@ -163,6 +163,55 @@ ps_script() {
+   printf '%s' "${copy}"
+ }
+ 
++# Prints a file that defines only the script's confirmed_reading and the
++# ps_line_max it reads, so a test can time the ps fallback's walk without the
++# ps and lsof calls of a listing. Fails when the script no longer has them.
++walk_script() {
++  local copy="${BATS_TEST_TMPDIR}/confirmed-reading.sh"
++  sed -n '/^ps_line_max=/,/^}$/p' "${script}" >"${copy}"
++  grep -qx 'confirmed_reading() {' "${copy}" || {
++    echo "${SCRIPT_REL} no longer defines ps_line_max and confirmed_reading" >&2
++    return 1
++  }
++  printf '%s' "${copy}"
++}
++
++# Prints the fewest microseconds of three confirmed_reading calls on the UTF-8
++# reading $1 and the LC_ALL=C reading $2, stopping after a call of 10s or more,
++# which no runner noise explains. The calls run in a separate bash, out of
++# reach of the debug trap bats sets, and fail when they set no ps_line.
++walk_time() {
++  # shellcheck disable=SC2016 # expanded by the inner bash
++  "${BASH}" -c '
++    source "$1" || exit 1
++    best=""
++    for _ in 1 2 3; do
++      start="${EPOCHREALTIME/[.,]/}"
++      confirmed_reading "$2" "$3"
++      end="${EPOCHREALTIME/[.,]/}"
++      if [[ -z "${best}" ]] || ((end - start < best)); then
++        best=$((end - start))
++      fi
++      ((end - start < 10000000)) || break
++    done
++    [[ -n "${ps_line}" ]] || exit 1
++    printf "%s" "${best}"
++  ' walk "$(walk_script)" "$1" "$2"
++}
++
++# Fails when the walk of a long line took at least floor_ms milliseconds and at
++# least ratio times the walk of its short control, given in microseconds as
++# long_us and control_us. Both walks run on the same runner moments apart, so a
++# slow runner slows both; the floor keeps a walk too short to time reliably
++# from failing on its ratio alone.
++check_walk_time() {
++  local long_us="$1" control_us="$2" ratio="$3" floor_ms="$4"
++  ((long_us < floor_ms * 1000 || long_us < ratio * control_us)) || {
++    echo "walk took ${long_us}us on the long line, ${control_us}us on its control"
++    return 1
++  }
++}
++
+ # Prints the UTF-8 locale the script's ps fallback uses, or nothing.
+ utf8_locale() {
+   local loc
+@@ -1004,14 +1053,13 @@ run_lookup() {
+ 
+ # A line the two readings differ on is walked in runs, and one longer than
+ # 4096 bytes is read under LC_ALL=C alone, so a long argument line costs little.
++# On one Mac, the walk byte by byte took about 10s on the long line and 0.1s on
++# the short one; in runs, about 0.01s and 0.001s.
+ @test "list-processes ps fallback reads a long argument line without slowing down" {
+   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+-  local lister base short long start plain_time long_time
++  local lister base short long name name_c long_us control_us
+   lister="$(ps_script)"
+   base="$(mkdir -p "${target}/作業" && cd "${target}/作業" && pwd -P)"
+-  start="${SECONDS}"
+-  run -0 "${lister}" "${base}"
+-  plain_time=$((SECONDS - start))
+   start_with_args -p "$(printf 'a%.0s' {1..3000})" --cwd "${base}/x"
+   short="${started_pid}"
+   start_with_args -p "$(printf 'a%.0s' {1..30000})" --cwd "${base}/x"
+@@ -1019,40 +1067,45 @@ run_lookup() {
+   wait_for_runners "${short}" "${long}"
+   require_ps_meta_notation "${short}"
+ 
+-  start="${SECONDS}"
+   run -0 "${lister}" "${base}"
+-  long_time=$((SECONDS - start))
+   [ "$(row_for "${short}" | cut -f6)" = "--cwd under target" ]
+   [ "$(row_for "${long}" | cut -f6)" = "--cwd ambiguous" ]
+-  ((long_time - plain_time < 3)) || {
+-    echo "listing took ${long_time}s with long lines, ${plain_time}s without"
+-    return 1
+-  }
++
++  ((BASH_VERSINFO[0] >= 5)) || skip "Bash ${BASH_VERSION} has no EPOCHREALTIME"
++  # "作業" and how macOS ps prints its bytes under LC_ALL=C.
++  name="作業"
++  name_c='M-dM-=M^\M-fM-%M--'
++  long_us="$(walk_time " -p $(printf 'a%.0s' {1..30000}) --cwd /t/${name}/x" \
++    " -p $(printf 'a%.0s' {1..30000}) --cwd /t/${name_c}/x")"
++  control_us="$(walk_time " -p $(printf 'a%.0s' {1..3000}) --cwd /t/${name}/x" \
++    " -p $(printf 'a%.0s' {1..3000}) --cwd /t/${name_c}/x")"
++  check_walk_time "${long_us}" "${control_us}" 20 1000
+ }
+ 
+ # Bytes >= 0x80 are read only within a window at the start of a line, so a
+-# dense run of them before a long ASCII run costs little.
++# dense run of them before a long ASCII run costs little. Without the window,
++# the walk took about 4.4s on one Mac with the long run and 0.4s without; with
++# it, about 0.6s and 0.4s.
+ @test "list-processes ps fallback reads non-ASCII before a long ASCII run without slowing down" {
+   command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
+   [[ -n "$(utf8_locale)" ]] || skip "no UTF-8 locale"
+-  local lister dense start plain_time long_time pid
++  local lister dense dense_c pid long_us control_us
+   lister="$(ps_script)"
+-  start="${SECONDS}"
+-  run -0 "${lister}" "${target}"
+-  plain_time=$((SECONDS - start))
+   dense="$(printf 'é%.0s' {1..2000})"
+   start_with_args "x${dense}$(printf 'a%.0s' {1..40000})" --cwd "${target}"
+   pid="${started_pid}"
+   wait_for_runners "${pid}"
+ 
+-  start="${SECONDS}"
+   run -0 "${lister}" "${target}"
+-  long_time=$((SECONDS - start))
+   [ -n "$(row_for "${pid}" | LC_ALL=C cut -f6)" ]
+-  ((long_time - plain_time < 4)) || {
+-    echo "listing took ${long_time}s with the long line, ${plain_time}s without"
+-    return 1
+-  }
++
++  ((BASH_VERSINFO[0] >= 5)) || skip "Bash ${BASH_VERSION} has no EPOCHREALTIME"
++  # How macOS ps prints the bytes of "é" under LC_ALL=C.
++  dense_c="$(printf 'M-CM-)%.0s' {1..2000})"
++  long_us="$(walk_time "x${dense}$(printf 'a%.0s' {1..40000})" \
++    "x${dense_c}$(printf 'a%.0s' {1..40000})")"
++  control_us="$(walk_time "x${dense}a" "x${dense_c}a")"
++  check_walk_time "${long_us}" "${control_us}" 3 1000
+ }
+ 
+ # The first reading under LC_ALL=C sees a literal "x-$-'/M-CM-)", and the

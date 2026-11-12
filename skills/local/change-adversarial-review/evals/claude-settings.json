@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(~/.dotfiles/**)", "Read(~/.claude/**)", "Read(~/.agents/**)",
+      "Grep(~/.dotfiles/**)", "Grep(~/.claude/**)", "Grep(~/.agents/**)",
+      "Glob(~/.dotfiles/**)", "Glob(~/.claude/**)", "Glob(~/.agents/**)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "filesystem": {"denyRead": ["~/.dotfiles", "~/.claude", "~/.agents"]},
+    "network": {"allowedDomains": []}
+  }
+}

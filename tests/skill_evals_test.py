@@ -132,6 +132,46 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual(config.read_text(),
                          '[[skills.config]]\npath = "/skills/unrelated/SKILL.md"\nenabled = false\n')
 
+    def test_adversarial_review_suite_prepares_every_case_from_plain_fixtures(self):
+        suite = ROOT / "skills/local/change-adversarial-review/evals/evals.json"
+        data = json.loads(suite.read_text())
+        cases = data["evals"]
+        execution = data["execution"]
+        settings_name = execution["claude_settings"]
+        settings = json.loads((suite.parent / settings_name).read_text())
+        self.assertTrue(settings["sandbox"]["enabled"])
+        self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])
+        self.assertNotIn("danger", " ".join(execution["claude_extra_args"]).lower())
+        self.assertNotIn("bypassPermissions", execution["claude_extra_args"])
+        files = suite.parent / "files"
+        self.assertFalse(any(p.is_symlink() or p.name == ".git" for p in files.rglob("*")))
+        source_before = PREPARE.digest_tree(suite.parent)
+        for case in cases:
+            overlay = suite.parent / case["overlay"]
+            self.assertTrue((overlay / "change.patch").is_file())
+            self.assertTrue((overlay / "ISSUE.md").is_file())
+            for agent in ("codex", "claude"):
+                for variant in ("with-skill", "without-skill"):
+                    with self.subTest(case=case["name"], agent=agent, variant=variant):
+                        result = PREPARE.prepare(
+                            suite, case["id"], agent, variant,
+                            self.root / f"run-{len(self.workspaces)}",
+                        )
+                        workspace = Path(result["workspace"])
+                        self.workspaces.append(workspace)
+                        self.assertIn("change.patch", result["initial_files"])
+                        self.assertFalse((workspace / ".git").exists())
+                        self.assertFalse(any(
+                            Path(name).name in (settings_name, "evals.json")
+                            for name in result["initial_files"]
+                        ))
+                        guidance = workspace / ".guidance/skills"
+                        self.assertEqual(
+                            sorted(p.name for p in guidance.iterdir()) if guidance.exists() else [],
+                            ["change-adversarial-review"] if variant == "with-skill" else [],
+                        )
+        self.assertEqual(PREPARE.digest_tree(suite.parent), source_before)
+
     def test_old_snapshot_is_supplied_without_the_judging_cases(self):
         bundle = self.root / "snapshot"
         for name in ("maintain-verification-skill", "prove-it-works", "create-verification-skill"):
