@@ -321,10 +321,18 @@ test("change review checks acceptance criteria and mandatory rules and reports c
     "meets-all-criteria",
     "breaches-mandatory-rule",
     "no-issue-available",
+    "resume-discarded-drafts",
+    "review-fix-ssh-alias",
+    "lsof-literal-notation",
+    "broker-prefix-ownership",
+    "parallel-set-skips-wait",
+    "resume-discarded-drafts-fixed",
+    "review-fix-ssh-alias-fixed",
+    "broker-exact-ownership",
   ]);
   for (const item of suite.evals) {
     const overlay = path.join(skillRoot, "evals", item.overlay);
-    assert.equal(existsSync(path.join(skillRoot, "evals", item.fixture, "export.py")), true, item.name);
+    assert.equal(existsSync(path.join(skillRoot, "evals", item.fixture)), true, item.name);
     assert.equal(existsSync(path.join(overlay, "change.patch")), true, item.name);
     assert.equal(existsSync(path.join(overlay, "ISSUE.md")), item.name !== "no-issue-available", item.name);
   }

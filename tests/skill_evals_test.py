@@ -132,32 +132,27 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual(config.read_text(),
                          '[[skills.config]]\npath = "/skills/unrelated/SKILL.md"\nenabled = false\n')
 
-    def test_adversarial_review_suite_prepares_every_case_from_plain_fixtures(self):
-        suite = ROOT / "skills/local/change-adversarial-review/evals/evals.json"
-        data = json.loads(suite.read_text())
-        cases = data["evals"]
-        execution = data["execution"]
-        settings_name = execution["claude_settings"]
-        settings = json.loads((suite.parent / settings_name).read_text())
+    def check_claude_policy(self, suite, claude):
+        settings = json.loads((suite.parent / claude["claude_settings"]).read_text())
         self.assertTrue(settings["sandbox"]["enabled"])
         self.assertFalse(settings["sandbox"]["allowUnsandboxedCommands"])
         self.assertEqual(settings["sandbox"]["network"]["deniedDomains"], ["*"])
-        self.assertEqual(execution["fresh_tmpdir"],
+        self.assertEqual(claude["fresh_tmpdir"],
                          {"env": "CLAUDE_CODE_TMPDIR", "max_per_uid_path_bytes": 44})
         self.assertTrue(any("no sandbox key and no permissions.allow rule" in check
-                            for check in execution["pre_run_checks"]))
+                            for check in claude["pre_run_checks"]))
         self.assertTrue(any("Inherited hooks run outside the sandbox" in check
-                            for check in execution["pre_run_checks"]))
-        self.assertTrue(any("Delete" in check for check in execution["post_run_checks"]))
-        self.assertNotIn("danger", " ".join(execution["claude_extra_args"]).lower())
-        self.assertNotIn("bypassPermissions", execution["claude_extra_args"])
+                            for check in claude["pre_run_checks"]))
+        self.assertTrue(any("Delete" in check for check in claude["post_run_checks"]))
+
+    def check_plain_fixture_suite(self, suite, private_names):
+        data = json.loads(suite.read_text())
         files = suite.parent / "files"
         self.assertFalse(any(p.is_symlink() or p.name == ".git" for p in files.rglob("*")))
         source_before = PREPARE.digest_tree(suite.parent)
-        for case in cases:
+        for case in data["evals"]:
             overlay = suite.parent / case["overlay"]
             self.assertTrue((overlay / "change.patch").is_file())
-            self.assertTrue((overlay / "ISSUE.md").is_file())
             for agent in ("codex", "claude"):
                 for variant in ("with-skill", "without-skill"):
                     with self.subTest(case=case["name"], agent=agent, variant=variant):
@@ -170,15 +165,69 @@ class SkillEvaluationTests(unittest.TestCase):
                         self.assertIn("change.patch", result["initial_files"])
                         self.assertFalse((workspace / ".git").exists())
                         self.assertFalse(any(
-                            Path(name).name in (settings_name, "evals.json")
+                            Path(name).name in (*private_names, "evals.json")
                             for name in result["initial_files"]
                         ))
                         guidance = workspace / ".guidance/skills"
                         self.assertEqual(
                             sorted(p.name for p in guidance.iterdir()) if guidance.exists() else [],
-                            ["change-adversarial-review"] if variant == "with-skill" else [],
+                            [data["skill_name"]] if variant == "with-skill" else [],
                         )
+                        applied = subprocess.run(
+                            ["git", "apply", "--check", "change.patch"], cwd=workspace,
+                            capture_output=True, text=True, check=False,
+                        )
+                        self.assertEqual(applied.returncode, 0, applied.stderr)
         self.assertEqual(PREPARE.digest_tree(suite.parent), source_before)
+
+    def test_adversarial_review_suite_prepares_every_case_from_plain_fixtures(self):
+        suite = ROOT / "skills/local/change-adversarial-review/evals/evals.json"
+        data = json.loads(suite.read_text())
+        execution = data["execution"]
+        self.check_claude_policy(suite, execution)
+        self.assertNotIn("danger", " ".join(execution["claude_extra_args"]).lower())
+        self.assertNotIn("bypassPermissions", execution["claude_extra_args"])
+        for case in data["evals"]:
+            self.assertTrue((suite.parent / case["overlay"] / "ISSUE.md").is_file())
+        self.check_plain_fixture_suite(suite, [execution["claude_settings"]])
+
+    def test_change_review_suite_runs_both_agents_under_equal_sandboxed_policies(self):
+        suite = ROOT / "skills/local/change-review/evals/evals.json"
+        data = json.loads(suite.read_text())
+        self.assertEqual(data["supporting_skills"], [])
+        execution = data["execution"]
+        self.assertEqual((execution["runs_per_condition"], execution["run_timeout_minutes"]), (3, 30))
+        claude, codex = execution["agents"]["claude"], execution["agents"]["codex"]
+        self.check_claude_policy(suite, claude)
+        for agent in (claude, codex):
+            joined = " ".join(agent["extra_args"]).lower()
+            self.assertNotIn("danger", joined)
+            self.assertNotIn("bypass", joined)
+            self.assertIn(agent["model"], agent["extra_args"])
+        self.assertNotIn("--sandbox", codex["extra_args"])
+        overrides = [codex["extra_args"][i + 1] for i, arg in enumerate(codex["extra_args"])
+                     if arg == "-c"]
+        config = tomllib.loads("\n".join(overrides))
+        self.assertEqual(config["approval_policy"], "never")
+        self.assertEqual(config["model_reasoning_effort"], codex["effort"])
+        profile = config["permissions"][config["default_permissions"]]["filesystem"]
+        self.assertEqual({key: value for key, value in profile.items() if value != "none"},
+                         {":root": "read", ":workspace_roots": "write", ":tmpdir": "write"})
+        for denied in ("~/.dotfiles", "~/.claude", "~/.agents", "~/.codex/skills"):
+            self.assertEqual(profile[denied], "none")
+        for feature in ("hooks", "memories", "plugins", "computer_use", "browser_use"):
+            self.assertIn(["--disable", feature],
+                          [codex["extra_args"][i:i + 2] for i in range(len(codex["extra_args"]))])
+        self.assertTrue(any("mcp_servers.<name>.enabled=false" in check
+                            for check in codex["pre_run_checks"]))
+        self.assertTrue(any("codex sandbox -P" in check for check in codex["pre_run_checks"]))
+        names = [case["name"] for case in data["evals"]]
+        self.assertEqual(names[:4], ["misses-one-criterion", "meets-all-criteria",
+                                     "breaches-mandatory-rule", "no-issue-available"])
+        for case in data["evals"]:
+            issue = suite.parent / case["overlay"] / "ISSUE.md"
+            self.assertEqual(issue.is_file(), case["name"] != "no-issue-available", case["name"])
+        self.check_plain_fixture_suite(suite, [claude["claude_settings"]])
 
     def test_old_snapshot_is_supplied_without_the_judging_cases(self):
         bundle = self.root / "snapshot"

@@ -1,0 +1,134 @@
+diff --git a/setup/test/skills-wiring-delivery.test.mjs b/setup/test/skills-wiring-delivery.test.mjs
+index 093bd1c..acab460 100644
+--- a/setup/test/skills-wiring-delivery.test.mjs
++++ b/setup/test/skills-wiring-delivery.test.mjs
+@@ -405,6 +405,41 @@ test("delivery workers draft the understanding and preflight for the coordinator
+   assert.match(withDocs, /write documentation only after the coordinator returns the user's answers\./);
+ });
+ 
++test("an unsettled goal routes a delivery target back to discovery", async () => {
++  const localRoot = path.join(repoRoot, "skills", "local");
++  const read = async (...parts) => flat(await readText(path.join(localRoot, ...parts)));
++  const check = await read("shared-understanding", "SKILL.md");
++  const dialogue = await read("delivery-common", "references", "worker-dialogue.md");
++  const completion = await read("delivery-common", "references", "completion.md");
++
++  // shared-understanding owns the condition, the discovery selector, and the status marker.
++  assert.match(check, /When a further correction refines the sentence, revise it again and continue; when the goal is unsettled under step 5, go to step 5\./);
++  assert.match(check, /The goal is \*\*unsettled\*\* when the user cannot confirm any revision of the one-sentence overview and cannot say what should change, or indicates during steps 2-4 that the goal or problem itself is not decided\./);
++  assert.match(check, /recommend discovery: `find-unknowns` when the problem itself is unclear, or `grilling` when the user holds a candidate goal or plan to stress-test\. Close as `unresolved \(goal unsettled\)`\./);
++  assert.match(check, /Write an unsettled goal as `Status: unresolved \(goal unsettled\)`, and every other open point as plain `unresolved`\./);
++  for (const status of ["confirmed", "corrected", "unresolved", "skipped", "not run"]) {
++    assert.match(check, new RegExp(`- \`${status}\`:`), `shared-understanding keeps the status ${status}`);
++  }
++
++  // Worker Dialogue adds only the delivery steps after the status gate and names the selector's home.
++  const gate = dialogue.indexOf("Continue only with a status of `confirmed`, `corrected`, or `skipped`");
++  const route = dialogue.indexOf("For `unresolved (goal unsettled)`, the next action is the user's:");
++  const tier = dialogue.indexOf("4. The worker sets the tentative tier");
++  assert.ok(gate >= 0 && gate < route && route < tier, `worker-dialogue.md: goal-unsettled route order ${[gate, route, tier]}`);
++  assert.match(dialogue, /run the discovery skill that `shared-understanding` step 5 recommends, update the task with its outcome, then resume the delivery\. The delivery keeps the target's worktree and branch and leaves the task text to the user\./);
++  assert.doesNotMatch(dialogue, /grilling|find-unknowns/, "worker-dialogue.md restates the discovery selector");
++  // A fresh worker after a resume never receives the result and drafts that Resume discards.
++  assert.match(dialogue, /dispatch a fresh worker for the same worktree with the recorded drafts and results, except those that Delivery Completion's \[Resume\]\(completion\.md#resume\) discards\./);
++
++  // Delivery Completion's Resume re-runs the check instead of carrying the stale result forward.
++  assert.match(completion, /A recorded shared understanding result and settled preflight decisions carry forward, except an `unresolved \(goal unsettled\)` result: discard it and the target's drafts, and have the worker run `shared-understanding` again from step 1 on the current task\./);
++
++  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
++    const skill = await read(delivery, "SKILL.md");
++    assert.doesNotMatch(skill, /goal unsettled|find-unknowns|grilling/, `${delivery} restates the discovery route`);
++  }
++});
++
+ test("delivery-common owns the shared completion policy", async () => {
+   const localRoot = path.join(repoRoot, "skills", "local");
+   const read = (...parts) => readText(path.join(localRoot, ...parts));
+diff --git a/skills/local/delivery-common/references/completion.md b/skills/local/delivery-common/references/completion.md
+index 1513ae4..21a72b9 100644
+--- a/skills/local/delivery-common/references/completion.md
++++ b/skills/local/delivery-common/references/completion.md
+@@ -24,8 +24,11 @@ state. The calling workflow checks a recorded branch name before any command
+ uses it. Reuse matching worktrees and PRs, and verify the current head before
+ reusing review evidence. Resume the earliest incomplete phase; a completed PR
+ resumes completion checks rather than publication. A recorded shared
+-understanding result and settled preflight decisions carry forward. A progress
+-record is evidence, not authorization. Apply the calling workflow's additions.
++understanding result and settled preflight decisions carry forward, except an
++`unresolved (goal unsettled)` result: discard it and the target's drafts, and
++have the worker run `shared-understanding` again from step 1 on the current
++task. A progress record is evidence, not authorization. Apply the calling
++workflow's additions.
+ 
+ ## Decision summary
+ 
+diff --git a/skills/local/delivery-common/references/worker-dialogue.md b/skills/local/delivery-common/references/worker-dialogue.md
+index d340af3..df18629 100644
+--- a/skills/local/delivery-common/references/worker-dialogue.md
++++ b/skills/local/delivery-common/references/worker-dialogue.md
+@@ -23,7 +23,8 @@ target. The same worker drafts the shared understanding, drafts the preflight,
+ and implements, keeping its context. Continue it through the host's mechanism
+ for messaging an existing agent. When it cannot be continued, such as after a
+ resume, dispatch a fresh worker for the same worktree with the recorded drafts
+-and results.
++and results, except those that Delivery Completion's
++[Resume](completion.md#resume) discards.
+ 
+ Without delegation, report the limitation and process targets one at a time.
+ The coordinator runs `shared-understanding` and `design-preflight-with-docs`
+@@ -45,7 +46,11 @@ For each target, in this order:
+    points one at a time. Relay a follow-up that needs code reading to the same
+    worker. Forward a user's skip. Send the result to the worker.
+ 3. Continue only with a status of `confirmed`, `corrected`, or `skipped`; report
+-   other targets as waiting for the user with their open points.
++   other targets as waiting for the user with their open points. For
++   `unresolved (goal unsettled)`, the next action is the user's: run the
++   discovery skill that `shared-understanding` step 5 recommends, update the
++   task with its outcome, then resume the delivery. The delivery keeps the
++   target's worktree and branch and leaves the task text to the user.
+ 4. The worker sets the tentative tier under [Risk Tier](risk-tier.md), runs
+    `design-preflight-with-docs` in draft mode with the shared understanding
+    result in the mode the tier's [Tier procedure](risk-tier.md#tier-procedure)
+diff --git a/skills/local/shared-understanding/SKILL.md b/skills/local/shared-understanding/SKILL.md
+index 64f9a54..d55c577 100644
+--- a/skills/local/shared-understanding/SKILL.md
++++ b/skills/local/shared-understanding/SKILL.md
+@@ -32,6 +32,8 @@ Write the overview for a user who has not reread the issue.
+ 
+ - State in one sentence what changes and why, and ask the user to confirm or
+   correct it. When the user corrects it, revise the overview before step 3.
++  When a further correction refines the sentence, revise it again and
++  continue; when the goal is unsettled under step 5, go to step 5.
+ - Show one typical case as **before / after**: a concrete situation (input,
+   operation, or state, using real names and values from the repository) and the
+   observable result before and after the change.
+@@ -80,8 +82,13 @@ decide after that explanation stays open.
+ - Carry durable design decisions (contracts, data formats, boundaries,
+   compatibility) to design preflight; leave small implementation tactics to
+   implementation.
+-- When the discussion shows that the problem itself is unsettled, recommend
+-  `find-unknowns` and close as `unresolved`.
++- The goal is **unsettled** when the user cannot confirm any revision of the
++  one-sentence overview and cannot say what should change, or indicates during
++  steps 2-4 that the goal or problem itself is not decided. Stop there and
++  recommend discovery:
++  `find-unknowns` when the problem itself is unclear, or `grilling` when the
++  user holds a candidate goal or plan to stress-test. Close as
++  `unresolved (goal unsettled)`.
+ 
+ The user may skip at any point; close as `skipped`. When interaction is
+ unavailable, close as `not run`; the judgments belong to the user alone.
+@@ -120,9 +127,10 @@ The check is complete when its status is one of:
+ - `confirmed`: the user accepted every consequential decision and settled every
+   undecided point, with no change to the issue.
+ - `corrected`: the same, with at least one agreed issue change.
+-- `unresolved`: a consequential decision or point remains open, or the problem
+-  itself is unsettled. An open point closes here, never as `confirmed` or
+-  `skipped`.
++- `unresolved`: a consequential decision or point remains open, or the goal is
++  unsettled. An open point closes here, never as `confirmed` or `skipped`.
++  Write an unsettled goal as `Status: unresolved (goal unsettled)`, and every
++  other open point as plain `unresolved`.
+ - `skipped`: the user explicitly skipped the check.
+ - `not run`: interaction was unavailable.
+ 

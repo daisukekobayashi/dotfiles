@@ -1,0 +1,105 @@
+diff --git a/setup/test/skills-wiring-delivery.test.mjs b/setup/test/skills-wiring-delivery.test.mjs
+index 0fa49de..6b6e842 100644
+--- a/setup/test/skills-wiring-delivery.test.mjs
++++ b/setup/test/skills-wiring-delivery.test.mjs
+@@ -198,6 +198,7 @@ test("change review skills are explicit-only and share target selection", async
+     assert.match(runnerSection(skill), new RegExp(`Start it with \`Use \\$${name}\``));
+     assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
+     assert.match(runnerSection(skill), /Run one Codex run at a time per target worktree/);
++    assert.match(runnerSection(skill), /several review skills for one worktree\s+together, run them in parallel as one set instead: follow that section once\s+before the first run starts and once after every run ends/);
+     assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Brokers Started by a Codex Review"/);
+   }
+   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
+@@ -478,6 +479,7 @@ test("Codex review runs stop only the broker tree they started", async () => {
+ 
+   assert.ok(brokers, "worktree-runtime-cleanup: missing Brokers Started by a Codex Review");
+   assert.match(brokers, /stopping them needs no confirmation/);
++  assert.match(brokers, /Runs started together for one worktree as a set count as one run: record the first list before any starts and the second after all end\./);
+   assert.match(brokers, /Before the run, record `scripts\/list-processes\.sh <worktree>`/);
+   assert.match(brokers, /is a broker this run started only when it is absent from the first list, by PID and start time, and/);
+   assert.match(brokers, /its `cwd` column in the second list equals exactly the target worktree root/);
+@@ -496,7 +498,7 @@ test("Codex review runs stop only the broker tree they started", async () => {
+   const localReview = flat(await readText(
+     path.join(repoRoot, "skills", "local", "delivery-common", "references", "local-review.md"),
+   ));
+-  assert.match(localReview, /Run Codex-routed reviewers for one worktree one at a time; each stops the broker it starts\./);
++  assert.match(localReview, /Run the Codex-routed reviewers for one pinned head in parallel as one set; only when the host cannot run them concurrently, run them one at a time and report that\./);
+ 
+   for (const cleanup of ["github-worktree-cleanup", "azure-devops-worktree-cleanup"]) {
+     const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
+diff --git a/skills/local/change-adversarial-review/SKILL.md b/skills/local/change-adversarial-review/SKILL.md
+index 8934469..cf71336 100644
+--- a/skills/local/change-adversarial-review/SKILL.md
++++ b/skills/local/change-adversarial-review/SKILL.md
+@@ -39,6 +39,10 @@ Run one Codex run at a time per target worktree; wait for any other in progress.
+ Before and after the run, including a failed run, follow
+ `../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
+ the target worktree, and report its result with the output.
++When you start the Codex runs of several review skills for one worktree
++together, run them in parallel as one set instead: follow that section once
++before the first run starts and once after every run ends, and report its
++result once.
+ 
+ Return the named tool's completed output. A launched background job is not a
+ completed review. If the named tool is not installed or its run fails, such as
+diff --git a/skills/local/change-review/SKILL.md b/skills/local/change-review/SKILL.md
+index 478b6c1..fd7e7aa 100644
+--- a/skills/local/change-review/SKILL.md
++++ b/skills/local/change-review/SKILL.md
+@@ -38,6 +38,10 @@ Run one Codex run at a time per target worktree; wait for any other in progress.
+ Before and after the run, including a failed run, follow
+ `../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
+ the target worktree, and report its result with the output.
++When you start the Codex runs of several review skills for one worktree
++together, run them in parallel as one set instead: follow that section once
++before the first run starts and once after every run ends, and report its
++result once.
+ 
+ Return the named tool's completed output. A launched background job is not a
+ completed review. If the named tool is not installed or its run fails, such as
+diff --git a/skills/local/change-security-review/SKILL.md b/skills/local/change-security-review/SKILL.md
+index dd8957f..da647bb 100644
+--- a/skills/local/change-security-review/SKILL.md
++++ b/skills/local/change-security-review/SKILL.md
+@@ -39,6 +39,10 @@ Run one Codex run at a time per target worktree; wait for any other in progress.
+ Before and after the run, including a failed run, follow
+ `../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
+ the target worktree, and report its result with the output.
++When you start the Codex runs of several review skills for one worktree
++together, run them in parallel as one set instead: follow that section once
++before the first run starts and once after every run ends, and report its
++result once.
+ 
+ Return the named tool's completed output. A launched background job is not a
+ completed review. If the named tool is not installed or its run fails, such as
+diff --git a/skills/local/delivery-common/references/local-review.md b/skills/local/delivery-common/references/local-review.md
+index 0ab8a6d..1d6d21f 100644
+--- a/skills/local/delivery-common/references/local-review.md
++++ b/skills/local/delivery-common/references/local-review.md
+@@ -9,8 +9,9 @@ for the second, and the `change-security-review` skill as a third. Each runs
+ in a fresh subagent of the current host unless the user's delivery request
+ explicitly names another review tool, such as Codex; forward that instruction to
+ every selected skill and read their instructions for how each route runs. Do not
+-infer the host from a directory name. Run Codex-routed reviewers for one
+-worktree one at a time; each stops the broker it starts.
++infer the host from a directory name. Run the Codex-routed reviewers for one
++pinned head in parallel as one set; only when the host cannot run them
++concurrently, run them one at a time and report that.
+ 
+ Report the selected route. If any required reviewer is unavailable or cannot
+ be invoked under its policy, report the missing prerequisite; do not substitute
+diff --git a/skills/local/worktree-runtime-cleanup/SKILL.md b/skills/local/worktree-runtime-cleanup/SKILL.md
+index bb869d9..a30c843 100644
+--- a/skills/local/worktree-runtime-cleanup/SKILL.md
++++ b/skills/local/worktree-runtime-cleanup/SKILL.md
+@@ -73,7 +73,9 @@ cleanup session, so discover them from process state.
+ `change-review`, `change-adversarial-review`, and `change-security-review`
+ follow this section around each Codex companion run for a target worktree. The
+ run owns the brokers it starts, so stopping them needs no confirmation; the stop
+-covers only the processes recorded below and sends only SIGTERM.
++covers only the processes recorded below and sends only SIGTERM. Runs started
++together for one worktree as a set count as one run: record the first list
++before any starts and the second after all end.
+ 
+ 1. Before the run, record `scripts/list-processes.sh <worktree>` in this
+    skill's directory.
