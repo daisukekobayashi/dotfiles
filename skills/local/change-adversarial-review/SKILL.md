@@ -86,17 +86,72 @@ without a finding. Report applied skips there too.
 
 ## Attack the Change
 
-Challenge the approach, not code style. Prioritize:
+### Stance
 
-- invariants, guards, assumptions, auth, permissions, and trust boundaries
-- data loss, corruption, duplication, migrations, and irreversible actions
-- retries, partial failure, rollback, idempotency, races, and ordering
-- stale state, timeouts, degraded dependencies, recovery, and observability
-- compatibility, issue alignment, and safer or simpler alternatives
+Break confidence in the change, not validate it; challenge the approach, not
+code style. Review it as if trying to find the strongest reasons it should not
+ship yet. Default to skepticism. Assume the change can fail in subtle,
+high-cost, or user-visible ways until the evidence says otherwise. Do not give
+credit for good intent, partial fixes, or likely follow-up work. If something
+only works on the happy path, treat that as a real weakness.
 
-Trace concrete failure paths and weight the user's focus heavily. A material
-finding states what fails, why, its impact, and a risk reduction. Exclude praise,
-style, cleanup, and speculation. Prefer one strong finding; mark inferences.
+### Attack Surface
+
+Prioritize the kinds of failures that are expensive, dangerous, or hard to
+detect:
+
+- auth, permissions, tenant isolation, and trust boundaries
+- data loss, corruption, duplication, and irreversible state changes
+- rollback safety, retries, partial failure, and idempotency gaps
+- race conditions, ordering assumptions, stale state, and re-entrancy
+- empty-state, null, timeout, and degraded dependency behavior
+- version skew, schema drift, migration hazards, and compatibility regressions
+- observability gaps that would hide failure or make recovery harder
+- issue alignment
+
+### Method
+
+Actively try to disprove the change. Look for violated invariants, missing
+guards, unhandled failure paths, and assumptions that stop being true under
+stress. Trace how bad inputs, retries, concurrent actions, or partially
+completed operations move through the code. If the user supplied a focus area,
+weight it heavily, but still report any other material issue you can defend.
+
+### Finding Bar
+
+Report only material findings. Do not include style feedback, naming feedback,
+low-value cleanup, or speculative concerns without evidence. A finding should
+answer:
+
+1. What can go wrong?
+2. Why is this code path vulnerable?
+3. What is the likely impact?
+4. What concrete change would reduce the risk? A safer or simpler alternative
+   belongs here.
+
+### Grounding
+
+Be aggressive, but stay grounded. Every finding must be defensible from the
+repository context or tool outputs. Do not invent files, lines, code paths,
+incidents, attack chains, or runtime behavior you cannot support. If a
+conclusion depends on an inference, state that explicitly in the finding body
+and keep the confidence honest.
+
+### Calibration
+
+Prefer one strong finding over several weak ones. Do not dilute serious issues
+with filler. If the change looks safe, say so directly and return no findings.
+
+### Final Check
+
+Before finalizing, check that each finding is:
+
+- adversarial rather than stylistic
+- tied to a concrete code location
+- plausible under a real failure scenario
+- actionable for an engineer fixing the issue
+
+### Local Rules
 
 Tag each finding `introduced` when this change creates the failure, `worsened`
 when an older defect becomes newly reachable or more severe through this change
@@ -120,12 +175,9 @@ Respond in the user's language:
 
 **Material Findings**
 - [High|Medium] <title> - <location> - confidence <0-1> - <introduced|worsened|pre-existing>
-  <failure, evidence, impact, recommendation>
+  <what fails, why the path is vulnerable, evidence, impact, recommendation>
   Class: <bug class>; other instances: <locations or "none found">
 - If none: No material findings found.
-
-**Challenged Assumptions and Alternatives**
-- <material challenge, safer alternative, or "None supported">
 
 **Issue Alignment**
 - <include only with issue or PR context>
@@ -133,6 +185,10 @@ Respond in the user's language:
 **Coverage and Residual Risk**
 - <coverage, skipped evidence, test gaps, stale refs, uncertainty>
 ```
+
+Report every material defect under Material Findings with a label and tag;
+never report one only in another section, such as Issue Alignment or Coverage
+and Residual Risk.
 
 Use `Do not ship` only for a defensible introduced or worsened blocker. A clean
 result means no material finding was supported, not that safety was proven.
@@ -152,8 +208,13 @@ result means no material finding was supported, not that safety was proven.
 
 Local adaptation of OpenAI's [adversarial review command](https://github.com/openai/codex-plugin-cc/blob/db52e28f4d9ded852ab3942cea316258ae4ef346/plugins/codex/commands/adversarial-review.md)
 and [review prompt](https://github.com/openai/codex-plugin-cc/blob/db52e28f4d9ded852ab3942cea316258ae4ef346/plugins/codex/prompts/adversarial-review.md).
-Last compared on 2026-10-21 with upstream commit
+Last compared on 2026-11-13 with the `codex` plugin 1.0.6, whose prompt matches
+upstream commit
 [`db52e28`](https://github.com/openai/codex-plugin-cc/commit/db52e28f4d9ded852ab3942cea316258ae4ef346).
+Attack the Change follows the prompt's stance, attack surface, method, finding
+bar, grounding, calibration, and final check sections, with issue alignment
+added to the attack surface; its Local Rules section holds the local additions.
 Each host runs this skill in its own subagent unless the user names another tool. Local behavior preserves issue/worktree
-targeting, evidence-based findings, and coverage reporting in the user's language
-instead of the plugin runtime's structured JSON output.
+targeting, evidence-based findings, finding tags and bug classes, and coverage
+reporting in the user's language instead of the plugin runtime's structured
+JSON output.
