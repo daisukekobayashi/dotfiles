@@ -45,6 +45,8 @@ Claude Code: /evaluate-skill maintain-verification-skill
 Claude の `claude-opus-5-5`(effort high)で、ケースと条件ごとに3回(各30分まで)実行し、
 両条件に同じコマンド権限を与えます。実行前に、`claude-settings.json` 以外の Claude 設定が
 `sandbox` のキーも許可ルール(`permissions.allow`)も設定していないことを確認して記録します。
+継承した hooks はサンドボックスの外で動くため、ワークスペースや実行の一時ディレクトリの中のファイルを
+実行または読み込む hook コマンドがないことも確認し、hook コマンドを記録します。
 各実行には空の `CLAUDE_CODE_TMPDIR` を新しく与え、その `claude-<uid>` のパスを44バイト以内にします。
 長いパスでは共有の一時ディレクトリに戻るため、戻った実行は除外します。
 新しい一時ディレクトリは決まった名前の作業ディレクトリの共有を防ぎますが、

@@ -27,7 +27,8 @@
       "macOS ps (setuid) cannot run under the sandbox, so the listing tests in tests/list_processes.bats cannot run; lsof and Bash 5 work. The timing defects in cases 1 and 2 reproduce through confirmed_reading, which is pure Bash, so they remain reproducible under load."
     ],
     "pre_run_checks": [
-      "Every effective Claude settings source other than claude_settings (user, project, local, and managed) sets no sandbox key and no permissions.allow rule; record the result and do not start runs otherwise."
+      "Every effective Claude settings source other than claude_settings (user, project, local, and managed) sets no sandbox key and no permissions.allow rule; record the result and do not start runs otherwise.",
+      "Inherited hooks run outside the sandbox: no effective hook command runs or sources a file in the workspace or the run's temp directory; record the hook commands and do not start runs otherwise."
     ],
     "post_run_checks": [
       "<dir>/claude-<uid> exists under the run's fresh temp directory, showing that the run's TMPDIR did not fall back to the shared temp root; exclude the run otherwise.",
