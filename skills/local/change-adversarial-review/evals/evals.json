@@ -1,0 +1,128 @@
+{
+  "skill_name": "change-adversarial-review",
+  "supporting_skills": [],
+  "execution": {
+    "agent": "claude",
+    "model": "claude-opus-5-5",
+    "effort": "high",
+    "runs_per_condition": 3,
+    "run_timeout_minutes": 30,
+    "claude_extra_args": [
+      "--model",
+      "claude-opus-5-5",
+      "--effort",
+      "high",
+      "--permission-mode",
+      "dontAsk",
+      "--allowedTools",
+      "Read Grep Glob Bash"
+    ],
+    "claude_settings": "claude-settings.json",
+    "fresh_tmpdir": {
+      "env": "CLAUDE_CODE_TMPDIR",
+      "max_per_uid_path_bytes": 44
+    },
+    "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Each run gets a new, empty directory as the environment variable named in fresh_tmpdir.env, with a path short enough that <dir>/claude-<uid> stays within max_per_uid_path_bytes; a longer path makes the CLI fall back to the shared /tmp/claude-<uid>. This keeps runs from sharing fixed-name scratch directories; it does not stop a run from deliberately reading another run's workspace or temp directory, because the sandbox allows reads outside its deny list. The contamination rule covers that. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and the run's temp directory, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed.",
+    "known_constraints": [
+      "macOS ps (setuid) cannot run under the sandbox, so the listing tests in tests/list_processes.bats cannot run; lsof and Bash 5 work. The timing defects in cases 1 and 2 reproduce through confirmed_reading, which is pure Bash, so they remain reproducible under load."
+    ],
+    "pre_run_checks": [
+      "Every effective Claude settings source other than claude_settings (user, project, local, and managed) sets no sandbox key and no permissions.allow rule; record the result and do not start runs otherwise.",
+      "Inherited hooks run outside the sandbox: no effective hook command runs or sources a file in the workspace or the run's temp directory; record the hook commands and do not start runs otherwise."
+    ],
+    "post_run_checks": [
+      "<dir>/claude-<uid> exists under the run's fresh temp directory, showing that the run's TMPDIR did not fall back to the shared temp root; exclude the run otherwise.",
+      "Delete the run's workspace and temp directory once its transcript, final answer, and file hashes are retained."
+    ],
+    "contamination": "Exclude a run whose transcript shows access to a repository or installed skill outside the workspace, another run's workspace or temp directory, the shared temp root, gh, or the network, and rerun it once under the same conditions. Report a second contaminated run as missing coverage."
+  },
+  "evals": [
+    {
+      "id": 1,
+      "name": "timing-separate-windows",
+      "prompt": "Review the branch change in change.patch before shipping, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings with severity, coverage, and a verdict.",
+      "expected_output": "A finding reports that walk_time is called once for the long line and again for its control, so the three long walks and the three control walks are timed in separate windows. Runner load during only the long walks can push the ratio past the 3x or 20x threshold and fail the test with no script regression. The finding is rated Medium or High.",
+      "fixture": "files/list-processes",
+      "overlay": "files/timing-separate-windows",
+      "files": [
+        "files/list-processes",
+        "files/timing-separate-windows"
+      ],
+      "assertions": [
+        "A finding reports that the long-line walks and the control walks are timed in separate calls or time windows, so runner load during only the long walks can push the ratio past the threshold and fail the test with no regression in the script",
+        "That finding is rated Medium or High",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "timing-best-of-each",
+      "prompt": "Review the branch change in change.patch before shipping, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings with severity, coverage, and a verdict.",
+      "expected_output": "The walks now alternate, but walk_times keeps the fastest long walk and the fastest control walk independently. The long walk it keeps can come from a loaded round and the control from an unloaded one, so load that covers every long call but not the last control can still fail the test with no script regression. A finding reports this and is rated Medium or High.",
+      "fixture": "files/list-processes",
+      "overlay": "files/timing-best-of-each",
+      "files": [
+        "files/list-processes",
+        "files/timing-best-of-each"
+      ],
+      "assertions": [
+        "A finding reports that the fastest long walk and the fastest control walk are taken independently across rounds, so a long walk from a loaded round can be compared with a control from an unloaded round and fail the test with no regression in the script",
+        "That finding is rated Medium or High",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "unsettled-goal-route",
+      "prompt": "Review the branch change in change.patch before shipping, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings with severity, coverage, and a verdict.",
+      "expected_output": "Two findings, each rated Medium or High. First, completion.md now discards an `unresolved (goal unsettled)` result and the target's drafts on resume, but the unchanged worker-dialogue.md still dispatches a fresh worker after a resume with the recorded drafts and results, so the discarded drafts reach it. Second, shared-understanding now treats a user who cannot confirm the revised overview as an unsettled goal, so a normal refining correction of the revised sentence ends the check as `unresolved (goal unsettled)` instead of revising it again.",
+      "fixture": "files/delivery-route",
+      "overlay": "files/unsettled-goal-route",
+      "files": [
+        "files/delivery-route",
+        "files/unsettled-goal-route"
+      ],
+      "assertions": [
+        "A finding reports that after a resume discards an `unresolved (goal unsettled)` result and its drafts, worker-dialogue.md still dispatches a fresh worker with the recorded drafts and results, so the discarded drafts reach the fresh worker",
+        "That finding is rated Medium or High",
+        "A finding reports that a further correction of the revised one-sentence overview, such as a refining correction, ends the check as an unsettled goal instead of revising the overview again",
+        "That finding is rated Medium or High",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "timing-per-round-control",
+      "prompt": "Review the branch change in change.patch before shipping, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings with severity, coverage, and a verdict.",
+      "expected_output": "The merged state: each round compares its long walk with the control timed moments after it, and the test fails only when every round is over both the floor and the ratio. No Medium or High finding is reported without a concrete failure path that the patch causes.",
+      "fixture": "files/list-processes",
+      "overlay": "files/timing-per-round-control",
+      "files": [
+        "files/list-processes",
+        "files/timing-per-round-control"
+      ],
+      "assertions": [
+        "Every finding rated Medium or High states a concrete failure path that this patch introduces or worsens; the assertion passes when no finding is rated Medium or High",
+        "No finding rated Medium or High reports that the long and control walks are timed in separate windows or compared across rounds",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "unsettled-goal-route-fixed",
+      "prompt": "Review the branch change in change.patch before shipping, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings with severity, coverage, and a verdict.",
+      "expected_output": "The merged state: a fresh worker after a resume receives the recorded drafts and results except those that Resume discards, and the goal is unsettled only when no revision can be confirmed and the user cannot say what should change, or the user says the goal itself is not decided. No Medium or High finding is reported without a concrete failure path that the patch causes.",
+      "fixture": "files/delivery-route",
+      "overlay": "files/unsettled-goal-route-fixed",
+      "files": [
+        "files/delivery-route",
+        "files/unsettled-goal-route-fixed"
+      ],
+      "assertions": [
+        "Every finding rated Medium or High states a concrete failure path that this patch introduces or worsens; the assertion passes when no finding is rated Medium or High",
+        "No finding rated Medium or High reports that discarded drafts reach a fresh worker after a resume, or that a refining correction of the overview ends the check as an unsettled goal",
+        "The project files remain byte-identical to the initial fixture"
+      ]
+    }
+  ]
+}
