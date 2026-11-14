@@ -296,6 +296,26 @@ test("change review skills are explicit-only and share target selection", async 
   assert.doesNotMatch(`${changeReview}\n${adversarial}`, /\$code-review|local-code-review|\$codex-review/);
 });
 
+test("change adversarial review follows the plugin prompt and keeps material defects in findings", async () => {
+  const adversarial = await readText(
+    path.join(repoRoot, "skills", "local", "change-adversarial-review", "SKILL.md"),
+  );
+  const attack = flat(adversarial.match(/\n## Attack the Change\n[\s\S]*?(?=\n## )/)?.[0]);
+  const output = flat(adversarial.match(/\n## Output\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.ok(attack && output, "missing Attack the Change or Output");
+  for (const heading of ["Stance", "Attack Surface", "Method", "Finding Bar", "Grounding", "Calibration", "Final Check", "Local Rules"]) {
+    assert.match(adversarial, new RegExp(`\\n### ${heading}\\n`), heading);
+  }
+  assert.match(attack, /Default to skepticism\./);
+  assert.match(attack, /Do not give credit for good intent, partial fixes, or likely follow-up work\./);
+  assert.match(attack, /weight it heavily, but still report any other material issue you can defend\./);
+  assert.match(attack, /Prefer one strong finding over several weak ones\./);
+  assert.match(attack, /What concrete change would reduce the risk\?/);
+  assert.match(output, /Report every material defect under Material Findings with a label and tag; never report one only in another section/);
+  assert.match(output, /\[High\|Medium\] .* <introduced\|worsened\|pre-existing>/);
+  assert.doesNotMatch(adversarial, /Challenged Assumptions/);
+});
+
 test("change review checks acceptance criteria and mandatory rules and reports coverage", async () => {
   const skillRoot = path.join(repoRoot, "skills", "local", "change-review");
   const skill = await readText(path.join(skillRoot, "SKILL.md"));
