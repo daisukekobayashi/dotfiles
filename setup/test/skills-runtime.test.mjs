@@ -466,6 +466,127 @@ test("project scope keeps unchanged copies of a removed skill only in the backup
   }
 });
 
+// Fails any symbolic link attempt, so a passing --copy install proves that it
+// copied without trying a link (and so without a Windows elevation request).
+function runSkillsRejectingSymlinks(args, fixture, options = {}) {
+  const launcher = `
+const fs = require("node:fs");
+fs.symlinkSync = () => { throw new Error("unexpected symlink attempt"); };
+const runtime = process.argv[1];
+process.argv = [process.execPath, runtime, ...process.argv.slice(2)];
+require(runtime);
+`;
+  return spawnSync(process.execPath, ["-e", launcher, skillsRuntime, ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: fixture.env,
+    encoding: "utf8",
+  });
+}
+
+test("project scope --copy installs marked copies without attempting links", async () => {
+  const fixture = await createFixture();
+  try {
+    const args = ["--scope", "project", "--profile", "base", "--agent", "codex", "--agent", "claude-code", "--copy"];
+    const result = runSkillsRejectingSymlinks(args, fixture, { cwd: fixture.project });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const source = path.join(fixture.dotfiles, "skills", "local", "local-one");
+    for (const skills of [path.join(fixture.project, ".agents", "skills"), path.join(fixture.project, ".claude", "skills")]) {
+      const entry = path.join(skills, "local-one");
+      assert.equal((await lstat(entry)).isDirectory(), true);
+      assert.equal(await readText(path.join(entry, "SKILL.md")), await readText(path.join(source, "SKILL.md")));
+      const marker = JSON.parse(await readText(path.join(skills, ".dotfiles-copy-local-one.json")));
+      assert.equal(marker.version, 1);
+      assert.equal(marker.source, source);
+      assert.match(marker.files["SKILL.md"], /^[a-f0-9]{64}$/);
+      assert.ok(result.stderr.includes(`Copied skill directory: ${entry}; rerun setup to refresh copies.`), result.stderr);
+    }
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope --copy dry run reports copies without writing them", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkills(
+      ["--scope", "project", "--profile", "base", "--agent", "codex", "--copy"],
+      { ...fixture, env: { ...fixture.env, SETUP_DRY_RUN: "1" } },
+      { cwd: fixture.project },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const source = path.join(fixture.dotfiles, "skills", "local", "local-one");
+    assert.ok(result.stdout.includes(`DRY-RUN copy ${source} ${path.join(fixture.project, ".agents", "skills", "local-one")}`), result.stdout);
+    assert.doesNotMatch(result.stdout, /DRY-RUN ln -s/);
+    assert.equal(existsSync(path.join(fixture.project, ".agents", "skills")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope runs follow their own --copy flag and replace edited copies with a backup warning", async () => {
+  const fixture = await createFixture();
+  try {
+    const linkArgs = ["--scope", "project", "--profile", "base", "--agent", "codex"];
+    const copyArgs = [...linkArgs, "--copy"];
+    const skills = path.join(fixture.project, ".agents", "skills");
+    const entry = path.join(skills, "local-one");
+    const sourceFile = path.join(fixture.dotfiles, "skills", "local", "local-one", "SKILL.md");
+
+    let result = runSkills(linkArgs, fixture, { cwd: fixture.project });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal((await lstat(entry)).isSymbolicLink(), true);
+
+    result = runSkills(copyArgs, fixture, { cwd: fixture.project });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal((await lstat(entry)).isSymbolicLink(), false, "--copy should replace the link with a copy");
+    assert.equal(existsSync(path.join(skills, ".dotfiles-copy-local-one.json")), true);
+    assert.doesNotMatch(result.stderr, /Replaced locally edited skill copy/);
+
+    await writeFile(sourceFile, "updated source\n");
+    result = runSkills(copyArgs, fixture, { cwd: fixture.project });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readText(path.join(entry, "SKILL.md")), "updated source\n", "a rerun should refresh the copy");
+    assert.doesNotMatch(result.stderr, /Replaced locally edited skill copy/);
+
+    await writeFile(path.join(entry, "SKILL.md"), "local edit\n");
+    result = runSkills(copyArgs, fixture, { cwd: fixture.project });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readText(path.join(entry, "SKILL.md")), "updated source\n", "the selected skill replaces the edited copy");
+    const backupRoot = path.join(await realpath(privateSkillsBase(fixture)), "dotfiles-skills-backup", path.basename(fixture.project));
+    const warning = result.stderr.match(/Replaced locally edited skill copy: (.+); previous copy kept in (.+)/);
+    assert.ok(warning, result.stderr);
+    assert.equal(warning[1], entry);
+    assert.ok(warning[2].startsWith(backupRoot + path.sep), warning[2]);
+    assert.equal(await readText(path.join(warning[2], "SKILL.md")), "local edit\n");
+
+    result = runSkills(linkArgs, fixture, { cwd: fixture.project });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal((await lstat(entry)).isSymbolicLink(), true, "a run without --copy should link again");
+    assert.equal(existsSync(path.join(skills, ".dotfiles-copy-local-one.json")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("--copy is rejected outside project installs", async () => {
+  const fixture = await createFixture();
+  try {
+    for (const args of [["--copy"], ["--scope", "user", "--profile", "base", "--copy"]]) {
+      const result = runSkills(args, fixture, { cwd: fixture.project });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /--copy is supported only for project scope/);
+    }
+    const result = runSkills(["profile", "validate", "--copy"], fixture);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Unknown skills profile argument: --copy/);
+    assert.equal(existsSync(path.join(fixture.dotfiles, ".agents", "user")), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("project scope restores dangling unmanaged links unchanged", async () => {
   const fixture = await createFixture();
   try {

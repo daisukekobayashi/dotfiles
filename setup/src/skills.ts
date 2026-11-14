@@ -37,6 +37,7 @@ interface ParsedArgs {
   scope: Scope;
   profiles: string;
   agents: Agent[];
+  copy: boolean;
 }
 
 interface BackupRecord {
@@ -134,11 +135,13 @@ function parseArgs(argv: string[]): ParsedArgs {
       scope: "user",
       profiles,
       agents: ["codex"],
+      copy: false,
     };
   }
 
   let scope: Scope = "user";
   let profiles = "";
+  let copy = false;
   const agentArgs: string[] = [];
   let index = 0;
 
@@ -172,7 +175,18 @@ function parseArgs(argv: string[]): ParsedArgs {
       index += 2;
       continue;
     }
+    if (item === "--copy") {
+      copy = true;
+      index += 1;
+      continue;
+    }
     fail(`Unknown skills argument: ${item}`);
+  }
+
+  // User scope copies are made by the Windows PowerShell wrapper, which owns
+  // the user link batch; the runtime copies only project skills.
+  if (copy && scope !== "project") {
+    fail("--copy is supported only for project scope");
   }
 
   const agents: Agent[] = agentArgs.length > 0 ? parseAgents(agentArgs) : ["codex", "claude-code"];
@@ -181,6 +195,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     scope,
     profiles,
     agents,
+    copy,
   };
 }
 
@@ -666,21 +681,23 @@ function pruneStaleManagedEntries(directory: string, stale: string[][], dryRun: 
   }
 }
 
-function createSymlinks(links: { source: string; target: string }[], expectedRoot?: string): void {
+// With copy, every entry is installed as a marked copy without attempting a
+// link or elevation.
+function createSymlinks(links: { source: string; target: string }[], expectedRoot?: string, copyAll = false): void {
   const stages: string[] = [];
   const pending: { source: string; target: string; artifact: string; copy?: boolean }[] = [];
   try {
     for (const link of links) {
       const source = path.resolve(link.source);
-      let copy = false;
+      let copy = copyAll;
       const linked = getLinkTarget(link.target);
-      if (linked !== null && path.resolve(path.dirname(link.target), linked) === source) continue;
+      if (!copyAll && linked !== null && path.resolve(path.dirname(link.target), linked) === source) continue;
       const marker = path.join(path.dirname(link.target), copyMarker(path.basename(link.target)));
       if (fs.lstatSync(link.target, { throwIfNoEntry: false }) &&
           ((expectedRoot && !isManagedLocalSymlink(link.target, expectedRoot)) || fs.existsSync(marker))) {
         const change = planSharedLink(path.dirname(link.target), { name: path.basename(link.target), source, directory: true });
         if (!change) continue;
-        copy = change.copy === true;
+        copy = copyAll || change.copy === true;
       }
       fs.mkdirSync(path.dirname(link.target), { recursive: true });
       const stage = fs.mkdtempSync(path.join(path.dirname(link.target), ".dotfiles-skill-link-"));
@@ -722,7 +739,7 @@ function requireNoLocalSkillEntries(plan: SkillsPlan, skillsDir: string, owners:
   }
 }
 
-function linkLocalSkills(plan: SkillsPlan, dotfilesRoot: string, target: "user" | "project", rootOrSkillsDir: string): void {
+function linkLocalSkills(plan: SkillsPlan, dotfilesRoot: string, target: "user" | "project", rootOrSkillsDir: string, copy = false): void {
   const localRoot = path.join(dotfilesRoot, "skills", "local");
   if (target === "user") {
     createSymlinks(plan.local.map(skill => ({ source: skill.path, target: path.join(rootOrSkillsDir, skill.name) })), localRoot);
@@ -731,7 +748,7 @@ function linkLocalSkills(plan: SkillsPlan, dotfilesRoot: string, target: "user" 
   createSymlinks(plan.agents.flatMap(agent => {
     const skillsDir = agentSkillDir(rootOrSkillsDir, agent);
     return plan.local.map(skill => ({ source: skill.path, target: path.join(skillsDir, skill.name) }));
-  }), localRoot);
+  }), localRoot, copy);
 }
 
 function isWindowsBatchFile(command: string): boolean {
@@ -831,7 +848,7 @@ function logDryRunUserExternalInstalls(stagingBase: string, plan: SkillsPlan, np
   info(`DRY-RUN rm -rf ${workDir}`);
 }
 
-function logDryRunLinkLocalSkills(plan: SkillsPlan, target: "user" | "project", rootOrSkillsDir: string): void {
+function logDryRunLinkLocalSkills(plan: SkillsPlan, target: "user" | "project", rootOrSkillsDir: string, copy = false): void {
   if (target === "user") {
     for (const skill of plan.local) {
       info(`DRY-RUN ln -s ${skill.path} ${path.join(rootOrSkillsDir, skill.name)}`);
@@ -842,7 +859,7 @@ function logDryRunLinkLocalSkills(plan: SkillsPlan, target: "user" | "project", 
   for (const agent of plan.agents) {
     const skillsDir = agentSkillDir(rootOrSkillsDir, agent);
     for (const skill of plan.local) {
-      info(`DRY-RUN ln -s ${skill.path} ${path.join(skillsDir, skill.name)}`);
+      info(`DRY-RUN ${copy ? "copy" : "ln -s"} ${skill.path} ${path.join(skillsDir, skill.name)}`);
     }
   }
 }
@@ -1365,17 +1382,49 @@ function rollbackProjectTargets(records: BackupRecord[]): void {
 }
 
 // Entries the previous run installed for skills no longer selected stay in the
-// backup instead of being restored.
+// backup instead of being restored. So does the copy marker of a selected
+// skill: it describes the replaced entry, not the one this run installed.
 function restoreUnmanagedProjectSkills(records: BackupRecord[], projectRoot: string, agents: Agent[], localRoot: string, keep: ReadonlySet<string>): void {
   const agentSkillDirs = new Set(agents.map((agent) => agentSkillDir(projectRoot, agent)));
+  const selectedMarkers = [...keep].map(name => copyMarker(name));
   for (const record of records) {
     if (!record.backupPath || !agentSkillDirs.has(record.targetPath)) {
       continue;
     }
     const stale = staleManagedEntries(record.backupPath, localRoot, keep, { linkBase: record.targetPath });
-    copyMissingDirectoryEntries(record.backupPath, record.targetPath, new Set(stale.flat()));
+    copyMissingDirectoryEntries(record.backupPath, record.targetPath, new Set([...stale.flat(), ...selectedMarkers]));
     for (const [name] of stale) {
       info(`Removed stale skill entry: ${path.join(record.targetPath, name)}`);
+    }
+  }
+}
+
+// A selected local skill always replaces its previous entry. Name the backup
+// of a copy that was edited after setup made it, so the edits can be recovered.
+function warnReplacedEditedCopies(records: BackupRecord[], projectRoot: string, agents: Agent[], selected: ReadonlySet<string>): void {
+  const agentSkillDirs = new Set(agents.map((agent) => agentSkillDir(projectRoot, agent)));
+  for (const record of records) {
+    if (!record.backupPath || !agentSkillDirs.has(record.targetPath)) {
+      continue;
+    }
+    for (const name of [...selected].sort()) {
+      const entry = path.join(record.backupPath, name);
+      const marker = path.join(record.backupPath, copyMarker(name));
+      const markerStat = fs.lstatSync(marker, { throwIfNoEntry: false });
+      const entryStat = fs.lstatSync(entry, { throwIfNoEntry: false });
+      if (!markerStat?.isFile() || !entryStat?.isDirectory()) {
+        continue;
+      }
+      let edited: boolean;
+      try {
+        const saved = parseCopyMarker(fs.readFileSync(marker, "utf8"));
+        edited = !saved || !sameSnapshot(snapshot(entry), saved.files);
+      } catch {
+        edited = true;
+      }
+      if (edited) {
+        warn(`Replaced locally edited skill copy: ${path.join(record.targetPath, name)}; previous copy kept in ${entry}`);
+      }
     }
   }
 }
@@ -1391,7 +1440,7 @@ function gitProjectRoot(cwd: string): string {
   return result.stdout.trim();
 }
 
-function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: Agent[], dryRun: boolean): void {
+function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: Agent[], dryRun: boolean, copy: boolean): void {
   if (!profilesCsv) {
     fail("--profile is required for project scope");
   }
@@ -1429,7 +1478,7 @@ function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: A
       info(`DRY-RUN backup ${agentSkillDir(projectRoot, agent)} to ${backupRoot}`);
     }
     logDryRunExternalInstalls(base, projectRoot, plan, agents, npmCacheDir);
-    logDryRunLinkLocalSkills(plan, "project", projectRoot);
+    logDryRunLinkLocalSkills(plan, "project", projectRoot, copy);
     for (const agent of agents) {
       const skillsDir = agentSkillDir(projectRoot, agent);
       pruneStaleManagedEntries(skillsDir, staleManagedEntries(skillsDir, localRoot, localNames), true);
@@ -1458,8 +1507,9 @@ function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: A
     for (const agent of agents) {
       requireNoLocalSkillEntries(plan, agentSkillDir(projectRoot, agent), owners.get(agent) ?? new Map(), "project install");
     }
-    linkLocalSkills(plan, dotfilesRoot, "project", projectRoot);
+    linkLocalSkills(plan, dotfilesRoot, "project", projectRoot, copy);
     restoreUnmanagedProjectSkills(backups, projectRoot, agents, localRoot, localNames);
+    warnReplacedEditedCopies(backups, projectRoot, agents, localNames);
     writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
   } catch (error) {
     rollbackProjectTargets(backups);
@@ -1503,7 +1553,7 @@ function main(argv: string[]): void {
     return;
   }
 
-  setupProjectSkills(context.dotfilesRoot, parsed.profiles, parsed.agents, context.dryRun);
+  setupProjectSkills(context.dotfilesRoot, parsed.profiles, parsed.agents, context.dryRun, parsed.copy);
 }
 
 try {

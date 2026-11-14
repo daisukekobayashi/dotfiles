@@ -38,7 +38,7 @@ Behavior:
   unless SETUP_ALLOW_ELEVATED=1 (for CI runners that are always elevated)
   A failed step is reported and setup continues, unless SETUP_STRICT=1
   links/skills/claude: retry link creation elevated when privileges are unavailable, then copy if needed
-  -Copy: skip link attempts for links, all, user-scope skills or claude; rerun setup to refresh copies
+  -Copy: skip link attempts for links, all, skills (user or project scope) or claude; rerun setup to refresh copies
   skills: runs the shared Node skills setup runtime
   codex: accepts --env <name>, --provider azure|openai|chatgpt, --base-url <url>, --api-version <value>,
          --profile <name> and --dry-run (requires Node.js).

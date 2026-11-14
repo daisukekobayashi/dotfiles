@@ -26,6 +26,12 @@ Expected command shape:
 ~/.dotfiles/setup.sh skills --scope project --profile base,beads
 ~/.dotfiles/setup.sh skills --scope project --profile base,azure-devops
 ~/.dotfiles/setup.sh skills --scope project --profile workbench
+~/.dotfiles/setup.sh skills --scope project --profile base --copy
+```
+
+```powershell
+.\setup.ps1 skills --scope project --profile base
+.\setup.ps1 skills --scope project --profile base -Copy
 ```
 
 Project scope requires an explicit `--profile`. If it is omitted, setup should fail rather than installing an implicit default.
@@ -692,7 +698,7 @@ npx skills add <owner/repo> \
 
 Setup runs this in a private staging directory outside the project, then moves the generated `skills-lock.json` and agent skill directories into the project.
 
-If an existing `skills-lock.json` or agent skill directory will be replaced, create a backup first and restore it if installation fails. On successful installs, copy back pre-existing agent skill entries that were not recreated by the selected profile. Entries with the same name as profile-managed skills are replaced by the profile-managed version. Links into `skills/local` for skills that are no longer selected or no longer exist, and unchanged managed copies of them, are not copied back; they stay only in the backup. Edited copies are kept with a warning. Pre-existing entries with a reserved name are copied back like any other entry; only entries an install produces fail on a reserved name. Dirty Git state should produce a warning, not block execution.
+If an existing `skills-lock.json` or agent skill directory will be replaced, create a backup first and restore it if installation fails. On successful installs, copy back pre-existing agent skill entries that were not recreated by the selected profile. Entries with the same name as profile-managed skills are replaced by the profile-managed version, even when they are copies with local edits; the previous entry stays only in the backup, and setup names the backed-up entry in a `Replaced locally edited skill copy` warning when it was an edited copy. Links into `skills/local` for skills that are no longer selected or no longer exist, and unchanged managed copies of them, are not copied back; they stay only in the backup. Edited copies of those skills are kept with a warning. Pre-existing entries with a reserved name are copied back like any other entry; only entries an install produces fail on a reserved name. Dirty Git state should produce a warning, not block execution.
 
 Setup runs each `npx skills add` in a new private directory, not in the project or a shared temp directory such as `/tmp`, for both scopes. The npm cache and project backups live in the same per-user location: `$XDG_CACHE_HOME` or `~/.cache` on Linux, `$TMPDIR` on macOS, and `%TEMP%` on Windows. The cache is `dotfiles-skills-npm-cache/` and is reused across runs; backups go to `dotfiles-skills-backup/<project directory name>/` and are kept after a successful install. `$TMPDIR` and `%TEMP%` must be absolute, and `%TEMP%` must be on a local drive (`C:\...` or `\\?\C:\...`), not a network share (`\\server\share`, or a drive letter mapped to one), a device path, or a path without a drive (`\Temp`). Setup checks these directories before creating any of them, so a refusal leaves no new directory behind. Setup stops before changing anything when one of these values is unsuitable; when that location is inside the project, regardless of letter case on Windows and on case-insensitive macOS volumes; when that location, or a directory above it, is owned by another user or writable by others; when such a directory is group-writable and is not your own directory with your user-private group (your primary group, named after you, with no other members in `/etc/passwd` and `/etc/group`), which on macOS refuses every group-writable directory; or when `.agents`, `.claude`, an agent skill directory, `skills-lock.json`, or `.agents/skills-profile.json` in the project is a symbolic link, wherever it points and even when it is dangling.
 
@@ -714,6 +720,12 @@ repo/.claude/skills/<name> -> ~/.dotfiles/skills/local/<name>
 ```
 
 User scope should also symlink local skills into the generated user profile view.
+
+On Windows, when Node cannot create the project links because symbolic link privileges are missing, setup requests UAC elevation once for the whole link batch. Cancelling or being unable to elevate (Win32 code 5, 740, 1223, or 1314), or missing link privileges after elevation, falls back to copies; any other elevation failure stops setup and restores the project from the backup.
+
+`--copy` (`-Copy` in `.\setup.ps1`) installs project local skills as copies from the start, without attempting links or elevation, on every platform. It is accepted only with `--scope project`; user scope fails with `--copy is supported only for project scope`, and `.\setup.ps1 skills -Copy` copies user-scope links in PowerShell instead. Each run follows its own flag: a run with `--copy` replaces existing project links with copies, and a later run without it creates links again.
+
+Each copy is a plain directory with a `.dotfiles-copy-<name>.json` marker next to it, recording its source and content. Copies do not follow source edits; rerun setup to refresh them. Like every selected entry, a copy is replaced on each run, and local edits survive only in the backup.
 
 If a target path already exists and is not a dotfiles-managed symlink, fail instead of overwriting it. Local skills take no precedence over external installs: when an install produces an entry with a local skill's name, setup fails with `skill entry collision in user staging: <entry> (<source>, local)` or `skill entry collision in project install: <entry> (<source>, local)`, keeps the user view, and restores the project.
 
