@@ -1505,8 +1505,10 @@ function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: A
   fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
 
   const backups: BackupRecord[] = [];
+  let prepared = false;
   try {
     prepareProjectTargets(targets, backupRoot, backups);
+    prepared = true;
     const owners = runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
     for (const agent of agents) {
       requireNoLocalSkillEntries(plan, agentSkillDir(projectRoot, agent), owners.get(agent) ?? new Map(), "project install");
@@ -1516,7 +1518,9 @@ function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: A
     warnReplacedEditedCopies(backups, projectRoot, agents, localNames);
     writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
   } catch (error) {
-    rollbackProjectTargets(backups);
+    // Before installs run, a target recorded without a backup was absent and
+    // setup has not written it, so anything there now is not ours to remove.
+    rollbackProjectTargets(prepared ? backups : backups.filter(record => record.backupPath !== null));
     throw error;
   }
 

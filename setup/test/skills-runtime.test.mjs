@@ -737,6 +737,33 @@ test("project scope restores targets already backed up when a later backup move 
   }
 });
 
+test("project scope backup failure keeps a target created after setup found it absent", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.project, ".agents", "skills", "old-agent"), { recursive: true });
+    await writeFile(path.join(fixture.project, ".agents", "skills-profile.json"), "old-profile\n");
+    await writeFile(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md"), "old-agent\n");
+
+    // skills-lock.json is absent, so setup records it without a backup; another
+    // process creates it before the move of .agents/skills fails.
+    const result = runSkillsWithBackupRenameErrorOn(
+      path.join(".agents", "skills"),
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project, createBeforeFailure: { path: "skills-lock.json", content: "concurrent-lock\n" } },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /EPERM: operation not permitted, rename/);
+    assert.equal(existsSync(fixture.log), false, "no install should run");
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "concurrent-lock\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), "old-profile\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("project scope rollback keeps dangling links when backups move cross devices", async () => {
   const fixture = await createFixture({
     npxBody: `#!/usr/bin/env bash

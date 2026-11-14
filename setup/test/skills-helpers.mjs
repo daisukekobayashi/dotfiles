@@ -262,18 +262,25 @@ require(runtime);
 
 // Fails, like a file locked by another process on Windows, the move of one
 // project target into the backup. failingTarget is relative to the project,
-// such as ".agents/skills".
+// such as ".agents/skills". options.createBeforeFailure ({ path, content },
+// path relative to the project) writes that file just before the failure, like
+// another process creating a target that setup found absent.
 export function runSkillsWithBackupRenameErrorOn(failingTarget, args, fixture, options = {}) {
   const launcher = `
 const fs = require("node:fs");
 const path = require("node:path");
 const failingSuffix = path.sep + path.normalize(process.argv[1]);
-const runtime = process.argv[2];
-const args = process.argv.slice(3);
+const createBeforeFailure = JSON.parse(process.argv[2]);
+const runtime = process.argv[3];
+const args = process.argv.slice(4);
 const originalRenameSync = fs.renameSync;
 fs.renameSync = (oldPath, newPath) => {
   const intoBackup = path.resolve(newPath).split(path.sep).includes("dotfiles-skills-backup");
   if (intoBackup && path.resolve(oldPath).endsWith(failingSuffix)) {
+    if (createBeforeFailure) {
+      const projectRoot = path.resolve(oldPath).slice(0, -failingSuffix.length);
+      fs.writeFileSync(path.join(projectRoot, createBeforeFailure.path), createBeforeFailure.content);
+    }
     const error = new Error("EPERM: operation not permitted, rename '" + oldPath + "'");
     error.code = "EPERM";
     throw error;
@@ -283,7 +290,7 @@ fs.renameSync = (oldPath, newPath) => {
 process.argv = [process.execPath, runtime, ...args];
 require(runtime);
 `;
-  return spawnSync(process.execPath, ["-e", launcher, failingTarget, skillsRuntime, ...args], {
+  return spawnSync(process.execPath, ["-e", launcher, failingTarget, JSON.stringify(options.createBeforeFailure ?? null), skillsRuntime, ...args], {
     cwd: options.cwd ?? repoRoot,
     env: fixture.env,
     encoding: "utf8",
