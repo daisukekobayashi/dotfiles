@@ -94,7 +94,7 @@
       "id": 4,
       "name": "timing-per-round-control",
       "prompt": "Review the branch change in change.patch before shipping, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings with severity, coverage, and a verdict.",
-      "expected_output": "The merged state: each round compares its long walk with the control timed moments after it, and the test fails only when every round is over both the floor and the ratio. No Medium or High finding is reported without a concrete failure path that the patch causes.",
+      "expected_output": "The merged state: each round compares its long walk with the control timed moments after it, and the test fails only when every round is over both the floor and the ratio. No Medium or High finding is reported without a concrete failure path that the patch causes, except a finding tagged pre-existing whose concrete failure path also occurs at the merge-base.",
       "fixture": "files/list-processes",
       "overlay": "files/timing-per-round-control",
       "files": [
@@ -102,7 +102,7 @@
         "files/timing-per-round-control"
       ],
       "assertions": [
-        "Every finding rated Medium or High states a concrete failure path that this patch introduces or worsens; the assertion passes when no finding is rated Medium or High",
+        "Every finding rated Medium or High either states a concrete failure path that this patch introduces or worsens, or is tagged pre-existing and states a concrete failure path that also occurs at the merge-base; the assertion passes when no finding is rated Medium or High",
         "No finding rated Medium or High reports that the long and control walks are timed in separate windows or compared across rounds",
         "The project files remain byte-identical to the initial fixture"
       ]
@@ -111,7 +111,7 @@
       "id": 5,
       "name": "unsettled-goal-route-fixed",
       "prompt": "Review the branch change in change.patch before shipping, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings with severity, coverage, and a verdict.",
-      "expected_output": "The merged state: a fresh worker after a resume receives the recorded drafts and results except those that Resume discards, and the goal is unsettled only when no revision can be confirmed and the user cannot say what should change, or the user says the goal itself is not decided. No Medium or High finding is reported without a concrete failure path that the patch causes.",
+      "expected_output": "The merged state: a fresh worker after a resume receives the recorded drafts and results except those that Resume discards, and the goal is unsettled only when no revision can be confirmed and the user cannot say what should change, or the user says the goal itself is not decided. No Medium or High finding is reported without a concrete failure path that the patch causes, except a finding tagged pre-existing whose concrete failure path also occurs at the merge-base.",
       "fixture": "files/delivery-route",
       "overlay": "files/unsettled-goal-route-fixed",
       "files": [
@@ -119,7 +119,7 @@
         "files/unsettled-goal-route-fixed"
       ],
       "assertions": [
-        "Every finding rated Medium or High states a concrete failure path that this patch introduces or worsens; the assertion passes when no finding is rated Medium or High",
+        "Every finding rated Medium or High either states a concrete failure path that this patch introduces or worsens, or is tagged pre-existing and states a concrete failure path that also occurs at the merge-base; the assertion passes when no finding is rated Medium or High",
         "No finding rated Medium or High reports that discarded drafts reach a fresh worker after a resume, or that a refining correction of the overview ends the check as an unsettled goal",
         "The project files remain byte-identical to the initial fixture"
       ]
