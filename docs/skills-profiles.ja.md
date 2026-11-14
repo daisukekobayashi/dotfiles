@@ -339,6 +339,40 @@ PR がマージ済み（Azure DevOps
 意味し、クリーンアップを止めます。`tests/check_cleanup_targets.bats` がスクリプトを
 テストします。
 
+### Triage レンズ
+
+`github-issue-triage`、`azure-devops-work-item-triage`、`beads-issue-triage`
+は、呼び出し時に `lens=<name>` で渡すレンズで着手可能な項目を順位付けします。
+`deliver`(既定)は長期的な基盤を損なわずにコア機能を優先し、`stabilize` は
+重大度、ユーザー影響、リグレッション、リリースブロッカーを優先します。記録した
+フェーズは更新されずに古くなるため、レンズをリポジトリのドキュメントから読むことは
+しません。それ以外の `lens=` の値では順位付けせずに止まります。
+
+レンズが変えるのは順位付けの手順だけです。分類、並列 wave と重なりの確認、
+ガードレールはどのレンズでも同じです。レポートの `Current State` にはレンズと
+その根拠を書きます。`deliver` ではコア機能とその出典、Deferred foundation の一覧、
+`stabilize` では重大度の出典と推定した重大度です。
+
+共有ローカルスキル `triage-common` が `references/lenses.md` でレンズの定義を
+持ちます。レンズの選び方、順位付けの順序、すべてのレンズに共通の tie-breaker
+(リポジトリのガイダンスとの整合、明確な受け入れ条件、適度な影響範囲、広い・
+曖昧・高リスク・将来スコープの作業の後回し、トラッカーを調整項目として扱うこと)、
+各レンズのルール、レポートの行です。基盤、契約、ポリシーを決める項目の順位は
+レンズが決めます。各プロバイダーの triage スキルは、プロバイダー上でシグナルを
+どこから読むか(GitHub ではラベルとマイルストーン、Azure DevOps では Severity と
+Priority フィールド、Beads では bead の `priority`)だけを持ち、ルールを書き直さず
+`triage-common` にリンクします。重大度のシグナルがないときは優先度のシグナルを
+重大度として扱い、どちらもないときは本文から推定して推定と明記します。
+
+`triage-common` は `base` ではなく `github`、`azure-devops`、`beads` の各 profile
+に入れます。これでプロバイダー profile 単体でも triage スキルが動き、profile を
+組み合わせたときは重複が除かれます。`base` が `mattpocock/skills` から `triage`
+を入れるため、名前は `triage` にしません。レンズを追加するときは、既存のレンズと
+同じ項目を持つ節を `lenses.md` に足し、そこにある有効なレンズの一覧に名前を
+加えます。`setup/test/skills-wiring-profiles.test.mjs` は、各 triage スキルのリンクが
+プロバイダー profile 単体で解決すること、どの triage スキルも共有の順位付けルールを
+書き直していないことを確認します。
+
 ## Profile Format
 
 Profile は JSON にします。Bash で無理に parse せず、Node で処理できるようにします。
@@ -482,6 +516,7 @@ GitHub workflow skill:
 
 - `gh-cli`
 - `skills/local/` 配下の自作 GitHub issue, pull request, AI review, merge cleanup skill
+- [Triage レンズ](#triage-レンズ) 用の `triage-common`
 
 Azure DevOps provider profile では, GitHub の `issue` skill に相当するものを `work-item` skill として扱います.
 
@@ -491,6 +526,7 @@ Beads workflow skill:
 
 - `beads-issue-create`
 - `beads-issue-triage`
+- `triage-common`
 - `beads-issue-worktree`
 - `beads-merge-cleanup`
 
@@ -536,6 +572,7 @@ Azure DevOps workflow skill:
 - `azure-devops-work-item-create`
 - `azure-devops-work-item-review`
 - `azure-devops-work-item-triage`
+- `triage-common`
 - `azure-devops-work-item-start`
 - `azure-devops-work-item-delivery`
 - `azure-devops-pr-create`
