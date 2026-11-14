@@ -255,7 +255,7 @@
       "id": 10,
       "name": "resume-discarded-drafts-fixed",
       "prompt": "Review the branch change in change.patch for material defects, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings, test gaps, coverage, and a verdict.",
-      "expected_output": "The merged state: a fresh worker after a resume receives the recorded drafts and results except those that Resume discards, and the goal is unsettled only when no revision can be confirmed and the user cannot say what should change, or the user says the goal itself is not decided. No Medium or High finding is reported without a concrete failure path that the patch causes.",
+      "expected_output": "The merged state: a fresh worker after a resume receives the recorded drafts and results except those that Resume discards, and the goal is unsettled only when no revision can be confirmed and the user cannot say what should change, or the user says the goal itself is not decided. No Medium or High finding is reported without a concrete failure path that the patch causes, except a finding tagged pre-existing whose concrete failure path also occurs at the merge-base.",
       "fixture": "files/delivery-route",
       "overlay": "files/resume-discarded-drafts-fixed",
       "files": [
@@ -272,7 +272,7 @@
       "id": 11,
       "name": "review-fix-ssh-alias-fixed",
       "prompt": "Review the branch change in change.patch for material defects, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings, test gaps, coverage, and a verdict.",
-      "expected_output": "The merged state: the review cycle uses the push remote captured at publication as is; on resume without it, when the upstream remote cannot be confirmed as the PR head repository, as with an SSH host alias, it stops and asks the user to confirm or name the remote. No Medium or High finding is reported without a concrete failure path that the patch causes.",
+      "expected_output": "The merged state: the review cycle uses the push remote captured at publication as is; on resume without it, when the upstream remote cannot be confirmed as the PR head repository, as with an SSH host alias, it stops and asks the user to confirm or name the remote. No Medium or High finding is reported without a concrete failure path that the patch causes, except a finding tagged pre-existing whose concrete failure path also occurs at the merge-base.",
       "fixture": "files/publish-remote",
       "overlay": "files/review-fix-ssh-alias-fixed",
       "files": [
@@ -289,7 +289,7 @@
       "id": 12,
       "name": "broker-exact-ownership",
       "prompt": "Review the branch change in change.patch for material defects, written for the task in ISSUE.md. The project files are the merge-base and the patch is the whole branch diff; this copy has no git history or remote. Review directly in this session without subagents, leave the project files unedited, and report findings, test gaps, coverage, and a verdict.",
-      "expected_output": "The merged state: a broker is the run's only when it is absent from the first list and its `--cwd` argument, or its cwd when it has none, resolves to exactly the target worktree root; any other listed broker is reported and left running. No Medium or High finding is reported without a concrete failure path that the patch causes.",
+      "expected_output": "The merged state: a broker is the run's only when it is absent from the first list and its `--cwd` argument, or its cwd when it has none, resolves to exactly the target worktree root; any other listed broker is reported and left running. No Medium or High finding is reported without a concrete failure path that the patch causes, except a finding tagged pre-existing whose concrete failure path also occurs at the merge-base.",
       "fixture": "files/broker-cleanup",
       "overlay": "files/broker-exact-ownership",
       "files": [
