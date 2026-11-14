@@ -292,10 +292,33 @@ function markdownAnchors(content) {
   );
 }
 
-test("triage references resolve in each copied provider profile without base", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "triage-profile-test."));
+// Read-only skills (no push, no PR) must work from their provider profile
+// alone. Follow every Markdown link and every backtick `../<skill>/...`
+// reference: each target must exist, with its anchor. Recurse into the
+// starting skill's own files and other skills' references, but only check that
+// another workflow skill's SKILL.md exists: that link names where a rule
+// lives, not something the read-only skill reads.
+const readOnlySkills = [
+  ["github", ["github-issue-triage", "github-issue-create", "github-issue-review"]],
+  ["azure-devops", ["azure-devops-work-item-triage", "azure-devops-work-item-create", "azure-devops-work-item-review"]],
+  ["beads", ["beads-issue-triage", "beads-issue-create"]],
+];
+
+function skillReferences(content) {
+  const targets = [];
+  for (const [, target] of content.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+    if (!/^[a-z][a-z\d+.-]*:/i.test(target)) targets.push(target);
+  }
+  for (const [, target] of content.matchAll(/`((?:\.\.\/)+[a-z0-9-]+\/[A-Za-z0-9._\/#-]*)`/g)) {
+    targets.push(target);
+  }
+  return targets;
+}
+
+test("read-only skills resolve in each copied provider profile without base", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "read-only-profile-test."));
   try {
-    for (const [provider, triage] of triageSkills) {
+    for (const [provider, skills] of readOnlySkills) {
       const profile = await readRepoProfile(provider);
       assert.equal(profile.local.includes("triage-common"), true, `${provider}: triage-common missing`);
       const skillsDir = path.join(root, provider, "skills");
@@ -306,27 +329,34 @@ test("triage references resolve in each copied provider profile without base", a
         });
       }
 
-      const pending = [path.join(skillsDir, triage, "SKILL.md")];
-      const visited = new Set();
-      while (pending.length > 0) {
-        const file = pending.pop();
-        if (visited.has(file)) continue;
-        visited.add(file);
-        const content = await readText(file);
-        for (const [, target] of content.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
-          if (/^[a-z][a-z\d+.-]*:/i.test(target)) continue;
-          const [relative, anchor] = target.split("#");
-          const resolved = relative ? path.resolve(path.dirname(file), relative) : file;
-          assert.equal(resolved.startsWith(skillsDir + path.sep), true, `${file}: ${target}`);
-          assert.equal(existsSync(resolved), true, `${file}: missing copied reference ${target}`);
-          if (!resolved.endsWith(".md")) continue;
-          if (anchor) {
-            assert.equal(markdownAnchors(await readText(resolved)).has(anchor), true, `${file}: missing anchor ${target}`);
+      for (const skill of skills) {
+        assert.equal(profile.local.includes(skill), true, `${provider}: ${skill} missing`);
+        const skillDir = path.join(skillsDir, skill);
+        const pending = [path.join(skillDir, "SKILL.md")];
+        const visited = new Set();
+        while (pending.length > 0) {
+          const file = pending.pop();
+          if (visited.has(file)) continue;
+          visited.add(file);
+          const content = await readText(file);
+          for (const target of skillReferences(content)) {
+            const [relative, anchor] = target.split("#");
+            const resolved = relative ? path.resolve(path.dirname(file), relative) : file;
+            const where = `${provider}/${path.relative(skillsDir, file)}: ${target}`;
+            assert.equal(resolved.startsWith(skillsDir + path.sep), true, where);
+            assert.equal(existsSync(resolved), true, `${where}: missing in ${provider} alone`);
+            if (!resolved.endsWith(".md")) continue;
+            if (anchor) {
+              assert.equal(markdownAnchors(await readText(resolved)).has(anchor), true, `${where}: missing anchor`);
+            }
+            const otherSkillEntry = path.basename(resolved) === "SKILL.md" && path.dirname(resolved) !== skillDir;
+            if (!otherSkillEntry) pending.push(resolved);
           }
-          pending.push(resolved);
+        }
+        if (skill.endsWith("-triage")) {
+          assert.equal(visited.has(path.join(skillsDir, "triage-common", "references", "lenses.md")), true, `${skill}: lenses not linked`);
         }
       }
-      assert.equal(visited.has(path.join(skillsDir, "triage-common", "references", "lenses.md")), true, `${triage}: lenses not linked`);
     }
   } finally {
     await rm(root, { recursive: true, force: true });

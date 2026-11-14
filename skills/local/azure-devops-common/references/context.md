@@ -31,12 +31,13 @@ Accepted remote URL shapes:
 
 Resolution rules:
 
-- Choose the push remote by the push target rule in
-  [`azure-devops-pr-publish`](../../azure-devops-pr-publish/SKILL.md) step 2:
-  the remote the user names, or the single remote that names the target; with
-  more than one remote and none named, ask. The shared
-  [`check-push-target.mjs`](../../delivery-common/scripts/check-push-target.mjs)
-  accepts exactly the remote URL shapes above.
+- Resolve the organization, project, and repository from the remotes whose URL
+  uses one of the accepted shapes above: the remote the user names, or, when
+  every such remote names the same organization, project, and repository, that
+  target. When they name different targets and the user named none, ask.
+- Target resolution does not choose a push remote. A skill that pushes chooses
+  it by the push target rule in
+  [`azure-devops-pr-publish`](../../azure-devops-pr-publish/SKILL.md) step 2.
 - Compare git remote context with `az devops configure --list` defaults.
 - Stop if organization, project, or repository cannot be resolved to one target.
 - Stop if git remote context conflicts with `az devops` defaults.
