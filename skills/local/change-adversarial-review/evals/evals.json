@@ -2,37 +2,99 @@
   "skill_name": "change-adversarial-review",
   "supporting_skills": [],
   "execution": {
-    "agent": "claude",
-    "model": "claude-opus-5-5",
-    "effort": "high",
     "runs_per_condition": 3,
     "run_timeout_minutes": 30,
-    "claude_extra_args": [
-      "--model",
-      "claude-opus-5-5",
-      "--effort",
-      "high",
-      "--permission-mode",
-      "dontAsk",
-      "--allowedTools",
-      "Read Grep Glob Bash"
-    ],
-    "claude_settings": "claude-settings.json",
-    "fresh_tmpdir": {
-      "env": "CLAUDE_CODE_TMPDIR",
-      "max_per_uid_path_bytes": 44
+    "agents": {
+      "claude": {
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "extra_args": [
+          "--model",
+          "claude-opus-5-5",
+          "--effort",
+          "high",
+          "--permission-mode",
+          "dontAsk",
+          "--allowedTools",
+          "Read Grep Glob Bash"
+        ],
+        "claude_settings": "claude-settings.json",
+        "fresh_tmpdir": {
+          "env": "CLAUDE_CODE_TMPDIR",
+          "max_per_uid_path_bytes": 44
+        },
+        "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Each run gets a new, empty directory as the environment variable named in fresh_tmpdir.env, with a path short enough that <dir>/claude-<uid> stays within max_per_uid_path_bytes; a longer path makes the CLI fall back to the shared /tmp/claude-<uid>. This keeps runs from sharing fixed-name scratch directories; it does not stop a run from deliberately reading another run's workspace or temp directory, because the sandbox allows reads outside its deny list. The contamination rule covers that. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and the run's temp directory, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed.",
+        "pre_run_checks": [
+          "Every effective Claude settings source other than claude_settings (user, project, local, and managed) sets no sandbox key and no permissions.allow rule; record the result and do not start runs otherwise.",
+          "Inherited hooks run outside the sandbox: no effective hook command runs or sources a file in the workspace or the run's temp directory; record the hook commands and do not start runs otherwise."
+        ],
+        "post_run_checks": [
+          "<dir>/claude-<uid> exists under the run's fresh temp directory, showing that the run's TMPDIR did not fall back to the shared temp root; exclude the run otherwise.",
+          "Delete the run's workspace and temp directory once its transcript, final answer, and file hashes are retained."
+        ]
+      },
+      "codex": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "extra_args": [
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"high\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "web_search=\"disabled\"",
+          "-c",
+          "default_permissions=\"skill_eval\"",
+          "-c",
+          "permissions.skill_eval.filesystem={\":root\"=\"read\",\":workspace_roots\"=\"write\",\":tmpdir\"=\"write\",\"~/.dotfiles\"=\"none\",\"~/.claude\"=\"none\",\"~/.agents\"=\"none\",\"~/.codex/skills\"=\"none\",\"~/.codex/sessions\"=\"none\",\"~/.codex/archived_sessions\"=\"none\"}",
+          "--disable",
+          "hooks",
+          "--disable",
+          "memories",
+          "--disable",
+          "apps",
+          "--disable",
+          "plugins",
+          "--disable",
+          "remote_plugin",
+          "--disable",
+          "computer_use",
+          "--disable",
+          "browser_use",
+          "--disable",
+          "browser_use_external",
+          "--disable",
+          "in_app_browser",
+          "--disable",
+          "image_generation",
+          "--disable",
+          "tool_suggest",
+          "--disable",
+          "skill_mcp_dependency_install",
+          "--disable",
+          "goals"
+        ],
+        "fresh_tmpdir": {
+          "env": "TMPDIR"
+        },
+        "policy": "Both conditions insert exec after codex in the prepared launch_argv, keep its arguments, then append extra_args, one -c mcp_servers.<name>.enabled=false per MCP server found by the pre-run check, and --skip-git-repo-check --json -, with no --sandbox, approval-bypass, or hook-trust-bypass flag. The skill_eval permission profile lets commands write only to the workspace and the run's temp directory, blocks the network, and blocks reads of ~/.dotfiles, ~/.claude, ~/.agents, and Codex's installed skills and session transcripts. Commands that need more fail instead of asking, because the approval policy is never. Each run gets a new, empty directory as TMPDIR. apply_patch stays available, so the file-hash assertion catches an edit.",
+        "pre_run_checks": [
+          "List the MCP servers in the effective Codex config and disable each one for both conditions with -c mcp_servers.<name>.enabled=false; record the names.",
+          "From an empty scratch directory, run codex debug prompt-input with the same -c and --disable arguments before the subcommand: the permissions instructions show the denied reads, restricted network, and approval policy never, and the tool list has no browser, computer-use, web search, or MCP server tool; record the result and do not start runs otherwise.",
+          "Run codex sandbox -P skill_eval with the same -c arguments from that directory: a write there succeeds, a write outside it fails, a read of each denied path fails, and a network request fails; record the result and do not start runs otherwise.",
+          "Global instructions that Codex loads, such as ~/.codex/AGENTS.md, apply to both conditions; record their presence."
+        ],
+        "post_run_checks": [
+          "The run's event stream shows the pinned model and no turn with a different model or effort; exclude the run otherwise.",
+          "Delete the run's workspace and temp directory once its event stream, final answer, and file hashes are retained."
+        ]
+      }
     },
-    "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Each run gets a new, empty directory as the environment variable named in fresh_tmpdir.env, with a path short enough that <dir>/claude-<uid> stays within max_per_uid_path_bytes; a longer path makes the CLI fall back to the shared /tmp/claude-<uid>. This keeps runs from sharing fixed-name scratch directories; it does not stop a run from deliberately reading another run's workspace or temp directory, because the sandbox allows reads outside its deny list. The contamination rule covers that. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and the run's temp directory, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed.",
     "known_constraints": [
-      "macOS ps (setuid) cannot run under the sandbox, so the listing tests in tests/list_processes.bats cannot run; lsof and Bash 5 work. The timing defects in cases 1 and 2 reproduce through confirmed_reading, which is pure Bash, so they remain reproducible under load."
-    ],
-    "pre_run_checks": [
-      "Every effective Claude settings source other than claude_settings (user, project, local, and managed) sets no sandbox key and no permissions.allow rule; record the result and do not start runs otherwise.",
-      "Inherited hooks run outside the sandbox: no effective hook command runs or sources a file in the workspace or the run's temp directory; record the hook commands and do not start runs otherwise."
-    ],
-    "post_run_checks": [
-      "<dir>/claude-<uid> exists under the run's fresh temp directory, showing that the run's TMPDIR did not fall back to the shared temp root; exclude the run otherwise.",
-      "Delete the run's workspace and temp directory once its transcript, final answer, and file hashes are retained."
+      "macOS ps (setuid) cannot run under the sandbox, so the listing tests in tests/list_processes.bats cannot run; lsof and Bash 5 work. The timing defects in cases 1 and 2 reproduce through confirmed_reading, which is pure Bash, so they remain reproducible under load.",
+      "Codex keeps spawn_agent with these flags; a subagent runs under the same permission profile, and the prompt asks for no subagents. Record a run that spawns one."
     ],
     "contamination": "Exclude a run whose transcript shows access to a repository or installed skill outside the workspace, another run's workspace or temp directory, the shared temp root, gh, or the network, and rerun it once under the same conditions. Report a second contaminated run as missing coverage."
   },

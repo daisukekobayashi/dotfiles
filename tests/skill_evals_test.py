@@ -145,6 +145,30 @@ class SkillEvaluationTests(unittest.TestCase):
                             for check in claude["pre_run_checks"]))
         self.assertTrue(any("Delete" in check for check in claude["post_run_checks"]))
 
+    def check_agent_policies(self, claude, codex):
+        for agent in (claude, codex):
+            joined = " ".join(agent["extra_args"]).lower()
+            self.assertNotIn("danger", joined)
+            self.assertNotIn("bypass", joined)
+            self.assertIn(agent["model"], agent["extra_args"])
+        self.assertNotIn("--sandbox", codex["extra_args"])
+        overrides = [codex["extra_args"][i + 1] for i, arg in enumerate(codex["extra_args"])
+                     if arg == "-c"]
+        config = tomllib.loads("\n".join(overrides))
+        self.assertEqual(config["approval_policy"], "never")
+        self.assertEqual(config["model_reasoning_effort"], codex["effort"])
+        profile = config["permissions"][config["default_permissions"]]["filesystem"]
+        self.assertEqual({key: value for key, value in profile.items() if value != "none"},
+                         {":root": "read", ":workspace_roots": "write", ":tmpdir": "write"})
+        for denied in ("~/.dotfiles", "~/.claude", "~/.agents", "~/.codex/skills"):
+            self.assertEqual(profile[denied], "none")
+        for feature in ("hooks", "memories", "plugins", "computer_use", "browser_use"):
+            self.assertIn(["--disable", feature],
+                          [codex["extra_args"][i:i + 2] for i in range(len(codex["extra_args"]))])
+        self.assertTrue(any("mcp_servers.<name>.enabled=false" in check
+                            for check in codex["pre_run_checks"]))
+        self.assertTrue(any("codex sandbox -P" in check for check in codex["pre_run_checks"]))
+
     def check_plain_fixture_suite(self, suite, private_names):
         data = json.loads(suite.read_text())
         files = suite.parent / "files"
@@ -184,12 +208,13 @@ class SkillEvaluationTests(unittest.TestCase):
         suite = ROOT / "skills/local/change-adversarial-review/evals/evals.json"
         data = json.loads(suite.read_text())
         execution = data["execution"]
-        self.check_claude_policy(suite, execution)
-        self.assertNotIn("danger", " ".join(execution["claude_extra_args"]).lower())
-        self.assertNotIn("bypassPermissions", execution["claude_extra_args"])
+        self.assertEqual((execution["runs_per_condition"], execution["run_timeout_minutes"]), (3, 30))
+        claude, codex = execution["agents"]["claude"], execution["agents"]["codex"]
+        self.check_claude_policy(suite, claude)
+        self.check_agent_policies(claude, codex)
         for case in data["evals"]:
             self.assertTrue((suite.parent / case["overlay"] / "ISSUE.md").is_file())
-        self.check_plain_fixture_suite(suite, [execution["claude_settings"]])
+        self.check_plain_fixture_suite(suite, [claude["claude_settings"]])
 
     def test_change_review_suite_runs_both_agents_under_equal_sandboxed_policies(self):
         suite = ROOT / "skills/local/change-review/evals/evals.json"
@@ -199,28 +224,7 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual((execution["runs_per_condition"], execution["run_timeout_minutes"]), (3, 30))
         claude, codex = execution["agents"]["claude"], execution["agents"]["codex"]
         self.check_claude_policy(suite, claude)
-        for agent in (claude, codex):
-            joined = " ".join(agent["extra_args"]).lower()
-            self.assertNotIn("danger", joined)
-            self.assertNotIn("bypass", joined)
-            self.assertIn(agent["model"], agent["extra_args"])
-        self.assertNotIn("--sandbox", codex["extra_args"])
-        overrides = [codex["extra_args"][i + 1] for i, arg in enumerate(codex["extra_args"])
-                     if arg == "-c"]
-        config = tomllib.loads("\n".join(overrides))
-        self.assertEqual(config["approval_policy"], "never")
-        self.assertEqual(config["model_reasoning_effort"], codex["effort"])
-        profile = config["permissions"][config["default_permissions"]]["filesystem"]
-        self.assertEqual({key: value for key, value in profile.items() if value != "none"},
-                         {":root": "read", ":workspace_roots": "write", ":tmpdir": "write"})
-        for denied in ("~/.dotfiles", "~/.claude", "~/.agents", "~/.codex/skills"):
-            self.assertEqual(profile[denied], "none")
-        for feature in ("hooks", "memories", "plugins", "computer_use", "browser_use"):
-            self.assertIn(["--disable", feature],
-                          [codex["extra_args"][i:i + 2] for i in range(len(codex["extra_args"]))])
-        self.assertTrue(any("mcp_servers.<name>.enabled=false" in check
-                            for check in codex["pre_run_checks"]))
-        self.assertTrue(any("codex sandbox -P" in check for check in codex["pre_run_checks"]))
+        self.check_agent_policies(claude, codex)
         names = [case["name"] for case in data["evals"]]
         self.assertEqual(names[:4], ["misses-one-criterion", "meets-all-criteria",
                                      "breaches-mandatory-rule", "no-issue-available"])
