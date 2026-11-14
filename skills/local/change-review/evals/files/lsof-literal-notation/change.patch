@@ -1,0 +1,266 @@
+diff --git a/skills/local/worktree-runtime-cleanup/SKILL.md b/skills/local/worktree-runtime-cleanup/SKILL.md
+index 5b7b942..6407459 100644
+--- a/skills/local/worktree-runtime-cleanup/SKILL.md
++++ b/skills/local/worktree-runtime-cleanup/SKILL.md
+@@ -76,7 +76,8 @@ covers only the processes recorded below and sends only SIGTERM.
+    the broker with its cwd set to the `--cwd` path, so the untruncated `cwd`
+    column carries that path. The `command` column is cut to 200 characters and
+    never establishes ownership. A missing, unreadable, or ` (deleted)` cwd is
+-   not an exact match. The list also matches paths below the target, such as a
++   not an exact match, nor is a `cwd` column containing a backslash: the script
++   escapes control bytes and backslashes in the path. The list also matches paths below the target, such as a
+    nested worktree; prefix matching never establishes ownership here. Report
+    any other listed broker,
+    whether pre-existing or under the target without equaling it, and leave it
+diff --git a/skills/local/worktree-runtime-cleanup/scripts/list-processes.sh b/skills/local/worktree-runtime-cleanup/scripts/list-processes.sh
+index 60411cb..214dfd6 100755
+--- a/skills/local/worktree-runtime-cleanup/scripts/list-processes.sh
++++ b/skills/local/worktree-runtime-cleanup/scripts/list-processes.sh
+@@ -12,12 +12,14 @@
+ #   <pid> <ppid> <tty> <started> <cwd> <reason> <command>
+ # <tty> is "?" for processes without a controlling terminal, such as detached
+ # brokers and daemons. <started> lets callers detect PID reuse before stopping.
++# <cwd> is escaped so every process stays on one line: newline as \n, tab as
++# \t, backslash as \\, and other control bytes as \xNN; other bytes are as-is.
+ # The script and its ancestors are never listed. It only reads process state;
+ # it never sends signals.
+ set -euo pipefail
+ 
+ usage() {
+-  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
++  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+ }
+ 
+ mode="path"
+@@ -42,25 +44,79 @@ case "${1:-}" in
+     ;;
+ esac
+ 
+-# pid<TAB>cwd for every process of the current user.
++# pid<TAB>cwd for every process of the current user, each record ending in NUL
++# so a cwd may contain any byte but NUL.
+ list_cwds() {
+-  local dir pid cwd
++  local dir pid cwd field
+   if [[ -d /proc/self ]]; then
+     for dir in /proc/[0-9]*; do
+       [[ -O "${dir}" ]] || continue
+       pid="${dir#/proc/}"
+-      cwd="$(readlink "${dir}/cwd" 2>/dev/null)" || continue
+-      printf '%s\t%s\n' "${pid}" "${cwd}"
++      # The sentinel keeps trailing newlines of the name through $(...).
++      cwd="$(readlink "${dir}/cwd" 2>/dev/null && printf x)" || continue
++      cwd="${cwd%$'\n'x}"
++      printf '%s\t%s\0' "${pid}" "${cwd}"
+     done
+   elif command -v lsof >/dev/null 2>&1; then
+-    lsof -a -u "$(id -u)" -d cwd -Fpn 2>/dev/null |
+-      awk '/^p/ { pid = substr($0, 2) } /^n/ { printf "%s\t%s\n", pid, substr($0, 2) }'
++    lsof -w -a -u "$(id -u)" -d cwd -F0pn 2>/dev/null |
++      while IFS= read -r -d '' field; do
++        field="${field#$'\n'}"
++        case "${field}" in
++          p*) pid="${field#p}" ;;
++          n*)
++            cwd="$(lsof_name "${field#n}" && printf x)"
++            printf '%s\t%s\0' "${pid}" "${cwd%x}"
++            ;;
++        esac
++      done
+   else
+     echo "Neither /proc nor lsof is available" >&2
+     exit 1
+   fi
+ }
+ 
++# Decodes lsof's escaped name (\n, \t, \r, \b, \f, \\, \xNN, ^X) to raw bytes.
++# lsof leaves a literal "^" unescaped, so "^X" is always read as a control byte.
++lsof_name() {
++  local LC_ALL=C name="$1" out="" c next
++  if [[ "${name}" != *[\\^]* ]]; then
++    printf '%s' "${name}"
++    return
++  fi
++  while [[ -n "${name}" ]]; do
++    c="${name:0:1}"
++    next="${name:1:1}"
++    if [[ "${c}" == "^" && "${next}" == [@A-Z\[\\\]^_] ]]; then
++      out+="$(printf '\\x%02x' "$(( $(printf '%d' "'${next}") - 64 ))")"
++      name="${name:2}"
++    else
++      out+="${c}"
++      name="${name:1}"
++    fi
++  done
++  printf '%b' "${out}"
++}
++
++# Escapes a cwd for the one-line output; see the header.
++encode_cwd() {
++  local LC_ALL=C cwd="$1" out="" c i
++  if [[ "${cwd}" != *[[:cntrl:]\\]* ]]; then
++    printf '%s' "${cwd}"
++    return
++  fi
++  for ((i = 0; i < ${#cwd}; i++)); do
++    c="${cwd:i:1}"
++    case "${c}" in
++      $'\n') out+='\n' ;;
++      $'\t') out+='\t' ;;
++      \\) out+='\\' ;;
++      [[:cntrl:]]) out+="$(printf '\\x%02x' "'${c}")" ;;
++      *) out+="${c}" ;;
++    esac
++  done
++  printf '%s' "${out}"
++}
++
+ # Prints the value of a --cwd argument, if any.
+ cwd_argument() {
+   local pid="$1" prev="" arg
+@@ -106,9 +162,12 @@ while [[ -n "${pid}" && "${pid}" != "0" ]]; do
+   pid="$(ps -o ppid= -p "${pid}" 2>/dev/null | tr -d ' ')"
+ done
+ 
+-while IFS=$'\t' read -r pid cwd; do
++while IFS= read -r -d '' record; do
++  pid="${record%%$'\t'*}"
++  cwd="${record#*$'\t'}"
+   [[ -z "${pid}" || "${ancestors}" == *" ${pid} "* ]] && continue
+-  arg_cwd="$(cwd_argument "${pid}")"
++  # A process that exits mid-listing is skipped rather than ending the list.
++  arg_cwd="$(cwd_argument "${pid}")" || continue
+   reason=""
+   case "${mode}" in
+     path)
+@@ -135,5 +194,5 @@ while IFS=$'\t' read -r pid cwd; do
+   started="$(ps -o lstart= -p "${pid}" 2>/dev/null | sed 's/^ *//')"
+   command="$(ps -ww -o args= -p "${pid}" 2>/dev/null | cut -c1-200)"
+   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+-    "${pid}" "${ppid}" "${tty}" "${started}" "${cwd}" "${reason}" "${command}"
++    "${pid}" "${ppid}" "${tty}" "${started}" "$(encode_cwd "${cwd}")" "${reason}" "${command}"
+ done < <(list_cwds)
+diff --git a/tests/list_processes.bats b/tests/list_processes.bats
+new file mode 100644
+index 0000000..cc5aa01
+--- /dev/null
++++ b/tests/list_processes.bats
+@@ -0,0 +1,118 @@
++#!/usr/bin/env bats
++
++bats_require_minimum_version 1.5.0
++
++load 'helpers/test_helper.bash'
++
++SCRIPT_REL="skills/local/worktree-runtime-cleanup/scripts/list-processes.sh"
++
++setup() {
++  script="$(repo_root)/${SCRIPT_REL}"
++  target="$(mkdir -p "${BATS_TEST_TMPDIR}/target" && cd "${BATS_TEST_TMPDIR}/target" && pwd -P)"
++  outside="$(mkdir -p "${BATS_TEST_TMPDIR}/outside" && cd "${BATS_TEST_TMPDIR}/outside" && pwd -P)"
++  pids=()
++}
++
++teardown() {
++  local pid
++  for pid in "${pids[@]}"; do
++    kill "${pid}" 2>/dev/null || true
++  done
++}
++
++# Starts a sleep whose cwd is $1 and sets started_pid.
++start_in() {
++  (cd "$1" && exec sleep 60) &
++  started_pid=$!
++  pids+=("${started_pid}")
++}
++
++# The same script with the /proc branch disabled, so it reads lsof.
++lsof_script() {
++  local copy="${BATS_TEST_TMPDIR}/list-processes-lsof.sh"
++  sed 's|\[\[ -d /proc/self \]\]|false|' "${script}" >"${copy}"
++  chmod +x "${copy}"
++  printf '%s' "${copy}"
++}
++
++# Asserts the output has one 7-field row per line and none forged for $1.
++assert_no_forged_row() {
++  local decoy="$1" line
++  while IFS= read -r line; do
++    [[ -z "${line}" ]] && continue
++    awk -F '\t' '{ exit NF != 7 }' <<<"${line}" || {
++      echo "row without 7 fields: ${line}"
++      return 1
++    }
++    [[ "$(cut -f5 <<<"${line}")" != "${target}" ]] || {
++      echo "row with cwd equal to the target: ${line}"
++      return 1
++    }
++    [[ "$(cut -f1 <<<"${line}")" != "${decoy}" ]] || {
++      echo "decoy listed: ${line}"
++      return 1
++    }
++  done <<<"${output}"
++}
++
++row_for() {
++  awk -F '\t' -v pid="$1" '$1 == pid' <<<"${output}"
++}
++
++check_crafted_cwd() {
++  local lister="$1" decoy crafted sleeper
++  start_in "${outside}"
++  decoy="${started_pid}"
++  # The part after the newline reads as a row for the decoy with cwd == target.
++  crafted="${target}/c"$'\x01'"\\d/x"$'\n'"${decoy}"$'\t'"${target}"
++  mkdir -p "${crafted}"
++  start_in "${crafted}"
++  sleeper="${started_pid}"
++  sleep 0.3
++
++  # Exit status is not checked: a process that exits mid-listing can end the
++  # script early, which is independent of the cwd escaping under test.
++  run "${lister}" "${target}"
++  assert_no_forged_row "${decoy}"
++  [ "$(row_for "${sleeper}" | wc -l | tr -d ' ')" -eq 1 ]
++  [ "$(row_for "${sleeper}" | cut -f5)" = "${target}/c\\x01\\\\d/x\\n${decoy}\\t${target}" ]
++  [ "$(row_for "${sleeper}" | cut -f6)" = "cwd under target" ]
++}
++
++check_trailing_newline_and_plain() {
++  local lister="$1" trailing plain trailing_pid plain_pid
++  trailing="${target}/t"$'\n'
++  plain="${target}/plain dir"
++  mkdir -p "${trailing}" "${plain}"
++  start_in "${trailing}"
++  trailing_pid="${started_pid}"
++  start_in "${plain}"
++  plain_pid="${started_pid}"
++  sleep 0.3
++
++  # Exit status is not checked: a process that exits mid-listing can end the
++  # script early, which is independent of the cwd escaping under test.
++  run "${lister}" "${target}"
++  [ "$(row_for "${trailing_pid}" | cut -f5)" = "${target}/t\\n" ]
++  [ "$(row_for "${plain_pid}" | cut -f5)" = "${plain}" ]
++}
++
++@test "list-processes escapes a crafted cwd instead of forging a row" {
++  check_crafted_cwd "${script}"
++}
++
++@test "list-processes keeps a trailing newline escaped and a plain cwd raw" {
++  check_trailing_newline_and_plain "${script}"
++}
++
++@test "list-processes lsof path escapes a crafted cwd the same way" {
++  [[ -d /proc/self ]] || skip "the default run already uses lsof"
++  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
++  check_crafted_cwd "$(lsof_script)"
++}
++
++@test "list-processes lsof path keeps a trailing newline and a plain cwd" {
++  [[ -d /proc/self ]] || skip "the default run already uses lsof"
++  command -v lsof >/dev/null 2>&1 || skip "lsof is not installed"
++  check_trailing_newline_and_plain "$(lsof_script)"
++}

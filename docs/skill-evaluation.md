@@ -56,6 +56,22 @@ still reproduce through pure Bash. A run whose transcript reaches outside the
 workspace, including another run's workspace or temp directory, is excluded and
 rerun once.
 
+The `change-review` suite keeps its four synthetic criteria and rule cases and
+adds defects from real review rounds with their fixed states as controls. Its
+`execution` object runs both agents, Claude and Codex, three runs per case and
+condition with a 30-minute limit each. The Claude arm uses the same policy as
+the `change-adversarial-review` suite. The Codex arm pins the model and effort,
+sets the approval policy to `never`, and runs commands under a `skill_eval`
+permission profile. That profile limits writes to the workspace and the run's
+fresh `TMPDIR`, blocks the network, and blocks reads of the real repository,
+installed skills, and Codex session transcripts. Hooks, memories, plugins,
+apps, browser, computer use, and web search are off, and the pre-run check
+disables every configured MCP server. Before the runs, render the prompt with
+`codex debug prompt-input` and probe the profile with `codex sandbox -P
+skill_eval`, both with the same overrides, and record the results. A revision
+runs only the new skill and compares it with the baseline with-skill runs of the
+same agent; rerun the old snapshot when the model or CLI version changed.
+
 `bats tests/setup_pstack_skills.bats tests/skill_evals.bats` checks both agent
 layouts and preparation behavior. Those checks do not establish real-model
 effectiveness. Native skill discovery/triggering is a separate check from the

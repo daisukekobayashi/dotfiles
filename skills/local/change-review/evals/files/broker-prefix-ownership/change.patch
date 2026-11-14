@@ -1,0 +1,160 @@
+diff --git a/setup/test/skills-wiring-delivery.test.mjs b/setup/test/skills-wiring-delivery.test.mjs
+index 8280dce..44c240b 100644
+--- a/setup/test/skills-wiring-delivery.test.mjs
++++ b/setup/test/skills-wiring-delivery.test.mjs
+@@ -189,6 +189,8 @@ test("change review skills are explicit-only and share target selection", async
+     assert.match(runnerSection(skill), /outside the target worktree/);
+     assert.match(runnerSection(skill), new RegExp(`Start it with \`Use \\$${name}\``));
+     assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
++    assert.match(runnerSection(skill), /Run one Codex run at a time per target worktree/);
++    assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Brokers Started by a Codex Review"/);
+   }
+   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
+   const security = await readText(path.join(securityRoot, "SKILL.md"));
+@@ -366,3 +368,32 @@ test("delivery resume checks the recorded branch name", async () => {
+     assert.match(resume, /Stop and report the recorded branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${delivery}: recorded branch checked`);
+   }
+ });
++
++test("Codex review runs stop only the broker tree they started", async () => {
++  const runtime = await readText(
++    path.join(repoRoot, "skills", "local", "worktree-runtime-cleanup", "SKILL.md"),
++  );
++  const brokers = flat(runtime.match(/## Brokers Started by a Codex Review\n[\s\S]*?(?=\n## )/)?.[0]);
++
++  assert.ok(brokers, "worktree-runtime-cleanup: missing Brokers Started by a Codex Review");
++  assert.match(brokers, /stopping them needs no confirmation/);
++  assert.match(brokers, /Before the run, record `scripts\/list-processes\.sh <worktree>`/);
++  assert.match(brokers, /absent from the first list, by PID and start time, is a broker this run started/);
++  assert.match(brokers, /Report a broker present in the first list and leave it running\./);
++  assert.match(brokers, /every listed process descending from it by `ppid`, with PID and start time/);
++  assert.match(brokers, /Immediately before signaling, recheck each broker's PID and start time/);
++  assert.match(brokers, /Never signal a process outside the recorded tree, and never use SIGKILL\./);
++  assert.match(brokers, /Leftovers do not change the review result/);
++  assert.match(brokers, /report the teardown as unverified and leave it to cleanup/);
++  assert.match(flat(runtime), /Review skills that run Codex follow only \[Brokers Started by a Codex Review\]\(#brokers-started-by-a-codex-review\)/);
++
++  const localReview = flat(await readText(
++    path.join(repoRoot, "skills", "local", "delivery-common", "references", "local-review.md"),
++  ));
++  assert.match(localReview, /Run Codex-routed reviewers for one worktree one at a time; each stops the broker it starts\./);
++
++  for (const cleanup of ["github-worktree-cleanup", "azure-devops-worktree-cleanup"]) {
++    const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
++    assert.match(skill, /Before removal, follow `\.\.\/worktree-runtime-cleanup\/SKILL\.md` for the/, cleanup);
++  }
++});
+diff --git a/skills/local/change-adversarial-review/SKILL.md b/skills/local/change-adversarial-review/SKILL.md
+index 0696925..8934469 100644
+--- a/skills/local/change-adversarial-review/SKILL.md
++++ b/skills/local/change-adversarial-review/SKILL.md
+@@ -35,6 +35,11 @@ node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
+   --prompt-file <prompt-file>
+ ```
+ 
++Run one Codex run at a time per target worktree; wait for any other in progress.
++Before and after the run, including a failed run, follow
++`../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
++the target worktree, and report its result with the output.
++
+ Return the named tool's completed output. A launched background job is not a
+ completed review. If the named tool is not installed or its run fails, such as
+ on authentication, timeout, or runtime error, report the failure and stop; do
+diff --git a/skills/local/change-review/SKILL.md b/skills/local/change-review/SKILL.md
+index 247584c..478b6c1 100644
+--- a/skills/local/change-review/SKILL.md
++++ b/skills/local/change-review/SKILL.md
+@@ -34,6 +34,11 @@ node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
+   --prompt-file <prompt-file>
+ ```
+ 
++Run one Codex run at a time per target worktree; wait for any other in progress.
++Before and after the run, including a failed run, follow
++`../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
++the target worktree, and report its result with the output.
++
+ Return the named tool's completed output. A launched background job is not a
+ completed review. If the named tool is not installed or its run fails, such as
+ on authentication, timeout, or runtime error, report the failure and stop; do
+diff --git a/skills/local/change-security-review/SKILL.md b/skills/local/change-security-review/SKILL.md
+index ad275da..dd8957f 100644
+--- a/skills/local/change-security-review/SKILL.md
++++ b/skills/local/change-security-review/SKILL.md
+@@ -35,6 +35,11 @@ node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
+   --prompt-file <prompt-file>
+ ```
+ 
++Run one Codex run at a time per target worktree; wait for any other in progress.
++Before and after the run, including a failed run, follow
++`../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
++the target worktree, and report its result with the output.
++
+ Return the named tool's completed output. A launched background job is not a
+ completed review. If the named tool is not installed or its run fails, such as
+ on authentication, timeout, or runtime error, report the failure and stop; do
+diff --git a/skills/local/delivery-common/references/local-review.md b/skills/local/delivery-common/references/local-review.md
+index 436ebb9..1145a68 100644
+--- a/skills/local/delivery-common/references/local-review.md
++++ b/skills/local/delivery-common/references/local-review.md
+@@ -8,7 +8,8 @@ selects it, add the `change-security-review` skill as a third reviewer. Each run
+ in a fresh subagent of the current host unless the user's delivery request
+ explicitly names another review tool, such as Codex; forward that instruction to
+ every selected skill and read their instructions for how each route runs. Do not
+-infer the host from a directory name.
++infer the host from a directory name. Run Codex-routed reviewers for one
++worktree one at a time; each stops the broker it starts.
+ 
+ Report the selected route. If any required reviewer is unavailable or cannot
+ be invoked under its policy, report the missing prerequisite; do not substitute
+diff --git a/skills/local/worktree-runtime-cleanup/SKILL.md b/skills/local/worktree-runtime-cleanup/SKILL.md
+index 333645c..5271e7c 100644
+--- a/skills/local/worktree-runtime-cleanup/SKILL.md
++++ b/skills/local/worktree-runtime-cleanup/SKILL.md
+@@ -12,7 +12,9 @@ verification evidence.
+ 
+ Worktree cleanup skills (`github-worktree-cleanup`,
+ `azure-devops-worktree-cleanup`, `beads-merge-cleanup`) read this file and run
+-it for the worktree they are about to remove.
++it for the worktree they are about to remove. Review skills that run Codex
++follow only [Brokers Started by a Codex Review](#brokers-started-by-a-codex-review),
++so a broker found at cleanup is a leak to report.
+ 
+ Run this before `git worktree remove`: the live worktree helps establish runtime
+ ownership, and Compose stacks can be matched by path rather than the weaker
+@@ -58,6 +60,36 @@ cleanup session, so discover them from process state.
+    alone does not establish cleanup. Report remaining processes and unverified
+    ownership explicitly.
+ 
++## Brokers Started by a Codex Review
++
++`change-review`, `change-adversarial-review`, and `change-security-review`
++follow this section around each Codex companion run for a target worktree. The
++run owns the brokers it starts, so stopping them needs no confirmation; the stop
++covers only the processes recorded below and sends only SIGTERM.
++
++1. Before the run, record `scripts/list-processes.sh <worktree>` in this
++   skill's directory.
++2. After the run, whether it succeeded or failed, list again. A process running
++   `app-server-broker.mjs` that is absent from the first list, by PID and start
++   time, is a broker this run started. Report a broker present in the first list
++   and leave it running. If the run started none, report that and stop here.
++3. Record each started broker's tree from the second list: the broker and every
++   listed process descending from it by `ppid`, with PID and start time.
++4. Immediately before signaling, recheck each broker's PID and start time; if
++   they no longer match, leave it and report it as unverified. Send SIGTERM to
++   each broker.
++5. Re-list for up to about 10 seconds until the recorded processes exit. Send
++   SIGTERM once to each recorded process still running whose PID and start time
++   match, even if it was reparented. Never signal a process outside the recorded
++   tree, and never use SIGKILL.
++6. Report the stopped brokers, any broker left running, and recorded processes
++   still running. Leftovers do not change the review result; cleanup under
++   [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
++   handles them before the worktree is removed.
++
++When `list-processes.sh` cannot run, such as without bash, `/proc`, or `lsof`,
++report the teardown as unverified and leave it to cleanup.
++
+ ## Compose Stacks
+ 
+ `docker compose run --rm` leaves `depends_on` services up, and a wrapper killed

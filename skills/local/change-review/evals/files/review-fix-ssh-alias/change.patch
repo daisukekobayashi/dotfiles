@@ -1,0 +1,254 @@
+diff --git a/setup/test/skills-wiring-issue-start.test.mjs b/setup/test/skills-wiring-issue-start.test.mjs
+index b6b7c64..48cf0a9 100644
+--- a/setup/test/skills-wiring-issue-start.test.mjs
++++ b/setup/test/skills-wiring-issue-start.test.mjs
+@@ -7,7 +7,7 @@ import {
+ } from "./skills-helpers.mjs";
+ 
+ const flat = (text) => text?.replace(/\s+/g, " ");
+-const upstreamRead = /`git config --get branch\.<branch>\.remote` and `git config --get branch\.<branch>\.merge`[^.]*?no output means no upstream/;
++const upstreamRead = /`git config --get-all branch\.<branch>\.remote` and `git config --get-all branch\.<branch>\.merge`[^.]*?no output means no upstream[^.]*?more than one value for either key[^.]*?stop and report/;
+ 
+ test("start skills create worktree branches without tracking the base", async () => {
+   for (const start of ["github-issue-start", "azure-devops-work-item-start", "beads-issue-worktree"]) {
+@@ -29,6 +29,7 @@ test("start skills create worktree branches without tracking the base", async ()
+     const check = flat(prep.match(/^5\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
+     assert.ok(check, `${start}: missing step 5`);
+     assert.match(check, upstreamRead, `${start}: upstream read`);
++    assert.doesNotMatch(skill, /git config --get branch/, `${start}: --get returns the last of several values`);
+     assert.match(check, /no upstream or the same-named branch on the publication remote/, `${start}: kept upstreams`);
+     assert.match(check, /base or its local branch \(remote `\.`\)[\s\S]*`git branch --unset-upstream <branch>`/, `${start}: unset base upstream`);
+     assert.match(check, /Stop and report any other upstream/, `${start}: report other upstream`);
+@@ -67,7 +68,8 @@ test("publish skills push with an explicit refspec and recheck the upstream", as
+     assert.match(push, /PR base branch is the existing PR's (base|target), otherwise[^.]*default branch unless the user specifies another/, `${publish}: base definition`);
+     assert.match(push, upstreamRead, `${publish}: upstream read`);
+     assert.doesNotMatch(push, /%\(upstream/, `${publish}: upstream format atoms need a remote-tracking ref`);
+-    assert.match(push, /Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, local or remote-tracking\./, `${publish}: accepted upstreams`);
++    assert.doesNotMatch(push, /git config --get branch/, `${publish}: --get returns the last of several values`);
++    assert.match(push, /Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, either local \(remote `\.`\) or remote-tracking\./, `${publish}: accepted upstreams`);
+     assert.match(push, /Stop and report any other upstream/, `${publish}: report other upstream`);
+     assert.match(push, /`git push -u <remote> <branch>:refs\/heads\/<branch>`/, `${publish}: explicit refspec`);
+     assert.doesNotMatch(push, /`git push -u <remote> <branch>`/, `${publish}: bare push follows push.default=upstream to the base`);
+@@ -76,3 +78,38 @@ test("publish skills push with an explicit refspec and recheck the upstream", as
+     assert.match(push, /Re-read the upstream; stop and report unless the remote is `<remote>` and the merge ref is `refs\/heads\/<branch>`\./, `${publish}: post-push recheck`);
+   }
+ });
++
++test("publish skills check the branch name and resolve one push remote", async () => {
++  for (const publish of ["github-pr-publish", "azure-devops-pr-publish"]) {
++    const skill = await readText(path.join(repoRoot, "skills", "local", publish, "SKILL.md"));
++    const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
++
++    assert.ok(context, `${publish}: missing step 2`);
++    assert.match(context, /Stop and report the branch unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`, before running any command with it\./, `${publish}: safe branch name`);
++    assert.match(context, /leading `\+`[^.]*force push/, `${publish}: + refspec refused`);
++    assert.match(context, /Use the remote the user names\./, `${publish}: user-named remote`);
++    assert.match(context, /Otherwise `<remote>` is the one remote whose fetch URL and every push URL \(`git remote -v`\)/, `${publish}: URL-matched remote`);
++    assert.match(context, /Stop and report the candidates when more than one remote matches\./, `${publish}: several matches stop`);
++    assert.match(context, /When none matches, as with an SSH host alias, stop and ask the user to name the remote\./, `${publish}: no match asks for a remote`);
++  }
++
++  const github = flat(await readText(path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md")));
++  assert.match(github, /ignoring the scheme, user, letter case, and a trailing `\.git` or `\/`/, "github: URL normalization");
++  const azure = flat(await readText(path.join(repoRoot, "skills", "local", "azure-devops-pr-publish", "SKILL.md")));
++  assert.match(azure, /accepted remote URL shapes/, "azure: URL shapes from the common context");
++  assert.match(azure, /decoding percent-encoding \(`My%20Project` is `My Project`\) and ignoring letter case, the `user@` part, and a trailing `\.git` or `\/`/, "azure: URL normalization");
++});
++
++test("github-pr-publish stops in an unresolved fork layout", async () => {
++  const skill = await readText(path.join(repoRoot, "skills", "local", "github-pr-publish", "SKILL.md"));
++  const context = flat(skill.match(/^2\. [\s\S]*?(?=\n\d\. )/m)?.[0]);
++
++  assert.ok(context, "missing step 2");
++  assert.doesNotMatch(context, /set-default|shows no default/, "gh's default names the PR base, not the push target");
++  assert.match(context, /Check every other remote: stop and ask the user to name the remote when its repository is in the resolved repository's fork network/, "fork layout asks for a remote");
++  assert.match(context, /`gh repo view <owner>\/<repo> --json parent`/, "fork network lookup");
++  assert.match(context, /Look up the parent of the resolved repository and of each other remote's repository with `gh repo view <owner>\/<repo> --json parent`\./, "both parents looked up");
++  assert.match(context, /one is the other's parent, or both are forks with the same parent/, "shared parent means both are forks");
++  assert.match(context, /any of its fetch or push URLs does not name an `<owner>\/<repo>` on the resolved repository's host/, "every remote URL checked");
++  assert.match(context, /or a parent lookup fails[^.]*a failed lookup is not "no parent"/, "failed lookup fails closed");
++});
+diff --git a/setup/test/skills-wiring-pr.test.mjs b/setup/test/skills-wiring-pr.test.mjs
+index 911131f..26e24aa 100644
+--- a/setup/test/skills-wiring-pr.test.mjs
++++ b/setup/test/skills-wiring-pr.test.mjs
+@@ -23,3 +23,24 @@ test("Codex review cycle detects completion from the review-state marker", async
+   assert.doesNotMatch(wait, /review threads, inline comments, or a review summary\/comment that indicates/);
+   assert.match(cycle, /^8\. Verify final PR state when possible\.\n   - Re-read thread state after writeback\./m);
+ });
++
++test("Codex review cycle pushes review fixes to the publication remote", async () => {
++  const cycle = await readText(
++    path.join(repoRoot, "skills", "local", "github-pr-codex-review-cycle", "SKILL.md"),
++  );
++  const publish = cycle.match(/\n2\. Use `github-pr-publish`\.\n[\s\S]*?(?=\n3\. )/)?.[0]?.replace(/\s+/g, " ");
++  const push = cycle.match(/\n6\. If review fixes changed files[\s\S]*?(?=\n7\. )/)?.[0]?.replace(/\s+/g, " ");
++
++  assert.ok(publish, "missing publish step");
++  assert.match(publish, /Capture the PR number, PR URL, branch, push remote,/);
++  assert.ok(push, "missing review-fix push step");
++  assert.match(push, /`git push <remote> <branch>:refs\/heads\/<branch>`/);
++  assert.match(push, /`<remote>` is the push remote captured in step 2/);
++  assert.match(push, /`branch\.<branch>\.pushRemote` or `remote\.pushDefault`/);
++  assert.match(push, /Stop and report `<branch>` unless it is a \*\*safe branch name\*\*, using only `\[A-Za-z0-9\/._-\]`/, "branch checked before the refspec");
++  assert.match(push, /on resume without it, read `<remote>` with `git config --get-all branch\.<branch>\.remote`[^.]*exactly one value/, "resume reads the upstream remote");
++  assert.match(push, /`gh pr view --json headRepository,headRepositoryOwner`/, "resume checks the PR head repository");
++  assert.doesNotMatch(push, /resolve it as `github-pr-publish` step 2 does/, "URL matching can pick the parent in a fork layout");
++  assert.doesNotMatch(push, /normal push/, "a plain push follows pushRemote away from the PR head");
++  assert.match(push, /Confirm the fixes are present in the remote PR head/);
++});
+diff --git a/skills/local/azure-devops-pr-publish/SKILL.md b/skills/local/azure-devops-pr-publish/SKILL.md
+index 33429a3..76708c0 100644
+--- a/skills/local/azure-devops-pr-publish/SKILL.md
++++ b/skills/local/azure-devops-pr-publish/SKILL.md
+@@ -41,6 +41,18 @@ Still stop and ask before:
+    worktree and branch.
+ 2. Resolve Azure DevOps organization, project, repository, default branch, and
+    current branch for each target.
++   - Stop and report the branch unless it is a **safe branch name**, using only
++     `[A-Za-z0-9/._-]`, before running any command with it. This also refuses a
++     leading `+`, which would make the push refspec a force push.
++   - Resolve the push remote. Use the remote the user names. Otherwise
++     `<remote>` is the one remote whose fetch URL and every push URL
++     (`git remote -v`) name the resolved organization, project, and repository
++     in one of the accepted remote URL shapes from the common context, after
++     decoding percent-encoding (`My%20Project` is `My Project`) and ignoring
++     letter case, the `user@` part, and a trailing `.git` or `/`. Stop and
++     report the candidates when more than one remote matches. When none
++     matches, as with an SSH host alias, stop and ask the user to name the
++     remote.
+ 3. Inspect local state:
+    - `git status --short --branch`
+    - `git diff --stat`
+@@ -59,16 +71,17 @@ Still stop and ask before:
+    - Use the `git-commit` skill.
+    - Stage only files belonging to the requested work.
+ 7. Push the branch.
+-   - `<remote>` is the Azure DevOps remote resolved in step 2. The PR base
+-     branch is the existing PR's target, otherwise the target
++   - `<remote>` is the push remote resolved in step 2. The PR base branch
++     is the existing PR's target, otherwise the target
+      `azure-devops-pr-create` uses: the default branch unless the user
+      specifies another target.
+-   - Read the upstream with `git config --get branch.<branch>.remote` and
+-     `git config --get branch.<branch>.merge`; no output means no upstream.
++   - Read the upstream with `git config --get-all branch.<branch>.remote` and
++     `git config --get-all branch.<branch>.merge`; no output means no upstream,
++     and more than one value for either key means stop and report.
+    - Continue when there is no upstream, the same branch name on `<remote>`, or
+-     the PR base branch, local or remote-tracking. Stop and report any other
+-     upstream, such as a differently named branch or another remote; it may
+-     back an existing PR.
++     the PR base branch, either local (remote `.`) or remote-tracking. Stop and
++     report any other upstream, such as a differently named branch or another
++     remote; it may back an existing PR.
+    - Push with `git push -u <remote> <branch>:refs/heads/<branch>`. The
+      explicit refspec keeps a base upstream or `push.default=upstream` from
+      sending the branch to the base. This sets the upstream for the same branch
+diff --git a/skills/local/azure-devops-work-item-start/SKILL.md b/skills/local/azure-devops-work-item-start/SKILL.md
+index 25c6579..5b7c43a 100644
+--- a/skills/local/azure-devops-work-item-start/SKILL.md
++++ b/skills/local/azure-devops-work-item-start/SKILL.md
+@@ -108,9 +108,10 @@ Use available worktree tools or Git directly; no separate worktree skill is requ
+    `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path
+    and branch; a detached workspace needs a dedicated Work Item branch before
+    implementation. Read the upstream with
+-   `git config --get branch.<branch>.remote` and
+-   `git config --get branch.<branch>.merge`, which work without a
+-   remote-tracking ref; no output means no upstream. Keep no upstream or the
++   `git config --get-all branch.<branch>.remote` and
++   `git config --get-all branch.<branch>.merge`, which work without a
++   remote-tracking ref; no output means no upstream, and more than one value
++   for either key means stop and report. Keep no upstream or the
+    same-named branch on the publication remote; publication sets it on first
+    push. If the upstream is the base or its local branch (remote `.`), remove
+    it with
+diff --git a/skills/local/beads-issue-worktree/SKILL.md b/skills/local/beads-issue-worktree/SKILL.md
+index 2a9cfa1..0407987 100644
+--- a/skills/local/beads-issue-worktree/SKILL.md
++++ b/skills/local/beads-issue-worktree/SKILL.md
+@@ -40,7 +40,7 @@ Use Beads or Git directly; no separate worktree skill is required.
+ 2. Resolve the base from the user's request or repository convention. Otherwise inspect the default branch and local branch state, asking only if the intended base remains ambiguous. Do not assume a local ref is current or silently branch from another bead's branch. Record the chosen base ref and commit.
+ 3. Choose the path by user preference, then repository instructions or an established worktree directory, then `.worktrees/<bead-id>-<slug>`. Check path and branch collisions without overwriting or repurposing another bead's workspace.
+ 4. Before project-local creation, verify the actual target path with `git check-ignore`. Resolve missing ignore configuration under repository change and approval rules before creation; do not automatically commit that change. External locations do not need this check.
+-5. Follow applicable approval rules, honoring existing authorization for this bead's worktree. Prefer `bd worktree create` when it supports the required base, branch, and path; consult installed CLI help for supported options. Otherwise use `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path and dedicated bead branch before implementation. Verify the upstream on either path: read it with `git config --get branch.<branch>.remote` and `git config --get branch.<branch>.merge`, which work without a remote-tracking ref; no output means no upstream. Keep no upstream or the same-named branch on the publication remote; publication sets it on first push. If the upstream is the base or its local branch (remote `.`), remove it with `git branch --unset-upstream <branch>`. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
++5. Follow applicable approval rules, honoring existing authorization for this bead's worktree. Prefer `bd worktree create` when it supports the required base, branch, and path; consult installed CLI help for supported options. Otherwise use `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path and dedicated bead branch before implementation. Verify the upstream on either path: read it with `git config --get-all branch.<branch>.remote` and `git config --get-all branch.<branch>.merge`, which work without a remote-tracking ref; no output means no upstream, and more than one value for either key means stop and report. Keep no upstream or the same-named branch on the publication remote; publication sets it on first push. If the upstream is the base or its local branch (remote `.`), remove it with `git branch --unset-upstream <branch>`. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
+ 6. Read instructions in the selected worktree and run its documented setup. Use `repo-execution-context` if commands are unclear; do not infer install commands solely from manifest filenames. Restore dependencies only as repository rules permit, without modifying manifests or lockfiles.
+ 
+ If creation fails, diagnose and report it; do not silently implement in the
+diff --git a/skills/local/github-issue-start/SKILL.md b/skills/local/github-issue-start/SKILL.md
+index f9754de..4118c8a 100644
+--- a/skills/local/github-issue-start/SKILL.md
++++ b/skills/local/github-issue-start/SKILL.md
+@@ -53,7 +53,7 @@ worktree skill is required.
+ 2. Resolve the base, and for a new workspace its starting commit, from the user's requested base or the repository's documented convention. If neither identifies a base, inspect the default branch and local branch state; ask only if the intended base remains ambiguous. Do not silently branch from another issue's branch or assume a local ref is current. Record the chosen base ref and commit.
+ 3. Prefer an available native worktree tool when it supports the required base and dedicated issue branch; otherwise plan to use Git directly. For manual creation, choose the location by explicit user preference, then repository instructions or an established worktree directory, then `.worktrees/` at the repository root. Check for path and branch collisions; do not overwrite, force checkout, or repurpose another issue's workspace.
+ 4. Before creating a project-local worktree, verify the actual target path is ignored with `git check-ignore`. If it is not, resolve the ignore configuration under the repository's change and approval rules before creation. Do not automatically commit an ignore change. External worktree locations do not need this check.
+-5. Follow applicable approval rules, honoring authorization already given for this issue's worktree, then create it with the selected tool or `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path and branch; a detached workspace still needs an issue branch before implementation. Read the upstream with `git config --get branch.<branch>.remote` and `git config --get branch.<branch>.merge`, which work without a remote-tracking ref; no output means no upstream. Keep no upstream or the same-named branch on the publication remote; publication sets it on first push. If the upstream is the base or its local branch (remote `.`), remove it with `git branch --unset-upstream <branch>`. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
++5. Follow applicable approval rules, honoring authorization already given for this issue's worktree, then create it with the selected tool or `git worktree add --no-track -b <branch> <path> <base>`. Verify the resulting path and branch; a detached workspace still needs an issue branch before implementation. Read the upstream with `git config --get-all branch.<branch>.remote` and `git config --get-all branch.<branch>.merge`, which work without a remote-tracking ref; no output means no upstream, and more than one value for either key means stop and report. Keep no upstream or the same-named branch on the publication remote; publication sets it on first push. If the upstream is the base or its local branch (remote `.`), remove it with `git branch --unset-upstream <branch>`. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
+ 6. Read the instructions in the selected worktree and run its documented setup. If commands are unclear, use `repo-execution-context`. Do not infer an install command solely from a manifest filename. Restore dependencies only as permitted by repository rules, using existing manifests and lockfiles without modifying them.
+ 7. Run the smallest relevant documented baseline check before editing. Report the command and result, including existing failures or unavailable checks; do not claim a clean baseline when verification was blocked. Include the worktree path, branch, and base commit in the handoff.
+ 
+diff --git a/skills/local/github-pr-codex-review-cycle/SKILL.md b/skills/local/github-pr-codex-review-cycle/SKILL.md
+index f10dbb9..8bde2ff 100644
+--- a/skills/local/github-pr-codex-review-cycle/SKILL.md
++++ b/skills/local/github-pr-codex-review-cycle/SKILL.md
+@@ -75,7 +75,8 @@ Still stop and ask before:
+      for an older head does not satisfy a review of the current head.
+ 2. Use `github-pr-publish`.
+    - Preserve that skill's verification, staging, commit, push, and PR rules.
+-   - Capture the PR number, PR URL, branch, commit, and verification result.
++   - Capture the PR number, PR URL, branch, push remote, commit, and
++     verification result.
+ 3. Use `github-pr-review-request` with provider `codex` for the resolved PR.
+    - Treat `Codex acknowledged` as acknowledgement only.
+    - Treat `Codex request posted but not acknowledged` as a blocker unless the
+@@ -116,7 +117,18 @@ Still stop and ask before:
+    - Reuse Prepare's successful verification if no relevant files changed after
+      it; otherwise run the smallest relevant verification for the changed files.
+    - Stage only review-follow-up changes.
+-   - Use a normal commit and normal push of the same feature branch.
++   - Stop and report `<branch>` unless it is a **safe branch name**, using only
++     `[A-Za-z0-9/._-]`.
++   - Use a normal commit, then push with
++     `git push <remote> <branch>:refs/heads/<branch>`. `<remote>` is the push
++     remote captured in step 2; on resume without it, read `<remote>` with
++     `git config --get-all branch.<branch>.remote`, which publication set with
++     `-u`, and continue only on exactly one value. Then stop unless that
++     remote's URLs name the PR's head repository
++     (`gh pr view --json headRepository,headRepositoryOwner`), compared as in
++     `github-pr-publish` step 2. The explicit remote and refspec keep
++     `branch.<branch>.pushRemote` or `remote.pushDefault` from sending the
++     fixes away from the PR head.
+    - If verification is unsuccessful or unavailable, stop before commit or push.
+      If verification, commit, or push fails, stop before reply or resolution.
+    - Confirm the fixes are present in the remote PR head and add the published
+diff --git a/skills/local/github-pr-publish/SKILL.md b/skills/local/github-pr-publish/SKILL.md
+index f150685..9fd8cdc 100644
+--- a/skills/local/github-pr-publish/SKILL.md
++++ b/skills/local/github-pr-publish/SKILL.md
+@@ -48,8 +48,10 @@ Still stop and ask before any action outside that narrow scope, including:
+    - For multiple targets, process them sequentially and stop on the first failure.
+ 2. Resolve repository context for each target.
+    - Confirm the target is inside a git repository.
+-   - Resolve the current branch with `git branch --show-current`.
++   - Resolve the current branch with `git branch --show-current`. Stop and report the branch unless it is a **safe branch name**, using only `[A-Za-z0-9/._-]`, before running any command with it. This also refuses a leading `+`, which would make the push refspec a force push.
+    - Resolve the remote repository with `gh repo view --json nameWithOwner,url,defaultBranchRef`.
++   - Resolve the push remote. Use the remote the user names. Otherwise `<remote>` is the one remote whose fetch URL and every push URL (`git remote -v`) name the repository's host and `<owner>/<repo>`, ignoring the scheme, user, letter case, and a trailing `.git` or `/`. Stop and report the candidates when more than one remote matches. When none matches, as with an SSH host alias, stop and ask the user to name the remote.
++   - Without a user-named remote, rule out a fork layout, where `gh repo view` and gh's default repository can name the parent rather than the push target. Look up the parent of the resolved repository and of each other remote's repository with `gh repo view <owner>/<repo> --json parent`. Check every other remote: stop and ask the user to name the remote when its repository is in the resolved repository's fork network (one is the other's parent, or both are forks with the same parent), or when the check cannot finish: any of its fetch or push URLs does not name an `<owner>/<repo>` on the resolved repository's host, such as an SSH host alias or a non-GitHub mirror, or a parent lookup fails, such as for an inaccessible or deleted repository or a network or auth error; a failed lookup is not "no parent".
+    - Stop if the current branch is the default branch.
+ 3. Inspect local state before changing anything.
+    - Run `git status --short --branch`.
+@@ -74,9 +76,9 @@ Still stop and ask before any action outside that narrow scope, including:
+    - Derive the commit message from the implementation diff, issue context, branch name, and current conversation.
+    - Never stage secrets or unrelated local files.
+ 7. Push the branch.
+-   - `<remote>` is the repository remote resolved in step 2. The PR base branch is the existing PR's base, otherwise the base `github-pr-create` uses: the default branch unless the user specifies another base.
+-   - Read the upstream with `git config --get branch.<branch>.remote` and `git config --get branch.<branch>.merge`; no output means no upstream.
+-   - Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, local or remote-tracking. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
++   - `<remote>` is the push remote resolved in step 2. The PR base branch is the existing PR's base, otherwise the base `github-pr-create` uses: the default branch unless the user specifies another base.
++   - Read the upstream with `git config --get-all branch.<branch>.remote` and `git config --get-all branch.<branch>.merge`; no output means no upstream, and more than one value for either key means stop and report.
++   - Continue when there is no upstream, the same branch name on `<remote>`, or the PR base branch, either local (remote `.`) or remote-tracking. Stop and report any other upstream, such as a differently named branch or another remote; it may back an existing PR.
+    - Push with `git push -u <remote> <branch>:refs/heads/<branch>`. The explicit refspec keeps a base upstream or `push.default=upstream` from sending the branch to the base. This sets the upstream for the same branch name; report it when it replaced the PR base branch.
+    - Re-read the upstream; stop and report unless the remote is `<remote>` and the merge ref is `refs/heads/<branch>`.
+    - Do not force push, delete remote branches, or rewrite history.
