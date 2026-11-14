@@ -1311,6 +1311,9 @@ function backupPath(targetPath: string, backupRoot: string, records: BackupRecor
   const backupTarget = path.join(backupRoot, `${backupName}.${timestamp()}.${process.pid}`);
   fs.mkdirSync(backupRoot, { recursive: true });
   movePath(targetPath, backupTarget);
+  // Record the target only after its move succeeds. Rollback removes each
+  // recorded target before restoring it, so a record for a target whose move
+  // failed would delete the user's original.
   records.push({ targetPath, backupPath: backupTarget });
   warn(`Backed up existing skills path to ${backupTarget}`);
 }
@@ -1362,12 +1365,12 @@ function requireNoProjectTargetLinks(projectRoot: string, targets: string[]): vo
   }
 }
 
-function prepareProjectTargets(targets: string[], backupRoot: string): BackupRecord[] {
-  const records: BackupRecord[] = [];
+// Fills the caller's records as each target moves, so the caller can roll
+// back the targets already moved when a later move fails.
+function prepareProjectTargets(targets: string[], backupRoot: string, records: BackupRecord[]): void {
   for (const target of targets) {
     backupPath(target, backupRoot, records);
   }
-  return records;
 }
 
 function rollbackProjectTargets(records: BackupRecord[]): void {
@@ -1501,8 +1504,11 @@ function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: A
   const backupRoot = backupDir.real;
   fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
 
-  const backups = prepareProjectTargets(targets, backupRoot);
+  const backups: BackupRecord[] = [];
+  let prepared = false;
   try {
+    prepareProjectTargets(targets, backupRoot, backups);
+    prepared = true;
     const owners = runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
     for (const agent of agents) {
       requireNoLocalSkillEntries(plan, agentSkillDir(projectRoot, agent), owners.get(agent) ?? new Map(), "project install");
@@ -1512,7 +1518,9 @@ function setupProjectSkills(dotfilesRoot: string, profilesCsv: string, agents: A
     warnReplacedEditedCopies(backups, projectRoot, agents, localNames);
     writeMetadata(plan, path.join(projectRoot, ".agents", "skills-profile.json"));
   } catch (error) {
-    rollbackProjectTargets(backups);
+    // Before installs run, a target recorded without a backup was absent and
+    // setup has not written it, so anything there now is not ours to remove.
+    rollbackProjectTargets(prepared ? backups : backups.filter(record => record.backupPath !== null));
     throw error;
   }
 
