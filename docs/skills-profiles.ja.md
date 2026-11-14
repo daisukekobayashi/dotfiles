@@ -365,13 +365,36 @@ Priority フィールド、Beads では bead の `priority`)だけを持ち、�
 重大度として扱い、どちらもないときは本文から推定して推定と明記します。
 
 `triage-common` は `base` ではなく `github`、`azure-devops`、`beads` の各 profile
-に入れます。これでプロバイダー profile 単体でも triage スキルが動き、profile を
+に入れます。これでプロバイダー profile 単体でも triage スキルが動き
+([単体で動く読み取り系スキル](#単体で動く読み取り系スキル)を参照)、profile を
 組み合わせたときは重複が除かれます。`base` が `mattpocock/skills` から `triage`
 を入れるため、名前は `triage` にしません。レンズを追加するときは、既存のレンズと
 同じ項目を持つ節を `lenses.md` に足し、そこにある有効なレンズの一覧に名前を
-加えます。`setup/test/skills-wiring-profiles.test.mjs` は、各 triage スキルのリンクが
-プロバイダー profile 単体で解決すること、どの triage スキルも共有の順位付けルールを
-書き直していないことを確認します。
+加えます。`setup/test/skills-wiring-profiles.test.mjs` は、どの triage スキルも
+共有の順位付けルールを書き直していないことを確認します。
+
+### 単体で動く読み取り系スキル
+
+各プロバイダー profile の読み取り系スキルは、`base` なしでその profile だけを
+入れても動きます。`github` の `github-issue-triage`、`github-issue-create`、
+`github-issue-review`、`azure-devops` の `azure-devops-work-item-triage`、
+`azure-devops-work-item-create`、`azure-devops-work-item-review`、`beads` の
+`beads-issue-triage`、`beads-issue-create` です。これらは issue や Work Item を
+作ることはあっても push や PR の作成はしないため、[共有スクリプト](#共有スクリプト)
+も `base` の他のスキルも必要としません。
+
+Azure DevOps のスキルは `azure-devops-common/references/context.md` を読みます。
+その target 解決は、受け付ける remote URL の形に合う remote と `az devops` の
+既定値だけを使います。push remote は選びません。push remote を選ぶのは push する
+スキルだけで、`azure-devops-pr-publish` の step 2 にある push target rule に
+従います。
+
+`setup/test/skills-wiring-profiles.test.mjs` は各プロバイダー profile を単体で
+コピーし、これらの各スキルから、すべての Markdown リンクとバッククォートで書いた
+`../<skill>/...` 参照を確認します。参照先はアンカーも含めて存在しなければなりません。
+スキル自身のファイルと他スキルの references はたどります。他のワークフロースキルの
+`SKILL.md` は存在だけを確認し、たどりません。そのリンクはルールの置き場所を示すもので、
+読み取り系スキルが読むものではないためです。
 
 ## Profile Format
 

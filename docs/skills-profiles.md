@@ -384,12 +384,34 @@ the item body and marked inferred.
 
 `triage-common` is listed in the `github`, `azure-devops`, and `beads`
 profiles rather than `base`, so each provider profile alone installs a working
-triage skill; profiles deduplicate it when combined. It is not named `triage`,
+triage skill (see [Standalone Read-Only Skills](#standalone-read-only-skills));
+profiles deduplicate it when combined. It is not named `triage`,
 which `base` installs from `mattpocock/skills`. To add a lens, add one section
 to `lenses.md` with the same fields as the existing lenses and add its name to
 the valid lens list there. `setup/test/skills-wiring-profiles.test.mjs` checks
-that each triage skill's links resolve in its provider profile alone and that
-no triage skill restates the shared ranking rules.
+that no triage skill restates the shared ranking rules.
+
+### Standalone Read-Only Skills
+
+The read-only skills of each provider profile work when that profile is
+installed alone, without `base`: `github-issue-triage`, `github-issue-create`,
+and `github-issue-review` in `github`; `azure-devops-work-item-triage`,
+`azure-devops-work-item-create`, and `azure-devops-work-item-review` in
+`azure-devops`; and `beads-issue-triage` and `beads-issue-create` in `beads`.
+They may create issues or Work Items but never push or open a pull request, so
+they need no [shared script](#shared-scripts) and nothing else from `base`.
+
+The Azure DevOps skills read `azure-devops-common/references/context.md`, whose
+target resolution uses only the remotes in the accepted remote URL shapes and
+the `az devops` defaults. It does not choose a push remote; only a skill that
+pushes does, by the push target rule in `azure-devops-pr-publish` step 2.
+
+`setup/test/skills-wiring-profiles.test.mjs` copies each provider profile alone
+and, from each of these skills, checks every Markdown link and every backtick
+`../<skill>/...` reference: each target must exist, with its anchor. It follows
+the skill's own files and other skills' references; another workflow skill's
+`SKILL.md` is checked to exist but not followed, because that link names where
+a rule lives rather than something the read-only skill reads.
 
 ## Profile Format
 
