@@ -260,6 +260,36 @@ require(runtime);
   });
 }
 
+// Fails, like a file locked by another process on Windows, the move of one
+// project target into the backup. failingTarget is relative to the project,
+// such as ".agents/skills".
+export function runSkillsWithBackupRenameErrorOn(failingTarget, args, fixture, options = {}) {
+  const launcher = `
+const fs = require("node:fs");
+const path = require("node:path");
+const failingSuffix = path.sep + path.normalize(process.argv[1]);
+const runtime = process.argv[2];
+const args = process.argv.slice(3);
+const originalRenameSync = fs.renameSync;
+fs.renameSync = (oldPath, newPath) => {
+  const intoBackup = path.resolve(newPath).split(path.sep).includes("dotfiles-skills-backup");
+  if (intoBackup && path.resolve(oldPath).endsWith(failingSuffix)) {
+    const error = new Error("EPERM: operation not permitted, rename '" + oldPath + "'");
+    error.code = "EPERM";
+    throw error;
+  }
+  return originalRenameSync(oldPath, newPath);
+};
+process.argv = [process.execPath, runtime, ...args];
+require(runtime);
+`;
+  return spawnSync(process.execPath, ["-e", launcher, failingTarget, skillsRuntime, ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: fixture.env,
+    encoding: "utf8",
+  });
+}
+
 export function runSkillsAsWindows(args, fixture, options = {}) {
   const launcher = `
 const runtime = process.argv[1];

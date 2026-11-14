@@ -1168,6 +1168,9 @@ function backupPath(targetPath, backupRoot, records) {
     const backupTarget = path.join(backupRoot, `${backupName}.${timestamp()}.${process.pid}`);
     fs.mkdirSync(backupRoot, { recursive: true });
     movePath(targetPath, backupTarget);
+    // Record the target only after its move succeeds. Rollback removes each
+    // recorded target before restoring it, so a record for a target whose move
+    // failed would delete the user's original.
     records.push({ targetPath, backupPath: backupTarget });
     warn(`Backed up existing skills path to ${backupTarget}`);
 }
@@ -1213,12 +1216,12 @@ function requireNoProjectTargetLinks(projectRoot, targets) {
         }
     }
 }
-function prepareProjectTargets(targets, backupRoot) {
-    const records = [];
+// Fills the caller's records as each target moves, so the caller can roll
+// back the targets already moved when a later move fails.
+function prepareProjectTargets(targets, backupRoot, records) {
     for (const target of targets) {
         backupPath(target, backupRoot, records);
     }
-    return records;
 }
 function rollbackProjectTargets(records) {
     for (const record of records) {
@@ -1343,8 +1346,9 @@ function setupProjectSkills(dotfilesRoot, profilesCsv, agents, dryRun, copy) {
     const npmCacheDir = npmCache ? npmCache.real : "";
     const backupRoot = backupDir.real;
     fs.mkdirSync(path.join(projectRoot, ".agents"), { recursive: true });
-    const backups = prepareProjectTargets(targets, backupRoot);
+    const backups = [];
     try {
+        prepareProjectTargets(targets, backupRoot, backups);
         const owners = runExternalInstalls(stagingBase, projectRoot, plan, agents, npmCacheDir);
         for (const agent of agents) {
             requireNoLocalSkillEntries(plan, agentSkillDir(projectRoot, agent), owners.get(agent) ?? new Map(), "project install");

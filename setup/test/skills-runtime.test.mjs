@@ -11,6 +11,7 @@ import {
   runSkills,
   runSkillsWithSymlinkError,
   runSkillsWithCrossDeviceBackupRenameError,
+  runSkillsWithBackupRenameErrorOn,
   readText,
   createClaudeEnvironment,
   privateSkillsBase,
@@ -696,6 +697,37 @@ exit 42
     assert.equal(existsSync(`${fixture.log}.exdev`), true, "backup moves should take the cross-device path");
     assert.doesNotMatch(result.stderr, /EXDEV/);
     assert.match(await readText(fixture.log), /skills add anthropics\/skills/);
+    assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "old-lock\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), "old-profile\n");
+    assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
+    assert.equal(await readText(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md")), "old-claude\n");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope restores targets already backed up when a later backup move fails", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.project, ".agents", "skills", "old-agent"), { recursive: true });
+    await mkdir(path.join(fixture.project, ".claude", "skills", "old-claude"), { recursive: true });
+    await writeFile(path.join(fixture.project, "skills-lock.json"), "old-lock\n");
+    await writeFile(path.join(fixture.project, ".agents", "skills-profile.json"), "old-profile\n");
+    await writeFile(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md"), "old-agent\n");
+    await writeFile(path.join(fixture.project, ".claude", "skills", "old-claude", "SKILL.md"), "old-claude\n");
+
+    // The lockfile and the profile metadata move first; .agents/skills is the third target.
+    const result = runSkillsWithBackupRenameErrorOn(
+      path.join(".agents", "skills"),
+      ["--scope", "project", "--profile", "office", "--agent", "codex", "--agent", "claude-code"],
+      fixture,
+      { cwd: fixture.project },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /EPERM: operation not permitted, rename/);
+    assert.match(result.stderr, /Restored previous project skills/);
+    assert.equal(existsSync(fixture.log), false, "no install should run");
     assert.equal(await readText(path.join(fixture.project, "skills-lock.json")), "old-lock\n");
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills-profile.json")), "old-profile\n");
     assert.equal(await readText(path.join(fixture.project, ".agents", "skills", "old-agent", "SKILL.md")), "old-agent\n");
