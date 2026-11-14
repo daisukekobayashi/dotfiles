@@ -36,9 +36,11 @@ and label mappings belong in `/tmp` or ignored storage.
 
 The `change-adversarial-review` suite is built from defects that real delivery
 review rounds found, plus sound controls. Its `execution` object in
-`evals.json` records how to run it: Claude with `claude-opus-5-5` at effort
-high, three runs per case and condition with a 30-minute limit each, and the
-same command grant for both conditions. Before the runs, check that no Claude
+`evals.json` records how to run it on both agents, Claude and Codex: three runs
+per case and condition with a 30-minute limit each, and the same command grant
+for both conditions. The Claude arm uses `claude-opus-5-5` at effort high, and
+the Codex arm uses the policy of the `change-review` suite's Codex arm,
+described below. For the Claude arm, before the runs, check that no Claude
 settings source other than `claude-settings.json` sets any `sandbox` key or
 permission allow rule, and record the result. Inherited hooks run outside the
 sandbox, so also check that no hook command runs or sources a file in the
