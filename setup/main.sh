@@ -80,6 +80,8 @@ skills args:
                              Required for project scope; defaults to base for user scope
   --agent <name>             Target agent, repeatable or comma-separated
                              Supported: codex, claude-code
+  --copy                     Copy local skills instead of linking them
+                             (project scope only; rerun to refresh copies)
   profile validate           Validate all skills/profiles/*.json files
   profile validate --profile <csv>
                              Validate selected profiles only

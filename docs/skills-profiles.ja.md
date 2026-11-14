@@ -26,6 +26,12 @@ Git リポジトリ内のどこから実行しても、`git rev-parse --show-top
 ~/.dotfiles/setup.sh skills --scope project --profile base,beads
 ~/.dotfiles/setup.sh skills --scope project --profile base,azure-devops
 ~/.dotfiles/setup.sh skills --scope project --profile workbench
+~/.dotfiles/setup.sh skills --scope project --profile base --copy
+```
+
+```powershell
+.\setup.ps1 skills --scope project --profile base
+.\setup.ps1 skills --scope project --profile base -Copy
 ```
 
 Project scope では `--profile` を必須にします。未指定の場合は、暗黙の default を入れずにエラーにします。
@@ -671,7 +677,7 @@ npx skills add <owner/repo> \
 
 setup はこれを project 外の private なステージングディレクトリで実行し、生成された `skills-lock.json` と agent skill ディレクトリを project に移動します。
 
-既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、profile 管理版に置き換えます。ただし、選択されなくなった、または存在しなくなった skill を指す `skills/local` へのリンクと、その未編集の管理コピーは戻さず、backup にだけ残します。編集済みのコピーは warning を出して残します。予約名の既存 entry も他の entry と同様に戻します。予約名で失敗するのは install が生成した entry だけです。Git の dirty state は warning に留め、実行自体は止めません。
+既存の `skills-lock.json` や agent skill directory を置き換える場合は、事前に backup を作り、install に失敗したら復元します。Install が成功した場合は、選択した profile で再作成されなかった既存の agent skill entry を戻します。Profile 管理の skill と同じ名前の entry は、ローカルで編集したコピーであっても profile 管理版に置き換えます。以前の entry は backup にだけ残り、それが編集済みのコピーだった場合は `Replaced locally edited skill copy` の warning で backup 内の entry を示します。ただし、選択されなくなった、または存在しなくなった skill を指す `skills/local` へのリンクと、その未編集の管理コピーは戻さず、backup にだけ残します。それらの skill の編集済みのコピーは warning を出して残します。予約名の既存 entry も他の entry と同様に戻します。予約名で失敗するのは install が生成した entry だけです。Git の dirty state は warning に留め、実行自体は止めません。
 
 どちらの scope でも、`npx skills add` は project や `/tmp` のような共有 temp directory ではなく、実行ごとに作る private directory で実行します。npm cache と project の backup も同じユーザー専用の場所に置きます。Linux では `$XDG_CACHE_HOME` または `~/.cache`、macOS では `$TMPDIR`、Windows では `%TEMP%` です。Cache は `dotfiles-skills-npm-cache/` で、実行をまたいで再利用します。Backup は `dotfiles-skills-backup/<project directory 名>/` に置き、install が成功しても残します。`$TMPDIR` と `%TEMP%` は絶対 path でなければならず、`%TEMP%` は network share (`\\server\share`、またはそれを割り当てた drive letter)、device path、drive のない path (`\Temp`) ではなく local drive 上 (`C:\...` または `\\?\C:\...`) でなければなりません。これらの directory は作成する前にすべて確認するため、止まった場合に新しい directory は残りません。これらの値が条件を満たさない場合、その場所が project 内にある場合 (Windows と、大文字小文字を区別しない macOS の volume では、大文字小文字の違いを無視します)、その場所か上位の directory が他のユーザーの所有か他のユーザーから書き込み可能な場合、その directory が group から書き込み可能で、自分が所有し自分の user-private group (自分の名前を持つ primary group で、`/etc/passwd` と `/etc/group` に他の member がいないもの) に属する directory ではない場合 (macOS では group から書き込み可能な directory はすべて対象)、または project 内の `.agents`、`.claude`、agent skill directory、`skills-lock.json`、`.agents/skills-profile.json` が symbolic link の場合は、リンク先が project の内外どちらでも、リンク切れでも、何も変更せずに止まります。
 
@@ -693,6 +699,12 @@ repo/.claude/skills/<name> -> ~/.dotfiles/skills/local/<name>
 ```
 
 User scope でも、生成した user profile view 内に local skill を symlink します。
+
+Windows で symbolic link の権限がなく Node が project のリンクを作れない場合、setup はリンク全体について UAC 昇格を1回だけ要求します。昇格をキャンセルした場合や昇格できない場合 (Win32 code 5、740、1223、1314)、または昇格後もリンク権限がない場合はコピーに切り替えます。それ以外の昇格の失敗では setup を止め、backup から project を復元します。
+
+`--copy` (`.\setup.ps1` では `-Copy`) を付けると、どの platform でも、リンクや昇格を試さずに最初から project の local skill をコピーとしてインストールします。`--scope project` でのみ使え、user scope では `--copy is supported only for project scope` で失敗します。`.\setup.ps1 skills -Copy` の user scope では、PowerShell 側で user scope のリンクをコピーにします。各実行はその実行のフラグに従います。`--copy` 付きで実行すると既存の project のリンクをコピーに置き換え、その後 `--copy` なしで実行すると再びリンクを作ります。
+
+各コピーは通常のディレクトリで、隣にソースと内容を記録した `.dotfiles-copy-<name>.json` marker を置きます。コピーはソースの編集に追従しないため、更新するには setup を再実行します。選択した他の entry と同様に、コピーも実行ごとに置き換わり、ローカルの編集は backup にだけ残ります。
 
 Target path がすでに存在し、それが dotfiles 管理の symlink ではない場合は、上書きせずエラーにします。local skill は external のインストールより優先しません。インストールが local skill と同じ名前のエントリを生成した場合は `skill entry collision in user staging: <entry> (<source>, local)` または `skill entry collision in project install: <entry> (<source>, local)` で失敗し、user view を入れ替えず、project を復元します。
 

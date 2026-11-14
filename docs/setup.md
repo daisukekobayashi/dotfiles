@@ -64,23 +64,26 @@ Packages are installed with Homebrew from `brew/Brewfile`.
 session unless `SETUP_ALLOW_ELEVATED=1` is set (CI uses this on always-elevated
 runners).
 
-Link creation in `.\setup.ps1 links`, user-scope `skills`, and named `claude`
-environments first uses the current privileges. If symbolic link privileges are
-missing, setup requests UAC elevation once for the link batch. Only link
-installation is retried; package installation, configuration generation and
-credential input stay in the original process with the original user's paths.
-Cancelling or being unable to elevate, or missing link privileges after
-elevation, falls back to copies. Other errors stop setup. Developer Mode allows
+Link creation in `.\setup.ps1 links`, `skills` (user and project scope), and
+named `claude` environments first uses the current privileges. If symbolic link
+privileges are missing, setup requests UAC elevation once for the link batch.
+Only link installation is retried; package installation, configuration
+generation and credential input stay in the original process with the original
+user's paths. Cancelling or being unable to elevate, or missing link privileges
+after elevation, falls back to copies. Other errors stop setup; project-scope
+skills then restore the project from its backup. Developer Mode allows
 unelevated links. To copy from the start:
 
 ```powershell
 .\setup.ps1 links -Copy
 .\setup.ps1 skills -Copy
+.\setup.ps1 skills --scope project --profile base -Copy
 .\setup.ps1 claude --env personal -Copy
 ```
 
 `-Copy` also applies to the links step of `.\setup.ps1 all`; skills supports it
-for user scope. Codex environments generate independent files, so they need no
+for user and project scope (`./setup.sh skills --scope project --copy` on Linux
+and macOS). Codex environments generate independent files, so they need no
 symbolic links or elevation.
 
 Copies do not follow source edits: rerun the corresponding setup command after

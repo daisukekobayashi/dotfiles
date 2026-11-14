@@ -221,8 +221,15 @@ try {
   $shouldWireUserSkills = (Test-IsUserScopeSkillsInvocation -SkillsArguments $SkillsArgs) -or $WireUserSkillLinksOnly
   $selectedAgents = Get-SelectedSkillsAgents -SkillsArguments $SkillsArgs -WireAgentsCsv $WireAgents
 
+  $isProfileCommand = $SkillsArgs.Count -gt 0 -and $SkillsArgs[0] -eq "profile"
+  if ($Copy -and $isProfileCommand) {
+    throw "-Copy is supported only for skills installs (user or project scope)."
+  }
+  # The user link batch below makes user-scope copies; project-scope copies are
+  # made by the Node runtime without attempting links or elevation.
+  $runtimeArgs = @($SkillsArgs)
   if ($Copy -and -not $shouldWireUserSkills) {
-    throw "-Copy is supported only for user-scope skills setup."
+    $runtimeArgs += "--copy"
   }
 
   if ($WireUserSkillLinksOnly) {
@@ -247,7 +254,7 @@ try {
       $Env:SETUP_SKIP_USER_AGENT_SKILL_LINKS = "1"
     }
 
-    & node $skillsRuntime @SkillsArgs
+    & node $skillsRuntime @runtimeArgs
     if ($LASTEXITCODE -ne 0) {
       throw "Setup script failed: $skillsRuntime"
     }

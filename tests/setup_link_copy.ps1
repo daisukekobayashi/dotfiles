@@ -263,6 +263,32 @@ Invoke-Test "project skills retry a single batch and copy definitions for both a
   Assert-True (@(Get-Content (Join-Path $fixture.Root "elevation.log")).Count -eq 1) "project links requested multiple elevations"
 }
 
+Invoke-Test "project skills -Copy copies without link attempts or elevation" {
+  param($fixture)
+  $preload = Join-Path $fixture.Root "reject-symlink.cjs"
+  Write-FixtureFile $preload 'require("node:fs").symlinkSync = () => { throw new Error("UNEXPECTED_SYMLINK_ATTEMPT"); };'
+  Push-Location -LiteralPath $fixture.DotfilesRoot
+  try {
+    $result = Invoke-FixtureSetup $fixture @("skills", "--scope", "project", "--profile", "base", "-Copy") -Elevation "error" -NodeOptions "--require `"$($preload.Replace('\', '/'))`""
+  } finally { Pop-Location }
+  Assert-True ($result.ExitCode -eq 0) $result.Output
+  foreach ($agent in @(".agents", ".claude")) {
+    $entry = Join-Path $fixture.DotfilesRoot "$agent/skills/local-one"
+    Assert-True ((Get-Content -Raw (Join-Path $entry "SKILL.md")).Trim() -eq "local skill") "project skill was not copied for $agent"
+    Assert-True (-not ((Get-Item $entry).Attributes -band [IO.FileAttributes]::ReparsePoint)) "project skill is a link for $agent"
+    $marker = Get-Content -Raw (Join-Path $fixture.DotfilesRoot "$agent/skills/.dotfiles-copy-local-one.json") | ConvertFrom-Json
+    Assert-True ($marker.version -eq 1) "copy marker is missing for $agent"
+  }
+  Assert-True (-not (Test-Path (Join-Path $fixture.Root "elevation.log"))) "project -Copy requested elevation"
+}
+
+Invoke-Test "skills profile validate rejects -Copy" {
+  param($fixture)
+  $result = Invoke-FixtureSetup $fixture @("skills", "profile", "validate", "-Copy")
+  Assert-True ($result.ExitCode -ne 0) "profile validate accepted -Copy"
+  Assert-True ($result.Output -match "-Copy is supported only for skills installs") $result.Output
+}
+
 Invoke-Test "unrelated elevated failures stop without copying" {
   param($fixture)
   $result = Invoke-FixtureSetup $fixture @("links") -Elevation "error"
