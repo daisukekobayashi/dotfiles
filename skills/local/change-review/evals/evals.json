@@ -4,7 +4,7 @@
   "execution": {
     "runs_per_condition": 3,
     "run_timeout_minutes": 30,
-    "comparison": "Baseline: with-skill (the current skill) and without-skill, both agents. Revision: with-skill only, compared with the baseline with-skill runs of the same agent; rerun the old snapshot with --skill-source when the model or CLI version differs from the baseline.",
+    "comparison": "Run only the real-defect cases, ids 5 to 12; the synthetic cases 1 to 4 stay in the suite but are not run. Baseline: with-skill only (the current skill), both agents. Revision: with-skill only, compared with the baseline runs of the same agent; rerun the old snapshot with --skill-source when the model or CLI version differs from the baseline.",
     "agents": {
       "claude": {
         "model": "claude-opus-5-5",
