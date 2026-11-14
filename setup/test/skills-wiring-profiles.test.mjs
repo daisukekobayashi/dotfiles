@@ -17,6 +17,7 @@ const githubLocalSkills = [
   "github-issue-create",
   "github-issue-review",
   "github-issue-triage",
+  "triage-common",
   "github-issue-start",
   "github-issue-delivery",
   "github-worktree-cleanup",
@@ -33,6 +34,7 @@ const azureDevOpsLocalSkills = [
   "azure-devops-work-item-create",
   "azure-devops-work-item-review",
   "azure-devops-work-item-triage",
+  "triage-common",
   "azure-devops-work-item-start",
   "azure-devops-work-item-delivery",
   "azure-devops-pr-create",
@@ -57,6 +59,7 @@ const baseLocalSkills = [
 const beadsLocalSkills = [
   "beads-issue-create",
   "beads-issue-triage",
+  "triage-common",
   "beads-issue-worktree",
   "beads-merge-cleanup",
 ];
@@ -271,5 +274,89 @@ test("every shared delivery-common script link resolves and runs in copied base 
     assert.ok(linked.has("check-cleanup-targets.mjs"), "no skill links the shared cleanup target check");
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+const triageSkills = [
+  ["github", "github-issue-triage"],
+  ["azure-devops", "azure-devops-work-item-triage"],
+  ["beads", "beads-issue-triage"],
+];
+const lensesLink = "../triage-common/references/lenses.md";
+
+function markdownAnchors(content) {
+  return new Set(
+    [...content.matchAll(/^#{1,6} (.+)$/gm)].map(([, heading]) =>
+      heading.trim().toLowerCase().replace(/[^a-z0-9 -]/g, "").replace(/ /g, "-"),
+    ),
+  );
+}
+
+test("triage references resolve in each copied provider profile without base", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "triage-profile-test."));
+  try {
+    for (const [provider, triage] of triageSkills) {
+      const profile = await readRepoProfile(provider);
+      assert.equal(profile.local.includes("triage-common"), true, `${provider}: triage-common missing`);
+      const skillsDir = path.join(root, provider, "skills");
+      await mkdir(skillsDir, { recursive: true });
+      for (const name of profile.local) {
+        await cp(path.join(repoRoot, "skills", "local", name), path.join(skillsDir, name), {
+          recursive: true,
+        });
+      }
+
+      const pending = [path.join(skillsDir, triage, "SKILL.md")];
+      const visited = new Set();
+      while (pending.length > 0) {
+        const file = pending.pop();
+        if (visited.has(file)) continue;
+        visited.add(file);
+        const content = await readText(file);
+        for (const [, target] of content.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+          if (/^[a-z][a-z\d+.-]*:/i.test(target)) continue;
+          const [relative, anchor] = target.split("#");
+          const resolved = relative ? path.resolve(path.dirname(file), relative) : file;
+          assert.equal(resolved.startsWith(skillsDir + path.sep), true, `${file}: ${target}`);
+          assert.equal(existsSync(resolved), true, `${file}: missing copied reference ${target}`);
+          if (!resolved.endsWith(".md")) continue;
+          if (anchor) {
+            assert.equal(markdownAnchors(await readText(resolved)).has(anchor), true, `${file}: missing anchor ${target}`);
+          }
+          pending.push(resolved);
+        }
+      }
+      assert.equal(visited.has(path.join(skillsDir, "triage-common", "references", "lenses.md")), true, `${triage}: lenses not linked`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("triage skills rank through the shared lenses without restating them", async () => {
+  const lenses = await readText(path.join(repoRoot, "skills", "local", "triage-common", "references", "lenses.md"));
+  const valid = lenses.match(/Valid lenses: (.+), matched exactly/)[1].match(/`([a-z]+)`/g).map((name) => name.slice(1, -1));
+  assert.deepEqual(valid, ["deliver", "stabilize"]);
+  assert.match(lenses, /- No `lens=` argument: use `deliver`\./);
+  assert.match(lenses, /`Unknown lens: <value>\. Valid lenses: deliver, stabilize\.`/);
+  for (const name of valid) {
+    const section = lenses.split(`\n## Lens: ${name}\n`)[1]?.split("\n## ")[0];
+    assert.ok(section, `missing lens section ${name}`);
+    for (const field of ["**Basis.**", "**Prefers**", "**Defers:**", "**Report basis:**"]) {
+      assert.equal(section.includes(field), true, `${name}: missing ${field}`);
+    }
+  }
+
+  for (const [, triage] of triageSkills) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", triage, "SKILL.md"));
+    assert.match(skill, new RegExp(`\\[Triage Lenses\\]\\(${lensesLink.replace(/\./g, "\\.")}#choose-the-lens\\)`), triage);
+    assert.match(skill, new RegExp(`under the lens,? following\\s+\\[Rank\\]\\(${lensesLink.replace(/\./g, "\\.")}#rank\\)`), triage);
+    assert.match(skill, /\*\*Current State\*\*\n- Lens: <lens>\n- Basis: <the lens's report basis>\n/, triage);
+    assert.match(skill, /If product intent or the lens basis is unclear/, triage);
+    assert.doesNotMatch(
+      skill,
+      /unblock later work|Prefer unblocking work|moderate blast radius|thin vertical|Deferred foundation|Valid lenses|policy-setting/,
+      `${triage} restates ranking rules owned by triage-common`,
+    );
   }
 });

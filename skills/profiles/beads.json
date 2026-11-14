@@ -4,6 +4,7 @@
   "local": [
     "beads-issue-create",
     "beads-issue-triage",
+    "triage-common",
     "beads-issue-worktree",
     "beads-merge-cleanup"
   ]

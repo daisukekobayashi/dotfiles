@@ -11,6 +11,7 @@
     "azure-devops-work-item-create",
     "azure-devops-work-item-review",
     "azure-devops-work-item-triage",
+    "triage-common",
     "azure-devops-work-item-start",
     "azure-devops-work-item-delivery",
     "azure-devops-pr-create",

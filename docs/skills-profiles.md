@@ -353,6 +353,44 @@ remote branch and cleanup continues without it, while `manifest --preview` and
 `compare` stop the cleanup. Any other status means the check could not run and
 stops the cleanup. `tests/check_cleanup_targets.bats` covers the script.
 
+### Triage Lenses
+
+`github-issue-triage`, `azure-devops-work-item-triage`, and
+`beads-issue-triage` rank actionable items by a lens passed at invocation as
+`lens=<name>`: `deliver` (the default) puts core features first without
+undermining long-term foundations, and `stabilize` puts severity, user impact,
+regressions, and release blockers first. The lens is never read from a
+repository document, because a recorded phase goes stale. Any other `lens=`
+value stops the run without ranking.
+
+The lens changes only the rank step. Classification, the parallel waves and
+overlap checks, and the guardrails are the same under every lens. The report's
+`Current State` names the lens and its basis: under `deliver`, the core
+features with their source and the Deferred foundation list; under
+`stabilize`, where severity came from and which severities were inferred.
+
+The shared local skill `triage-common` owns the lens definitions in
+`references/lenses.md`: choosing the lens, the rank order, the tie-breakers
+shared by every lens (alignment with repository guidance, clear acceptance
+criteria, moderate blast radius, deferring broad, ambiguous, high-risk, or
+future-scope work, and trackers as coordination items), each lens's rules, and
+the report lines. How foundation, contract, or policy-setting items rank
+belongs to the lens. Each provider triage skill owns only where it reads the
+signals on its provider, such as labels and milestones on GitHub, the Severity
+and Priority fields on Azure DevOps, and the bead `priority` on Beads, and
+links `triage-common` instead of restating its rules. A priority signal counts
+as severity when no severity signal exists; otherwise severity is inferred from
+the item body and marked inferred.
+
+`triage-common` is listed in the `github`, `azure-devops`, and `beads`
+profiles rather than `base`, so each provider profile alone installs a working
+triage skill; profiles deduplicate it when combined. It is not named `triage`,
+which `base` installs from `mattpocock/skills`. To add a lens, add one section
+to `lenses.md` with the same fields as the existing lenses and add its name to
+the valid lens list there. `setup/test/skills-wiring-profiles.test.mjs` checks
+that each triage skill's links resolve in its provider profile alone and that
+no triage skill restates the shared ranking rules.
+
 ## Profile Format
 
 Profiles are JSON so setup can process them with Node without adding a parser dependency.
@@ -501,6 +539,7 @@ GitHub workflow skills:
 
 - `gh-cli`
 - custom GitHub issue, pull request, AI review, and merge cleanup skills from `skills/local/`
+- `triage-common` for the [triage lenses](#triage-lenses)
 
 GitHub `issue` skills map to Azure DevOps `work-item` skills when using the Azure DevOps provider profile.
 
@@ -510,6 +549,7 @@ Beads workflow skills:
 
 - `beads-issue-create`
 - `beads-issue-triage`
+- `triage-common`
 - `beads-issue-worktree`
 - `beads-merge-cleanup`
 
@@ -555,6 +595,7 @@ Azure DevOps workflow skills:
 - `azure-devops-work-item-create`
 - `azure-devops-work-item-review`
 - `azure-devops-work-item-triage`
+- `triage-common`
 - `azure-devops-work-item-start`
 - `azure-devops-work-item-delivery`
 - `azure-devops-pr-create`

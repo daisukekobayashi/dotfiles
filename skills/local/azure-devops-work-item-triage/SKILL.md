@@ -14,6 +14,10 @@ read-only and does not start implementation.
 Read `../azure-devops-common/references/context.md` before querying Azure
 DevOps.
 
+Ranking follows a lens given as `lens=<name>`, `deliver` by default. Choose it
+under [Triage Lenses](../triage-common/references/lenses.md#choose-the-lens)
+before step 1.
+
 ## Workflow
 
 1. Resolve the current Azure DevOps organization, project, repository, branch,
@@ -24,7 +28,9 @@ DevOps.
 2. Fetch candidate Work Items.
    - Prefer repository or project guidance when it defines the query.
    - Otherwise use `az boards query --wiql` for active, relevant Work Items in
-     the current project.
+     the current project, selecting `System.Tags`, `System.IterationPath`,
+     `Microsoft.VSTS.Common.Severity`, and `Microsoft.VSTS.Common.Priority`
+     with the other fields.
    - For plausible candidates, fetch details and relations with
      `az boards work-item show --id <id> --expand relations`.
    - Collect dependencies from `Predecessor` relations and from
@@ -48,12 +54,13 @@ DevOps.
    - future-scope or out-of-scope work
    - duplicate or already represented by an open PR
    - already in progress in another local worktree
-6. Rank actionable Work Items.
-   - Prefer unblocking work, especially precursor items that settle a contract
-     for several blocked items, plus clear acceptance criteria, moderate blast
-     radius, and alignment with repository guidance.
-   - Defer ambiguous, broad, high-risk, or policy-setting items unless they are
-     explicitly the priority.
+6. Rank actionable Work Items under the lens, following
+   [Rank](../triage-common/references/lenses.md#rank).
+   - Read tags, iteration paths, and parent Epics or Features as core feature
+     sources, alongside the docs from step 4.
+   - Read severity from `Microsoft.VSTS.Common.Severity`, then priority from
+     `Microsoft.VSTS.Common.Priority`; read regressions and release blockers
+     from tags, iteration paths, and the description.
 7. Identify safe parallel candidates.
    - Build the current wave: actionable Work Items with no incomplete
      blockers.
@@ -74,6 +81,8 @@ DevOps.
 
 ```markdown
 **Current State**
+- Lens: <lens>
+- Basis: <the lens's report basis>
 - Candidate Work Items: <count>
 - Open PRs: <count>
 - Active worktrees: <count, mapped Work Items>
@@ -100,3 +109,5 @@ DevOps.
 - Do not edit files.
 - Do not mutate Work Items.
 - If Azure DevOps auth or network access blocks reads, report the blocker and stop.
+- If product intent or the lens basis is unclear after reading local docs and
+  Work Item descriptions, ask a focused question before ranking.

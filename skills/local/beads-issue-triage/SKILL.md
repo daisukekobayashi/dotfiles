@@ -11,6 +11,8 @@ Use this skill to recommend which Beads issue to handle next, which issues are b
 
 Use `bd` as the source of truth. Do not create markdown TODO files for work tracking when Beads is available.
 
+Ranking follows a lens given as `lens=<name>`, `deliver` by default. Choose it under [Triage Lenses](../triage-common/references/lenses.md#choose-the-lens) before step 1.
+
 ## Workflow
 
 1. Resolve the current Beads workspace.
@@ -32,10 +34,9 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
    - If a `Blocked by` section names a blocker that `bd` does not record, treat the bead as blocked and note the disagreement.
    - already in progress or claimed, or in progress in another local worktree
    - future-scope, out-of-scope, duplicate, or ambiguous work
-5. Rank actionable issues.
-   - Prefer issues that unblock later work, especially precursor issues that settle a contract for several blocked issues.
-   - Prefer clear acceptance criteria, moderate blast radius, and alignment with repository guidance.
-   - Defer broad, ambiguous, high-risk, or policy-setting issues unless explicitly prioritized.
+5. Rank actionable issues under the lens, following [Rank](../triage-common/references/lenses.md#rank).
+   - Read labels and parent epics as core feature sources, alongside the docs from step 3.
+   - Read severity from severity-like labels, then priority from the bead's `priority`; read regressions and release blockers from labels, the issue type, and the description.
 6. Identify safe parallel candidates.
    - Build the current wave: actionable ready issues with no open blockers.
    - Within the current wave, group issues as parallel only when their touched areas do not overlap, including shared resources such as schemas, config, migrations, lockfiles, or public interfaces.
@@ -52,6 +53,8 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
 
 ```markdown
 **Current State**
+- Lens: <lens>
+- Basis: <the lens's report basis>
 - Ready issues: <count>
 - Open issues: <count>
 - Active worktrees: <count, mapped beads>
@@ -79,4 +82,4 @@ Use `bd` as the source of truth. Do not create markdown TODO files for work trac
 - Do not create, close, claim, assign, delete, or mutate Beads issues.
 - Do not recommend blocked, closed, parent, or ambiguous issues as direct implementation work.
 - If `bd` is unavailable or the repository is not a Beads workspace, report the blocker and stop.
-- If product intent is unclear after reading local docs and issue bodies, ask one focused question before ranking.
+- If product intent or the lens basis is unclear after reading local docs and issue bodies, ask one focused question before ranking.

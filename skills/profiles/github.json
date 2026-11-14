@@ -5,6 +5,7 @@
     "github-issue-create",
     "github-issue-review",
     "github-issue-triage",
+    "triage-common",
     "github-issue-start",
     "github-issue-delivery",
     "github-worktree-cleanup",
