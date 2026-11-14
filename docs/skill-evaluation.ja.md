@@ -42,8 +42,9 @@ Claude Code: /evaluate-skill maintain-verification-skill
 
 `change-adversarial-review` の課題は、実際の delivery のレビューで見つかった欠陥と、
 欠陥のない対照から作っています。実行方法は `evals.json` の `execution` に記録します。
-Claude の `claude-opus-5-5`(effort high)で、ケースと条件ごとに3回(各30分まで)実行し、
-両条件に同じコマンド権限を与えます。実行前に、`claude-settings.json` 以外の Claude 設定が
+Claude と Codex の両方で、ケースと条件ごとに3回(各30分まで)実行し、
+両条件に同じコマンド権限を与えます。Claude 側は `claude-opus-5-5`(effort high)で実行し、
+Codex 側は後述の `change-review` の Codex 側と同じ方針で実行します。Claude 側では実行前に、`claude-settings.json` 以外の Claude 設定が
 `sandbox` のキーも許可ルール(`permissions.allow`)も設定していないことを確認して記録します。
 継承した hooks はサンドボックスの外で動くため、ワークスペースや実行の一時ディレクトリの中のファイルを
 実行または読み込む hook コマンドがないことも確認し、hook コマンドを記録します。
