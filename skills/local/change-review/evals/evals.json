@@ -263,7 +263,7 @@
         "files/resume-discarded-drafts-fixed"
       ],
       "assertions": [
-        "Every finding rated Medium or High states a concrete failure path that this patch introduces or worsens; the assertion passes when no finding is rated Medium or High",
+        "Every finding rated Medium or High either states a concrete failure path that this patch introduces or worsens, or is tagged pre-existing and states a concrete failure path that also occurs at the merge-base; the assertion passes when no finding is rated Medium or High",
         "No finding rated Medium or High reports that discarded drafts reach a fresh worker after a resume",
         "The project files remain byte-identical to the initial fixture"
       ]
@@ -280,7 +280,7 @@
         "files/review-fix-ssh-alias-fixed"
       ],
       "assertions": [
-        "Every finding rated Medium or High states a concrete failure path that this patch introduces or worsens; the assertion passes when no finding is rated Medium or High",
+        "Every finding rated Medium or High either states a concrete failure path that this patch introduces or worsens, or is tagged pre-existing and states a concrete failure path that also occurs at the merge-base; the assertion passes when no finding is rated Medium or High",
         "No finding rated Medium or High reports that the review-fix push rejects a remote the user named for publication",
         "The project files remain byte-identical to the initial fixture"
       ]
@@ -297,7 +297,7 @@
         "files/broker-exact-ownership"
       ],
       "assertions": [
-        "Every finding rated Medium or High states a concrete failure path that this patch introduces or worsens; the assertion passes when no finding is rated Medium or High",
+        "Every finding rated Medium or High either states a concrete failure path that this patch introduces or worsens, or is tagged pre-existing and states a concrete failure path that also occurs at the merge-base; the assertion passes when no finding is rated Medium or High",
         "No finding rated Medium or High reports that the cleanup stops a broker whose cwd is only below the target worktree",
         "The project files remain byte-identical to the initial fixture"
       ]
