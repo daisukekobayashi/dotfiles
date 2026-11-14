@@ -339,6 +339,8 @@ test("triage skills rank through the shared lenses without restating them", asyn
   assert.deepEqual(valid, ["deliver", "stabilize"]);
   assert.match(lenses, /- No `lens=` argument: use `deliver`\./);
   assert.match(lenses, /`Unknown lens: <value>\. Valid lenses: deliver, stabilize\.`/);
+  assert.match(lenses, /\*\*Prefers wins:\*\* an item a Prefers rule places keeps that place even when\s+it also matches the lens's Defers/);
+  assert.match(lenses, /4\. Place last the Defers items that no Prefers rule places\./);
   for (const name of valid) {
     const section = lenses.split(`\n## Lens: ${name}\n`)[1]?.split("\n## ")[0];
     assert.ok(section, `missing lens section ${name}`);
@@ -353,6 +355,8 @@ test("triage skills rank through the shared lenses without restating them", asyn
     assert.match(skill, new RegExp(`under the lens,? following\\s+\\[Rank\\]\\(${lensesLink.replace(/\./g, "\\.")}#rank\\)`), triage);
     assert.match(skill, /\*\*Current State\*\*\n- Lens: <lens>\n- Basis: <the lens's report basis>\n/, triage);
     assert.match(skill, /If product intent or the lens basis is unclear/, triage);
+    assert.match(skill, /\n\d\. Classify (?:each open issue|Work Items|candidate issues)/, `${triage} lost its classification step`);
+    assert.match(skill, /- Build the current wave: actionable/, `${triage} lost its parallel wave step`);
     assert.doesNotMatch(
       skill,
       /unblock later work|Prefer unblocking work|moderate blast radius|thin vertical|Deferred foundation|Valid lenses|policy-setting/,

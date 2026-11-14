@@ -27,9 +27,13 @@ The lens comes only from the invocation; repository documents never set it.
 1. Determine the lens's basis under its **Basis** rule. When the rule says to
    ask, ask one focused question and rank only after the answer.
 2. Order actionable items by the lens's **Prefers** rules, in their order.
+   **Prefers wins:** an item a Prefers rule places keeps that place even when
+   it also matches the lens's Defers, such as a foundation item that is a
+   refactor, a bug that blocks the core path, or a feature that is a release
+   blocker.
 3. Among items the lens leaves equal or close, apply the
    [shared tie-breakers](#shared-tie-breakers).
-4. Place the lens's **Defers** items last.
+4. Place last the Defers items that no Prefers rule places.
 
 Each row's `Reason` names the lens rule that placed it.
 
