@@ -113,6 +113,12 @@ Invoke-Test "psmux config explicitly binds prefix split keys" {
   Assert-True ($lastPrefixVIndex -gt $painControlSourceIndex) "prefix v split binding should be kept after plugin sources"
 }
 
+Invoke-Test "psmux config disables the Claude Code teammate pane wrapper" {
+  $configPath = Join-Path $RepoRoot "tmux\psmux.conf"
+  $config = Get-Content -Raw $configPath
+  Assert-True ($config -match '(?m)^set\s+-g\s+claude-code-fix-tty\s+off\s*$') "psmux config should turn off claude-code-fix-tty"
+}
+
 Invoke-Test "Windows links setup wires psmux config to the user profile" {
   $linksScript = Get-Content -Raw (Join-Path $RepoRoot "setup\links.ps1")
   Assert-True ($linksScript -match '\.psmux\.conf') "setup\links.ps1 does not link ~/.psmux.conf"
