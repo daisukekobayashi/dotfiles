@@ -184,6 +184,7 @@ run_picker() {
     FZF_LOG="${FZF_LOG}" \
     FZF_ROWS="${FZF_ROWS}" \
     CODEX_HOME="${CODEX_HOME}" \
+    AZURE_OPENAI_API_KEY="${TEST_AZURE_KEY-test-azure-key}" \
     "${ROOT}/tools/codex/codex-pick" "$@"
 }
 
