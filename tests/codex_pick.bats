@@ -184,6 +184,7 @@ run_picker() {
     FZF_LOG="${FZF_LOG}" \
     FZF_ROWS="${FZF_ROWS}" \
     CODEX_HOME="${CODEX_HOME}" \
+    AZURE_OPENAI_API_KEY="${TEST_AZURE_KEY-test-azure-key}" \
     "${ROOT}/tools/codex/codex-pick" "$@"
 }
 
@@ -217,6 +218,7 @@ run_default_picker() {
     FZF_LOG="${FZF_LOG}" \
     FZF_ROWS="${FZF_ROWS}" \
     CODEX_EXIT_STATUS="${CODEX_EXIT_STATUS:-0}" \
+    AZURE_OPENAI_API_KEY="${TEST_AZURE_KEY-test-azure-key}" \
     "${ROOT}/tools/codex/codex-pick" "$@"
 }
 
@@ -767,4 +769,39 @@ write_env() {
   [ "$status" -eq 0 ]
   [ "$(wc -l < "$FZF_ROWS")" -eq 1 ]
   grep -Fx 'argv=<--profile><gpt-6-luna_max>' "$CODEX_LOG"
+}
+
+@test "Azure launches require the credential variable while OpenAI launches do not" {
+  setup_default_homes
+  setup_openai_home
+  write_env "$AZURE_HOME" azure azure
+  write_env "$OPENAI_HOME" openai openai
+  TEST_AZURE_KEY=""
+  run_default_picker --env azure -p gpt-6_1-sol_max
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"AZURE_OPENAI_API_KEY is not set for $AZURE_HOME"* ]]
+  [[ "$output" == *"codex app-server daemon stop"* ]]
+  [ ! -e "$CODEX_LOG" ]
+  printf 'azure/gpt-6_1-sol_max\n' > "$FZF_CHOICES"
+  run_default_picker
+  [ "$status" -eq 2 ]
+  [ ! -e "$CODEX_LOG" ]
+  run_default_picker --env openai -p gpt-6_1-sol_max
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$OPENAI_HOME" "$CODEX_LOG"
+}
+
+@test "Azure launches check the environment's configured credential variable" {
+  setup_default_homes
+  local lab="$PICKER_HOME/.codex-envs/lab-a"
+  write_env "$lab" lab-a azure
+  jq '.azureProvider = {env_key: "LAB_A_AZURE_KEY"}' "$lab/.dotfiles-env.json" > "$lab/meta.json"
+  mv "$lab/meta.json" "$lab/.dotfiles-env.json"
+  run_default_picker --env lab-a -p gpt-6_1-sol_max
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"LAB_A_AZURE_KEY is not set"* ]]
+  [ ! -e "$CODEX_LOG" ]
+  LAB_A_AZURE_KEY=lab-key TEST_AZURE_KEY="" run_default_picker --env lab-a -p gpt-6_1-sol_max
+  [ "$status" -eq 0 ]
+  grep -Fx "home=$lab" "$CODEX_LOG"
 }

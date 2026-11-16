@@ -774,7 +774,7 @@ test("generated environments launch neutral profiles through the real picker int
   fs.chmodSync(executable, 0o700);
   for (const [envName, home] of [["azure", f.azure], ["openai", f.openai]]) {
     const launched = spawnSync("bash", [path.join(repo, "tools/codex/codex-pick"), "--env", envName, "--profile", profile, "--", "--resume", "two words", ""], {
-      env: { ...f.env, HOME: f.home, CODEX_HOME: path.join(f.home, ".codex"), PATH: `${bin}${path.delimiter}${process.env.PATH}`, LAUNCH_LOG: log },
+      env: { ...f.env, HOME: f.home, CODEX_HOME: path.join(f.home, ".codex"), PATH: `${bin}${path.delimiter}${process.env.PATH}`, LAUNCH_LOG: log, AZURE_OPENAI_API_KEY: "test-azure-key" },
       encoding: "utf8",
     });
     success(launched);

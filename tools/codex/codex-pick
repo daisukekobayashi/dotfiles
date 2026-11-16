@@ -144,6 +144,25 @@ require_azure_home() {
   fi
 }
 
+azure_key_env() {
+  local metadata="$1/.dotfiles-env.json" key
+  [[ -f "${metadata}" ]] || metadata="$1/.dotfiles-azure.json"
+  require_command jq
+  key="$(jq -r '.azureProvider.env_key // "AZURE_OPENAI_API_KEY"' "${metadata}" 2>/dev/null)" || key=""
+  [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die 2 "Invalid Azure credential variable in ${metadata}"
+  printf '%s\n' "${key}"
+}
+
+# The Codex app-server daemon keeps the environment of the launch that started
+# it, so a launch without the key would break later launches of the same home.
+require_azure_key() {
+  local key
+  key="$(azure_key_env "$1")" || exit $?
+  if [[ -z "${!key:-}" ]]; then
+    die 2 "${key} is not set for $1. Load it first; if Codex already reported a missing key, also run: CODEX_HOME=\"$1\" codex app-server daemon stop"
+  fi
+}
+
 require_openai_home() {
   if ! is_openai_home "$1"; then
     die 2 "OpenAI home is not ready: $1. Run ./setup.sh codex --provider openai first"
@@ -204,6 +223,7 @@ launch_codex() {
     require_openai_home "${target_home}"
   fi
   if [[ -e "${target_home}/.dotfiles-env.json" ]]; then require_env_home "${target_home}"; fi
+  if is_azure_home "${target_home}"; then require_azure_key "${target_home}"; fi
   exec env CODEX_HOME="${target_home}" CODEX_PICK_ENV="$(env_name_for_home "${target_home}")" codex "$@"
 }
 
