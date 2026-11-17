@@ -59,6 +59,8 @@ function sharedConfig(config) {
         if (Object.keys(config.notice).length === 0)
             delete config.notice;
     }
+    // Generated environments start on the default tier whatever the main home uses.
+    config.service_tier = "default";
     return config;
 }
 function overlay(base, overrides) {

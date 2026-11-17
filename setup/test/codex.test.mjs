@@ -29,6 +29,7 @@ function fixture(t) {
 model_reasoning_effort = "high"
 approval_policy = "on-request"
 sandbox_mode = "workspace-write"
+service_tier = "fast"
 forced_login_method = "chatgpt"
 forced_chatgpt_workspace_id = "main-workspace"
 log_dir = "/main-only/logs"
@@ -106,6 +107,7 @@ test("generates Azure defaults, all profiles and shared assets without altering 
     assert.equal(config.model_providers.azure.requires_openai_auth, false);
     assert.equal(config.model_providers.azure.base_url, baseUrl);
     assert.equal(config.model_providers.azure.query_params["api-version"], apiVersion);
+    assert.equal(config.service_tier, "default");
     assert.equal(config.projects, undefined);
     assert.equal(config.hooks, undefined);
     assert.equal(config.tui.model_availability_nux, undefined);
@@ -515,6 +517,7 @@ test("OpenAI generates API-only built-in profiles and leaves the subscription an
     assert.equal(value.forced_login_method, "api");
     assert.equal(value.cli_auth_credentials_store, "file");
     assert.equal(value.openai_base_url, "https://api.openai.com/v1");
+    assert.equal(value.service_tier, "default");
     assert.equal(value.model_providers, undefined);
     for (const key of ["projects", "hooks", "forced_chatgpt_workspace_id", "log_dir", "sqlite_home"]) assert.equal(value[key], undefined);
     assert.equal(value.tui.model_availability_nux, undefined);
@@ -711,6 +714,7 @@ test("fresh subscription environments isolate login and strip main-home state an
   assert.equal(config.model_provider, "openai");
   assert.equal(config.forced_login_method, "chatgpt");
   assert.equal(config.cli_auth_credentials_store, "file");
+  assert.equal(config.service_tier, "default");
   for (const key of ["model_providers", "openai_base_url", "forced_chatgpt_workspace_id", "projects", "hooks", "log_dir", "sqlite_home"]) assert.equal(config[key], undefined);
   assert.equal(config.tui.model_availability_nux, undefined);
   for (const name of ["auth.json", "sessions", "plugins", "memories"]) assert.equal(fs.existsSync(path.join(home, name)), false);
