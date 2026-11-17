@@ -78,7 +78,7 @@ selection also needs `fzf`.
 | `codex/config.toml` | Common preferences and MCP configuration |
 | `codex/profiles/*.config.toml` | Only `model` and `model_reasoning_effort` |
 | `codex/env-profiles.json` | Initial profile sets and defaults for generated environments |
-| `<home>/config.toml` (generated) | Provider, URL, authentication, and default model/effort |
+| `<home>/config.toml` (generated) | Provider, URL, authentication, and default model/effort; `service_tier` is always `"default"` |
 
 Profiles inherit the connection through Codex's official configuration
 layering. Available models still depend on the selected service and account.
