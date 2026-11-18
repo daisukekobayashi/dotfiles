@@ -11,6 +11,15 @@ elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH="/Users/daisuke/.antigravity/antigravity/bin:$PATH"
 fi
 
+# keyutils: pam_keyinit revokes the SSH login's session keyring on logout,
+# leaving shells inside a surviving tmux server with a dead @s. Give this
+# shell a fresh session keyring in place; new_session must run as a direct
+# child of this shell (not inside $(...)) to replace its keyring.
+if [[ -o interactive && "${unamestr}" == 'Linux' ]] && (( $+commands[keyctl] )) \
+   && [[ "$(LC_ALL=C command keyctl describe @s 2>&1)" == *'Key has been revoked'* ]]; then
+  command keyctl new_session >/dev/null 2>&1
+fi
+
 # SSH agent / key setup
 export SSH_KEY_PATH="$HOME/.ssh/id_ed25519"
 export SSH_FALLBACK_AUTH_SOCK="$HOME/.ssh/ssh_auth_sock"
