@@ -78,3 +78,61 @@ same agent; rerun the old snapshot when the model or CLI version changed.
 layouts and preparation behavior. Those checks do not establish real-model
 effectiveness. Native skill discovery/triggering is a separate check from the
 comparison of supplied instructions.
+
+## Delivery coordinator context
+
+To compare how much context a delivery coordinator uses before and after a
+change to the delivery skills, measure two comparable deliveries (a similar
+number of issues, rounds, and phases) from their Claude Code transcripts,
+`~/.claude*/projects/<project>/<session>.jsonl`. Subagent transcripts are
+separate files, so these numbers cover the coordinator alone.
+
+```bash
+f="$HOME/.claude/projects/PROJECT/SESSION.jsonl"  # replace PROJECT and SESSION
+# Peak context tokens of the coordinator.
+jq -s '[.[] | select(.type=="assistant" and (.isSidechain|not) and .message.usage)
+  | .message.usage | .input_tokens + (.cache_creation_input_tokens//0)
+  + (.cache_read_input_tokens//0)] | max' "$f"
+# Compaction count.
+jq -s '[.[] | select(.type=="system" and .subtype=="compact_boundary")] | length' "$f"
+# Characters by tool: writes cost their input, reads and fetches their result.
+jq -s '[.[] | select(.isSidechain|not)] as $e
+  | ([$e[] | select(.type=="assistant") | .message.content[]? | select(.type=="tool_use")
+      | {key: .id, value: {
+          kind: (if .name=="Bash" then (.input.command
+              | (split("\n")[0]) as $line
+              | "\\btee\\b|(^|[^0-9&>])>>?[ ]*(?!/dev/null|&)[^ ]" as $redirect
+              | if ($line | test("<<[^<]") and (test("\\$\\(|`|\\b(ba)?sh -c") | not)) then "Bash:write"
+                elif test("[\u0027\"`]|\\$\\(|\\b(ba)?sh -c") and test($redirect) then "Bash:ambiguous"
+                elif test($redirect) then "Bash:write"
+                elif test("(^|[;&| ])(cat|sed -n|head|tail) [^|]*\\.md") then "Bash:read-md"
+                elif test("gh issue (view|list)|az boards work-item show") then "Bash:issue-fetch"
+                else "Bash:other" end)
+            else .name end),
+          input: ((.input.command // .input.content // .input.new_string // (.input | tostring)) | length)}}]
+      | from_entries) as $use
+  | [$e[] | select(.type=="user") | .message.content[]? | select(.type=="tool_result")
+      | ($use[.tool_use_id] // {kind: "?", input: 0})
+        + {result: (.content | if type=="string" then length
+            else ([.[]? | .text? // ""] | add // "" | length) end)}]
+  | group_by(.kind) | map({kind: .[0].kind, calls: length,
+      input_chars: (map(.input) | add), result_chars: (map(.result) | add)})
+  | sort_by(-(.input_chars + .result_chars))' "$f"
+```
+
+Also count missed reviews and decisions: a review the tier selected that did
+not run, or a user decision the coordinator acted on without asking. The last
+query is a heuristic for comparing like with like, not a shell parser. It
+counts a heredoc or an unquoted `tee` or redirect as a write before any read.
+A command with a quote, `$(`, a backtick, or `bash -c` or `sh -c` that also has
+a `>` or `tee` anywhere is `Bash:ambiguous`; classify those calls manually.
+Compare `input_chars` for writes and `result_chars` for reads and issue
+fetches.
+
+A delivery-skill change can be checked before such a run with a static
+**chars-read proxy**: for each phase in delivery-common's Phase sections, sum
+the characters of `delivery-common/SKILL.md` and of the listed reference
+sections, each from its `##` heading to the next, adding every section they
+link to by heading anchor, and compare it with the whole files read at the
+base. The proxy measures what the rules direct the coordinator to read, not
+what an agent actually reads.

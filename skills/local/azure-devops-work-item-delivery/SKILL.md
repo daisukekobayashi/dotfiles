@@ -22,7 +22,10 @@ resolving the target. Azure Boards with GitHub repositories and Azure DevOps
 Server need a different workflow; report that boundary rather than choosing an
 Azure Repos target for them.
 
-Read component skills before their phases and call them under
+Read each component skill when its phase starts; after context compaction,
+reread only the section of the current step. Read delivery-common's references
+by its [Phase sections](../delivery-common/SKILL.md#phase-sections).
+Call the component skills under
 [Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
 the exact target is the Work Item, branch, and worktree. An explicit full
 delivery request selects the delegated shared understanding, preflight, local
@@ -54,9 +57,13 @@ cycle.
    the worker.
 3. Follow Worker Dialogue for each item's shared understanding and preflight.
 4. Keep a progress record per item under
-   [Delivery Completion](../delivery-common/references/completion.md), adding
-   the organization, project and repository IDs, the PR ID and source/target
-   refs, the policy and merge state, and the Work Item state.
+   [Delivery Completion](../delivery-common/references/completion.md) with the
+   task key `work-item-<id>`, adding the organization, project and repository
+   IDs, the PR ID and source/target refs, the policy and merge state, and the
+   Work Item state. After `azure-devops-work-item-start`'s initial fetch, read a
+   Work Item only with `az boards work-item show --id <id> --org <org-url>
+   --expand none --fields` for the resolved organization and the fields the
+   step needs, such as `System.State`.
 
 On resume, follow Delivery Completion's Resume with Azure DevOps state. Stop
 and report the recorded branch unless it is a **safe branch name** before
