@@ -25,25 +25,43 @@ before step 1.
    - List other worktrees with `git worktree list --porcelain`, and map each to
      a Work Item ID when its branch or path names one; report the rest as
      unmapped.
-2. Fetch candidate Work Items.
+2. Fetch the overview data.
    - Prefer repository or project guidance when it defines the query.
    - Otherwise use `az boards query --wiql` for active, relevant Work Items in
-     the current project, selecting `System.Tags`, `System.IterationPath`,
+     the current project, selecting `System.State`, `System.WorkItemType`,
+     `System.Tags`, `System.IterationPath`,
      `Microsoft.VSTS.Common.Severity`, and `Microsoft.VSTS.Common.Priority`
      with the other fields.
-   - For plausible candidates, fetch details and relations with
-     `az boards work-item show --id <id> --expand relations`.
-   - Collect dependencies from `Predecessor` relations and from
-     `Blocked by #<id>` lines in the description.
-   - Collect each Work Item's `Touched Areas` section when present.
+   - Read each candidate's relations with
+     `az boards work-item show --id <id> --expand relations --query "relations[?rel=='System.LinkTypes.Dependency-Reverse' || rel=='System.LinkTypes.Hierarchy-Forward' || rel=='System.LinkTypes.Hierarchy-Reverse' || rel=='ArtifactLink'].{rel: rel, url: url, name: attributes.name}"`,
+     which keeps its `Predecessor`, child, and parent links and its artifact
+     links, such as linked pull requests. Take each linked Work Item's state
+     from the query results, or else from
+     `az boards work-item show --id <linked-id> --expand none --fields System.State --query 'fields."System.State"'`.
 3. Fetch open PRs with `az repos pr list`.
-   - For PRs that may overlap with candidates, compare changed files with
-     `git diff --name-only <target>...<source>` when both branches are
-     available as local or remote-tracking refs. Do not fetch or check out
-     branches only for this.
 4. Read local repository guidance such as `AGENTS.md`, `README.md`,
    `docs/*.md`, and roadmap docs when present.
-5. Classify Work Items:
+5. Read details under [Detail Reads](../triage-common/references/detail-reads.md).
+   - Read a band item with
+     `az boards work-item show --id <id> --expand none --fields System.State,System.Description,Microsoft.VSTS.TCM.ReproSteps,Microsoft.VSTS.Common.AcceptanceCriteria,System.CommentCount`,
+     which also returns the type-specific text fields a Work Item type may use
+     instead of the description.
+   - When `System.CommentCount` is above zero, read its comments with
+     `az devops invoke --area wit --resource comments --route-parameters project=<project> workItemId=<id> --api-version 7.1-preview --query "{comments: comments[].{author: createdBy.displayName, createdDate: createdDate, text: text}, next: continuationToken || continuation_token}"`.
+     The token comes from the response body or, through `invoke`, from its
+     header. While `next` is set, repeat with
+     `--query-parameters continuationToken=<token>`. `invoke` accepts only
+     `<major>.<minor>` with an optional `-preview`, never a resource version
+     such as `-preview.4`. If the comments request fails, report that item's
+     comments as unread and keep it in the band.
+   - Collect dependencies from `Predecessor` relations and from
+     `Blocked by #<id>` lines in the description.
+   - Collect each band item's `Touched Areas` section when present.
+   - Once the band is complete, for PRs that may overlap with band items,
+     compare changed files with `git diff --name-only <target>...<source>`
+     when both branches are available as local or remote-tracking refs. Do not
+     fetch or check out branches only for this.
+6. Classify Work Items:
    - parent/tracking item
    - directly actionable implementation item
    - blocked by another Work Item or PR. Treat an item as blocked while any
@@ -54,14 +72,14 @@ before step 1.
    - future-scope or out-of-scope work
    - duplicate or already represented by an open PR
    - already in progress in another local worktree
-6. Rank actionable Work Items under the lens, following
+7. Rank actionable Work Items under the lens, following
    [Rank](../triage-common/references/lenses.md#rank).
    - Read tags, iteration paths, and parent Epics or Features as core feature
      sources, alongside the docs from step 4.
    - Read severity from `Microsoft.VSTS.Common.Severity`, then priority from
      `Microsoft.VSTS.Common.Priority`; read regressions and release blockers
      from tags, iteration paths, and the description.
-7. Identify safe parallel candidates.
+8. Identify safe parallel candidates.
    - Build the current wave: actionable Work Items with no incomplete
      blockers.
    - Within the current wave, group items as parallel only when their touched
@@ -87,6 +105,7 @@ before step 1.
 - Open PRs: <count>
 - Active worktrees: <count, mapped Work Items>
 - Local branch/state: <short note>
+- Detail reads: <Work Items read in full>; list only: <Work Items placed from list data, or "none">
 
 **Recommended Order**
 | Rank | Work Item | Recommendation | Reason |

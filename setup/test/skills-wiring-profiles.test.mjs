@@ -394,3 +394,45 @@ test("triage skills rank through the shared lenses without restating them", asyn
     );
   }
 });
+
+const detailReadsLink = "../triage-common/references/detail-reads.md";
+
+test("triage skills read item text only for the shared detail band", async () => {
+  const detailReads = await readText(path.join(repoRoot, "skills", "local", "triage-common", "references", "detail-reads.md"));
+  assert.match(detailReads, /Before reading any item description, place every open item from:/);
+  assert.match(detailReads, /native blocking and parent-child relationships, each reduced to the related\s+item's ID and state/);
+  assert.match(detailReads, /Read the full text, description and comments, of every item in the \*\*detail\s+band\*\*/);
+  assert.match(detailReads, /- any open item natively blocked by a band item, because a lens can rank a\s+blocker by the work it unblocks;/);
+  assert.match(detailReads, /The band is\s+complete when a pass adds no item\./);
+  assert.match(detailReads, /Whenever a read changes an item's\s+class, severity, or core-path standing, re-place it together with the items\s+that block it/);
+  assert.match(detailReads, /List other current-wave items as unverified for parallel work\./);
+  assert.match(detailReads, /never on how\s+a project writes its item descriptions/);
+
+  const reportLine = /- Local branch\/state: <short note>\n- Detail reads: <[^>]+ read in full>; list only: <[^>]+ placed from list data, or "none">\n/;
+  for (const [, triage] of triageSkills) {
+    const skill = await readText(path.join(repoRoot, "skills", "local", triage, "SKILL.md"));
+    assert.match(skill, new RegExp(`\\n\\d\\. Read details under \\[Detail Reads\\]\\(${detailReadsLink.replace(/\./g, "\\.")}\\)\\.`), triage);
+    assert.match(skill, reportLine, `${triage} lost the detail reads report line`);
+    assert.doesNotMatch(skill, /plausible candidates|each plausible|detail band|adds no item/, `${triage} restates or bypasses the detail-read rules`);
+  }
+
+  const github = await readText(path.join(repoRoot, "skills", "local", "github-issue-triage", "SKILL.md"));
+  assert.match(github, /`gh issue view <number> --json number,state,body,comments --jq '\{number, state, body, comments: \[\.comments\[\] \| \{author: \.author\.login, createdAt, body\}\]\}'`/);
+  for (const api of ["dependencies/blocked_by", "sub_issues"]) {
+    assert.match(
+      github,
+      new RegExp(`\`gh api --hostname <host> --paginate repos/<owner>/<repo>/issues/<number>/${api} --jq '\\.\\[\\] \\| \\{repository: \\(\\.repository_url \\| sub\\("\\^\\.\\*/repos/"; ""\\)\\), number, state\\}'\``),
+      `${api} is not bound to the host, paginated, and reduced to number and state`,
+    );
+  }
+  const azure = await readText(path.join(repoRoot, "skills", "local", "azure-devops-work-item-triage", "SKILL.md"));
+  assert.match(azure, /--expand relations --query "relations\[\?rel=='System\.LinkTypes\.Dependency-Reverse'/);
+  assert.match(azure, /`az boards work-item show --id <id> --expand none --fields System\.State,System\.Description,Microsoft\.VSTS\.TCM\.ReproSteps,Microsoft\.VSTS\.Common\.AcceptanceCriteria,System\.CommentCount`,/);
+  assert.doesNotMatch(azure, /work-item show --id <[a-z-]+> --fields/, "azure --fields without --expand none conflicts with the default expansion");
+  assert.match(azure, /rel=='System\.LinkTypes\.Hierarchy-Reverse' \|\| rel=='ArtifactLink'/);
+  assert.match(azure, /az devops invoke --area wit --resource comments [^`]*--api-version 7\.1-preview --query/);
+  assert.doesNotMatch(azure, /--api-version \d+\.\d+-preview\.\d/, "az devops invoke cannot parse a resource version");
+  const beads = await readText(path.join(repoRoot, "skills", "local", "beads-issue-triage", "SKILL.md"));
+  assert.match(beads, /`bd list --status=open,in_progress,blocked,hooked --brief --json --limit 0`/);
+  assert.match(beads, /`bd show <id> --json --include-comments --brief-deps`/);
+});

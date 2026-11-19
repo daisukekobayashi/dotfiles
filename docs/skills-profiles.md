@@ -391,6 +391,28 @@ to `lenses.md` with the same fields as the existing lenses and add its name to
 the valid lens list there. `setup/test/skills-wiring-profiles.test.mjs` checks
 that no triage skill restates the shared ranking rules.
 
+### Triage Detail Reads
+
+The triage skills place every open item from list data first: list fields,
+native blocking and parent-child relationships reduced to IDs and states, and
+the repository guidance. They read an item's full text, description and
+comments, only for the detail band: the next item, the items that run in
+parallel with it, the next wave, the open items natively blocked by a band
+item, and any item whose placement turns on its text. A detail read that changes
+an item's class, severity, or core-path standing also re-places the items that
+block it, and extends the band down the
+overview order. Parallel groups are named only among band items; other
+current-wave items are listed as unverified for parallel work. The report's
+`Current State` lists the items read in full and the items placed from list
+data, so the user can ask for more detail reads.
+
+The selection uses no description template, so it works for projects that
+write items differently. A dependency or severity written only in the text of
+an item outside the band stays unread, and can change a ranking only through
+that item; the list-only items in the report show where. `triage-common` owns
+these rules in `references/detail-reads.md`, and each provider triage skill
+owns only its fetch commands.
+
 ### Standalone Read-Only Skills
 
 The read-only skills of each provider profile work when that profile is
