@@ -19,6 +19,13 @@ It needs Bash 4.1 or later: older Bash does not fail a test on a non-final
 macOS, install Homebrew bash (`brew install bash`) and put it ahead of the
 system `/bin/bash` 3.2 on `PATH`.
 
+CI runs bats with `--timing` and a JUnit report, and the job summary of each
+Linux and macOS job lists the 10 slowest tests. To time tests locally:
+
+```bash
+bats --timing tests/list_processes.bats
+```
+
 When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
 `tests/powershell.bats` parses every tracked `.ps1` file and runs
 `tests/setup_windows.ps1`, skipping the cases that need Windows APIs.
