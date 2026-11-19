@@ -100,7 +100,8 @@ jq -s '[.[] | select(.isSidechain|not)] as $e
   | ([$e[] | select(.type=="assistant") | .message.content[]? | select(.type=="tool_use")
       | {key: .id, value: {
           kind: (if .name=="Bash" then (.input.command
-              | if test("<<|\\btee\\b|(^|[^0-9&>])>>?[ ]*(?!/dev/null|&)[^ ]") then "Bash:write"
+              | if (gsub("\u0027[^\u0027]*\u0027|\"([^\"\\\\]|\\\\.)*\""; "Q")
+                  | test("<<|\\btee\\b|(^|[^0-9&>])>>?[ ]*(?!/dev/null|&)[^ ]")) then "Bash:write"
                 elif test("(^|[;&| ])(cat|sed -n|head|tail) [^|]*\\.md") then "Bash:read-md"
                 elif test("gh issue (view|list)|az boards work-item show") then "Bash:issue-fetch"
                 else "Bash:other" end)
@@ -118,8 +119,9 @@ jq -s '[.[] | select(.isSidechain|not)] as $e
 
 Also count missed reviews and decisions: a review the tier selected that did
 not run, or a user decision the coordinator acted on without asking. The last
-query classifies heredoc, `tee`, and redirect writes before reads, so compare
-`input_chars` for writes and `result_chars` for reads and issue fetches.
+query classifies heredoc, `tee`, and redirect writes before reads, ignoring `>`
+inside quoted strings, so compare `input_chars` for writes and `result_chars`
+for reads and issue fetches.
 
 A delivery-skill change can be checked before such a run with a static
 **chars-read proxy**: for each phase in delivery-common's Phase sections, sum

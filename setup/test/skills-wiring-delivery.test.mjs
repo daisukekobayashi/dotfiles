@@ -497,7 +497,7 @@ test("delivery-common owns the shared completion policy", async () => {
     /A wait or an unresolved approval stays open/,
     /Mark `Complete` only after acceptance criteria, current verification and reviews, actual merge, task closure, and confirmed local cleanup/,
     /## Resume A turn that continues after context compaction is a resume\. On resume, read the task's `state\.md` first/,
-    /Then reconcile the progress record with the actual local and provider state, including the actual head and each logged external action, before retrying any action; where they differ, the actual state holds\. The calling workflow checks a recorded branch name before any command uses it\./,
+    /Then reconcile the progress record with the actual local and provider state, including the actual head and each logged external action; where they differ, the actual state holds\. For an intent entry without an outcome, .*? The calling workflow checks a recorded branch name before any command uses it\./,
     /Reuse matching worktrees and PRs, and verify the current head before reusing review evidence\. Resume the earliest incomplete phase; a completed PR resumes completion checks rather than publication\./,
     /A progress record is evidence, not authorization\./,
     /compare the PR's current remote source head with the local reviewed head; a successful push or PR creation alone does not establish the match\./,
@@ -907,11 +907,12 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(row("Resume, including after context compaction"), /Delivery Completion: [^;]*Merge confirmation/);
   assert.match(row("Resume, including after context compaction"), /Risk Tier: [^;]*Select the security review/);
   assert.match(row("Report and cleanup"), /Delivery Completion: [^;]*Merge confirmation/);
-  // Hosted findings are assessed during publication.
-  assert.match(row("Publication"), /Local Review: [^;]*Triage classes[^;]*Assess findings/);
+  // Hosted findings are assessed during publication, where the workflow runs a hosted review.
+  assert.match(row("Publication"), /Local Review \(when assessing hosted findings\): [^;]*Triage classes[^;]*Assess findings/);
+  assert.match(row("Merge"), /Risk Tier: [^;]*Recommend human review/);
   for (const [, phase, cell] of rows) {
     for (const group of cell.split("; ")) {
-      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review): (.+)$/);
+      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review)(?: \([^)]+\))?: (.+)$/);
       if (!match) continue;
       const [, name, list] = match;
       if (list === "all") continue;
@@ -930,9 +931,10 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     /an entry that changes an item reuses its id, and the latest entry for an id is current\./,
     /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, reserved for reports/,
     /Until a workflow writes reports there, reports are handed off as before\./,
-    /Right after an external action inside a phase succeeds, such as a posted review request, append an entry with its identifier, round, and the full head SHA it covers\./,
+    /For an external action inside a phase, such as posting a review request, append an intent entry with its target, round, and the full head SHA it covers before the action, and an outcome entry with its identifier after the action succeeds\./,
+    /For an intent entry without an outcome, find the action at the provider for that target and head before any retry: log the one match as its outcome, and otherwise stop and report\./,
     /Keep external text, such as review, issue, or PR content, only quoted or summarized inside an entry, never as an entry header or typed line\./,
-    /including the actual head and each logged external action, before retrying any action/,
+    /including the actual head and each logged external action; where they differ, the actual state holds\./,
     /\[Phase sections\]\(\.\.\/SKILL\.md#phase-sections\)/,
   ]) {
     assert.match(completion, rule, `completion.md: ${rule}`);
@@ -940,7 +942,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
 
   const readRule = "Read each component skill when its phase starts; after context compaction, reread only the section of the current step. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
   const providers = {
-    "github-issue-delivery": [/task key `issue-<number>`/, /log each posted trigger as an external action/, /fetch an issue only with `gh issue view <number> --repo <owner>\/<repo> --json` for the resolved repository and the fields the step needs/],
+    "github-issue-delivery": [/task key `issue-<number>`/, /log each review trigger post as an external action/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
     // Omitting --expand still sends expand=all, which the service rejects together with fields.
     "azure-devops-work-item-delivery": [/task key `work-item-<id>`/, /read a Work Item only with `az boards work-item show --id <id> --org <org-url> --expand none --fields` for the resolved organization and the fields the step needs/],
   };
@@ -949,7 +951,9 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     assert.ok(skill.includes(readRule), `${delivery}: missing the shared component read rule`);
     for (const rule of rules) assert.match(skill, rule, `${delivery}: ${rule}`);
   }
-  // Standalone start keeps the plugin route; every CLI read names the resolved target.
-  assert.match(flat(await read("github-issue-start", "SKILL.md")), /Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <owner>\/<repo> --json number,title,body,state,url`/);
+  // Standalone start keeps the plugin route; every CLI read names the resolved host and target, so GH_HOST or GH_REPO cannot redirect it.
+  const start = flat(await read("github-issue-start", "SKILL.md"));
+  assert.match(start, /Resolve the current repo and its host from local git context/);
+  assert.match(start, /Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <host>\/<owner>\/<repo> --json number,title,body,state,url`/);
   assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once from the organization resolved in step 1 with `az boards work-item show --id <id> --org <org-url> --expand all`/);
 });

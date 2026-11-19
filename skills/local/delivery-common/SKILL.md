@@ -46,8 +46,8 @@ Completion's Bounds whenever a phase stops or stalls.
 | Shared understanding and preflight | Worker Dialogue: Draft and ask, Worker defaults; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Tier procedure |
 | Implementation | Worker Dialogue: Preflight and implementation, Worker defaults |
 | Local reviews and focused follow-up | Local Review: all; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Select the security review, Tier procedure |
-| Publication | Delivery Completion: Decision summary, Before publication, After publication; Local Review: Triage classes, Assess findings, Repeat and advance; Risk Tier: Select the security review, Tier procedure, Recommend human review |
-| Merge | Delivery Completion: Decision summary, After publication, Merge confirmation |
+| Publication | Delivery Completion: Decision summary, Before publication, After publication; Local Review (when assessing hosted findings): Triage classes, Assess findings, Repeat and advance; Risk Tier: Select the security review, Tier procedure, Recommend human review |
+| Merge | Delivery Completion: Decision summary, After publication, Merge confirmation; Risk Tier: Recommend human review |
 | Report and cleanup | Delivery Completion: Merge confirmation, Report and complete, Follow-up candidates |
 | Resume, including after context compaction | Delivery Completion: Progress record, Resume, Merge confirmation; Risk Tier: Select the security review; then the sections of the phase the task's state file names |
 
