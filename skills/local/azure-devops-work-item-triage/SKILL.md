@@ -31,7 +31,11 @@ before step 1.
      the current project, selecting `System.State`, `System.WorkItemType`,
      `System.Tags`, `System.IterationPath`,
      `Microsoft.VSTS.Common.Severity`, and `Microsoft.VSTS.Common.Priority`
-     with the other fields.
+     with the other fields. Filter with
+     `[System.TeamProject] = '<project>'` and the resolved project name, never
+     `@project`: `az boards query` sends the query without a project context,
+     so `@project` matches nothing and returns an empty result without an
+     error.
    - Read each candidate's relations with
      `az boards work-item show --id <id> --expand relations --query "relations[?rel=='System.LinkTypes.Dependency-Reverse' || rel=='System.LinkTypes.Hierarchy-Forward' || rel=='System.LinkTypes.Hierarchy-Reverse' || rel=='ArtifactLink'].{rel: rel, url: url, name: attributes.name}"`,
      which keeps its `Predecessor`, child, and parent links and its artifact
@@ -45,7 +49,10 @@ before step 1.
    - Read a band item with
      `az boards work-item show --id <id> --expand none --fields System.State,System.Description,Microsoft.VSTS.TCM.ReproSteps,Microsoft.VSTS.Common.AcceptanceCriteria,System.CommentCount`,
      which also returns the type-specific text fields a Work Item type may use
-     instead of the description.
+     instead of the description. A field the item's type lacks is left out of
+     the result. If the read fails with `TF51535: Cannot find field`, the
+     process does not define that field; repeat the read without the field it
+     names.
    - When `System.CommentCount` is above zero, read its comments with
      `az devops invoke --area wit --resource comments --route-parameters project=<project> workItemId=<id> --api-version 7.1-preview --query "{comments: comments[].{author: createdBy.displayName, createdDate: createdDate, text: text}, next: continuationToken || continuation_token}"`.
      The token comes from the response body or, through `invoke`, from its
