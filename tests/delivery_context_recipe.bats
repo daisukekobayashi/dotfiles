@@ -115,6 +115,27 @@ assert_kind() {
   assert_kind Bash:ambiguous $'cat <<\'EOF\' > "a b.txt"\nx\nEOF'
 }
 
+@test "delivery-context exempts only descriptor duplication and close after >&" {
+  assert_kind Bash:write 'cat notes.md >&snapshot.md'
+  assert_kind Bash:write 'gh issue view 217 >&issue.json'
+  assert_kind Bash:write 'echo x 2>&err.log'
+  assert_kind Bash:ambiguous 'echo x >&"$log"'
+  assert_kind Bash:read-md 'cat notes.md 2>&1'
+  assert_kind Bash:read-md 'cat notes.md >&2'
+  assert_kind Bash:read-md 'cat notes.md 2>&-'
+  assert_kind Bash:read-md 'cat notes.md >&-;true'
+  assert_kind Bash:read-md 'cat notes.md 3>&1 1>&2 2>&3'
+}
+
+@test "delivery-context classifies a long digit run in linear time" {
+  local digits
+  digits="$(printf '%065536d' 0)"
+  bash_calls "printf ${digits} > out.txt"
+  run --separate-stderr timeout 10 "${script}" "${transcript}"
+  [ "${status}" -eq 0 ]
+  [ "$(jq -r '.tools[0].kind' <<<"${output}")" = Bash:write ]
+}
+
 @test "delivery-context exempts only a complete quoted heredoc delimiter" {
   assert_kind Bash:other 'jq . <<<"$output"'
   assert_kind Bash:ambiguous 'jq . <<<"$output" > out.json'

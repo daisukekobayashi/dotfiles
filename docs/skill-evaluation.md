@@ -124,7 +124,8 @@ parser:
   single- or double-quoted and followed by whitespace or the line end, such as
   `<<'EOF'` or `<<-"END JSON"`, does not count as a quote.
 - A `tee` or a redirect operator anywhere (`N>>`, `N>`, `&>>`, `&>`, `>>`,
-  `>`; not `>&N`) is a write unless its destination word is exactly
+  `>`, including `>&file`; not a descriptor duplication or close such as
+  `>&2` or `2>&-`) is a write unless its destination word is exactly
   `/dev/null`. It is `Bash:write`, or `Bash:ambiguous` when the command has a
   quote, `$(`, a backtick, `bash -c`, or `sh -c` anywhere. A `>` inside a
   string, such as `->`, is counted too.
@@ -133,13 +134,11 @@ parser:
 
 Before comparing two deliveries, check that they are comparable:
 
-- The skills the session loaded match the revision being measured. Count it
-  as verified only with evidence from the session's time: for a linked
-  install, the link target and that checkout's reflog showing its revision at
-  the session start, with no local edits to the skills; for a copied install
-  (`--copy`), an install before the session start of a known revision and no
-  reinstall since. Otherwise report the revision as unverified; today's files
-  do not show what an earlier session loaded.
+- The skills the session loaded match the revision being measured. Report
+  the revision as verified only when it, or a digest of the skill contents,
+  was recorded at the session's time. Otherwise report it as inferred and list
+  the evidence used, such as the link target, the checkout's reflog, or the
+  install time of a copy.
 - Note reads of the skills under change in the task's own worktree, and the
   same file read twice through different paths, such as `.claude/skills` and
   `skills/local`.

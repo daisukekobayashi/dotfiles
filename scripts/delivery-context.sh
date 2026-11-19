@@ -27,15 +27,16 @@ command -v jq >/dev/null 2>&1 || {
 #   backtick, or bash -c / sh -c. A delimiter word that is wholly single- or
 #   double-quoted and followed by whitespace or the line end, such as <<'EOF'
 #   or <<-"END JSON", does not count as a quote.
-# - tee, or a redirect operator anywhere (N>>, N>, &>>, &>, >>, >; not >&N),
-#   unless its destination word is exactly /dev/null: Bash:ambiguous when the
+# - tee, or a redirect operator anywhere (N>>, N>, &>>, &>, >>, >; not a
+#   descriptor duplication or close such as >&2 or 2>&-), unless its
+#   destination word is exactly /dev/null: Bash:ambiguous when the
 #   command has a quote, $(, a backtick, or bash -c / sh -c anywhere,
 #   otherwise Bash:write. Uncertain cases fall toward write or ambiguous.
 # Writes cost their input; reads and fetches cost their result.
 # shellcheck disable=SC2016 # $ and backticks are jq regex text, not expansions.
 jq -s '
   def quoting: test("[\u0027\"`]|\\$\\(|\\b(ba)?sh -c");
-  def redirect: test("\\btee\\b|(?>[0-9]*>>|[0-9]*>|&>>|&>)(?!&)(?>[ \\t]*)(?!/dev/null(?:[\\s;&|()<>]|$))");
+  def redirect: test("\\btee\\b|(?>(?<![0-9])[0-9]*>>|(?<![0-9])[0-9]*>|&>>|&>)(?!&(?:[0-9]+|-)(?:[\\s;&|()<>]|$))(?>[ \\t]*)(?!/dev/null(?:[\\s;&|()<>]|$))");
   def kind:
     (split("\n")[0]
       | gsub("(?<!<)<<(?!<)-?[ \\t]*(?:\u0027[^\u0027]*\u0027|\"[^\"]*\")(?=[ \\t]|$)"; "<<EOF")) as $line
