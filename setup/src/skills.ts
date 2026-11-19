@@ -6,31 +6,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { copyMarker, copyMetadata, parseCopyMarker, planSharedLink, sameSnapshot, snapshot, stageSharedLinks } from "./shared-links";
 import { isReservedSkillName } from "./skill-names";
+import { type Agent, type Scope, type ExternalSkillSource, type SkillsPlan, csv, fail, listProfiles, parseAgents, resolveProfiles } from "./skill-profiles";
+import { exportSkills, parseExportArgs } from "./skills-export";
 import { createPrivateDirs, planPrivateDir, privateSkillsBase as resolvePrivateSkillsBase } from "./private-base";
 
-type Scope = "user" | "project";
-type Agent = "codex" | "claude-code";
 type Action = "install" | "profile-validate";
-
-interface ExternalSkillSource {
-  source: string;
-  skills: string[];
-}
-
-interface LocalSkill {
-  name: string;
-  path: string;
-}
-
-interface SkillsPlan {
-  generatedBy: string;
-  scope: Scope | "validate";
-  requestedProfiles: string[];
-  expandedProfiles: string[];
-  agents: Agent[];
-  external: ExternalSkillSource[];
-  local: LocalSkill[];
-}
 
 interface ParsedArgs {
   action: Action;
@@ -55,10 +35,6 @@ interface SetupContext {
 
 const SUPPORTED_AGENTS = new Set<Agent>(["codex", "claude-code"]);
 
-function fail(message: string): never {
-  throw new Error(message);
-}
-
 function info(message: string): void {
   console.log(message);
 }
@@ -73,37 +49,6 @@ function envFlag(name: string): boolean {
     fail(`${name} must be 0 or 1: ${value}`);
   }
   return value === "1";
-}
-
-function csv(value: string): string[] {
-  if (!value) {
-    return [];
-  }
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function parseAgent(value: string): Agent {
-  const trimmed = value.trim();
-  if (trimmed === "codex" || trimmed === "claude-code") {
-    return trimmed;
-  }
-  fail(`unsupported skills agent: ${trimmed}`);
-}
-
-function parseAgents(values: string[]): Agent[] {
-  const agents: Agent[] = [];
-  for (const value of values) {
-    for (const item of csv(value)) {
-      const agent = parseAgent(item);
-      if (!agents.includes(agent)) {
-        agents.push(agent);
-      }
-    }
-  }
-  return agents;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -265,171 +210,6 @@ function resolveCommand(command: string, env: NodeJS.ProcessEnv = process.env): 
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function readJson(filePath: string): unknown {
-  let raw: string;
-  try {
-    raw = fs.readFileSync(filePath, "utf8");
-  } catch (error) {
-    fail(`failed to read ${filePath}: ${(error as Error).message}`);
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    fail(`failed to parse ${filePath}: ${(error as Error).message}`);
-  }
-}
-
-function ensureArray(value: unknown, filePath: string, key: string): unknown[] {
-  if (value === undefined) {
-    return [];
-  }
-  if (!Array.isArray(value)) {
-    fail(`${filePath}: ${key} must be an array`);
-  }
-  return value;
-}
-
-function getObjectProperty(value: unknown, key: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-  return (value as Record<string, unknown>)[key];
-}
-
-function requireUnreservedSkillName(name: string): void {
-  if (isReservedSkillName(name)) {
-    fail(`Invalid or reserved skill name: ${name}`);
-  }
-}
-
-function profilePath(profileDir: string, name: string): string {
-  return path.join(profileDir, `${name}.json`);
-}
-
-function listProfiles(profileDir: string): string[] {
-  if (!fs.existsSync(profileDir)) {
-    fail(`skills profiles directory not found: ${profileDir}`);
-  }
-  return fs
-    .readdirSync(profileDir)
-    .filter((entry) => entry.endsWith(".json"))
-    .map((entry) => path.basename(entry, ".json"))
-    .sort();
-}
-
-function resolveProfiles(dotfilesRoot: string, requestedProfiles: string[], agents: Agent[], scope: Scope | "validate"): SkillsPlan {
-  const profileDir = path.join(dotfilesRoot, "skills", "profiles");
-  const localDir = path.join(dotfilesRoot, "skills", "local");
-  const expanded: string[] = [];
-  const loaded = new Set<string>();
-  const externalBySource = new Map<string, Set<string>>();
-  const localSkills = new Set<string>();
-
-  function load(name: string, stack: string[]): void {
-    if (loaded.has(name)) {
-      return;
-    }
-    if (stack.includes(name)) {
-      fail(`cyclic profile include: ${stack.concat(name).join(" -> ")}`);
-    }
-
-    const filePath = profilePath(profileDir, name);
-    if (!fs.existsSync(filePath)) {
-      fail(`unknown profile ${name}`);
-    }
-
-    const profile = readJson(filePath);
-    const includes = ensureArray(getObjectProperty(profile, "includes"), filePath, "includes");
-    for (const includeName of includes) {
-      if (typeof includeName !== "string" || includeName.trim() === "") {
-        fail(`${filePath}: includes must contain profile names`);
-      }
-      load(includeName, stack.concat(name));
-    }
-
-    const external = ensureArray(getObjectProperty(profile, "external"), filePath, "external");
-    for (const entry of external) {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        fail(`${filePath}: external entries must be objects`);
-      }
-      const source = (entry as Record<string, unknown>).source;
-      if (typeof source !== "string" || source.trim() === "") {
-        fail(`${filePath}: external entry is missing source`);
-      }
-      const skills = ensureArray((entry as Record<string, unknown>).skills, filePath, "external[].skills");
-      if (skills.length === 0) {
-        fail(`${filePath}: external entry for ${source} has no skills`);
-      }
-      if (!externalBySource.has(source)) {
-        externalBySource.set(source, new Set<string>());
-      }
-      const sourceSkills = externalBySource.get(source);
-      if (!sourceSkills) {
-        fail(`failed to resolve external source ${source}`);
-      }
-      for (const skillName of skills) {
-        if (typeof skillName !== "string" || skillName.trim() === "") {
-          fail(`${filePath}: external skills must contain names`);
-        }
-        requireUnreservedSkillName(skillName);
-        sourceSkills.add(skillName);
-      }
-    }
-
-    const local = ensureArray(getObjectProperty(profile, "local"), filePath, "local");
-    for (const skillName of local) {
-      if (typeof skillName !== "string" || skillName.trim() === "") {
-        fail(`${filePath}: local must contain skill names`);
-      }
-      requireUnreservedSkillName(skillName);
-      const skillPath = path.join(localDir, skillName);
-      if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
-        fail(`unknown local skill ${skillName}`);
-      }
-      localSkills.add(skillName);
-    }
-
-    loaded.add(name);
-    expanded.push(name);
-  }
-
-  for (const profileName of requestedProfiles) {
-    load(profileName, []);
-  }
-
-  const owners = new Map<string, string[]>();
-  for (const [source, skills] of externalBySource) {
-    for (const skillName of skills) {
-      owners.set(skillName, (owners.get(skillName) ?? []).concat(source));
-    }
-  }
-  for (const skillName of localSkills) {
-    owners.set(skillName, (owners.get(skillName) ?? []).concat("local"));
-  }
-  const collisions = Array.from(owners.entries())
-    .filter(([, skillOwners]) => skillOwners.length > 1)
-    .map(([skillName, skillOwners]) => `${skillName} (${skillOwners.join(", ")})`)
-    .sort();
-  if (collisions.length > 0) {
-    fail(`skill name collision: ${collisions.join("; ")}`);
-  }
-
-  return {
-    generatedBy: "dotfiles setup skills",
-    scope,
-    requestedProfiles,
-    expandedProfiles: expanded,
-    agents,
-    external: Array.from(externalBySource.entries())
-      .map(([source, skills]) => ({ source, skills: Array.from(skills).sort() }))
-      .sort((left, right) => left.source.localeCompare(right.source)),
-    local: Array.from(localSkills)
-      .sort()
-      .map((name) => ({ name, path: path.join(localDir, name) })),
-  };
 }
 
 function writeJson(filePath: string, value: unknown): void {
@@ -1540,6 +1320,13 @@ function setupContext(): SetupContext {
 }
 
 function main(argv: string[]): void {
+  if (argv[0] === "export") {
+    const options = parseExportArgs(argv.slice(1));
+    const context = setupContext();
+    exportSkills(options, { dotfilesRoot: context.dotfilesRoot, home: context.home, dryRun: context.dryRun, env: process.env });
+    return;
+  }
+
   const parsed = parseArgs(argv);
   const context = setupContext();
 

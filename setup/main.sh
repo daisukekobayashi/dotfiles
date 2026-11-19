@@ -85,6 +85,11 @@ skills args:
   profile validate           Validate all skills/profiles/*.json files
   profile validate --profile <csv>
                              Validate selected profiles only
+  export --profile <csv> --out <dir>
+                             Write a shareable bundle of the selected skills
+                             and composed rules to <dir>; also takes --agent,
+                             --exclude <csv>, and --force (replaces only a
+                             previous bundle)
 
 Environment:
   SETUP_HOME          Override target home directory (default: $HOME)
@@ -240,6 +245,8 @@ main() {
     skills)
       if [ "$#" -ge 2 ] && [ "$1" = "profile" ] && [ "$2" = "validate" ]; then
         log_info "Validating skills profiles..."
+      elif [ "$#" -ge 1 ] && [ "$1" = "export" ]; then
+        log_info "Exporting skills bundle..."
       else
         log_info "Running skills setup..."
       fi

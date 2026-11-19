@@ -40,6 +40,7 @@ Behavior:
   links/skills/claude: retry link creation elevated when privileges are unavailable, then copy if needed
   -Copy: skip link attempts for links, all, skills (user or project scope) or claude; rerun setup to refresh copies
   skills: runs the shared Node skills setup runtime
+          export --profile <csv> --out <dir> writes a shareable skills bundle (no -Copy)
   codex: accepts --env <name>, --provider azure|openai|chatgpt, --base-url <url>, --api-version <value>,
          --profile <name> and --dry-run (requires Node.js).
          The provider defaults to azure. Legacy --azure-* aliases remain available.
