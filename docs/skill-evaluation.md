@@ -100,25 +100,39 @@ classification with synthetic transcripts.
 
 Also count missed reviews and decisions by hand: a review the tier selected
 that did not run, or a user decision the coordinator acted on without asking.
-Check the reviewers each round's tier selected in the progress record against
-the review reports and log entries, and the decisions it records against the
-transcript's questions to the user.
+Derive what should have happened from the workflow rules and the transcript,
+not from the progress record, which can omit what it missed:
+
+- Expected confirmations: each commit, push, PR creation, merge, cleanup, and
+  issue or PR write the transcript shows, and each worker-listed default or
+  question the coordinator adopted.
+- Expected reviews: each reviewed head and tier selection the transcript
+  shows, with the reviewers the tier procedure selects for it.
+- Reconcile each expected item with the user's answers and own messages
+  before it, and with the review reports for that head. An item with no match
+  is a miss; the progress record only explains a match.
 
 The `Bash` kinds are a heuristic for comparing like with like, not a shell
 parser:
 
 - A heredoc on the first line is `Bash:write`, or `Bash:ambiguous` when that
-  line also has a quote, `$(`, a backtick, `bash -c`, or `sh -c`. A quoted
-  delimiter such as `<<'EOF'` does not count as a quote.
-- A `tee` or a redirect (`>`, `>>`, `N>`, `N>>`, `&>`, `&>>`; not to
-  `/dev/null` or `>&N`) is `Bash:write`, or `Bash:ambiguous` when the command
-  has a quote, `$(`, a backtick, `bash -c`, or `sh -c` anywhere.
+  line also has a quote, `$(`, a backtick, `bash -c`, or `sh -c`. A delimiter
+  word that is wholly single- or double-quoted, such as `<<'EOF'` or
+  `<<-"END JSON"`, does not count as a quote.
+- A `tee` or a whole redirect operator (`>`, `>>`, `N>`, `N>>`, `&>`, `&>>`;
+  not `>&N`) at a token boundary (start, space, tab, `;`, `&`, `|`, a
+  parenthesis or brace, or a quote) is a write unless its destination word is
+  exactly `/dev/null`. It is `Bash:write`, or `Bash:ambiguous` when the
+  command has a quote, `$(`, a backtick, `bash -c`, or `sh -c` anywhere.
 - Writes are checked before reads. Classify `Bash:ambiguous` calls manually.
 
 Before comparing two deliveries, check that they are comparable:
 
-- The installed skills match the base being measured: compare the session
-  start with the reflog of the branch the skills are installed from.
+- The skills the session loaded match the revision being measured. For a
+  linked install, resolve the link target and check which revision that
+  checkout had at the session start; for a copied install (`--copy`),
+  compare the installed files with that revision. A branch reflog alone does
+  not show what a copy contains.
 - Note reads of the skills under change in the task's own worktree, and the
   same file read twice through different paths, such as `.claude/skills` and
   `skills/local`.

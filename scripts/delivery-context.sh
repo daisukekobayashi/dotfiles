@@ -23,19 +23,21 @@ command -v jq >/dev/null 2>&1 || {
 # Classification is a heuristic for comparing like with like, not a shell
 # parser:
 # - The first line has a heredoc: Bash:write, or Bash:ambiguous when the line
-#   also has a quote, $(, a backtick, or bash -c / sh -c (a quoted delimiter
-#   such as <<'EOF' does not count as a quote).
-# - A redirect (>, >>, N>, N>>, &>, &>>; not to /dev/null or >&N) or tee:
-#   Bash:ambiguous when the command has a quote, $(, a backtick, or
-#   bash -c / sh -c anywhere, otherwise Bash:write.
+#   also has a quote, $(, a backtick, or bash -c / sh -c. A delimiter word
+#   that is wholly single- or double-quoted, such as <<'EOF' or <<-"END JSON",
+#   does not count as a quote.
+# - A tee or a redirect operator (>, >>, N>, N>>, &>, &>>; not >&N) at a token
+#   boundary (start, space, tab, ; & | ( ) { } or a quote), whose destination
+#   word is not exactly /dev/null: Bash:ambiguous when the command has a quote,
+#   $(, a backtick, or bash -c / sh -c anywhere, otherwise Bash:write.
 # Writes cost their input; reads and fetches cost their result.
 # shellcheck disable=SC2016 # $ and backticks are jq regex text, not expansions.
 jq -s '
   def quoting: test("[\u0027\"`]|\\$\\(|\\b(ba)?sh -c");
-  def redirect: test("\\btee\\b|(^|[^0-9&>])([0-9]+|&)?>>?[ ]*(?!/dev/null|&)[^ ]");
+  def redirect: test("(?<![^\\s;&|(){}\u0027\"`])(?:tee(?=\\s|$)|(?>[0-9]+>>|[0-9]+>|&>>|&>|>>|>)(?!&)(?>[ \\t]*)(?!/dev/null(?:[\\s;&|()<>]|$))[^\\s;&|()<>])");
   def kind:
     (split("\n")[0]
-      | gsub("<<-?[ ]*(?<q>[\u0027\"])[A-Za-z_][A-Za-z0-9_]*\\k<q>"; "<<EOF")) as $line
+      | gsub("<<-?[ \\t]*(?:\u0027[^\u0027]*\u0027|\"[^\"]*\")"; "<<EOF")) as $line
     | if ($line | test("<<[^<]")) then
         (if ($line | quoting) then "Bash:ambiguous" else "Bash:write" end)
       elif quoting and redirect then "Bash:ambiguous"

@@ -74,6 +74,41 @@ assert_kind() {
   assert_kind Bash:write $'cat <<-"EOF" > a.md\nx\nEOF'
 }
 
+@test "delivery-context matches whole redirect operators at token boundaries" {
+  assert_kind Bash:ambiguous "bash -c 'true&&1>out.txt'"
+  assert_kind Bash:ambiguous "bash -c 'true&&&>out.txt'"
+  assert_kind Bash:write 'true&&1>out.txt'
+  assert_kind Bash:write 'true;2>>err.log echo x'
+  assert_kind Bash:write 'true|tee out.txt'
+  assert_kind Bash:write '(echo x)>out.txt'
+  assert_kind Bash:write $'echo x\t>out.txt'
+  assert_kind Bash:ambiguous 'echo "x">out.txt'
+  assert_kind Bash:other 'git log a->b'
+  assert_kind Bash:other 'git diff x12>y'
+}
+
+@test "delivery-context excludes only an exact /dev/null destination" {
+  assert_kind Bash:read-md 'cat notes.md 2>>/dev/null'
+  assert_kind Bash:read-md 'cat notes.md &>> /dev/null'
+  assert_kind Bash:read-md 'cat notes.md >>/dev/null'
+  assert_kind Bash:read-md $'cat notes.md 2>\t/dev/null'
+  assert_kind Bash:read-md 'cat notes.md 2>/dev/null;true'
+  assert_kind Bash:read-md 'cat notes.md 2>/dev/null|wc -c'
+  assert_kind Bash:issue-fetch 'gh issue view 217 2>>/dev/null'
+  assert_kind Bash:write 'echo x 1>/dev/null-output'
+  assert_kind Bash:write 'echo x >>/dev/nullx'
+  assert_kind Bash:other 'git status 1>&2'
+  assert_kind Bash:other 'git status >>&2'
+}
+
+@test "delivery-context accepts any wholly quoted heredoc delimiter" {
+  assert_kind Bash:write $'cat <<\'END-JSON\' > a.json\n{}\nEND-JSON'
+  assert_kind Bash:write $'cat <<\'123\' > a.txt\nx\n123'
+  assert_kind Bash:write $'cat <<-"END JSON" > a.txt\nx\nEND JSON'
+  assert_kind Bash:write $'cat <<\t\'EOF\' > a.txt\nx\nEOF'
+  assert_kind Bash:ambiguous $'cat <<\'EOF\' > "a b.txt"\nx\nEOF'
+}
+
 @test "delivery-context classifies reads, fetches, and other commands" {
   assert_kind Bash:read-md 'sed -n 1,20p docs/setup.md'
   assert_kind Bash:issue-fetch 'gh issue view 217'
