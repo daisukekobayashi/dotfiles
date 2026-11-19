@@ -128,11 +128,17 @@ assert_kind() {
 }
 
 @test "delivery-context classifies a long digit run in linear time" {
-  local digits
+  local digits start elapsed
   digits="$(printf '%065536d' 0)"
   bash_calls "printf ${digits} > out.txt"
-  run --separate-stderr timeout 10 "${script}" "${transcript}"
+  start="${SECONDS}"
+  run --separate-stderr "${script}" "${transcript}"
+  elapsed=$((SECONDS - start))
   [ "${status}" -eq 0 ]
+  if ((elapsed >= 10)); then
+    printf 'classification took %ss\n' "${elapsed}" >&2
+    return 1
+  fi
   [ "$(jq -r '.tools[0].kind' <<<"${output}")" = Bash:write ]
 }
 
