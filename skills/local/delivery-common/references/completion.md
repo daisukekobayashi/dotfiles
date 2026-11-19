@@ -11,7 +11,9 @@ Classify progress records as temporary and keep them under the records root:
 the main checkout's `.worktrees/delivery-records/`, unless the user's explicit
 preference or a repository instruction names another root. Before the first
 write, check with `git check-ignore` that the root is ignored, and check that
-it lies outside every task worktree; otherwise stop and report. The calling
+it lies outside every task worktree; otherwise stop and report. The root and
+every directory above it must not be writable by another account unless
+sticky, as [Report Handoff](report-handoff.md#report-path) requires. The calling
 workflow supplies each task's key, and the task's files live in
 `<root>/<task-key>/`:
 

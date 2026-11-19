@@ -9,7 +9,13 @@ summaries and opens a report only for the finding it needs to verify.
 
 The caller assigns each report one path. It creates the task's directory and
 each report directory with `mkdir -m 700`, as the current user, before the
-first report in it, so no other user can read or swap them. Reports on
+first report in it, so no other user can read or swap them. A directory that
+already exists, such as one made before this rule, must be its own real path
+and owned by the current user; run `chmod 700` on it and `chmod 600` on the
+reports and logs in it, or stop and report. The records root and every
+directory above it must not be writable by another account unless sticky,
+as the default root under the user's home is; agents running as the same user
+are trusted not to rewrite reports. Reports on
 a head use the layout under Delivery Completion's
 [Progress record](completion.md#progress-record):
 `<root>/<task-key>/<base12>-<head12>/r<round>-<role>-a<attempt>.md`. A worker
@@ -112,14 +118,16 @@ report path and the progress to a log beside it:
 
 ```text
 (umask 077; set -C; node "<plugin-root>/scripts/codex-companion.mjs" task \
-  --fresh --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>.log)
+  --fresh --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>.log) &&
+  node <check-report-handoff.mjs> --kind review --reviewer <skill> --base <base-sha> \
+  --head <head-sha> --round <round> --report <report> --show
 ```
 
 `umask 077` creates both files readable only by the current user, and `set -C`
 makes the redirections fail rather than overwrite an existing file; never
-append under `set -C`. Record the exit status, run the check below with
-`--show` so only the summary is shown, and return that summary. A non-zero exit
-is a failed run.
+append under `set -C`. The check below runs in the same command, so the
+summary shown comes from the bytes it verified; return that summary. A
+non-zero exit is a failed run or an invalid report.
 
 ## Check a handoff
 

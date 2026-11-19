@@ -20,8 +20,11 @@
 //   unknown label appears;
 // - Base, Head, Round, and Report equal the arguments, and the reviewer,
 //   Completion, and Verdict take an allowed value;
-// - a review lists one finding ID per finding in the full report and, for
-//   change-security-review, one SECD ID per deferred candidate;
+// - every label has a value or indented items;
+// - a review's summary Verdict equals the full report's, its findings match
+//   the full report's in order, severity, and tag, and, for
+//   change-security-review, it lists one SECD ID per deferred candidate;
+// - each required Output section has content, and headings start at column 0;
 // - a shared understanding draft has an Overview and a preflight draft a Tier;
 // - with --sha256, the file still has the recorded hash.
 //
@@ -144,7 +147,11 @@ for (const line of summary) {
     invalid(`unexpected summary line ${JSON.stringify(line.slice(0, 80))}`);
   }
 }
-for (const label of LABELS[args.kind]) if (!fields.has(label)) invalid(`missing ${label}`);
+for (const label of LABELS[args.kind]) {
+  if (!fields.has(label)) invalid(`missing ${label}`);
+  const field = fields.get(label);
+  if (!field.value && !field.children.some((child) => child.trim())) invalid(`empty ${label}`);
+}
 const value = (label) => fields.get(label).value;
 const isNone = (field) => (field.value === "None" && field.children.length === 0)
   || (field.value === "" && field.children.length === 1 && /^\s+- None$/.test(field.children[0]));
@@ -153,39 +160,52 @@ for (const [label, expected] of [["Base", args.base], ["Head", args.head], ["Rou
   if (value(label) !== expected) invalid(`${label} is not ${expected}`);
 }
 
-// Bullets of one bold-headed section of the full report.
-const section = (heading) => {
-  const begin = body.findIndex((line) => line.trim() === heading);
+// Lines of one bold-headed section of the full report. A heading starts at
+// column 0, so an indented quote of a heading inside a finding is content.
+const isHeading = (line) => /^\*\*[^*]+\*\*$/.test(line.trimEnd());
+const sectionLines = (heading) => {
+  const begin = body.findIndex((line) => line.trimEnd() === heading);
   if (begin < 0) return [];
   const rest = body.slice(begin + 1);
-  const end = rest.findIndex((line) => /^\*\*[^*]+\*\*$/.test(line.trim()));
-  return (end < 0 ? rest : rest.slice(0, end)).filter((line) => line.startsWith("- "));
+  const end = rest.findIndex(isHeading);
+  return end < 0 ? rest : rest.slice(0, end);
 };
+const section = (heading) => sectionLines(heading).filter((line) => line.startsWith("- "));
+const plain = (text) => text.replaceAll("*", "").trim();
 const ids = (field, pattern) => {
   if (isNone(field)) return [];
   if (field.value) invalid(`list value must be None or indented items: ${JSON.stringify(field.value.slice(0, 80))}`);
-  const seen = new Set();
+  const seen = new Map();
   for (const child of field.children) {
     const match = pattern.exec(child);
     if (!match) invalid(`malformed item ${JSON.stringify(child.trim().slice(0, 80))}`);
     if (seen.has(match[1])) invalid(`duplicate ID ${match[1]}`);
-    seen.add(match[1]);
+    seen.set(match[1], match.slice(1));
   }
-  return [...seen];
+  return [...seen.values()];
 };
 
 if (args.kind === "review") {
   const reviewer = REVIEWERS[args.reviewer];
   for (const heading of reviewer.headings) {
-    if (!body.some((line) => line.trim() === heading)) invalid(`full report lacks ${heading}`);
+    if (!body.some((line) => line.trimEnd() === heading)) invalid(`full report lacks ${heading}`);
+    if (!sectionLines(heading).some((line) => line.trim())) invalid(`full report section ${heading} is empty`);
   }
   if (value("Reviewer") !== args.reviewer && !value("Reviewer").startsWith(`${args.reviewer},`)) invalid(`Reviewer is not ${args.reviewer}`);
   if (value("Completion") !== "complete") invalid("Completion is not complete");
-  if (!reviewer.verdicts.includes(value("Verdict").replaceAll("*", "").trim())) invalid(`Verdict is not one of ${reviewer.verdicts.join(", ")}`);
-  const findingPattern = new RegExp(`^\\s+- (${reviewer.prefix}\\d+) \\[(?:Critical|High|Medium|Low)\\] (?:introduced|worsened|pre-existing) - \\S`);
+  if (!reviewer.verdicts.includes(plain(value("Verdict")))) invalid(`Verdict is not one of ${reviewer.verdicts.join(", ")}`);
+  const bodyVerdict = section("**Verdict**")[0];
+  if (!bodyVerdict || plain(bodyVerdict.slice(2)) !== plain(value("Verdict"))) invalid("summary Verdict differs from the full report");
+  const findingPattern = new RegExp(`^\\s+- (${reviewer.prefix}\\d+) \\[(Critical|High|Medium|Low)\\] (introduced|worsened|pre-existing) - \\S`);
   const findings = ids(fields.get("Findings"), findingPattern);
-  const reported = section(reviewer.findings).filter((line) => /^- (?:\*\*)?\[(?:Critical|High|Medium|Low)\]/.test(line)).length;
-  if (findings.length !== reported) invalid(`summary lists ${findings.length} findings; the full report has ${reported}`);
+  const reported = section(reviewer.findings).filter((line) => /^- (?:\*\*)?\[(?:Critical|High|Medium|Low)\]/.test(line));
+  if (findings.length !== reported.length) invalid(`summary lists ${findings.length} findings; the full report has ${reported.length}`);
+  reported.forEach((line, i) => {
+    const severity = /\[(Critical|High|Medium|Low)\]/.exec(line)[1];
+    const tag = [...line.matchAll(/\b(introduced|worsened|pre-existing)\b/g)].at(-1)?.[1];
+    const [id, summarySeverity, summaryTag] = findings[i];
+    if (severity !== summarySeverity || tag !== summaryTag) invalid(`${id} is [${summarySeverity}] ${summaryTag}; the full report has [${severity}] ${tag ?? "no tag"}`);
+  });
   const deferred = ids(fields.get("Deferred candidates"), /^\s+- (SECD\d+) - \S/);
   const candidates = reviewer.deferred ? section(reviewer.deferred).filter((line) => / [-—] /.test(line)).length : 0;
   if (deferred.length !== candidates) invalid(`summary lists ${deferred.length} deferred candidates; the full report has ${candidates}`);

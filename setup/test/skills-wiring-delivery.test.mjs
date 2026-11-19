@@ -977,11 +977,13 @@ test("review and worker reports hand off through a file and a fixed summary", as
   for (const field of ["Base", "Head", "Completion", "Files changed", "Verification", "Questions", "Defaults chosen", "Blockers", "Report"]) {
     assert.match(section("Worker summary"), new RegExp(`^- ${field}:`, "m"), `worker summary: ${field}`);
   }
-  assert.match(section("Codex route"), /\(umask 077; set -C; node "<plugin-root>\/scripts\/codex-companion\.mjs" task \\\n  --fresh --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>\.log\)\n```/);
+  assert.match(section("Codex route"), /\(umask 077; set -C; node "<plugin-root>\/scripts\/codex-companion\.mjs" task \\\n  --fresh --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>\.log\) &&\n  node <check-report-handoff\.mjs> --kind review/);
   assert.match(section("Codex route"), /never\s+append under `set -C`/);
   assert.match(section("Worker summary"), /^- Tier:/m);
   assert.match(section("Worker summary"), /^- Overview:/m);
   assert.match(section("Report path"), /`mkdir -m 700`/);
+  assert.match(section("Report path"), /already exists[\s\S]*`chmod 700`/);
+  assert.match(section("Report path"), /must not be writable by another account unless sticky/);
   assert.match(section("Codex route"), /Leave `--report` out of the prompt/);
   assert.match(section("Check a handoff"), /\[`check-report-handoff\.mjs`\]\(\.\.\/scripts\/check-report-handoff\.mjs\)/);
   assert.match(section("Check a handoff"), /--sha256 <hex>/);
@@ -1010,6 +1012,7 @@ test("review and worker reports hand off through a file and a fixed summary", as
   const completion = await readText(path.join(references, "completion.md"));
   assert.doesNotMatch(completion, /handed off as before/);
   assert.match(completion, /\[Report Handoff\]\(report-handoff\.md\)/);
+  assert.match(flat(completion), /The root and every directory above it must not be writable by another account unless sticky/);
   for (const start of ["github-issue-start", "azure-devops-work-item-start"]) {
     assert.match(await readText(path.join(local, start, "SKILL.md")),
       /\(\.\.\/delivery-common\/references\/report-handoff\.md#worker-summary\)/, start);
@@ -1017,11 +1020,12 @@ test("review and worker reports hand off through a file and a fixed summary", as
 });
 
 test("check-report-handoff accepts a complete report and rejects incomplete ones", async () => {
-  const { mkdir, mkdtemp, writeFile, chmod, rm } = await import("node:fs/promises");
+  const { mkdir, mkdtemp, realpath, writeFile, chmod, rm } = await import("node:fs/promises");
   const os = await import("node:os");
   const { spawnSync } = await import("node:child_process");
   const script = path.join(repoRoot, "skills", "local", "delivery-common", "scripts", "check-report-handoff.mjs");
-  const root = await mkdtemp(path.join(os.tmpdir(), "report-handoff-test."));
+  // macOS tmpdir is a symlink (/var -> /private/var); the check requires real paths.
+  const root = await mkdtemp(path.join(await realpath(os.tmpdir()), "report-handoff-test."));
   const base = "a".repeat(40);
   const head = "b".repeat(40);
   const reviewBody = [
@@ -1069,7 +1073,8 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       "duplicate head": [report((f) => [...reviewSummary(f), `- Head: ${head}`]), /duplicate label Head/],
       "completion suffix": [report((f) => reviewSummary(f, { Completion: "complete pending" })), /Completion is not complete/],
       partial: [report((f) => reviewSummary(f, { Completion: "partial" })), /Completion is not complete/],
-      "empty verdict": [report((f) => reviewSummary(f, { Verdict: "" })), /Verdict is not one of/],
+      "empty verdict": [report((f) => reviewSummary(f, { Verdict: "" })), /empty Verdict/],
+      "unknown verdict": [report((f) => reviewSummary(f, { Verdict: "Looks fine" })), /Verdict is not one of/],
       "missing reviewer": [report((f) => reviewSummary(f, { Reviewer: undefined })), /missing Reviewer/],
       "other reviewer": [report((f) => reviewSummary(f, { Reviewer: "change-review" })), /Reviewer is not/],
       "dropped finding": [report((f) => reviewSummary(f, { Findings: "None" })), /summary lists 0 findings; the full report has 1/],
@@ -1078,7 +1083,15 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       "unknown label": [report((f) => [...reviewSummary(f), "- Extra: x"]), /unknown label Extra/],
       truncated: [(f) => report((g) => reviewSummary(g))(f).slice(0, -1), /truncated/],
       "no summary": [() => reviewBody, /no summary/],
-      "body only verdict": [(f) => ["**Verdict**", "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /full report lacks/],
+      "body only verdict": [(f) => ["**Verdict**", "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /full report (?:lacks|section)/],
+      "verdict contradicts body": [report((f) => reviewSummary(f, { Verdict: "No material security finding" })), /summary Verdict differs/],
+      "severity relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Low] introduced - a.js:1 - A finding" })), /SEC1 is \[Low\] introduced; the full report has \[Medium\] introduced/],
+      "tag relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Medium] pre-existing - a.js:1 - A finding" })), /the full report has \[Medium\] introduced/],
+      "headings only": [(f) => [...["**Verdict**", "**Findings**", "**Deferred Candidates**", "**Threat Model**", "**Review Target**", "**Coverage and Residual Risk**"],
+        "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /section \*\*Verdict\*\* is empty/],
+      "quoted heading moves sections": [(f) => [...reviewBody.slice(0, 7), "  **Verdict**", "  - No material security finding", ...reviewBody.slice(7),
+        "<!-- report-summary v1 -->", ...reviewSummary(f, { Verdict: "No material security finding" }), "<!-- end-report-summary -->"], /summary Verdict differs/],
+      "blank review value": [report((f) => reviewSummary(f, { "Unverified coverage": "" })), /empty Unverified coverage/],
       "no body": [(f) => ["<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /no full report/],
     };
     for (const [name, [lines, reason]] of Object.entries(cases)) {
@@ -1106,6 +1119,8 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.match(runWorker(await write("worker-su", worker()), ["--draft", "su"]).stderr, /no Overview/);
     assert.equal(runWorker(await write("worker-su-ok", worker({ Overview: "\n  Change X (issue)" })), ["--draft", "su"]).status, 0);
     assert.match(runWorker(await write("worker-pf", worker()), ["--draft", "preflight"]).stderr, /no Tier/);
+    assert.match(runWorker(await write("worker-su-blank", worker({ Overview: "" })), ["--draft", "su"]).stderr, /empty Overview/);
+    assert.match(runWorker(await write("worker-pf-blank", worker({ Tier: "" })), ["--draft", "preflight"]).stderr, /empty Tier/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
