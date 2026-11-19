@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -70,11 +71,14 @@ export function parseExportArgs(argv: string[]): ExportOptions {
   const exclude: string[] = [];
   let index = 0;
 
+  // A following option is a missing value, not the value; a literal path
+  // that starts with -- can be written as ./--name.
   function value(flag: string): string {
-    if (index + 1 >= argv.length) {
+    const next = argv[index + 1];
+    if (next === undefined || next.startsWith("--")) {
       fail(`${flag} requires a value`);
     }
-    return argv[index + 1] ?? "";
+    return next;
   }
 
   while (index < argv.length) {
@@ -121,15 +125,63 @@ function isInsideOrSame(candidate: string, root: string): boolean {
   return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
-// Resolves a path that may not exist yet through its nearest existing ancestor.
-function realPathOfPossiblyMissing(target: string): string {
-  const missing: string[] = [];
-  let current = path.resolve(target);
-  while (!fs.existsSync(current) && path.dirname(current) !== current) {
-    missing.unshift(path.basename(current));
-    current = path.dirname(current);
+// Resolves --out the way the filesystem does: each existing component is
+// resolved, links included, before a following ".." applies. Components past
+// the first missing one are appended as written and may not contain "..".
+function physicalPath(target: string): string {
+  const absolute = path.isAbsolute(target) ? target : `${process.cwd()}${path.sep}${target}`;
+  const root = path.parse(absolute).root;
+  let current = fs.realpathSync(root);
+  let missing = false;
+  for (const part of absolute.slice(root.length).split(/[\\/]+/)) {
+    if (part === "" || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      if (missing) {
+        fail(`output path has ".." after a directory that does not exist: ${target}`);
+      }
+      current = path.dirname(current);
+      continue;
+    }
+    const next = path.join(current, part);
+    if (!missing && fs.lstatSync(next, { throwIfNoEntry: false })) {
+      current = fs.realpathSync(next);
+    } else {
+      missing = true;
+      current = next;
+    }
   }
-  return path.join(fs.realpathSync(current), ...missing);
+  return current;
+}
+
+function sameEntry(left: fs.Stats, right: fs.Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+// Compares filesystem identities rather than strings, so another spelling of
+// the checkout, such as a different letter case on a case-insensitive volume,
+// is still recognized.
+function requireOutsideCheckout(out: string, dotfilesRoot: string): void {
+  const checkout = fs.statSync(dotfilesRoot);
+  const outStat = fs.statSync(out, { throwIfNoEntry: false });
+  for (let current = out; ; current = path.dirname(current)) {
+    const stat = fs.statSync(current, { throwIfNoEntry: false });
+    if (stat && sameEntry(stat, checkout)) {
+      fail(`output directory must be outside the dotfiles repository: ${out}`);
+    }
+    if (path.dirname(current) === current) {
+      break;
+    }
+  }
+  for (let current = fs.realpathSync(dotfilesRoot); outStat; current = path.dirname(current)) {
+    if (sameEntry(fs.statSync(current), outStat)) {
+      fail(`output directory must be outside the dotfiles repository: ${out}`);
+    }
+    if (path.dirname(current) === current) {
+      break;
+    }
+  }
 }
 
 // Source paths below the checkout root must be real directories or files,
@@ -161,11 +213,10 @@ function requireSourcePath(dotfilesRoot: string, relative: string, kind: "direct
 
 // Reads text that must be strict UTF-8 without NUL; anything else, such as
 // UTF-16 or binary data, fails the export rather than going unscanned.
-function readText(file: string, label: string): string {
-  const bytes = fs.readFileSync(file);
+function decodeText(bytes: Buffer, label: string, keepBom = false): string {
   let text: string;
   try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: keepBom }).decode(bytes);
   } catch {
     fail(`cannot read ${label}: it is not UTF-8 text`);
   }
@@ -173,6 +224,10 @@ function readText(file: string, label: string): string {
     fail(`cannot read ${label}: it contains NUL characters`);
   }
   return text;
+}
+
+function readText(file: string, label: string): string {
+  return decodeText(fs.readFileSync(file), label);
 }
 
 // Lists a skill's files relative to its directory, without the top-level
@@ -235,21 +290,27 @@ export function resolveReference(fromDir: string, reference: string): string | u
   } catch {
     // Not valid percent-encoding; only the literal form applies.
   }
-  for (const form of forms) {
+  // Every component followed by anything, even a trailing "/" or "..", must
+  // be a directory, as the operating system requires.
+  const resolve = (form: string): string | undefined => {
     let current = fromDir;
-    let found = true;
-    for (const part of form.split("/")) {
+    const parts = form.split("/");
+    for (const [index, part] of parts.entries()) {
       if (part === "" || part === ".") {
         continue;
       }
       current = part === ".." ? path.dirname(current) : path.join(current, part);
-      if (!fs.existsSync(current)) {
-        found = false;
-        break;
+      const stat = fs.statSync(current, { throwIfNoEntry: false });
+      if (!stat || (index < parts.length - 1 && !stat.isDirectory())) {
+        return undefined;
       }
     }
-    if (found) {
-      return current;
+    return current;
+  };
+  for (const form of forms) {
+    const resolved = resolve(form);
+    if (resolved) {
+      return resolved;
     }
   }
   return undefined;
@@ -261,11 +322,16 @@ interface Sources {
 }
 
 // A selected skill root must be a real directory inside skills/local.
+// Every exported skill, selected or added as a dependency, needs SKILL.md.
 function requireSkillRoot(sources: Sources, name: string): string {
   if (!fs.lstatSync(path.join(sources.localDir, name), { throwIfNoEntry: false })) {
     fail(`unknown local skill ${name}`);
   }
-  return requireSourcePath(sources.root, `skills/local/${name}`, "directory");
+  const skillDir = requireSourcePath(sources.root, `skills/local/${name}`, "directory");
+  if (!fs.lstatSync(path.join(skillDir, "SKILL.md"), { throwIfNoEntry: false })?.isFile()) {
+    fail(`local skill ${name} has no SKILL.md file`);
+  }
+  return skillDir;
 }
 
 // A skill depends on another local skill when a reference in one of its files
@@ -368,7 +434,8 @@ export function shellArg(value: string): string {
 // Mirrors ai-rules/scripts/compose-rules.sh without --with-metadata, in Node
 // so setup.ps1 can export without Bash.
 function composeRules(dotfilesRoot: string, overrideName: string): string {
-  const read = (relative: string): string => readText(requireSourcePath(dotfilesRoot, relative, "file"), relative);
+  // A byte order mark stays, as compose-rules.sh copies bytes unchanged.
+  const read = (relative: string): string => decodeText(fs.readFileSync(requireSourcePath(dotfilesRoot, relative, "file")), relative, true);
   const docs = [read("ai-rules/base/global.md")];
   const overrideRelative = `ai-rules/agents/${overrideName}`;
   if (fs.lstatSync(path.join(dotfilesRoot, overrideRelative), { throwIfNoEntry: false })) {
@@ -437,7 +504,7 @@ function readmeText(manifest: BundleManifest, hasNodeScripts: boolean): string {
       'cd "$(mktemp -d)"',
     );
     for (const entry of manifest.external) {
-      const args = ["skills", "add", entry.source, ...entry.skills.flatMap((name) => ["--skill", name]), ...agents.flatMap((agent) => ["--agent", agent])];
+      const args = ["skills", "add", entry.source, ...entry.skills.flatMap((name) => ["--skill", name]), ...agents.flatMap((agent) => ["--agent", agent]), "--copy"];
       lines.push(["npx", ...args.map(shellArg)].join(" "));
     }
     lines.push("```", "");
@@ -471,10 +538,7 @@ interface PersonalMarker {
 // and redaction, so anything the check detects is also redacted.
 class Markers {
   private list: PersonalMarker[] = [];
-  private values: string[] = [];
-
   add(kind: string, value: string, token: string): void {
-    this.values.push(value);
     this.list.push({ kind, pattern: new RegExp(value.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&"), "giu"), token });
     this.list.sort((left, right) => right.pattern.source.length - left.pattern.source.length);
   }
@@ -488,21 +552,44 @@ class Markers {
   }
 }
 
+// The homes setup may use: the effective setup home, HOME, USERPROFILE,
+// setup.ps1's CUSTOM_HOME, and the OS home.
+function homes(context: ExportContext): string[] {
+  return unique([context.home, context.env.HOME, context.env.USERPROFILE, context.env.CUSTOM_HOME, os.homedir()].filter((home): home is string => Boolean(home)));
+}
+
+// Each home is matched with either separator, and as written escaped in JSON
+// or JavaScript (doubled backslashes, escaped slashes).
 function addHomeMarkers(markers: Markers, context: ExportContext): void {
-  for (const home of unique([context.home, os.homedir()])) {
+  for (const home of homes(context)) {
     const trimmed = home.replace(/[\\/]+$/, "");
     if (trimmed.length > 2) {
-      for (const value of unique([trimmed, trimmed.split("\\").join("/"), trimmed.split("/").join("\\")])) {
+      const slashed = trimmed.split("\\").join("/");
+      const backslashed = trimmed.split("/").join("\\");
+      for (const value of unique([slashed, backslashed, backslashed.split("\\").join("\\\\"), slashed.split("/").join("\\/")])) {
         markers.add("home path", value, "<home>");
       }
     }
   }
 }
 
+// Variables that point git at another repository or inject configuration
+// would read some other identity, so the lookup runs without them: it reads
+// the dotfiles repository's own config plus global and system config.
+function gitEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const cleaned = { ...env };
+  for (const key of Object.keys(cleaned)) {
+    if (/^GIT_(DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|NAMESPACE|CONFIG|CONFIG_PARAMETERS|CONFIG_COUNT|CONFIG_KEY_\d+|CONFIG_VALUE_\d+)$/.test(key)) {
+      delete cleaned[key];
+    }
+  }
+  return cleaned;
+}
+
 // An unset key exits 1; anything else means the identity could not be read,
 // and the check must not pass without it.
 function gitConfig(context: ExportContext, key: string): string {
-  const result = spawnSync(context.gitCommand(), ["config", "--get", key], { cwd: context.dotfilesRoot, env: context.env, encoding: "utf8" });
+  const result = spawnSync(context.gitCommand(), ["config", "--get", key], { cwd: context.dotfilesRoot, env: gitEnvironment(context.env), encoding: "utf8" });
   if (result.error) {
     fail(`cannot read git config ${key}: ${result.error.message}`);
   }
@@ -532,6 +619,7 @@ function addConfiguredMarkers(markers: Markers, context: ExportContext): void {
     }
   }
 
+  // Errors name only the file's role and the error code, never its path.
   let files: string[];
   let required = false;
   if (MARKERS_FILE_ENV in context.env) {
@@ -544,25 +632,28 @@ function addConfiguredMarkers(markers: Markers, context: ExportContext): void {
   } else if (context.env.XDG_CONFIG_HOME && path.isAbsolute(context.env.XDG_CONFIG_HOME)) {
     files = [path.join(context.env.XDG_CONFIG_HOME, "dotfiles", "export-personal-markers")];
   } else {
-    files = unique([context.home, os.homedir()]).map((home) => path.join(home, ".config", "dotfiles", "export-personal-markers"));
+    files = homes(context).map((home) => path.join(home, ".config", "dotfiles", "export-personal-markers"));
   }
+  const role = required ? "override personal marker file" : "default personal marker file";
   for (const file of files) {
-    let stat: fs.Stats | undefined;
+    // Only a missing entry is skipped; a broken link or unreadable file fails.
+    if (!fs.lstatSync(file, { throwIfNoEntry: false })) {
+      if (required) {
+        fail(`${MARKERS_FILE_ENV} names a missing file`);
+      }
+      continue;
+    }
+    let bytes: Buffer;
     try {
-      stat = fs.statSync(file);
+      if (!fs.statSync(file).isFile()) {
+        fail(`the ${role} is not a regular file`);
+      }
+      bytes = fs.readFileSync(file);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") {
-        fail(`cannot read the personal marker file ${file}: ${code ?? (error as Error).message}`);
-      }
-      if (!required) {
-        continue;
-      }
+      fail(code ? `cannot read the ${role}: ${code}` : (error as Error).message);
     }
-    if (!stat?.isFile()) {
-      fail(stat ? "the personal marker file is not a regular file" : `${MARKERS_FILE_ENV} names a missing file`);
-    }
-    readText(file, "the personal marker file")
+    decodeText(bytes, `the ${role}`)
       .split(/\r?\n/)
       .forEach((line, index) => {
         const value = line.trim();
@@ -571,11 +662,6 @@ function addConfiguredMarkers(markers: Markers, context: ExportContext): void {
         }
       });
   }
-}
-
-interface ManifestCheck {
-  manifest: BundleManifest;
-  problem?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -769,6 +855,12 @@ function removeSeen(previous: string, files: string[]): boolean {
   return !fs.existsSync(previous);
 }
 
+// Short work names beside --out, so they fit in any directory that holds
+// a valid --out name.
+function workName(out: string, kind: "s" | "b"): string {
+  return path.join(path.dirname(out), `.skx-${kind}${randomBytes(4).toString("hex")}`);
+}
+
 // Moves an existing --out aside, rechecks it, and puts the new bundle in
 // place; until then any failure moves the old directory back.
 function install(staging: string, out: string, state: OutState, warn: (message: string) => void): void {
@@ -776,7 +868,7 @@ function install(staging: string, out: string, state: OutState, warn: (message: 
     fs.renameSync(staging, out);
     return;
   }
-  const previous = path.join(path.dirname(out), `.${path.basename(out)}.previous-${process.pid}-${Date.now()}`);
+  const previous = workName(out, "b");
   fs.renameSync(out, previous);
   let seen: string[] = [];
   try {
@@ -810,12 +902,8 @@ export function runExportCommand(argv: string[], context: ExportContext): void {
 
 function runExport(options: ExportOptions, context: ExportContext, markers: Markers): void {
   const say = (message: string): void => console.log(markers.redact(message));
-  const out = path.resolve(options.out);
-  const dotfilesReal = fs.realpathSync(context.dotfilesRoot);
-  const outReal = realPathOfPossiblyMissing(out);
-  if (isInsideOrSame(outReal, dotfilesReal) || isInsideOrSame(dotfilesReal, outReal)) {
-    fail(`output directory must be outside the dotfiles repository: ${out}`);
-  }
+  const out = physicalPath(options.out);
+  requireOutsideCheckout(out, context.dotfilesRoot);
 
   const sources: Sources = { root: context.dotfilesRoot, localDir: requireSourcePath(context.dotfilesRoot, "skills/local", "directory") };
   requireSourcePath(context.dotfilesRoot, "skills/profiles", "directory");
@@ -850,51 +938,55 @@ function runExport(options: ExportOptions, context: ExportContext, markers: Mark
     return;
   }
 
+  // Everything is read and checked in memory before staging is written.
+  const contents = new Map<string, { bytes: Buffer; mode?: number }>();
+  for (const skill of selection.local) {
+    const sourceDir = requireSkillRoot(sources, skill.name);
+    for (const relative of skillFiles(sourceDir, skill.name)) {
+      const source = path.join(sourceDir, relative);
+      contents.set(toPosix(path.join("skills", skill.name, relative)), { bytes: fs.readFileSync(source), mode: fs.statSync(source).mode & 0o777 });
+    }
+  }
+  for (const target of rules) {
+    contents.set(target.file, { bytes: Buffer.from(composeRules(context.dotfilesRoot, target.override)) });
+  }
+  const manifest: BundleManifest = {
+    schemaVersion: SCHEMA_VERSION,
+    generatedBy: GENERATED_BY,
+    requestedProfiles: plan.requestedProfiles,
+    expandedProfiles: plan.expandedProfiles,
+    agents: options.agents,
+    local: selection.local,
+    excluded: selection.excluded,
+    external: selection.external,
+    rules: rules.map((target) => target.file),
+    files: [...contents.keys(), "README.md", BUNDLE_MANIFEST].sort(),
+  };
+  const problem = manifestProblem(manifest);
+  if (problem) {
+    fail(`internal error: the generated manifest is invalid (${problem})`);
+  }
+  const hasNodeScripts = manifest.files.some((file) => /^skills\/[^/]+\/scripts\/.+\.mjs$/.test(file));
+  contents.set("README.md", { bytes: Buffer.from(readmeText(manifest, hasNodeScripts)) });
+  contents.set(BUNDLE_MANIFEST, { bytes: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`) });
+  requireNoCaseCollisions(manifest.files);
+  checkPersonalData(contents, markers);
+
   fs.mkdirSync(path.dirname(out), { recursive: true });
   requireSafeParent(out);
-  const staging = fs.mkdtempSync(path.join(path.dirname(out), `.${path.basename(out)}.staging-`));
+  const staging = fs.mkdtempSync(workName(out, "s"));
   let installed = false;
   try {
-    const files: string[] = [];
-    const write = (relative: string, content: string): void => {
-      fs.writeFileSync(path.join(staging, relative), content);
-      files.push(relative);
-    };
-    for (const skill of selection.local) {
-      const sourceDir = requireSkillRoot(sources, skill.name);
-      for (const relative of skillFiles(sourceDir, skill.name)) {
-        const source = path.join(sourceDir, relative);
-        const bundlePath = toPosix(path.join("skills", skill.name, relative));
-        readText(source, bundlePath);
-        fs.mkdirSync(path.dirname(path.join(staging, bundlePath)), { recursive: true });
-        fs.copyFileSync(source, path.join(staging, bundlePath));
-        fs.chmodSync(path.join(staging, bundlePath), fs.statSync(source).mode & 0o777);
-        files.push(bundlePath);
+    for (const [relative, { bytes, mode }] of contents) {
+      const target = path.join(staging, ...relative.split("/"));
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, bytes);
+      if (mode !== undefined) {
+        fs.chmodSync(target, mode);
       }
     }
-    for (const target of rules) {
-      write(target.file, composeRules(context.dotfilesRoot, target.override));
-    }
-
-    const manifest: BundleManifest = {
-      schemaVersion: SCHEMA_VERSION,
-      generatedBy: GENERATED_BY,
-      requestedProfiles: plan.requestedProfiles,
-      expandedProfiles: plan.expandedProfiles,
-      agents: options.agents,
-      local: selection.local,
-      excluded: selection.excluded,
-      external: selection.external,
-      rules: rules.map((target) => target.file),
-      files: [...files, "README.md", BUNDLE_MANIFEST].sort(),
-    };
-    const problem = manifestProblem(manifest);
-    if (problem) {
-      fail(`internal error: the generated manifest is invalid (${problem})`);
-    }
-    write("README.md", readmeText(manifest, files.some((file) => /^skills\/[^/]+\/scripts\/.+\.mjs$/.test(file))));
-    write(BUNDLE_MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
-    checkBundle(staging, manifest.files, markers);
+    requireStagedTree(staging, manifest.files);
+    checkLinks(staging, contents);
     fs.chmodSync(staging, 0o777 & ~process.umask());
     install(staging, out, state, (message) => console.warn(markers.redact(message)));
     installed = true;
@@ -906,29 +998,65 @@ function runExport(options: ExportOptions, context: ExportContext, markers: Mark
   say(`Skills bundle written: ${out}`);
 }
 
-// Scans every staged file for personal markers, and every relative reference
-// in staged skills for a target inside the bundle's skills/ directory.
-function checkBundle(staging: string, files: string[], markers: Markers): void {
-  const findings: string[] = [];
-  const unresolved: string[] = [];
-  const skillsRoot = path.join(staging, "skills");
-  for (const relative of files) {
-    const file = path.join(staging, relative);
-    const text = readText(file, relative);
-    for (const kind of markers.kindsIn(`${relative}\n${text}`)) {
-      findings.push(`${markers.redact(relative)}: ${kind}`);
-    }
-    if (relative.startsWith("skills/")) {
-      for (const reference of parseReferences(text)) {
-        const resolved = resolveReference(path.dirname(file), reference);
-        if (!resolved || !isInsideOrSame(resolved, skillsRoot)) {
-          unresolved.push(`${relative} -> ${reference}`);
-        }
+// Two output paths that differ only in letter case would merge or overwrite
+// each other on a case-insensitive volume.
+function requireNoCaseCollisions(files: string[]): void {
+  const seen = new Map<string, string>();
+  const collisions = new Set<string>();
+  for (const file of files) {
+    const parts = file.split("/");
+    for (let depth = 1; depth <= parts.length; depth += 1) {
+      const entry = parts.slice(0, depth).join("/");
+      const other = seen.get(entry.toLowerCase());
+      if (other !== undefined && other !== entry) {
+        collisions.add(`${other} and ${entry}`);
       }
+      seen.set(entry.toLowerCase(), other ?? entry);
+    }
+  }
+  if (collisions.size > 0) {
+    fail(`bundle paths differ only in letter case: ${Array.from(collisions).sort().join("; ")}`);
+  }
+}
+
+// The staged tree must hold exactly the files the manifest lists.
+function requireStagedTree(staging: string, files: string[]): void {
+  const { files: staged, others } = listEntries(staging);
+  if (others.length > 0 || !sameList(staged.sort(), [...files].sort())) {
+    fail("internal error: the staged bundle does not match its manifest");
+  }
+}
+
+// Scans every bundle file's path and content, which must be strict UTF-8
+// without NUL, for personal markers.
+function checkPersonalData(contents: Map<string, { bytes: Buffer }>, markers: Markers): void {
+  const findings: string[] = [];
+  for (const [relative, { bytes }] of contents) {
+    for (const kind of markers.kindsIn(`${relative}\n${decodeText(bytes, relative)}`)) {
+      findings.push(`${markers.redact(relative)}: ${kind}`);
     }
   }
   if (findings.length > 0) {
     fail(`personal data check failed; nothing was written:\n  ${findings.join("\n  ")}`);
+  }
+}
+
+// Every relative reference in the staged skills must resolve to an existing
+// path inside the bundle's skills/ directory.
+function checkLinks(staging: string, contents: Map<string, { bytes: Buffer }>): void {
+  const unresolved: string[] = [];
+  const skillsRoot = path.join(staging, "skills");
+  for (const [relative, { bytes }] of contents) {
+    if (!relative.startsWith("skills/")) {
+      continue;
+    }
+    const file = path.join(staging, ...relative.split("/"));
+    for (const reference of parseReferences(decodeText(bytes, relative))) {
+      const resolved = resolveReference(path.dirname(file), reference);
+      if (!resolved || !isInsideOrSame(resolved, skillsRoot)) {
+        unresolved.push(`${relative} -> ${reference}`);
+      }
+    }
   }
   if (unresolved.length > 0) {
     fail(`relative links in the bundle do not resolve inside it:\n  ${unique(unresolved).join("\n  ")}`);

@@ -656,7 +656,7 @@ test("a failed promotion keeps an existing empty output directory", () =>
     const result = runExportPatched(["--profile", "base", "--out", fixture.out], fixture, `
       const rename = fs.renameSync;
       fs.renameSync = (from, to) => {
-        if (path.basename(from).includes(".staging-")) {
+        if (path.basename(from).startsWith(".skx-s")) {
           throw new Error("injected promotion failure");
         }
         return rename(from, to);
@@ -676,7 +676,7 @@ test("a failed promotion keeps a previous bundle", () =>
     const result = runExportPatched(["--profile", "base", "--out", fixture.out, "--force"], fixture, `
       const rename = fs.renameSync;
       fs.renameSync = (from, to) => {
-        if (path.basename(from).includes(".staging-")) {
+        if (path.basename(from).startsWith(".skx-s")) {
           throw new Error("injected promotion failure");
         }
         return rename(from, to);
@@ -693,17 +693,17 @@ test("a failed backup removal reports the installed bundle and where the backup 
     const result = runExportPatched(["--profile", "base", "--out", fixture.out, "--force"], fixture, `
       const rmdir = fs.rmdirSync;
       fs.rmdirSync = (target, options) => {
-        if (path.basename(target).includes(".previous-")) {
+        if (path.basename(target).startsWith(".skx-b")) {
           throw new Error("injected cleanup failure");
         }
         return rmdir(target, options);
       };
     `);
     assertOk(result);
-    assert.match(result.stderr, /the new bundle is installed at .*bundle, but the previous one was not fully removed and remains at .*\.bundle\.previous-/);
+    assert.match(result.stderr, /the new bundle is installed at .*bundle, but the previous one was not fully removed and remains at .*\.skx-b/);
     assert.match(result.stdout, /Skills bundle written/);
     assert.deepEqual((await readManifest(fixture.out)).requestedProfiles, ["base"]);
-    const left = (await readdir(fixture.outParent)).filter((name) => name.startsWith(".bundle.previous-"));
+    const left = (await readdir(fixture.outParent)).filter((name) => name.startsWith(".skx-b"));
     assert.equal(left.length, 1);
   }));
 
@@ -916,16 +916,16 @@ test("entries added to the backup after the recheck are kept, with a warning", (
       const result = runExportPatched(["--profile", "base", "--out", fixture.out, ...(setup === "bundle" ? ["--force"] : [])], fixture, `
         const rename = fs.renameSync;
         fs.renameSync = (from, to) => {
-          if (path.basename(from).includes(".staging-")) {
-            const previous = fs.readdirSync(path.dirname(out)).find((name) => name.includes(".previous-"));
+          if (path.basename(from).startsWith(".skx-s")) {
+            const previous = fs.readdirSync(path.dirname(out)).find((name) => name.startsWith(".skx-b"));
             fs.writeFileSync(path.join(path.dirname(out), previous, "late-note.txt"), "mine\\n");
           }
           return rename(from, to);
         };
       `);
       assertOk(result);
-      assert.match(result.stderr, /the previous one was not fully removed and remains at .*\.bundle\.previous-/, setup);
-      const previous = (await readdir(fixture.outParent)).find((name) => name.includes(".previous-"));
+      assert.match(result.stderr, /the previous one was not fully removed and remains at .*\.skx-b/, setup);
+      const previous = (await readdir(fixture.outParent)).find((name) => name.startsWith(".skx-b"));
       assert.ok(previous, setup);
       assert.deepEqual(await readdir(path.join(fixture.outParent, previous)), ["late-note.txt"], setup);
       assert.deepEqual((await readManifest(fixture.out)).requestedProfiles, ["base"]);
@@ -1009,7 +1009,7 @@ test("a marker file that is not strict UTF-8 without NUL fails the export", () =
       await writeFile(markerFile, bytes);
       const result = runExport(["--profile", "work", "--out", fixture.out], fixture);
       assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /cannot read the personal marker file: it (is not UTF-8 text|contains NUL characters)/);
+      assert.match(result.stderr, /cannot read the default personal marker file: it (is not UTF-8 text|contains NUL characters)/);
     }
   }));
 
@@ -1018,7 +1018,7 @@ test("a default marker path that cannot be read fails the export", () =>
     await mkdir(path.join(fixture.xdgConfig, "dotfiles", "export-personal-markers"), { recursive: true });
     const result = runExport(["--profile", "base", "--out", fixture.out], fixture);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /the personal marker file is not a regular file/);
+    assert.match(result.stderr, /the default personal marker file is not a regular file/);
   }));
 
 test("rule files that are not strict UTF-8 fail the export", () =>
@@ -1045,6 +1045,7 @@ test("export bundles round-trip through --force", () =>
   withFixture(async (fixture) => {
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "beta", "references", "note:v2 \\ draft.md"), "Note.\n");
     await mkdir(path.join(fixture.dotfiles, "skills", "local", "empty", "evals"), { recursive: true });
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "empty", "SKILL.md"), "---\nname: empty\n---\n");
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "empty", "evals", "only.md"), "Fixture.\n");
     await writeProfile(fixture.dotfiles, "hollow", { description: "Hollow", local: ["empty"] });
     for (const args of [
@@ -1132,8 +1133,8 @@ test("a listed file that was missing at the recheck is kept when it appears late
     const result = runExportPatched(["--profile", "base", "--out", fixture.out, "--force"], fixture, `
       const rename = fs.renameSync;
       fs.renameSync = (from, to) => {
-        if (path.basename(from).includes(".staging-")) {
-          const previous = fs.readdirSync(path.dirname(out)).find((name) => name.includes(".previous-"));
+        if (path.basename(from).startsWith(".skx-s")) {
+          const previous = fs.readdirSync(path.dirname(out)).find((name) => name.startsWith(".skx-b"));
           fs.writeFileSync(path.join(path.dirname(out), previous, "README.md"), "late\\n");
         }
         return rename(from, to);
@@ -1141,7 +1142,7 @@ test("a listed file that was missing at the recheck is kept when it appears late
     `);
     assertOk(result);
     assert.match(result.stderr, /not fully removed and remains at/);
-    const previous = (await readdir(fixture.outParent)).find((name) => name.includes(".previous-"));
+    const previous = (await readdir(fixture.outParent)).find((name) => name.startsWith(".skx-b"));
     assert.deepEqual(await readdir(path.join(fixture.outParent, previous)), ["README.md"]);
     assert.equal(await readFile(path.join(fixture.outParent, previous, "README.md"), "utf8"), "late\n");
   }));
@@ -1161,4 +1162,241 @@ test("a manifest that is a FIFO is refused without blocking", { skip: process.pl
     assert.notEqual(result.status, 0);
     assert.equal(result.signal, null, "export must not block on the FIFO");
     assert.match(result.stderr, /no valid skills-bundle\.json \(it has no regular manifest file\)/);
+  }));
+
+// Round 4.
+// D19: an option never takes another option as its value.
+test("a value option followed by another option fails as missing its value", () =>
+  withFixture(async (fixture) => {
+    for (const args of [
+      ["--profile", "base", "--out", "--force"],
+      ["--profile", "--out", fixture.out],
+      ["--profile", "base", "--agent", "--force", "--out", fixture.out],
+      ["--profile", "base", "--exclude", "--out", fixture.out],
+    ]) {
+      const result = runExport(args, fixture);
+      assert.notEqual(result.status, 0, args.join(" "));
+      assert.match(result.stderr, /--(out|profile|agent|exclude) requires a value/);
+    }
+    assert.deepEqual(await readdir(fixture.root).then((names) => names.filter((name) => name.startsWith("--"))), []);
+    assertOk(runExport(["--profile", "base", "--out", "./--force"], fixture));
+    assert.ok(existsSync(path.join(fixture.root, "--force", "skills-bundle.json")));
+  }));
+
+// D20: every exported skill has a regular SKILL.md.
+test("selected and dependency skills without a SKILL.md file fail the export", () =>
+  withFixture(async (fixture) => {
+    await rm(path.join(fixture.dotfiles, "skills", "local", "gamma", "SKILL.md"));
+    let result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /local skill gamma has no SKILL\.md file/);
+
+    await mkdir(path.join(fixture.dotfiles, "skills", "local", "gamma", "SKILL.md"));
+    result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /local skill gamma has no SKILL\.md file/);
+
+    await rm(path.join(fixture.dotfiles, "skills", "local", "delta", "SKILL.md"));
+    result = runExport(["--profile", "base", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /local skill delta has no SKILL\.md file/);
+  }));
+
+// D21: only directories may be followed by more components.
+test("references through a file or with a trailing slash on a file fail", () =>
+  withFixture(async (fixture) => {
+    const { resolveReference } = require("../skills-export.js");
+    const from = path.join(fixture.dotfiles, "skills", "local", "alpha");
+    assert.equal(resolveReference(from, "../beta/SKILL.md/../SKILL.md"), undefined);
+    assert.equal(resolveReference(from, "../beta/SKILL.md/"), undefined);
+    assert.ok(resolveReference(from, "../beta/references/"));
+    assert.ok(resolveReference(from, "../beta/references/../SKILL.md"));
+    for (const written of ["../beta/SKILL.md/../SKILL.md", "../beta/SKILL.md/"]) {
+      await writeSkill(fixture.dotfiles, "alpha", `Read \`../beta/references/guide.md\` and \`${written}\`.\n`);
+      const result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+      assert.notEqual(result.status, 0, written);
+      assert.ok(result.stderr.includes(`skills/alpha/SKILL.md -> ${written}`), result.stderr);
+    }
+  }));
+
+// D22: the destination is resolved physically and compared by identity.
+test("links are resolved before .. in --out, and the resolved path is used", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    const inside = path.join(fixture.root, "inside-link");
+    await symlink(path.join(fixture.dotfiles, "skills"), inside);
+    let result = runExport(["--profile", "base", "--out", `${inside}/../bundle`], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must be outside the dotfiles repository/);
+    assert.ok(!existsSync(path.join(fixture.dotfiles, "bundle")));
+
+    const elsewhere = path.join(fixture.root, "elsewhere", "deep");
+    await mkdir(elsewhere, { recursive: true });
+    const outside = path.join(fixture.root, "outside-link");
+    await symlink(elsewhere, outside);
+    result = runExport(["--profile", "base", "--out", `${outside}/../bundle`], fixture);
+    assertOk(result);
+    assert.ok(existsSync(path.join(fixture.root, "elsewhere", "bundle", "skills-bundle.json")));
+    assert.ok(!existsSync(path.join(fixture.root, "bundle")));
+
+    result = runExport(["--profile", "base", "--out", `${fixture.root}/missing/../bundle`], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /has "\.\." after a directory that does not exist/);
+  }));
+
+test("an --out that is an ancestor of the checkout is refused", () =>
+  withFixture(async (fixture) => {
+    const result = runExport(["--profile", "base", "--out", fixture.root, "--force"], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must be outside the dotfiles repository/);
+  }));
+
+// D23: case-insensitive collisions and the staged tree.
+test("bundle paths that differ only in letter case fail the export", () =>
+  withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "Notes.md"), "One.\n");
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md"), "Two.\n");
+    let result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /differ only in letter case: skills\/gamma\/Notes\.md and skills\/gamma\/notes\.md/);
+    await rm(path.join(fixture.dotfiles, "skills", "local", "gamma", "Notes.md"));
+
+    await writeSkill(fixture.dotfiles, "Gamma", "Upper.\n");
+    await writeProfile(fixture.dotfiles, "cased", { description: "Cased", local: ["gamma", "Gamma"] });
+    result = runExport(["--profile", "cased", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /differ only in letter case: skills\/Gamma and skills\/gamma/);
+    assert.deepEqual(await readdir(fixture.outParent), []);
+  }));
+
+test("a staged tree that differs from the manifest is not promoted", () =>
+  withFixture(async (fixture) => {
+    const result = runExportPatched(["--profile", "base", "--out", fixture.out], fixture, `
+      const write = fs.writeFileSync;
+      fs.writeFileSync = (file, ...rest) => {
+        write(file, ...rest);
+        if (String(file).endsWith("README.md") && path.basename(path.dirname(String(file))).startsWith(".skx-s")) {
+          write(path.join(path.dirname(String(file)), "stray.txt"), "x");
+        }
+      };
+    `);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /the staged bundle does not match its manifest/);
+    assert.deepEqual(await readdir(fixture.outParent), []);
+  }));
+
+// D24: personal check inputs.
+test("setup.ps1 keeps an explicit SETUP_HOME and still checks the PowerShell home", { skip: !pwsh && "pwsh is not installed" }, () =>
+  withFixture(async (fixture) => {
+    await mkdir(path.join(fixture.dotfiles, "setup"), { recursive: true });
+    for (const name of await readdir(path.join(repoRoot, "setup"))) {
+      if (name.endsWith(".js")) {
+        await cp(path.join(repoRoot, "setup", name), path.join(fixture.dotfiles, "setup", name));
+      }
+    }
+    const explicit = path.join(fixture.root, "explicit-home");
+    const psHome = path.join(fixture.root, "ps-home");
+    await mkdir(explicit);
+    await mkdir(psHome);
+    const quote = (value) => `'${value.replace(/'/g, "''")}'`;
+    const command = `& ${quote(path.join(repoRoot, "setup.ps1"))} skills export --profile 'work' --out ${quote(fixture.out)}`;
+    for (const home of [explicit, psHome]) {
+      await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md"), `See ${home}/x\n`);
+      const result = spawnSync(pwsh, ["-NoProfile", "-NonInteractive", "-Command", command], {
+        cwd: fixture.root,
+        env: { ...fixture.env, SETUP_HOME: explicit, CUSTOM_HOME: psHome, SETUP_DOTFILES_ROOT: fixture.dotfiles },
+        encoding: "utf8",
+      });
+      assert.notEqual(result.status, 0, home);
+      assert.match(result.stderr + result.stdout, /skills\/gamma\/notes\.md: home path/);
+    }
+  }));
+
+test("escaped forms of the home path are detected and redacted", () =>
+  withFixture(async (fixture) => {
+    const backslashed = fixture.home.split("/").join("\\");
+    for (const written of [fixture.home.split("/").join("\\/"), backslashed.split("\\").join("\\\\")]) {
+      await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md"), `{"path": "${written}"}\n`);
+      await assertPersonalFailure(fixture, {}, /skills\/gamma\/notes\.md: home path/);
+    }
+    const out = path.join(fixture.outParent, "x");
+    const result = runExport(["--profile", "base", "--out", out, "--agent", fixture.home.split("/").join("\\\\")], fixture);
+    assert.notEqual(result.status, 0);
+    assert.ok(!result.stderr.includes(fixture.home.split("/").join("\\\\")));
+  }));
+
+test("a default marker path that is a broken link fails, and errors never print marker paths", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    await mkdir(path.join(fixture.xdgConfig, "dotfiles"), { recursive: true });
+    await symlink(path.join(fixture.root, "secret-missing-target"), path.join(fixture.xdgConfig, "dotfiles", "export-personal-markers"));
+    let result = runExport(["--profile", "base", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot read the default personal marker file: ENOENT/);
+    assert.doesNotMatch(result.stderr, /secret-missing-target|xdg-config/);
+
+    const overrideDir = path.join(fixture.root, "secret-override-dir");
+    await mkdir(overrideDir);
+    result = runExport(["--profile", "base", "--out", fixture.out], fixture, { SETUP_EXPORT_PERSONAL_MARKERS_FILE: overrideDir });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /the override personal marker file is not a regular file/);
+    assert.doesNotMatch(result.stderr, /secret-override-dir/);
+  }));
+
+test("the git identity lookup ignores repository and config overrides in the environment", () =>
+  withFixture(async (fixture) => {
+    await writeFile(fixture.gitConfig, "[user]\n\tname = Fixture Person\n");
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "credit.md"), "By Fixture Person.\n");
+    for (const env of [
+      { GIT_CONFIG_PARAMETERS: "'user.name'='Someone Else'" },
+      { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "user.name", GIT_CONFIG_VALUE_0: "Someone Else" },
+      { GIT_DIR: path.join(fixture.root, "not-a-repo"), GIT_WORK_TREE: fixture.root },
+    ]) {
+      await assertPersonalFailure(fixture, env, /skills\/gamma\/credit\.md: git user\.name/);
+    }
+  }));
+
+// D26: short work names.
+test("a long --out name still works with --force", () =>
+  withFixture(async (fixture) => {
+    const out = path.join(fixture.outParent, "b".repeat(240));
+    assertOk(runExport(["--profile", "base", "--out", out], fixture));
+    assertOk(runExport(["--profile", "work", "--out", out, "--force"], fixture));
+    assert.deepEqual(await readdir(fixture.outParent), ["b".repeat(240)]);
+  }));
+
+// D27: README installs copies.
+test("README install commands pass --copy", () =>
+  withFixture(async (fixture) => {
+    assertOk(runExport(["--profile", "base", "--out", fixture.out], fixture));
+    const readme = await readFile(path.join(fixture.out, "README.md"), "utf8");
+    assert.match(readme, /npx skills add owner\/one --skill ext-a --skill ext-b --agent codex --agent claude-code --copy\n/);
+  }));
+
+// D28: scanning happens before staging, and files are written from buffers.
+test("the personal data check runs before any staging directory is created", () =>
+  withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md"), `Path ${fixture.home}\n`);
+    const patch = `
+      const mkdtemp = fs.mkdtempSync;
+      fs.mkdtempSync = (...args) => { process.stderr.write("STAGING-CREATED\\n"); return mkdtemp(...args); };
+      fs.copyFileSync = () => { throw new Error("copyFileSync must not be used"); };
+    `;
+    let result = runExportPatched(["--profile", "work", "--out", fixture.out], fixture, patch);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /personal data check failed/);
+    assert.doesNotMatch(result.stderr, /STAGING-CREATED/);
+    await rm(path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md"));
+    result = runExportPatched(["--profile", "work", "--out", fixture.out], fixture, patch);
+    assertOk(result);
+    if (process.platform !== "win32") {
+      assert.equal((await stat(path.join(fixture.out, "skills", "gamma", "scripts", "check.mjs"))).mode & 0o777, 0o755);
+    }
+  }));
+
+// D29: a byte order mark in rules is kept, like compose-rules.sh.
+test("rules keep a UTF-8 byte order mark", () =>
+  withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.dotfiles, "ai-rules", "base", "global.md"), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("# Global\n")]));
+    assertOk(runExport(["--profile", "base", "--agent", "codex", "--out", fixture.out], fixture));
+    const bytes = await readFile(path.join(fixture.out, "AGENTS.md"));
+    assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
   }));

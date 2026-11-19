@@ -765,9 +765,10 @@ Threat model: the person running export and the dotfiles checkout are trusted. E
 - `--agent` takes the install vocabulary, `codex` and `claude-code`, repeatable or comma-separated, and defaults to both.
 - `--exclude <csv>` drops local or external skills. Excluding a skill that an included skill depends on fails with `<dependency> is required by <skill>`; naming a skill the profiles do not include fails.
 - `--force` replaces only a previous bundle (see below).
+- A value option (`--profile`, `--agent`, `--exclude`, `--out`) followed by another `--` option fails as missing its value; write a path that starts with `--` as `./--name`.
 - `--scope` and `--copy` (`-Copy` in PowerShell) do not apply to export.
 - `SETUP_DRY_RUN=1` prints the selection and writes nothing.
-- The output directory must be outside the dotfiles repository, after resolving symbolic links.
+- The output directory must be outside the dotfiles repository. Export resolves `--out` the way the filesystem does, following each existing link before a later `..` applies, and compares directories by filesystem identity, so another spelling of the checkout, such as a different letter case on a case-insensitive volume, is still refused. `..` after a directory that does not exist yet fails.
 - In PowerShell, quote a comma-separated value (`'base,github'`), because PowerShell otherwise passes it as an array. `setup.ps1` hands export arguments straight to Node, so `--out` is not taken for a PowerShell common parameter.
 
 ### Bundle Layout
@@ -783,19 +784,19 @@ Threat model: the person running export and the dotfiles checkout are trusted. E
 
 The bundle is built only from `skills/local/<name>/`, `skills/profiles/`, and `ai-rules/`. It never contains `claude/settings.json`, `codex/config.toml`, `codex/profiles/`, MCP configuration, or any other file.
 
-Each selected local skill is copied as a whole directory, including `scripts/` and `references/`, with its executable bits. The top-level `evals/` directory is skipped: it holds development fixtures for this repository. A symbolic link inside a selected skill, or a selected skill directory that is itself a symbolic link, fails the export.
+Every exported skill, selected or added as a dependency, must have a regular `SKILL.md` file at its root. Each selected local skill is copied as a whole directory, including `scripts/` and `references/`, with its executable bits. The top-level `evals/` directory is skipped: it holds development fixtures for this repository. A symbolic link inside a selected skill, or a selected skill directory that is itself a symbolic link, fails the export.
 
 Every read stays inside the dotfiles checkout. Before reading anything under them, export requires `ai-rules/`, `skills/local/`, `skills/profiles/`, each selected skill directory, each profile file (including every `includes` entry), and each rule file to be real directories or files, not symbolic links, that resolve inside the checkout. A profile that fails to parse is reported by name and position only, never by its contents. Profile names, `includes` entries, and local skill names must each be one path component (`[A-Za-z0-9][A-Za-z0-9._-]*`), which install and validation also enforce.
 
-The rules files are composed in Node with the same output as `ai-rules/scripts/compose-rules.sh <agent>` without `--with-metadata`, so `setup.ps1` can export without Bash. `ai-rules/base/global.md` is shared as is.
+The rules files are composed in Node with the same output as `ai-rules/scripts/compose-rules.sh <agent>` without `--with-metadata`, including any UTF-8 byte order mark, so `setup.ps1` can export without Bash. `ai-rules/base/global.md` is shared as is.
 
-External skills are not copied. The manifest records them as `{source, skills}` and the README gives one `npx skills add <source> --skill <name> ... --agent <agent>` command per source, with every argument shell-quoted. Export accepts only `owner/repo` sources and plain skill names, so a profile cannot put shell syntax into those commands. The README tells the recipient to run those commands from a new, empty directory outside any project, because `npx` resolves commands and npm settings from its current directory; setup isolates its own installs the same way. `skills-lock.json` stays owned by the `skills` CLI; export neither copies nor synthesizes it.
+External skills are not copied. The manifest records them as `{source, skills}` and the README gives one `npx skills add <source> --skill <name> ... --agent <agent>` command per source, with every argument shell-quoted and `--copy`, as setup itself installs copies. Export accepts only `owner/repo` sources and plain skill names, so a profile cannot put shell syntax into those commands. The README tells the recipient to run those commands from a new, empty directory outside any project, because `npx` resolves commands and npm settings from its current directory; setup isolates its own installs the same way. `skills-lock.json` stays owned by the `skills` CLI; export neither copies nor synthesizes it.
 
 ### Dependency Closure
 
 A local skill depends on another local skill when a reference in one of its files, resolved from that file's directory, points into that skill, such as `../delivery-common/scripts/check-branch-name.mjs` in `SKILL.md` (see [Shared Scripts](#shared-scripts)). Export adds such skills transitively, prints `Added as a dependency: <skill> (required by <skills>)`, and records them with `origin: "dependency"`.
 
-A reference starts with one or more `../` after whitespace, a quote, a backtick, or a bracket, and runs to the next such delimiter. Its first named component must start with a letter, digit, `_`, or `%`, so hidden paths such as `../../.agents/skills` in scripts are not references. Trailing sentence punctuation and a `#anchor` are dropped; `..` at the end is kept. Export resolves the reference from the referring file's directory one component at a time, so `missing/..` fails, and also tries its %-decoded form. Dependency extraction and the bundle check use this same parser.
+A reference starts with one or more `../` after whitespace, a quote, a backtick, or a bracket, and runs to the next such delimiter. Its first named component must start with a letter, digit, `_`, or `%`, so hidden paths such as `../../.agents/skills` in scripts are not references. Trailing sentence punctuation and a `#anchor` are dropped; `..` at the end is kept. Export resolves the reference from the referring file's directory one component at a time, so `missing/..` fails, and any component followed by more of the path, even a trailing `/` or `..`, must be a directory, so `SKILL.md/` and `SKILL.md/../x` fail. It also tries the %-decoded form. Dependency extraction and the bundle check use this same parser.
 
 After copying, every reference in the bundle's skills must resolve to an existing path inside the bundle's `skills/`; a reference to a missing file, an unselected skill, or an `evals/` file fails the export. A dependency whose name is also a selected external skill fails as a name collision.
 
@@ -827,7 +828,7 @@ A skill name mentioned in prose, such as a workflow skill that runs `change-revi
 
 ### Output Directory
 
-Export builds the bundle in a staging directory next to `<out>`, runs the personal data check there, and only then moves it into place. Any failure removes the staging directory and leaves `<out>` as it was.
+Export reads every bundle file into memory and runs the personal data check there before it writes anything. It then writes a staging directory next to `<out>` from those buffers, checks that the staged tree matches the manifest and that its links resolve, and only then moves it into place. Any failure removes the staging directory and leaves `<out>` as it was. Bundle paths that differ only in letter case, such as two skills `Gamma` and `gamma`, fail before anything is written. The staging and moved-aside directories use short names (`.skx-s…`, `.skx-b…`) beside `<out>`, so any valid `--out` name works with `--force`.
 
 On Linux and macOS, export refuses to write when the direct parent of `<out>` is writable by other users without the sticky bit, or is owned and writable by a user other than you and root; such a parent is almost always a mistaken path. Sticky shared directories such as `/tmp` are allowed. Windows skips this check.
 
@@ -840,13 +841,13 @@ On Linux and macOS, export refuses to write when the direct parent of `<out>` is
 
 Before the bundle is moved into place, export scans every file's path and contents, case-insensitively, for:
 
-- the home directory (`SETUP_HOME` or `HOME`, and the OS home directory), with either path separator;
-- `git config user.name` and `user.email`, read in the dotfiles repository; an unset key is skipped, but a missing `git` or any other read error fails the export (Windows runs `git` from its `PATH` search, never from the current directory);
+- the home directories setup may use (`SETUP_HOME`, `HOME`, `USERPROFILE`, `setup.ps1`'s `CUSTOM_HOME`, and the OS home), with either path separator and as escaped in JSON or JavaScript (doubled backslashes, `\/`); `setup.ps1` keeps an explicitly set `SETUP_HOME`;
+- `git config user.name` and `user.email`, read in the dotfiles repository; an unset key is skipped, but a missing `git` or any other read error fails the export. The lookup runs without variables that point git at another repository or inject configuration (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_CONFIG`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT` with its keys and values, and similar), so it reads the dotfiles repository's config plus global and system config. Windows runs `git` from its `PATH` search, never from the current directory;
 - each marker in the personal marker file.
 
-The personal marker file is `${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/export-personal-markers` on every OS. Without `XDG_CONFIG_HOME`, export reads it under both the setup home (`SETUP_HOME`) and the OS home when they differ. It holds one literal marker per line; blank lines and lines starting with `#` are ignored. Keep it outside the repository, because the markers are personal data. A missing default file is allowed. `SETUP_EXPORT_PERSONAL_MARKERS_FILE` overrides the path; when it is empty or names a missing file, export fails.
+The personal marker file is `${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/export-personal-markers` on every OS. Without `XDG_CONFIG_HOME`, export reads it under each of those home directories. It holds one literal marker per line; blank lines and lines starting with `#` are ignored. Keep it outside the repository, because the markers are personal data. A missing default file is allowed. `SETUP_EXPORT_PERSONAL_MARKERS_FILE` overrides the path; when it is empty or names a missing file, export fails.
 
-Every bundle file, the marker file, and the rule files must be strict UTF-8 without NUL characters. Anything else, such as UTF-16 or binary data, fails the export instead of going unscanned. A default marker file that is missing is skipped; any other error reading it, or a marker path that is not a regular file, fails the export.
+Every bundle file, the marker file, and the rule files must be strict UTF-8 without NUL characters. Anything else, such as UTF-16 or binary data, fails the export instead of going unscanned. A default marker file is skipped only when no entry exists at its path; a broken link, any other error reading it, or a marker path that is not a regular file fails the export. Marker file errors name only the file's role (default or override) and the error code, never its path.
 
 A match fails the export with each file and the kind of match, such as `skills/x/SKILL.md: git user.email`. One case-insensitive matcher per marker serves both the check and redaction, so anything the check finds is also hidden: export never prints a matched value. Markers are loaded before arguments are parsed, each one as soon as it is read, and every message, including argument errors and the selection summary, shows the home path as `<home>` and other markers as `<redacted>`.
 

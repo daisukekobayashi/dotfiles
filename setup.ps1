@@ -170,10 +170,14 @@ function Invoke-SkillsExport {
     throw "Required command not found: node"
   }
   $runtime = Join-Path $SetupContext.DotfilesRoot "setup/skills.js"
-  $hadSetupHome = Test-Path Env:SETUP_HOME
+  # An explicitly set SETUP_HOME is kept; export also checks the
+  # PowerShell home through USERPROFILE and CUSTOM_HOME.
+  $hadSetupHome = -not [string]::IsNullOrEmpty($Env:SETUP_HOME)
   $previousSetupHome = $Env:SETUP_HOME
   try {
-    $Env:SETUP_HOME = $SetupContext.HomeDir
+    if (-not $hadSetupHome) {
+      $Env:SETUP_HOME = $SetupContext.HomeDir
+    }
     & node $runtime @Arguments
     if ($LASTEXITCODE -ne 0) {
       throw "Skills export failed."
