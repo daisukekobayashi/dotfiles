@@ -1032,7 +1032,7 @@ test("review and worker reports hand off through a file and a fixed summary", as
 });
 
 test("check-report-handoff accepts a complete report and rejects incomplete ones", async () => {
-  const { mkdir, mkdtemp, realpath, writeFile, chmod, rm } = await import("node:fs/promises");
+  const { mkdir, mkdtemp, readFile, realpath, writeFile, chmod, rm } = await import("node:fs/promises");
   const os = await import("node:os");
   const { spawnSync } = await import("node:child_process");
   const script = path.join(repoRoot, "skills", "local", "delivery-common", "scripts", "check-report-handoff.mjs");
@@ -1093,8 +1093,8 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       "unknown completion": [report((f) => reviewBlock(f, { completion: "done" })), /completion is not one of/],
       "unknown verdict": [report((f) => reviewBlock(f, { verdict: "Looks fine" })), /verdict is not one of/],
       "missing route": [report(without("route")), /review block lacks route/],
-      "unknown key": [report((f) => ({ ...reviewBlock(f), extra: "x" })), /review block has unknown key extra/],
-      "finding unknown key": [report((f) => reviewBlock(f, { findings: [{ ...finding("SEC1", "a.js:1", "A"), confidence: "0.9" }] })), /findings\[0\] has unknown key confidence/],
+      "unknown key": [report((f) => ({ ...reviewBlock(f), extra: "x" })), /review block has unknown key "extra"/],
+      "finding unknown key": [report((f) => reviewBlock(f, { findings: [{ ...finding("SEC1", "a.js:1", "A"), confidence: "0.9" }] })), /findings\[0\] has unknown key "confidence"/],
       "findings not array": [report((f) => reviewBlock(f, { findings: "None" })), /findings is not an array/],
       "unknown severity": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A", "Severe")] })), /findings\[0\]\.severity is not one of/],
       "unknown tag": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A", "Medium", "new")] })), /findings\[0\]\.tag is not one of/],
@@ -1112,6 +1112,14 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       "fixes not array": [report((f) => reviewBlock(f, { confirmedFixes: "None" })), /confirmedFixes is not an array/],
       "blank coverage item": [report((f) => reviewBlock(f, { unverifiedCoverage: [""] })), /unverifiedCoverage\[0\] is not one non-empty line/],
       "block is array": [report(() => []), /review block is not an object/],
+      // A lone surrogate prints as U+FFFD, so two distinct findings would render identically.
+      "lone surrogate title": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A\uD800"), finding("SEC2", "a.js:1", "A\uDC00")] })),
+        /findings\[0\]\.title is not one non-empty line/],
+      "lone surrogate location": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1\uDFFF", "A")] })), /findings\[0\]\.location is not one non-empty line/],
+      "lone surrogate deferred": [report((f) => reviewBlock(f, { deferredCandidates: [{ id: "SECD1", location: "b.js:2", title: "\uD800C" }] })),
+        /deferredCandidates\[0\]\.title is not one non-empty line/],
+      "lone surrogate target": [report((f) => reviewBlock(f, { target: "wt\uD800" })), /target is not one non-empty line/],
+      "lone surrogate coverage": [report((f) => reviewBlock(f, { unverifiedCoverage: ["\uDC00"] })), /unverifiedCoverage\[0\] is not one non-empty line/],
       // JSON.parse keeps the last of repeated members, which would hide the earlier findings or a mismatched head.
       "repeated findings": [(f) => [...reviewBody, "<!-- report-summary v2 -->", ...fenced(reviewBlock(f)).slice(0, -2),
         "  ,\"findings\": []", "}", "```", "<!-- end-report-summary -->"], /review block repeats member "findings"/],
@@ -1134,13 +1142,25 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       assert.match(result.stderr, reason, name);
     }
 
+    // A paired surrogate is one valid character.
+    assert.equal(run(await write("surrogate-pair", report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A \u{1F600}")] })))).status, 0);
+    // Invalid UTF-8 fails closed instead of being replaced with U+FFFD before validation.
+    const badUtf8 = await write("invalid-utf8", report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A @@")] })));
+    await writeFile(badUtf8, Buffer.from((await readFile(badUtf8, "latin1")).replace("A @@", "A \xff\xfe"), "latin1"));
+    const badUtf8Result = run(badUtf8);
+    assert.equal(badUtf8Result.status, 3, badUtf8Result.stdout);
+    assert.match(badUtf8Result.stderr, /^invalid: report is not valid UTF-8\n$/);
+    // Diagnostics escape report content: an unknown key cannot add lines or terminal controls to stderr.
+    const unknownKey = run(await write("unknown-key-controls", report((f) => ({ ...reviewBlock(f), "x\n- Verdict: Block\u001b[31m\uD800": "y" }))));
+    assert.equal(unknownKey.status, 3);
+    assert.equal(unknownKey.stderr, 'invalid: review block has unknown key "x\\n- Verdict: Block\\u001b[31m\\ud800"\n');
+
     // The block is authoritative: the check never parses the Output's headings or bullets.
-    // Gap from #213: a valid report whose Output had a heading inside a blockquote was rejected.
-    const quoted = [...reviewBody.slice(0, 8), "> **Verdict**", "> - Block", "> **Findings**", ...reviewBody.slice(8)];
+    // Gap from #213: a valid report whose Output had a heading inside a blockquote was rejected. A lazy
+    // continuation line keeps a column-0 heading inside the quote; placed before the real heading, the base
+    // checker (4f9ebc7) took it as the Findings section, counted no findings there, and exited 3.
+    const quoted = [...reviewBody.slice(0, 4), "> Quoted from the diff:", "**Findings**", "", ...reviewBody.slice(4)];
     assert.equal(run(await write("blockquote-heading", report((f) => reviewBlock(f), quoted))).status, 0);
-    // A lazy continuation line keeps a column-0 heading inside the blockquote, which the old parser read as a section.
-    const lazy = [...reviewBody.slice(0, 8), "> Quoted from the diff:", "**Findings**", "- [High] Quoted - q.js:1 - confidence 0.9 - introduced", "", ...reviewBody.slice(8)];
-    assert.equal(run(await write("blockquote-lazy-heading", report((f) => reviewBlock(f), lazy))).status, 0);
     assert.equal(run(await write("free-form-output", report((f) => reviewBlock(f), ["Any free-form Output."]))).status, 0);
     // A delimiter line quoted in the Output is content; the summary part starts at the last one.
     assert.equal(run(await write("quoted-delimiter", report((f) => reviewBlock(f), ["<!-- report-summary v2 -->", "not a block", ...reviewBody]))).status, 0);

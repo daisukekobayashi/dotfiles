@@ -21,10 +21,10 @@
 //   its own real path, owned by the current user, and closed to group and
 //   others (mode 700); on Windows, where this cannot be verified, the report
 //   is invalid;
-// - the full report is non-empty;
+// - the report is valid UTF-8 and the full report is non-empty;
 // - for a review, a v1 summary is rejected, and the block is one JSON object,
 //   with no member repeated in any object, and exactly the block's keys, each
-//   of its type; base, head, round,
+//   of its type, and every string is valid UTF-8 text; base, head, round,
 //   report, and reviewer equal the arguments; completion is complete; the
 //   verdict and each finding's severity are allowed for the reviewer; finding
 //   IDs run <prefix>1..n in order, as SECD1..n for change-security-review's
@@ -69,8 +69,13 @@ function reportPathError(report, platform = process.platform) {
   return pattern.test(report) && flavor.normalize(report) === report ? null : `report path is not ${form}`;
 }
 
+// Diagnostics can quote report content, so escape control, line separator, and
+// lone surrogate characters before writing them.
+const escapeText = (text) => text.replace(/[\p{Cc}\u2028\u2029\p{Cs}]/gu,
+  (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
+
 const invalid = (reason) => {
-  process.stderr.write(`invalid: ${reason}\n`);
+  process.stderr.write(`invalid: ${escapeText(reason)}\n`);
   process.exit(3);
 };
 
@@ -102,14 +107,16 @@ const CANDIDATE_KEYS = ["id", "location", "title"];
 const WORKER_LABELS = ["Target", "Base", "Head", "Round", "Completion", "Tier", "Overview", "Files changed",
   "Verification", "Questions", "Defaults chosen", "Blockers", "Follow-ups", "Report"];
 
-// One non-empty line: no control characters, so a rendered value cannot add a summary line.
-const isLine = (text) => typeof text === "string" && text.trim() !== "" && !/[\u0000-\u001f\u007f\u2028\u2029]/.test(text);
+// One non-empty line: no control characters, so a rendered value cannot add a summary
+// line, and no lone surrogate, which would print as U+FFFD and make distinct values equal.
+const isLine = (text) => typeof text === "string" && text.trim() !== ""
+  && !/[\p{Cc}\u2028\u2029\p{Cs}]/u.test(text);
 
 const isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 
 function checkKeys(object, keys, where) {
   if (!isPlainObject(object)) invalid(`${where} is not an object`);
-  for (const key of Object.keys(object)) if (!keys.includes(key)) invalid(`${where} has unknown key ${key}`);
+  for (const key of Object.keys(object)) if (!keys.includes(key)) invalid(`${where} has unknown key ${JSON.stringify(key)}`);
   for (const key of keys) if (!Object.hasOwn(object, key)) invalid(`${where} lacks ${key}`);
 }
 
@@ -174,7 +181,7 @@ function reviewSummary(part, args) {
   try {
     block = JSON.parse(text);
   } catch (error) {
-    invalid(`review block is not valid JSON: ${error.message}`);
+    invalid(`review block is not valid JSON: ${JSON.stringify(error.message)}`);
   }
   const repeated = repeatedMember(text);
   if (repeated !== null) invalid(`review block repeats member ${JSON.stringify(repeated)}`);
@@ -297,7 +304,14 @@ function main() {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   if (args.sha256 !== undefined && args.sha256 !== sha256) invalid("report changed since its hash was recorded");
 
-  const lines = bytes.toString("utf8").replace(/\r$/gm, "").split("\n");
+  let text;
+  try {
+    // Decode strictly: a lossy decode would replace invalid bytes before validation.
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    invalid("report is not valid UTF-8");
+  }
+  const lines = text.replace(/\r$/gm, "").split("\n");
   if (lines.at(-1) === "") lines.pop();
   if (lines.length === 0) invalid("empty file");
   const delimiter = args.kind === "review" ? REVIEW_DELIMITER : WORKER_DELIMITER;
