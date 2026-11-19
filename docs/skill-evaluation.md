@@ -100,8 +100,11 @@ jq -s '[.[] | select(.isSidechain|not)] as $e
   | ([$e[] | select(.type=="assistant") | .message.content[]? | select(.type=="tool_use")
       | {key: .id, value: {
           kind: (if .name=="Bash" then (.input.command
-              | if (gsub("\u0027[^\u0027]*\u0027|\"([^\"\\\\]|\\\\.)*\""; "Q")
-                  | test("<<|\\btee\\b|(^|[^0-9&>])>>?[ ]*(?!/dev/null|&)[^ ]")) then "Bash:write"
+              | (split("\n")[0]) as $line
+              | "\\btee\\b|(^|[^0-9&>])>>?[ ]*(?!/dev/null|&)[^ ]" as $redirect
+              | if ($line | test("<<[^<]") and (test("\\$\\(|`|\\b(ba)?sh -c") | not)) then "Bash:write"
+                elif test("[\u0027\"`]|\\$\\(|\\b(ba)?sh -c") and test($redirect) then "Bash:ambiguous"
+                elif test($redirect) then "Bash:write"
                 elif test("(^|[;&| ])(cat|sed -n|head|tail) [^|]*\\.md") then "Bash:read-md"
                 elif test("gh issue (view|list)|az boards work-item show") then "Bash:issue-fetch"
                 else "Bash:other" end)
@@ -119,9 +122,12 @@ jq -s '[.[] | select(.isSidechain|not)] as $e
 
 Also count missed reviews and decisions: a review the tier selected that did
 not run, or a user decision the coordinator acted on without asking. The last
-query classifies heredoc, `tee`, and redirect writes before reads, ignoring `>`
-inside quoted strings, so compare `input_chars` for writes and `result_chars`
-for reads and issue fetches.
+query is a heuristic for comparing like with like, not a shell parser. It
+counts a heredoc or an unquoted `tee` or redirect as a write before any read.
+A command with a quote, `$(`, a backtick, or `bash -c` or `sh -c` that also has
+a `>` or `tee` anywhere is `Bash:ambiguous`; classify those calls manually.
+Compare `input_chars` for writes and `result_chars` for reads and issue
+fetches.
 
 A delivery-skill change can be checked before such a run with a static
 **chars-read proxy**: for each phase in delivery-common's Phase sections, sum

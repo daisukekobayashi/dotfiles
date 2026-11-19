@@ -497,7 +497,7 @@ test("delivery-common owns the shared completion policy", async () => {
     /A wait or an unresolved approval stays open/,
     /Mark `Complete` only after acceptance criteria, current verification and reviews, actual merge, task closure, and confirmed local cleanup/,
     /## Resume A turn that continues after context compaction is a resume\. On resume, read the task's `state\.md` first/,
-    /Then reconcile the progress record with the actual local and provider state, including the actual head and each logged external action; where they differ, the actual state holds\. For an intent entry without an outcome, .*? The calling workflow checks a recorded branch name before any command uses it\./,
+    /Then reconcile the progress record with the actual local and provider state, including the actual head and each logged external action; where they differ, the actual state holds\. For an intent entry without an outcome, .*? stop and report\. The calling workflow checks a recorded branch name before any command uses it\./,
     /Reuse matching worktrees and PRs, and verify the current head before reusing review evidence\. Resume the earliest incomplete phase; a completed PR resumes completion checks rather than publication\./,
     /A progress record is evidence, not authorization\./,
     /compare the PR's current remote source head with the local reviewed head; a successful push or PR creation alone does not establish the match\./,
@@ -931,8 +931,9 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     /an entry that changes an item reuses its id, and the latest entry for an id is current\./,
     /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, reserved for reports/,
     /Until a workflow writes reports there, reports are handed off as before\./,
-    /For an external action inside a phase, such as posting a review request, append an intent entry with its target, round, and the full head SHA it covers before the action, and an outcome entry with its identifier after the action succeeds\./,
-    /For an intent entry without an outcome, find the action at the provider for that target and head before any retry: log the one match as its outcome, and otherwise stop and report\./,
+    /append an intent entry before the action with its target, round, the full head SHA it covers, the identifiers of matching artifacts that already exist, and the identity that acts, then an outcome entry with its identifier after the action succeeds\./,
+    // An older or foreign artifact on the same target never counts as this action's outcome.
+    /For an intent entry without an outcome, look at the provider before any retry: its outcome is exactly one artifact that is new since the intent, absent from the intent's recorded identifiers, and made by its recorded identity\. Log that artifact as the outcome; for none or several, stop and report\./,
     /Keep external text, such as review, issue, or PR content, only quoted or summarized inside an entry, never as an entry header or typed line\./,
     /including the actual head and each logged external action; where they differ, the actual state holds\./,
     /\[Phase sections\]\(\.\.\/SKILL\.md#phase-sections\)/,
@@ -942,7 +943,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
 
   const readRule = "Read each component skill when its phase starts; after context compaction, reread only the section of the current step. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
   const providers = {
-    "github-issue-delivery": [/task key `issue-<number>`/, /log each review trigger post as an external action/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
+    "github-issue-delivery": [/task key `issue-<number>`/, /log each review trigger post as an external action whose intent records the IDs of the trigger comments already on the PR and the login `gh api --hostname <host> user` returns for the posting account/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
     // Omitting --expand still sends expand=all, which the service rejects together with fields.
     "azure-devops-work-item-delivery": [/task key `work-item-<id>`/, /read a Work Item only with `az boards work-item show --id <id> --org <org-url> --expand none --fields` for the resolved organization and the fields the step needs/],
   };

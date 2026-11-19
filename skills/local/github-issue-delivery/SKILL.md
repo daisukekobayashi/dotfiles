@@ -52,8 +52,10 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    [Delivery Completion](../delivery-common/references/completion.md) with the
    task key `issue-<number>`, adding the hosted review round count and the PR
    trigger and thread identifiers; log each review trigger post as an external
-   action. After `github-issue-start`'s initial fetch, fetch an issue only with
-   `gh issue view <number> --repo <host>/<owner>/<repo> --json` for the
+   action whose intent records the IDs of the trigger comments already on the
+   PR and the login `gh api --hostname <host> user` returns for the posting
+   account. After `github-issue-start`'s initial fetch, fetch an issue only
+   with `gh issue view <number> --repo <host>/<owner>/<repo> --json` for the
    resolved host and repository and the fields the step needs, such as
    `state,stateReason`.
 
