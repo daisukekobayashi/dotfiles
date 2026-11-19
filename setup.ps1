@@ -40,6 +40,7 @@ Behavior:
   links/skills/claude: retry link creation elevated when privileges are unavailable, then copy if needed
   -Copy: skip link attempts for links, all, skills (user or project scope) or claude; rerun setup to refresh copies
   skills: runs the shared Node skills setup runtime
+          export --profile <csv> --out <dir> writes a shareable skills bundle (no -Copy)
   codex: accepts --env <name>, --provider azure|openai|chatgpt, --base-url <url>, --api-version <value>,
          --profile <name> and --dry-run (requires Node.js).
          The provider defaults to azure. Legacy --azure-* aliases remain available.
@@ -155,6 +156,41 @@ function Invoke-SetupSteps {
   }
 }
 
+# A child PowerShell run with -File would bind --out as the common parameter
+# -OutVariable or -OutBuffer, so export hands its arguments straight to Node,
+# which receives each one literally.
+function Invoke-SkillsExport {
+  param (
+    [Parameter(Mandatory = $true)]
+    [object]$SetupContext,
+    [string[]]$Arguments = @()
+  )
+
+  if (-not (Test-CommandAvailable -Name "node")) {
+    throw "Required command not found: node"
+  }
+  $runtime = Join-Path $SetupContext.DotfilesRoot "setup/skills.js"
+  # An explicitly set SETUP_HOME is kept; export also checks the
+  # PowerShell home through USERPROFILE and CUSTOM_HOME.
+  $hadSetupHome = -not [string]::IsNullOrEmpty($Env:SETUP_HOME)
+  $previousSetupHome = $Env:SETUP_HOME
+  try {
+    if (-not $hadSetupHome) {
+      $Env:SETUP_HOME = $SetupContext.HomeDir
+    }
+    & node $runtime @Arguments
+    if ($LASTEXITCODE -ne 0) {
+      throw "Skills export failed."
+    }
+  } finally {
+    if ($hadSetupHome) {
+      $Env:SETUP_HOME = $previousSetupHome
+    } else {
+      Remove-Item Env:SETUP_HOME -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 try {
   Assert-MinimumPowerShellVersion
   $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
@@ -184,6 +220,13 @@ try {
         -SetupContext $setupContext -CopyArguments $copyArguments
     }
     "skills" {
+      if ($SubcommandArgs.Count -gt 0 -and $SubcommandArgs[0] -eq "export") {
+        if ($Copy) {
+          throw "-Copy is not supported for skills export."
+        }
+        Invoke-SkillsExport -SetupContext $setupContext -Arguments $SubcommandArgs
+        break
+      }
       Invoke-SetupPowerShellScript -ScriptPath $skillsScript -ArgumentList (
         @(
           "-HomeDir",

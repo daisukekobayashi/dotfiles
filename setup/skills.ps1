@@ -42,7 +42,7 @@ function Test-IsUserScopeSkillsInvocation {
     $argumentList += $SkillsArguments
   }
 
-  if ($argumentList.Count -gt 0 -and $argumentList[0] -eq "profile") {
+  if ($argumentList.Count -gt 0 -and $argumentList[0] -in @("profile", "export")) {
     return $false
   }
 
@@ -221,7 +221,7 @@ try {
   $shouldWireUserSkills = (Test-IsUserScopeSkillsInvocation -SkillsArguments $SkillsArgs) -or $WireUserSkillLinksOnly
   $selectedAgents = Get-SelectedSkillsAgents -SkillsArguments $SkillsArgs -WireAgentsCsv $WireAgents
 
-  $isProfileCommand = $SkillsArgs.Count -gt 0 -and $SkillsArgs[0] -eq "profile"
+  $isProfileCommand = $SkillsArgs.Count -gt 0 -and $SkillsArgs[0] -in @("profile", "export")
   if ($Copy -and $isProfileCommand) {
     throw "-Copy is supported only for skills installs (user or project scope)."
   }

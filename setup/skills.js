@@ -7,11 +7,10 @@ const os = require("node:os");
 const path = require("node:path");
 const shared_links_1 = require("./shared-links");
 const skill_names_1 = require("./skill-names");
+const skill_profiles_1 = require("./skill-profiles");
+const skills_export_1 = require("./skills-export");
 const private_base_1 = require("./private-base");
 const SUPPORTED_AGENTS = new Set(["codex", "claude-code"]);
-function fail(message) {
-    throw new Error(message);
-}
 function info(message) {
     console.log(message);
 }
@@ -21,45 +20,17 @@ function warn(message) {
 function envFlag(name) {
     const value = process.env[name] || "0";
     if (value !== "0" && value !== "1") {
-        fail(`${name} must be 0 or 1: ${value}`);
+        (0, skill_profiles_1.fail)(`${name} must be 0 or 1: ${value}`);
     }
     return value === "1";
-}
-function csv(value) {
-    if (!value) {
-        return [];
-    }
-    return value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-}
-function parseAgent(value) {
-    const trimmed = value.trim();
-    if (trimmed === "codex" || trimmed === "claude-code") {
-        return trimmed;
-    }
-    fail(`unsupported skills agent: ${trimmed}`);
-}
-function parseAgents(values) {
-    const agents = [];
-    for (const value of values) {
-        for (const item of csv(value)) {
-            const agent = parseAgent(item);
-            if (!agents.includes(agent)) {
-                agents.push(agent);
-            }
-        }
-    }
-    return agents;
 }
 function parseArgs(argv) {
     if (argv[0] === "profile") {
         if (argv.length < 2) {
-            fail("skills profile requires a subcommand");
+            (0, skill_profiles_1.fail)("skills profile requires a subcommand");
         }
         if (argv[1] !== "validate") {
-            fail(`Unknown skills profile subcommand: ${argv[1]}`);
+            (0, skill_profiles_1.fail)(`Unknown skills profile subcommand: ${argv[1]}`);
         }
         let profiles = "";
         let index = 2;
@@ -67,13 +38,13 @@ function parseArgs(argv) {
             const item = argv[index];
             if (item === "--profile") {
                 if (index + 1 >= argv.length) {
-                    fail("--profile requires a csv value");
+                    (0, skill_profiles_1.fail)("--profile requires a csv value");
                 }
                 profiles = argv[index + 1] ?? "";
                 index += 2;
                 continue;
             }
-            fail(`Unknown skills profile argument: ${item}`);
+            (0, skill_profiles_1.fail)(`Unknown skills profile argument: ${item}`);
         }
         return {
             action: "profile-validate",
@@ -92,11 +63,11 @@ function parseArgs(argv) {
         const item = argv[index];
         if (item === "--scope") {
             if (index + 1 >= argv.length) {
-                fail("--scope requires one of: user, project");
+                (0, skill_profiles_1.fail)("--scope requires one of: user, project");
             }
             const rawScope = argv[index + 1];
             if (rawScope !== "user" && rawScope !== "project") {
-                fail(`Unknown skills scope: ${rawScope}`);
+                (0, skill_profiles_1.fail)(`Unknown skills scope: ${rawScope}`);
             }
             scope = rawScope;
             index += 2;
@@ -104,7 +75,7 @@ function parseArgs(argv) {
         }
         if (item === "--profile") {
             if (index + 1 >= argv.length) {
-                fail("--profile requires a csv value");
+                (0, skill_profiles_1.fail)("--profile requires a csv value");
             }
             profiles = argv[index + 1] ?? "";
             index += 2;
@@ -112,7 +83,7 @@ function parseArgs(argv) {
         }
         if (item === "--agent") {
             if (index + 1 >= argv.length) {
-                fail("--agent requires a value");
+                (0, skill_profiles_1.fail)("--agent requires a value");
             }
             agentArgs.push(argv[index + 1] ?? "");
             index += 2;
@@ -123,14 +94,14 @@ function parseArgs(argv) {
             index += 1;
             continue;
         }
-        fail(`Unknown skills argument: ${item}`);
+        (0, skill_profiles_1.fail)(`Unknown skills argument: ${item}`);
     }
     // User scope copies are made by the Windows PowerShell wrapper, which owns
     // the user link batch; the runtime copies only project skills.
     if (copy && scope !== "project") {
-        fail("--copy is supported only for project scope");
+        (0, skill_profiles_1.fail)("--copy is supported only for project scope");
     }
-    const agents = agentArgs.length > 0 ? parseAgents(agentArgs) : ["codex", "claude-code"];
+    const agents = agentArgs.length > 0 ? (0, skill_profiles_1.parseAgents)(agentArgs) : ["codex", "claude-code"];
     return {
         action: "install",
         scope,
@@ -176,7 +147,7 @@ function resolveWindowsCommand(command, env = process.env) {
             }
         }
     }
-    fail(`Required command not found: ${command}`);
+    (0, skill_profiles_1.fail)(`Required command not found: ${command}`);
 }
 function resolveCommand(command, env = process.env) {
     if (process.platform === "win32") {
@@ -188,166 +159,16 @@ function resolveCommand(command, env = process.env) {
         stdio: ["ignore", "pipe", "ignore"],
     });
     if (result.status !== 0) {
-        fail(`Required command not found: ${command}`);
+        (0, skill_profiles_1.fail)(`Required command not found: ${command}`);
     }
     const resolved = result.stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
     if (!resolved) {
-        fail(`Required command not found: ${command}`);
+        (0, skill_profiles_1.fail)(`Required command not found: ${command}`);
     }
     return resolved;
 }
 function shellQuote(value) {
     return `'${value.replace(/'/g, "'\\''")}'`;
-}
-function readJson(filePath) {
-    let raw;
-    try {
-        raw = fs.readFileSync(filePath, "utf8");
-    }
-    catch (error) {
-        fail(`failed to read ${filePath}: ${error.message}`);
-    }
-    try {
-        return JSON.parse(raw);
-    }
-    catch (error) {
-        fail(`failed to parse ${filePath}: ${error.message}`);
-    }
-}
-function ensureArray(value, filePath, key) {
-    if (value === undefined) {
-        return [];
-    }
-    if (!Array.isArray(value)) {
-        fail(`${filePath}: ${key} must be an array`);
-    }
-    return value;
-}
-function getObjectProperty(value, key) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-        return undefined;
-    }
-    return value[key];
-}
-function requireUnreservedSkillName(name) {
-    if ((0, skill_names_1.isReservedSkillName)(name)) {
-        fail(`Invalid or reserved skill name: ${name}`);
-    }
-}
-function profilePath(profileDir, name) {
-    return path.join(profileDir, `${name}.json`);
-}
-function listProfiles(profileDir) {
-    if (!fs.existsSync(profileDir)) {
-        fail(`skills profiles directory not found: ${profileDir}`);
-    }
-    return fs
-        .readdirSync(profileDir)
-        .filter((entry) => entry.endsWith(".json"))
-        .map((entry) => path.basename(entry, ".json"))
-        .sort();
-}
-function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
-    const profileDir = path.join(dotfilesRoot, "skills", "profiles");
-    const localDir = path.join(dotfilesRoot, "skills", "local");
-    const expanded = [];
-    const loaded = new Set();
-    const externalBySource = new Map();
-    const localSkills = new Set();
-    function load(name, stack) {
-        if (loaded.has(name)) {
-            return;
-        }
-        if (stack.includes(name)) {
-            fail(`cyclic profile include: ${stack.concat(name).join(" -> ")}`);
-        }
-        const filePath = profilePath(profileDir, name);
-        if (!fs.existsSync(filePath)) {
-            fail(`unknown profile ${name}`);
-        }
-        const profile = readJson(filePath);
-        const includes = ensureArray(getObjectProperty(profile, "includes"), filePath, "includes");
-        for (const includeName of includes) {
-            if (typeof includeName !== "string" || includeName.trim() === "") {
-                fail(`${filePath}: includes must contain profile names`);
-            }
-            load(includeName, stack.concat(name));
-        }
-        const external = ensureArray(getObjectProperty(profile, "external"), filePath, "external");
-        for (const entry of external) {
-            if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-                fail(`${filePath}: external entries must be objects`);
-            }
-            const source = entry.source;
-            if (typeof source !== "string" || source.trim() === "") {
-                fail(`${filePath}: external entry is missing source`);
-            }
-            const skills = ensureArray(entry.skills, filePath, "external[].skills");
-            if (skills.length === 0) {
-                fail(`${filePath}: external entry for ${source} has no skills`);
-            }
-            if (!externalBySource.has(source)) {
-                externalBySource.set(source, new Set());
-            }
-            const sourceSkills = externalBySource.get(source);
-            if (!sourceSkills) {
-                fail(`failed to resolve external source ${source}`);
-            }
-            for (const skillName of skills) {
-                if (typeof skillName !== "string" || skillName.trim() === "") {
-                    fail(`${filePath}: external skills must contain names`);
-                }
-                requireUnreservedSkillName(skillName);
-                sourceSkills.add(skillName);
-            }
-        }
-        const local = ensureArray(getObjectProperty(profile, "local"), filePath, "local");
-        for (const skillName of local) {
-            if (typeof skillName !== "string" || skillName.trim() === "") {
-                fail(`${filePath}: local must contain skill names`);
-            }
-            requireUnreservedSkillName(skillName);
-            const skillPath = path.join(localDir, skillName);
-            if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
-                fail(`unknown local skill ${skillName}`);
-            }
-            localSkills.add(skillName);
-        }
-        loaded.add(name);
-        expanded.push(name);
-    }
-    for (const profileName of requestedProfiles) {
-        load(profileName, []);
-    }
-    const owners = new Map();
-    for (const [source, skills] of externalBySource) {
-        for (const skillName of skills) {
-            owners.set(skillName, (owners.get(skillName) ?? []).concat(source));
-        }
-    }
-    for (const skillName of localSkills) {
-        owners.set(skillName, (owners.get(skillName) ?? []).concat("local"));
-    }
-    const collisions = Array.from(owners.entries())
-        .filter(([, skillOwners]) => skillOwners.length > 1)
-        .map(([skillName, skillOwners]) => `${skillName} (${skillOwners.join(", ")})`)
-        .sort();
-    if (collisions.length > 0) {
-        fail(`skill name collision: ${collisions.join("; ")}`);
-    }
-    return {
-        generatedBy: "dotfiles setup skills",
-        scope,
-        requestedProfiles,
-        expandedProfiles: expanded,
-        agents,
-        external: Array.from(externalBySource.entries())
-            .map(([source, skills]) => ({ source, skills: Array.from(skills).sort() }))
-            .sort((left, right) => left.source.localeCompare(right.source)),
-        local: Array.from(localSkills)
-            .sort()
-            .map((name) => ({ name, path: path.join(localDir, name) })),
-    };
 }
 function writeJson(filePath, value) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -366,8 +187,8 @@ function writeMetadata(plan, outputFile) {
 }
 function validateProfiles(dotfilesRoot, profilesCsv) {
     const profileDir = path.join(dotfilesRoot, "skills", "profiles");
-    const requestedProfiles = profilesCsv ? csv(profilesCsv) : listProfiles(profileDir);
-    resolveProfiles(dotfilesRoot, requestedProfiles, ["codex"], "validate");
+    const requestedProfiles = profilesCsv ? (0, skill_profiles_1.csv)(profilesCsv) : (0, skill_profiles_1.listProfiles)(profileDir);
+    (0, skill_profiles_1.resolveProfiles)(dotfilesRoot, requestedProfiles, ["codex"], "validate");
     console.log(`Profiles valid: ${requestedProfiles.join(",")}`);
 }
 function removePath(targetPath) {
@@ -432,7 +253,7 @@ function entryOwner(owners, entry) {
 // follows a link out of the directory.
 function requireNoEntry(directory, entry, owners, origin, place) {
     if (fs.lstatSync(path.join(directory, entry), { throwIfNoEntry: false })) {
-        fail(`skill entry collision in ${place}: ${entry} (${entryOwner(owners, entry)}, ${origin})`);
+        (0, skill_profiles_1.fail)(`skill entry collision in ${place}: ${entry} (${entryOwner(owners, entry)}, ${origin})`);
     }
 }
 // Fails when an install produced an entry with a reserved name in any letter
@@ -440,7 +261,7 @@ function requireNoEntry(directory, entry, owners, origin, place) {
 // skills.
 function requireUnreservedEntry(entry, source, place) {
     if ((0, skill_names_1.isReservedSkillName)(entry)) {
-        fail(`skill entry collision in ${place}: ${entry} (${source}, reserved name)`);
+        (0, skill_profiles_1.fail)(`skill entry collision in ${place}: ${entry} (${source}, reserved name)`);
     }
 }
 // Copies every entry an install produced into the user staging view, failing
@@ -630,7 +451,7 @@ function agentSkillDir(root, agent) {
     if (agent === "claude-code") {
         return path.join(root, ".claude", "skills");
     }
-    fail(`unsupported agent: ${agent}`);
+    (0, skill_profiles_1.fail)(`unsupported agent: ${agent}`);
 }
 // Local skills never replace an entry an external install produced; a
 // same-name entry fails with both origins before any link is created.
@@ -664,7 +485,7 @@ function windowsCommandShell(env = process.env) {
     if (systemRoot && path.isAbsolute(systemRoot)) {
         return path.join(systemRoot, "System32", "cmd.exe");
     }
-    fail("cannot locate cmd.exe: set ComSpec or SystemRoot to an absolute path");
+    (0, skill_profiles_1.fail)("cannot locate cmd.exe: set ComSpec or SystemRoot to an absolute path");
 }
 function runCommand(command, args, cwd, env = process.env) {
     // cmd.exe receives the command line unquoted under a shell, so quote the
@@ -677,10 +498,10 @@ function runCommand(command, args, cwd, env = process.env) {
         stdio: ["ignore", "inherit", "inherit"],
     });
     if (result.error) {
-        fail(result.error.message);
+        (0, skill_profiles_1.fail)(result.error.message);
     }
     if (result.status !== 0) {
-        fail(`${command} ${args.join(" ")} failed with exit ${result.status ?? "unknown"}`);
+        (0, skill_profiles_1.fail)(`${command} ${args.join(" ")} failed with exit ${result.status ?? "unknown"}`);
     }
 }
 // Run npm's npx-cli.js with node when it sits next to the npx.cmd shim, which
@@ -859,7 +680,7 @@ function requireRealAgentSkillDir(workDir, agent, source, place) {
         }
         if (!stat.isDirectory()) {
             const reason = stat.isSymbolicLink() ? "symbolic link" : "not a directory";
-            fail(`skill entry collision in ${place}: ${path.relative(workDir, current)} (${source}, ${reason})`);
+            (0, skill_profiles_1.fail)(`skill entry collision in ${place}: ${path.relative(workDir, current)} (${source}, ${reason})`);
         }
     }
 }
@@ -887,7 +708,7 @@ function installExternalSkills(workDir, projectRoot, plan, agents, npx, npmCache
             const agentOwners = owners.get(agent);
             for (const [name, identity] of before.get(agent)) {
                 if (entryIdentity(path.join(skillsDir, name)) !== identity) {
-                    fail(`skill entry collision in project install: ${name} (${entryOwner(agentOwners, name)}, ${entry.source})`);
+                    (0, skill_profiles_1.fail)(`skill entry collision in project install: ${name} (${entryOwner(agentOwners, name)}, ${entry.source})`);
                 }
             }
             for (const name of entryIdentities(skillsDir).keys()) {
@@ -918,7 +739,7 @@ function requireInstalledSkills(skillsDir, entry) {
     for (const name of entry.skills) {
         const skillFile = path.join(skillsDir, name, "SKILL.md");
         if (!fs.existsSync(skillFile) || !fs.statSync(skillFile).isFile()) {
-            fail(`Missing installed skill ${name} from ${entry.source}: ${skillFile}`);
+            (0, skill_profiles_1.fail)(`Missing installed skill ${name} from ${entry.source}: ${skillFile}`);
         }
     }
 }
@@ -1063,8 +884,8 @@ function linkClaudeEnvironmentSkills(restoreSkillsDir, directories, names, dryRu
     }
 }
 function setupUserSkills(dotfilesRoot, setupHome, profilesCsv, agents, dryRun, skipUserLocalSkillLinks, skipUserAgentSkillLinks) {
-    const requestedProfiles = csv(profilesCsv || "base");
-    const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "user");
+    const requestedProfiles = (0, skill_profiles_1.csv)(profilesCsv || "base");
+    const plan = (0, skill_profiles_1.resolveProfiles)(dotfilesRoot, requestedProfiles, agents, "user");
     const restoreRoot = path.join(dotfilesRoot, ".agents", "user");
     const restoreSkillsDir = path.join(restoreRoot, "skills");
     const suffix = `${process.pid}`;
@@ -1210,7 +1031,7 @@ function requireNoProjectTargetLinks(projectRoot, targets) {
                 break;
             }
             if (stat.isSymbolicLink()) {
-                fail(`refusing to set up project skills: ${current} is a symbolic link to ${fs.readlinkSync(current)}; ` +
+                (0, skill_profiles_1.fail)(`refusing to set up project skills: ${current} is a symbolic link to ${fs.readlinkSync(current)}; ` +
                     "replace it with a directory or file in the project");
             }
         }
@@ -1286,22 +1107,22 @@ function gitProjectRoot(cwd) {
         encoding: "utf8",
     });
     if (result.status !== 0) {
-        fail("project scope requires running inside a git repository");
+        (0, skill_profiles_1.fail)("project scope requires running inside a git repository");
     }
     return result.stdout.trim();
 }
 function setupProjectSkills(dotfilesRoot, profilesCsv, agents, dryRun, copy) {
     if (!profilesCsv) {
-        fail("--profile is required for project scope");
+        (0, skill_profiles_1.fail)("--profile is required for project scope");
     }
     for (const agent of agents) {
         if (!SUPPORTED_AGENTS.has(agent)) {
-            fail(`unsupported skills agent: ${agent}`);
+            (0, skill_profiles_1.fail)(`unsupported skills agent: ${agent}`);
         }
     }
-    const requestedProfiles = csv(profilesCsv);
+    const requestedProfiles = (0, skill_profiles_1.csv)(profilesCsv);
     const projectRoot = gitProjectRoot(process.cwd());
-    const plan = resolveProfiles(dotfilesRoot, requestedProfiles, agents, "project");
+    const plan = (0, skill_profiles_1.resolveProfiles)(dotfilesRoot, requestedProfiles, agents, "project");
     const hasExternal = plan.external.length > 0;
     const targets = projectTargets(projectRoot, agents, hasExternal);
     requireNoProjectTargetLinks(projectRoot, targets);
@@ -1380,6 +1201,17 @@ function setupContext() {
     };
 }
 function main(argv) {
+    if (argv[0] === "export") {
+        const context = setupContext();
+        (0, skills_export_1.runExportCommand)(argv.slice(1), {
+            dotfilesRoot: context.dotfilesRoot,
+            home: context.home,
+            dryRun: context.dryRun,
+            env: process.env,
+            gitCommand: () => (process.platform === "win32" ? resolveWindowsCommand("git") : "git"),
+        });
+        return;
+    }
     const parsed = parseArgs(argv);
     const context = setupContext();
     if (parsed.action === "profile-validate") {
