@@ -5,8 +5,9 @@ It answers from ../.snapshot/issues.json, relative to this file, instead of
 GitHub, and appends one JSON line per call to the ledger named by
 GH_SNAPSHOT_LOG, or ../.snapshot/gh-calls.jsonl when that is unset. A line
 holds the arguments, a command kind, the exit status, the bytes written to
-stdout and stderr, the issues whose body or comments the output contains, and
-this file's real path.
+stdout and stderr, the issues whose body or comments the output depends on,
+and this file's real path. An issue's text counts when withholding it changes
+the output, so a `--jq` projection of any part of a body or comment counts too.
 
 Supported: `gh repo view`, `gh issue list`, `gh issue view`, `gh pr list`,
 `gh pr view`, `gh auth status`, `gh --version`, and GET `gh api` for an issue,
@@ -18,6 +19,7 @@ the system `jq`. Every other command or flag, and every command that would
 change GitHub, exits non-zero with no stdout.
 """
 
+import copy
 import json
 import os
 import re
@@ -419,16 +421,17 @@ HANDLERS = {
 }
 
 
-def run(args):
+def run(args, snapshot=None):
     if args in (["--version"], ["version"]):
         return "version", "gh version 2.0.0 (offline snapshot stand-in)\n"
+    snapshot = load() if snapshot is None else snapshot
     if not args:
         raise Refusal("usage: gh <command> <subcommand> [flags]", "usage")
     command, rest = args[0], args[1:]
     if rest and rest[0] in MUTATING:
         raise Refusal(f"refused: the snapshot stand-in is read-only; gh {command} {rest[0]} would change GitHub")
     if command == "auth" and rest == ["status"]:
-        host = load()["repository"]["host"]
+        host = snapshot["repository"]["host"]
         return "auth status", f"{host}\n  Logged in to {host} (offline snapshot stand-in)\n"
     if command != "api":
         if not rest:
@@ -437,24 +440,32 @@ def run(args):
     if command not in HANDLERS:
         raise Refusal(f"unsupported command: gh {command}")
     positional, options = parse(command, rest)
-    return HANDLERS[command](load(), positional, options)
+    return HANDLERS[command](snapshot, positional, options)
 
 
-def text_in(text, output):
-    return text in output or json.dumps(text, ensure_ascii=False)[1:-1] in output
+WITHHELD = "(withheld by the snapshot stand-in)"
 
 
-def exposed(output):
-    """Return the issues whose body, and whose comments, appear in the output."""
-    if not output:
-        return [], []
-    try:
-        issues = load()["issues"]
-    except (OSError, ValueError):
-        return [], []
-    bodies = [issue["number"] for issue in issues if issue["body"] and text_in(issue["body"], output)]
-    comments = [issue["number"] for issue in issues
-                if any(text_in(comment["body"], output) for comment in issue.get("comments", []))]
+def exposed(args, snapshot, output):
+    """Return the issues whose body, and whose comments, the output depends on."""
+    bodies, comments = [], []
+    for index, issue in enumerate(snapshot["issues"]):
+        for field, found in (("body", bodies), ("comments", comments)):
+            if not issue.get(field):
+                continue
+            changed = copy.deepcopy(snapshot)
+            target = changed["issues"][index]
+            if field == "body":
+                target["body"] = WITHHELD
+            else:
+                for comment in target["comments"]:
+                    comment["body"] = WITHHELD
+            try:
+                other = run(args, changed)[1]
+            except Refusal:
+                other = None
+            if other != output:
+                found.append(issue["number"])
     return bodies, comments
 
 
@@ -468,7 +479,12 @@ def main():
     except (OSError, ValueError, KeyError) as error:
         kind, out, err, status = "error", "", f"gh stand-in error: {error}\n", 1
     out_bytes, err_bytes = out.encode(), err.encode()
-    bodies, comments = exposed(out)
+    bodies, comments = [], []
+    if status == 0 and out:
+        try:
+            bodies, comments = exposed(args, load(), out)
+        except (OSError, ValueError, KeyError):
+            pass
     entry = {"argv": args, "kind": kind, "exit": status,
              "stdout_bytes": len(out_bytes), "stderr_bytes": len(err_bytes),
              "text": bodies, "comments": comments, "exe": HERE}

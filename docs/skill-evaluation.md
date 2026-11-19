@@ -87,24 +87,28 @@ the full-read prompt names every open issue for a detail read. The fixture's
 `.snapshot/issues.json`, applies the filters it accepts, prints compact JSON as
 `gh` does off a terminal, applies `--jq` through the system `jq`, refuses every
 other command, flag, and write, and logs each call's stdout bytes and the
-issues whose text the call returned. Before launch, `evals/stage_gh.py stage`
+issues whose body or comments its output depends on: withholding that text
+would change the output, so a `--jq` projection of any part of it counts. Before launch, `evals/stage_gh.py stage`
 copies that stand-in into a read-only directory outside every path the
 candidate can write and prints the launch `PATH`: the staged copy first, then
 the caller's `PATH` without empty, relative, workspace, or temp-directory
 entries. Inherited Claude hooks run outside the sandbox with that `PATH`, so a
-candidate cannot plant an executable for them. After the run, `stage_gh.py
-collect` copies the call log, read only as a regular file inside the
-workspace, to the run's evidence directory before cleanup, and the run is
-reconciled with its transcript. The `execution` object otherwise uses the
+candidate cannot plant an executable for them. After the run and before cleanup,
+`stage_gh.py collect` opens the call log without blocking or following links,
+accepts only a single-link regular file within a byte limit and a deadline, and
+copies it to the run's evidence directory; a failed collection excludes the
+run, and a collected log is reconciled with the transcript. The `execution` object otherwise uses the
 `change-review` policy for both agents and fixes the decision rule before any
 run: a run matches when its next issue, current wave, and next wave equal the
 case's `expected` answer, and a default run in the overlap scenario also must
 not pair the overlapping issue with the next issue as parallel work. The read
-scope comes from the call log, not the report: a full-read run that did not
-receive every issue's text and comments is rerun, a default run that received
+scope never comes from the report. From the call log, a default run that read
 every issue's text does not count as detail-band evidence, and a default
-overlap run that read the overlapping issue does not count for the list-only
-guard. A counted default run that fails where the full-read runs of the same
+overlap run that read any of the overlapping issue's text does not count for
+the list-only guard. Full-read coverage comes from the tool results that
+reached the candidate: `stage_gh.py coverage` checks the tool output extracted
+from the transcript, and a full-read run it cannot confirm is excluded and
+rerun. A counted default run that fails where the full-read runs of the same
 agent pass marks a detail-band regression. Each run records its next issue,
 both waves, its parallel groups, its detail reads, and its `gh` bytes; bytes
 are measured, not gated.

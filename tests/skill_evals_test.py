@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 import unittest
 from unittest import mock
@@ -285,7 +286,10 @@ class SkillEvaluationTests(unittest.TestCase):
         rule = execution["decision_rule"]
         self.assertTrue(rule.startswith("Fixed before any run."))
         self.assertIn("a default run in addition names no parallel group", rule)
-        self.assertIn("never from the report", rule)
+        self.assertIn("never comes from the report", rule)
+        self.assertIn("withholding that issue's body or comments changes the call's output", rule)
+        self.assertIn("Full-read coverage comes from the tool results that reached the candidate", rule)
+        self.assertIn("coverage", execution["gh_stand_in"])
         self.assertEqual(set(execution["recorded_fields"]), {
             "next", "current_wave", "next_wave", "parallel_groups", "detail_reads", "gh_bytes"})
         self.assertTrue((TRIAGE_SUITE.parent / "stage_gh.py").is_file())
@@ -384,17 +388,28 @@ class SkillEvaluationTests(unittest.TestCase):
                                    str(tmpdir / "x"), "/usr/bin", "/usr/bin"])
         self.assertEqual(STAGE.trusted_path(hostile, [str(workspace), str(tmpdir)]), ["/usr/bin"])
         entries = env["PATH"].split(os.pathsep)
-        self.assertEqual(entries[0], str(dest / "bin"))
+        self.assertEqual(entries[0], os.path.realpath(dest / "bin"))
         for entry in entries:
             self.assertTrue(os.path.isabs(entry), entry)
             self.assertFalse(STAGE.inside(entry, workspace) or STAGE.inside(entry, tmpdir), entry)
-        self.assertEqual(Path(env["stand_in"]), (dest / "bin/gh").resolve())
+        self.assertEqual(env["stand_in"], os.path.realpath(dest / "bin/gh"))
         self.assertEqual(Path(env["GH_SNAPSHOT_LOG"]),
                          workspace.resolve() / ".snapshot/gh-calls.jsonl")
         for path in (dest, dest / "bin", dest / ".snapshot", dest / "bin/gh", dest / ".snapshot/issues.json"):
             self.assertFalse(path.stat().st_mode & 0o222, path)
         self.assertEqual((dest / "bin/gh").read_bytes(), (workspace / "bin/gh").read_bytes())
 
+        # PATH entries come out canonical, so a link in a writable root cannot be redirected later.
+        link = tmpdir / "usr-bin-link"
+        link.symlink_to("/usr/bin")
+        outside_link = self.root / "outside-link"
+        outside_link.symlink_to(workspace / "bin")
+        self.assertEqual(STAGE.trusted_path(os.pathsep.join([str(link), str(outside_link)]),
+                                            [str(workspace), str(tmpdir)]),
+                         [os.path.realpath("/usr/bin")])
+        with self.assertRaises(ValueError):
+            STAGE.stage(run_json, "relative-stage", tmpdir, os.environ["PATH"])
+        self.assertFalse(Path("relative-stage").exists())
         with self.assertRaises(ValueError):
             STAGE.stage(run_json, workspace / "inside", tmpdir, os.environ["PATH"])
         with self.assertRaises(ValueError):
@@ -443,6 +458,50 @@ class SkillEvaluationTests(unittest.TestCase):
         (workspace / ".snapshot").symlink_to(moved)
         with self.assertRaises(OSError):
             STAGE.collect(run_json, self.root / "evidence-dir-link")
+        (workspace / ".snapshot").unlink()
+        (moved / "gh-calls.jsonl").unlink()
+        (workspace / ".snapshot").mkdir()
+        ledger_path = workspace / ".snapshot/gh-calls.jsonl"
+
+        # A FIFO with no writer is rejected at once instead of blocking the collector.
+        os.mkfifo(ledger_path)
+        started = time.monotonic()
+        with self.assertRaisesRegex(ValueError, "not a regular file"):
+            STAGE.collect(run_json, self.root / "evidence-fifo", seconds=5)
+        self.assertLess(time.monotonic() - started, 5)
+        ledger_path.unlink()
+        # A hard link could copy a file the candidate cannot read into the evidence.
+        ledger_path.write_bytes(ledger)
+        os.link(ledger_path, self.root / "hard-link")
+        with self.assertRaisesRegex(ValueError, "hard links"):
+            STAGE.collect(run_json, self.root / "evidence-hard-link")
+        (self.root / "hard-link").unlink()
+        with self.assertRaisesRegex(ValueError, "larger than"):
+            STAGE.collect(run_json, self.root / "evidence-large", max_bytes=len(ledger) - 1)
+        self.assertEqual(STAGE.collect(run_json, self.root / "evidence-again")["calls"], 3)
+        for name in ("evidence-fifo", "evidence-hard-link", "evidence-large"):
+            self.assertFalse((self.root / name).exists(), name)
+        with self.assertRaises(TimeoutError):
+            with STAGE.deadline(0.2):
+                time.sleep(2)
+
+    def test_triage_coverage_counts_only_text_that_reached_the_candidate(self):
+        _, workspace, run_json = self.prepare_triage(4)
+        snapshot = json.loads((workspace / ".snapshot/issues.json").read_text())
+        complete = "\n".join(json.dumps(issue) for issue in snapshot["issues"])
+        output = self.root / "tool-output.txt"
+        output.write_text(complete)
+        result = STAGE.coverage(run_json, output)
+        self.assertEqual(result, {"body_issues": [20, 21, 22, 23], "comment_issues": [20],
+                                  "covers_read_scope": True})
+        # Discarded comments or a partial body leave the run uncounted.
+        without_comment = [dict(issue, comments=[]) for issue in snapshot["issues"]]
+        output.write_text("\n".join(json.dumps(issue) for issue in without_comment))
+        self.assertFalse(STAGE.coverage(run_json, output)["covers_read_scope"])
+        partial = [dict(issue, body=issue["body"].split("## Touched Areas")[0]) for issue in snapshot["issues"]]
+        output.write_text("\n".join(json.dumps(issue) for issue in partial))
+        result = STAGE.coverage(run_json, output)
+        self.assertEqual((result["body_issues"], result["covers_read_scope"]), ([], False))
 
     @unittest.skipUnless(shutil.which("jq"), "the gh stand-in runs --jq through jq")
     def test_triage_gh_stand_in_answers_documented_commands_and_logs_bytes(self):
@@ -536,15 +595,32 @@ class SkillEvaluationTests(unittest.TestCase):
                     self.assertEqual(entry["stdout_bytes"], len(result.stdout.encode()))
                     self.assertEqual(entry["stderr_bytes"], len(result.stderr.encode()))
                     self.assertEqual(entry["exe"], env["stand_in"])
-                    exposed = [n for n, issue in issues.items()
-                               if json.dumps(issue["body"])[1:-1] in result.stdout or issue["body"] in result.stdout]
-                    self.assertEqual(entry["text"], exposed, args)
                     if args[:2] == ["issue", "view"] and entry["exit"] == 0:
                         number = int(args[2])
                         self.assertEqual(entry["text"], [number])
                         self.assertEqual(entry["comments"], [number] if issues[number]["comments"] else [])
                     elif "--jq" in args and args[0] == "api":
                         self.assertEqual((entry["text"], entry["comments"]), ([], []))
+                    elif args[:2] in (["repo", "view"], ["pr", "list"]) or entry["exit"] != 0:
+                        self.assertEqual((entry["text"], entry["comments"]), ([], []))
+
+                # Any projection that depends on an issue's text counts as reading it.
+                first = min(issues)
+                projections = {
+                    ("issue", "view", str(first), "--json", "body", "--jq",
+                     '.body | split("## Touched Areas")[1]'): ([first], []),
+                    ("issue", "view", str(first), "--json", "body", "--jq",
+                     '.body | test("tasklet/export.py")'): ([first], []),
+                    ("issue", "view", str(first), "--json", "number,title"): ([], []),
+                    ("issue", "list", "--json", "number,body", "--jq", ".[].number"): ([], []),
+                    ("issue", "list", "--json", "body", "--jq", '.[].body | split("\n")'):
+                        (sorted(issues), []),
+                }
+                for args, expected_reads in projections.items():
+                    result = call(list(args))
+                    self.assertEqual(result.returncode, 0, (args, result.stderr))
+                    entry = json.loads((workspace / ".snapshot/gh-calls.jsonl").read_text().splitlines()[-1])
+                    self.assertEqual((entry["text"], entry["comments"]), expected_reads, args)
 
     def test_old_snapshot_is_supplied_without_the_judging_cases(self):
         bundle = self.root / "snapshot"
