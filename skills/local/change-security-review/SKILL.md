@@ -46,8 +46,8 @@ after every run ends, and report its result once.
 
 With `--report <path>`, run it with the redirection and check in
 [Report Handoff](../delivery-common/references/report-handoff.md#codex-route)
-and return only the summary; otherwise return the named tool's completed
-output. A launched background job is not a completed review. If the named tool is not installed or its run fails, such as
+and return only the report path and its completion; otherwise return the
+named tool's completed output. A launched background job is not a completed review. If the named tool is not installed or its run fails, such as
 on authentication, timeout, or runtime error, report the failure and stop; do
 not fall back to a subagent or the current session.
 
@@ -198,9 +198,11 @@ diff so one fix round can cover them.
 ## Output
 
 Respond in the user's language. With `--report <path>`, write this Output
-unchanged, then the review summary, to that path under
+unchanged, then the v2 delimiter, the
+[review block](../delivery-common/references/report-handoff.md#review-block),
+and the end line, to that path under
 [Report Handoff](../delivery-common/references/report-handoff.md#report-file),
-and return only the summary:
+and return only the report path and its completion:
 
 ```markdown
 **Verdict**

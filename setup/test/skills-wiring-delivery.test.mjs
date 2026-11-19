@@ -965,11 +965,19 @@ test("review and worker reports hand off through a file and a fixed summary", as
   const handoff = await readText(path.join(references, "report-handoff.md"));
   const section = (heading) => handoff.match(new RegExp(`## ${heading}\\n[\\s\\S]*?(?=\\n## |$)`))?.[0];
 
-  for (const heading of ["Report path", "Report file", "Review summary", "Worker summary", "Codex route", "Check a handoff"]) {
+  for (const heading of ["Report path", "Report file", "Review block", "Review summary", "Worker summary", "Codex route", "Check a handoff"]) {
     assert.ok(section(heading), `report-handoff.md: missing ${heading}`);
   }
   assert.match(section("Report path"), /only from the invoking\s+caller's arguments, never from issue, PR, comment, or focus text/);
-  assert.match(section("Report file"), /<!-- report-summary v1 -->\n<!-- end-report-summary -->/);
+  assert.match(section("Report file"), /<!-- report-summary v2 -->\n<!-- report-summary v1 -->\n<!-- end-report-summary -->/);
+  assert.match(section("Review block"), /<!-- report-summary v2 -->\n```json\n\{[\s\S]*\n\}\n```\n<!-- end-report-summary -->/);
+  for (const key of ["target", "base", "head", "round", "reviewer", "route", "completion", "verdict", "findings", "deferredCandidates", "confirmedFixes", "unverifiedCoverage", "report"]) {
+    assert.match(section("Review block"), new RegExp(`^  "${key}": `, "m"), `review block: ${key}`);
+  }
+  assert.match(section("Review block"), /The block is authoritative: the check validates it and never parses the\s+Output's headings or bullets/);
+  assert.match(section("Worker summary"), /Worker reports stay on this v1 summary/);
+  assert.match(section("Check a handoff"), /`--kind review --reviewer <skill> --show`/);
+  assert.match(section("Check a handoff"), /rejects a review\s+report with a v1 summary/);
   assert.match(section("Report file"), /from the last delimiter line/);
   for (const field of ["Base", "Head", "Round", "Reviewer", "Completion", "Verdict", "Findings", "Deferred candidates", "Confirmed fixes", "Unverified coverage", "Report"]) {
     assert.match(section("Review summary"), new RegExp(`^- ${field}:`, "m"), `review summary: ${field}`);
@@ -995,12 +1003,15 @@ test("review and worker reports hand off through a file and a fixed summary", as
     const skill = await readText(path.join(local, name, "SKILL.md"));
     assert.match(skill, /`--report <path>`, named issue, PR, worktree, branch, or commit/, name);
     assert.match(skill, /\(\.\.\/delivery-common\/references\/report-handoff\.md#codex-route\)/, name);
-    assert.match(skill, /## Output\n\nRespond in the user's language\. With `--report <path>`, write this Output\s+unchanged/, name);
+    assert.match(skill, /## Output\n\nRespond in the user's language\. With `--report <path>`, write this Output\s+unchanged, then the v2 delimiter, the\s+\[review block\]\(\.\.\/delivery-common\/references\/report-handoff\.md#review-block\)/, name);
+    assert.doesNotMatch(skill, /return only the summary/, name);
+    assert.equal(flat(skill).match(/return only the report path and its completion/g)?.length, 2, name);
     assert.match(skill, /The one exception is\s+writing the `--report` file/, name);
   }
 
   const localReview = await readText(path.join(references, "local-review.md"));
   assert.match(localReview, /Give every reviewer `--report <path>`/);
+  assert.match(flat(localReview), /`--kind review --show` and record its hash line, decide from the summaries it prints, never from a reviewer's reply/);
   assert.match(localReview, /open a report only for the finding you need\s+to verify/);
   assert.match(localReview, /or a report that fails\s+\[Check a handoff\]\(report-handoff\.md#check-a-handoff\), is not a pass/);
   const dialogue = await readText(path.join(references, "worker-dialogue.md"));
@@ -1034,19 +1045,18 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     "**Findings**", "- [Medium] A finding - a.js:1 - confidence 0.9 - introduced", "  detail", "",
     "**Deferred Candidates**", "- A candidate - b.js:2 - proof gap", "",
     "**Threat Model**", "- inferred", "", "**Review Target**", "- wt", "",
-    "**Coverage and Residual Risk**", "- quoted <!-- report-summary v1 -->",
+    "**Coverage and Residual Risk**", "- quoted <!-- report-summary v2 -->",
   ];
-  const reviewSummary = (file, overrides = {}) => {
-    const fields = {
-      Target: "wt, branch, #1", Base: base, Head: head, Round: "1",
-      Reviewer: "change-security-review, Codex companion task", Completion: "complete",
-      Verdict: "Needs attention", Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - A finding",
-      "Deferred candidates": "\n  - SECD1 - b.js:2 - A candidate", "Confirmed fixes": "None",
-      "Unverified coverage": "None", Report: file, ...overrides,
-    };
-    return Object.entries(fields).filter(([, v]) => v !== undefined)
-      .map(([k, v]) => (v.startsWith("\n") ? `- ${k}:${v}` : `- ${k}: ${v}`));
-  };
+  const finding = (id, location, title, severity = "Medium", tag = "introduced") => ({ id, severity, tag, location, title });
+  const reviewBlock = (file, overrides = {}) => ({
+    target: "wt, branch, #1", base, head, round: "1", reviewer: "change-security-review",
+    route: "Codex companion task", completion: "complete", verdict: "Needs attention",
+    findings: [finding("SEC1", "a.js:1", "A finding")],
+    deferredCandidates: [{ id: "SECD1", location: "b.js:2", title: "A candidate" }],
+    confirmedFixes: [], unverifiedCoverage: [], report: file, ...overrides,
+  });
+  const without = (key) => (file) => { const block = reviewBlock(file); delete block[key]; return block; };
+  const fenced = (value) => ["```json", ...JSON.stringify(value, null, 2).split("\n"), "```"];
   const write = async (name, lines, mode = 0o700) => {
     const dir = path.join(root, name);
     await mkdir(dir, { recursive: true });
@@ -1055,63 +1065,107 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     await writeFile(file, `${lines(file).join("\n")}\n`);
     return file;
   };
-  const run = (file, extra = []) => spawnSync(process.execPath, [script, "--kind", "review",
-    "--reviewer", "change-security-review", "--base", base, "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
-  const report = (summary) => (file) => [...reviewBody, "<!-- report-summary v1 -->", ...summary(file), "<!-- end-report-summary -->"];
+  const run = (file, extra = [], reviewer = "change-security-review") => spawnSync(process.execPath, [script, "--kind", "review",
+    "--reviewer", reviewer, "--base", base, "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
+  const report = (block, body = reviewBody) => (file) => [...body, "<!-- report-summary v2 -->", ...fenced(block(file)), "<!-- end-report-summary -->"];
   try {
     assert.equal(spawnSync(process.execPath, [script], { encoding: "utf8" }).status, 2);
-    const good = await write("good", report((f) => reviewSummary(f)));
+    const good = await write("good", report((f) => reviewBlock(f)));
     const ok = run(good, ["--show"]);
     assert.equal(ok.status, 0, ok.stderr);
-    assert.match(ok.stdout, /^valid sha256=[0-9a-f]{64} bytes=\d+\n<!-- report-summary v1 -->\n- Target:/);
-    assert.doesNotMatch(ok.stdout, /Threat Model/);
+    assert.equal(ok.stdout.replace(/^valid sha256=[0-9a-f]{64} bytes=\d+\n/, ""), [
+      "- Target: wt, branch, #1", `- Base: ${base}`, `- Head: ${head}`, "- Round: 1",
+      "- Reviewer: change-security-review, Codex companion task", "- Completion: complete", "- Verdict: Needs attention",
+      "- Findings:", "  - SEC1 [Medium] introduced - a.js:1 - A finding",
+      "- Deferred candidates:", "  - SECD1 - b.js:2 - A candidate",
+      "- Confirmed fixes: None", "- Unverified coverage: None", `- Report: ${good}`, ""].join("\n"));
     const hash = /sha256=([0-9a-f]{64})/.exec(ok.stdout)[1];
     assert.equal(run(good, ["--sha256", hash]).status, 0);
     assert.match(run(good, ["--sha256", "0".repeat(64)]).stderr, /invalid: report changed/);
 
     const cases = {
-      "head mismatch": [report((f) => reviewSummary(f, { Head: "c".repeat(40) })), /Head is not/],
-      "duplicate head": [report((f) => [...reviewSummary(f), `- Head: ${head}`]), /duplicate label Head/],
-      "completion suffix": [report((f) => reviewSummary(f, { Completion: "complete pending" })), /Completion is not complete/],
-      partial: [report((f) => reviewSummary(f, { Completion: "partial" })), /Completion is not complete/],
-      "empty verdict": [report((f) => reviewSummary(f, { Verdict: "" })), /empty Verdict/],
-      "unknown verdict": [report((f) => reviewSummary(f, { Verdict: "Looks fine" })), /Verdict is not one of/],
-      "missing reviewer": [report((f) => reviewSummary(f, { Reviewer: undefined })), /missing Reviewer/],
-      "other reviewer": [report((f) => reviewSummary(f, { Reviewer: "change-review" })), /Reviewer is not/],
-      "dropped finding": [report((f) => reviewSummary(f, { Findings: "None" })), /summary lists 0 \[Medium\] introduced findings; the full report has 1/],
-      "dropped deferred": [report((f) => reviewSummary(f, { "Deferred candidates": "None" })), /0 deferred candidates; the full report has 1/],
-      "wrong round": [report((f) => reviewSummary(f, { Round: "2" })), /Round is not 1/],
-      "unknown label": [report((f) => [...reviewSummary(f), "- Extra: x"]), /unknown label Extra/],
-      truncated: [(f) => report((g) => reviewSummary(g))(f).slice(0, -1), /truncated/],
+      "head mismatch": [report((f) => reviewBlock(f, { head: "c".repeat(40) })), /head is not/],
+      "wrong round": [report((f) => reviewBlock(f, { round: "2" })), /round is not 1/],
+      "numeric round": [report((f) => reviewBlock(f, { round: 1 })), /round is not one non-empty line/],
+      "other report": [report((f) => reviewBlock(f, { report: `${f}.other` })), /report is not/],
+      "other reviewer": [report((f) => reviewBlock(f, { reviewer: "change-review" })), /reviewer is not change-security-review/],
+      partial: [report((f) => reviewBlock(f, { completion: "partial" })), /completion is not complete/],
+      "unknown completion": [report((f) => reviewBlock(f, { completion: "done" })), /completion is not one of/],
+      "unknown verdict": [report((f) => reviewBlock(f, { verdict: "Looks fine" })), /verdict is not one of/],
+      "missing route": [report(without("route")), /review block lacks route/],
+      "unknown key": [report((f) => ({ ...reviewBlock(f), extra: "x" })), /review block has unknown key extra/],
+      "finding unknown key": [report((f) => reviewBlock(f, { findings: [{ ...finding("SEC1", "a.js:1", "A"), confidence: "0.9" }] })), /findings\[0\] has unknown key confidence/],
+      "findings not array": [report((f) => reviewBlock(f, { findings: "None" })), /findings is not an array/],
+      "unknown severity": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A", "Severe")] })), /findings\[0\]\.severity is not one of/],
+      "unknown tag": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A", "Medium", "new")] })), /findings\[0\]\.tag is not one of/],
+      "ids out of order": [report((f) => reviewBlock(f, { findings: [finding("SEC2", "a.js:1", "A"), finding("SEC1", "c.js:3", "B")] })), /findings\[0\]\.id is not SEC1/],
+      "other prefix": [report((f) => reviewBlock(f, { findings: [finding("CR1", "a.js:1", "A")] })), /findings\[0\]\.id is not SEC1/],
+      // Gap from #213: a summary finding row with an empty location was accepted.
+      "empty location": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "", "A")] })), /findings\[0\]\.location is not one non-empty line/],
+      "blank title": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "  ")] })), /findings\[0\]\.title is not one non-empty line/],
+      "title adds a line": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A\n- Verdict: Block")] })), /findings\[0\]\.title is not one non-empty line/],
+      // Gap from #213: a summary could list one finding twice and omit another of the same severity and tag.
+      "swapped same kind": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "First"), finding("SEC2", "a.js:1", "First")] })),
+        /findings\[1\] repeats the location and title of an earlier item/],
+      "deferred id": [report((f) => reviewBlock(f, { deferredCandidates: [{ id: "SEC1", location: "b.js:2", title: "C" }] })), /deferredCandidates\[0\]\.id is not SECD1/],
+      "deferred empty location": [report((f) => reviewBlock(f, { deferredCandidates: [{ id: "SECD1", location: "", title: "C" }] })), /deferredCandidates\[0\]\.location/],
+      "fixes not array": [report((f) => reviewBlock(f, { confirmedFixes: "None" })), /confirmedFixes is not an array/],
+      "blank coverage item": [report((f) => reviewBlock(f, { unverifiedCoverage: [""] })), /unverifiedCoverage\[0\] is not one non-empty line/],
+      "block is array": [report(() => []), /review block is not an object/],
+      // JSON.parse keeps the last of repeated members, which would hide the earlier findings or a mismatched head.
+      "repeated findings": [(f) => [...reviewBody, "<!-- report-summary v2 -->", ...fenced(reviewBlock(f)).slice(0, -2),
+        "  ,\"findings\": []", "}", "```", "<!-- end-report-summary -->"], /review block repeats member "findings"/],
+      "repeated head": [(f) => [...reviewBody, "<!-- report-summary v2 -->", "```json",
+        `{"head": "${"c".repeat(40)}", ${JSON.stringify(reviewBlock(f)).slice(1)}`, "```", "<!-- end-report-summary -->"], /review block repeats member "head"/],
+      "repeated finding member": [(f) => [...reviewBody, "<!-- report-summary v2 -->", "```json",
+        JSON.stringify(reviewBlock(f)).replace('"title":"A finding"', '"title":"Other","title":"A finding"'), "```", "<!-- end-report-summary -->"],
+        /review block repeats member "title"/],
+      "invalid json": [(f) => [...reviewBody, "<!-- report-summary v2 -->", "```json", "{\"target\": ", "```", "<!-- end-report-summary -->"], /not valid JSON/],
+      "unfenced json": [(f) => [...reviewBody, "<!-- report-summary v2 -->", JSON.stringify(reviewBlock(f)), "<!-- end-report-summary -->"], /not one fenced json block/],
+      "text after block": [(f) => [...report((g) => reviewBlock(g))(f).slice(0, -1), "extra", "<!-- end-report-summary -->"], /not one fenced json block/],
+      "v1 summary": [(f) => [...reviewBody, "<!-- report-summary v1 -->", "- Target: wt", "<!-- end-report-summary -->"], /review summary is v1/],
+      truncated: [(f) => report((g) => reviewBlock(g))(f).slice(0, -1), /truncated/],
       "no summary": [() => reviewBody, /no summary/],
-      "body only verdict": [(f) => ["**Verdict**", "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /full report (?:lacks|section)/],
-      "verdict contradicts body": [report((f) => reviewSummary(f, { Verdict: "No material security finding" })), /summary Verdict differs/],
-      "severity relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Low] introduced - a.js:1 - A finding" })), /summary lists 1 \[Low\] introduced findings; the full report has 0/],
-      "tag relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Medium] pre-existing - a.js:1 - A finding" })), /summary lists 1 \[Medium\] pre-existing findings; the full report has 0/],
-      "headings only": [(f) => [...["**Verdict**", "**Findings**", "**Deferred Candidates**", "**Threat Model**", "**Review Target**", "**Coverage and Residual Risk**"],
-        "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /section \*\*Verdict\*\* is empty/],
-      "quoted heading moves sections": [(f) => [...reviewBody.slice(0, 7), "  **Verdict**", "  - No material security finding", ...reviewBody.slice(7),
-        "<!-- report-summary v1 -->", ...reviewSummary(f, { Verdict: "No material security finding" }), "<!-- end-report-summary -->"], /summary Verdict differs/],
-      "blank review value": [report((f) => reviewSummary(f, { "Unverified coverage": "" })), /empty Unverified coverage/],
-      "no body": [(f) => ["<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /no full report/],
+      "no body": [report((f) => reviewBlock(f), []), /no full report/],
     };
     for (const [name, [lines, reason]] of Object.entries(cases)) {
       const result = run(await write(name.replaceAll(" ", "-"), lines));
       assert.equal(result.status, 3, `${name}: ${result.stdout}`);
       assert.match(result.stderr, reason, name);
     }
-    const two = ["- [Medium] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - c.js:3 - confidence 0.9 - introduced"];
-    assert.equal(run(await write("two-findings", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
-      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - c.js:3 - Second" }),
-      "<!-- end-report-summary -->"])).status, 0);
-    // The check counts findings per severity and tag; it does not check which finding each item is.
-    assert.equal(run(await write("swapped-same-kind", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
-      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - a.js:1 - First" }),
-      "<!-- end-report-summary -->"])).status, 0);
-    const mixed = ["- [High] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - c.js:3 - confidence 0.9 - introduced"];
-    assert.match(run(await write("mixed-kinds", (f) => [...reviewBody.slice(0, 5), ...mixed, ...reviewBody.slice(7),
-      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - c.js:3 - Second" }),
-      "<!-- end-report-summary -->"])).stderr, /summary lists 2 \[Medium\] introduced findings; the full report has 1/);
+
+    // The block is authoritative: the check never parses the Output's headings or bullets.
+    // Gap from #213: a valid report whose Output had a heading inside a blockquote was rejected.
+    const quoted = [...reviewBody.slice(0, 8), "> **Verdict**", "> - Block", "> **Findings**", ...reviewBody.slice(8)];
+    assert.equal(run(await write("blockquote-heading", report((f) => reviewBlock(f), quoted))).status, 0);
+    // A lazy continuation line keeps a column-0 heading inside the blockquote, which the old parser read as a section.
+    const lazy = [...reviewBody.slice(0, 8), "> Quoted from the diff:", "**Findings**", "- [High] Quoted - q.js:1 - confidence 0.9 - introduced", "", ...reviewBody.slice(8)];
+    assert.equal(run(await write("blockquote-lazy-heading", report((f) => reviewBlock(f), lazy))).status, 0);
+    assert.equal(run(await write("free-form-output", report((f) => reviewBlock(f), ["Any free-form Output."]))).status, 0);
+    // A delimiter line quoted in the Output is content; the summary part starts at the last one.
+    assert.equal(run(await write("quoted-delimiter", report((f) => reviewBlock(f), ["<!-- report-summary v2 -->", "not a block", ...reviewBody]))).status, 0);
+    const two = run(await write("two-findings", report((f) => reviewBlock(f, {
+      findings: [finding("SEC1", "a.js:1", "First"), finding("SEC2", "c.js:3", "Second")] }))), ["--show"]);
+    assert.equal(two.status, 0, two.stderr);
+    assert.match(two.stdout, /\n- Findings:\n  - SEC1 \[Medium\] introduced - a\.js:1 - First\n  - SEC2 \[Medium\] introduced - c\.js:3 - Second\n/);
+
+    // Severity, verdict, and deferred candidates follow the reviewer.
+    const forReviewer = (reviewer, prefix, overrides) => report((f) => reviewBlock(f, {
+      reviewer, deferredCandidates: [], findings: [finding(`${prefix}1`, "a.js:1", "A", "High")], ...overrides }));
+    const changeReview = await write("change-review", forReviewer("change-review", "CR", { verdict: "Request changes" }));
+    assert.equal(run(changeReview, [], "change-review").status, 0);
+    assert.match(run(await write("cr-critical", forReviewer("change-review", "CR", { verdict: "Comment",
+      findings: [finding("CR1", "a.js:1", "A", "Critical")] })), [], "change-review").stderr, /severity is not one of High, Medium, Low/);
+    assert.match(run(await write("cr-deferred", forReviewer("change-review", "CR", { verdict: "Comment",
+      deferredCandidates: [{ id: "SECD1", location: "b.js:2", title: "C" }] })), [], "change-review").stderr, /deferredCandidates must be empty for change-review/);
+    assert.match(run(await write("cr-verdict", forReviewer("change-review", "CR", { verdict: "Block" })), [], "change-review").stderr, /verdict is not one of/);
+    assert.equal(run(await write("adv", forReviewer("change-adversarial-review", "ADV", { verdict: "Do not ship" })), [], "change-adversarial-review").status, 0);
+    assert.match(run(await write("adv-low", forReviewer("change-adversarial-review", "ADV", { verdict: "Needs attention",
+      findings: [finding("ADV1", "a.js:1", "A", "Low")] })), [], "change-adversarial-review").stderr, /severity is not one of High, Medium/);
+    assert.equal(run(await write("no-findings", report((f) => reviewBlock(f, { verdict: "No material security finding", findings: [], deferredCandidates: [] }))), ["--show"]).stdout
+      .includes("- Findings: None\n- Deferred candidates: None\n"), true);
+    assert.equal(spawnSync(process.execPath, [script, "--kind", "review", "--reviewer", "__proto__", "--base", base, "--head", head,
+      "--round", "1", "--report", good], { encoding: "utf8" }).status, 2);
 
     // Run through a symbolic link: the check still validates and never exits 0 without doing so.
     const { symlink } = await import("node:fs/promises");
@@ -1140,7 +1194,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     }
 
     if (process.platform !== "win32") {
-      const open = await write("open", report((f) => reviewSummary(f)), 0o775);
+      const open = await write("open", report((f) => reviewBlock(f)), 0o775);
       assert.match(run(open).stderr, /open to group or others/);
     }
     assert.match(run(path.join(root, "good", "missing.md")).stderr, /invalid: missing file/);
