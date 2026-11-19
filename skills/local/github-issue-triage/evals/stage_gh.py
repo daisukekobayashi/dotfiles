@@ -6,29 +6,26 @@ prepare.py and before launch (`stage`), and after the run before deleting the
 workspace (`collect`). It never starts a model.
 
 stage: copies the prepared workspace's `bin/gh` and `.snapshot/issues.json`,
-checked against the hashes in run.json, into a new directory outside the
-workspace and the run's temp directory, makes the copy read-only, and prints
-the environment for the launch: PATH with the staged `bin` first followed by
-the caller's PATH without empty, relative, or candidate-writable entries, and
-GH_SNAPSHOT_LOG naming the ledger in the workspace. Inherited Claude hooks run
-outside the sandbox with the Claude process's PATH, so no PATH entry may be a
-directory the candidate can write.
+checked against the hashes in run.json, into a new absolute directory outside
+the workspace and the run's temp directory, makes the copy read-only, and
+prints the launch environment. PATH is fixed, never inherited: the staged
+`bin`, then FIXED_PATH. Inherited Claude hooks run outside the sandbox with
+the agent process's PATH, so this keeps every bare hook command and `gh` off
+directories the candidate can write. GH_SNAPSHOT_LOG names the ledger in the
+workspace.
 
-collect: opens `<workspace>/.snapshot/gh-calls.jsonl` without blocking and
-without following symbolic links, accepts only a single-link regular file
-within a byte limit, finishes within a deadline, copies the bytes to a new
-evidence directory outside the workspace, and prints the byte totals and the
-issues whose body or comments some call's output depended on. Any failure
-exits non-zero, and the run is then excluded.
-
-coverage: checks a text file of the tool results that reached the candidate,
-extracted from its transcript by the grader, for every line of every open
-issue's body and comments, and prints which issues it covers.
+collect: within one deadline, opens `<workspace>/.snapshot/gh-calls.jsonl`
+without blocking or following symbolic links, accepts only a single-link
+regular file within a byte limit, validates each record as it reads it,
+copies the bytes to a new evidence directory outside the workspace, and prints
+the totals and the issues that successful `gh issue view` calls read in full.
+Any failure exits non-zero, and the run is then excluded.
 """
 
 import argparse
 import contextlib
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -38,31 +35,34 @@ import sys
 
 STAGED = ("bin/gh", ".snapshot/issues.json")
 LEDGER = ".snapshot/gh-calls.jsonl"
-MAX_BYTES = 16 * 1024 * 1024
+FIXED_PATH = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
+MAX_BYTES = 4 * 1024 * 1024
+MAX_LINE_BYTES = 64 * 1024
 DEADLINE_SECONDS = 30
+FORMS = {"repo view", "issue list", "pr list", "api blocked_by", "api sub_issues", "issue view", "pr view"}
 
 
 def inside(path, root):
-    path, root = os.path.realpath(path), os.path.realpath(root)
-    return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
+    """True when path is root or below it, compared by file identity.
 
-
-def trusted_path(value, untrusted):
-    """Return the canonical absolute PATH entries outside every untrusted root, in order.
-
-    An entry is emitted as its resolved path, so a symbolic link that resolves
-    outside the roots now cannot be redirected later.
+    Comparing device and inode, not spelling, also catches aliases such as a
+    different letter case on a case-insensitive file system.
     """
-    kept = []
-    for entry in value.split(os.pathsep):
-        if not entry or not os.path.isabs(entry):
-            continue
-        canonical = os.path.realpath(entry)
-        if any(inside(canonical, root) for root in untrusted):
-            continue
-        if canonical not in kept:
-            kept.append(canonical)
-    return kept
+    try:
+        target = os.stat(root)
+    except FileNotFoundError:
+        return False
+    current = os.path.abspath(path)
+    while True:
+        try:
+            if os.path.samestat(os.stat(current), target):
+                return True
+        except FileNotFoundError:
+            pass
+        parent = os.path.dirname(current)
+        if parent == current:
+            return False
+        current = parent
 
 
 @contextlib.contextmanager
@@ -111,14 +111,16 @@ def read_regular(root, relative, max_bytes=MAX_BYTES):
     return data
 
 
-def stage(run_json, dest, tmpdir, base_path):
+def stage(run_json, dest, tmpdir):
     run = json.loads(Path(run_json).read_text())
     workspace = os.path.realpath(run["workspace"])
-    untrusted = [workspace, os.path.realpath(tmpdir)]
     if not os.path.isabs(dest):
         raise ValueError("the staging directory must be an absolute path")
     dest = Path(os.path.realpath(dest))
-    if any(inside(dest, root) or inside(root, dest) for root in untrusted):
+    if os.pathsep in str(dest):
+        raise ValueError(f"the staging directory must not contain {os.pathsep!r}")
+    # dest is new, so neither root can lie below it; only the other direction needs a check.
+    if any(inside(dest, root) for root in (workspace, tmpdir)):
         raise ValueError("the staging directory must be outside the workspace and the run's temp directory")
     dest.mkdir(mode=0o700)
     for relative in STAGED:
@@ -131,12 +133,49 @@ def stage(run_json, dest, tmpdir, base_path):
         target.chmod(0o555 if relative == "bin/gh" else 0o444)
     for directory in (dest / "bin", dest / ".snapshot", dest):
         directory.chmod(0o555)
-    path = [str(dest / "bin"), *trusted_path(base_path, untrusted)]
     return {
-        "PATH": os.pathsep.join(path),
+        "PATH": os.pathsep.join([str(dest / "bin"), *FIXED_PATH]),
         "GH_SNAPSHOT_LOG": os.path.join(workspace, LEDGER),
         "stand_in": str(dest / "bin/gh"),
     }
+
+
+def record(line):
+    """Validate one ledger line and return it as a dict."""
+    if len(line) > MAX_LINE_BYTES:
+        raise ValueError("ledger line too long")
+    entry = json.loads(line)
+    if not isinstance(entry, dict) or set(entry) != {
+            "argv", "form", "exit", "stdout_bytes", "stderr_bytes", "detail", "exe"}:
+        raise ValueError("ledger line has unexpected keys")
+    if not (isinstance(entry["argv"], list) and all(isinstance(arg, str) for arg in entry["argv"])
+            and (entry["form"] is None or entry["form"] in FORMS)
+            and entry["exit"] in (0, 1)
+            and all(isinstance(entry[k], int) and not isinstance(entry[k], bool) and entry[k] >= 0
+                    for k in ("stdout_bytes", "stderr_bytes"))
+            and (entry["detail"] is None or (isinstance(entry["detail"], int) and entry["form"] == "issue view"))
+            and isinstance(entry["exe"], str)
+            and (entry["exit"] == 0) == (entry["form"] is not None)):
+        raise ValueError("ledger line has invalid values")
+    return entry
+
+
+def summarize(data):
+    """Validate the ledger line by line, keeping only running totals."""
+    calls, total, by_form, detail, stand_ins = 0, 0, {}, set(), set()
+    for raw in io.BytesIO(data):
+        if not raw.strip():
+            continue
+        entry = record(raw)
+        calls += 1
+        total += entry["stdout_bytes"]
+        key = entry["form"] or "refused"
+        by_form[key] = by_form.get(key, 0) + entry["stdout_bytes"]
+        if entry["detail"] is not None:
+            detail.add(entry["detail"])
+        stand_ins.add(entry["exe"])
+    return {"calls": calls, "gh_bytes": total, "gh_bytes_by_form": by_form,
+            "detail_issues": sorted(detail), "stand_ins": sorted(stand_ins)}
 
 
 def collect(run_json, out, max_bytes=MAX_BYTES, seconds=DEADLINE_SECONDS):
@@ -146,47 +185,12 @@ def collect(run_json, out, max_bytes=MAX_BYTES, seconds=DEADLINE_SECONDS):
         raise ValueError("the evidence directory must be outside the workspace")
     with deadline(seconds):
         data = read_regular(run["workspace"], LEDGER, max_bytes)
-    out.mkdir(mode=0o700)
-    with open(out / "gh-calls.jsonl", "xb") as handle:
-        handle.write(data)
-    entries = [json.loads(line) for line in data.decode().splitlines() if line.strip()]
-    by_kind = {}
-    for entry in entries:
-        by_kind[entry["kind"]] = by_kind.get(entry["kind"], 0) + entry["stdout_bytes"]
-    ok = [entry for entry in entries if entry["exit"] == 0]
-    return {
-        "calls": len(entries),
-        "gh_bytes": sum(entry["stdout_bytes"] for entry in entries),
-        "gh_bytes_by_kind": by_kind,
-        "text_issues": sorted({n for entry in ok for n in entry["text"]}),
-        "comment_issues": sorted({n for entry in ok for n in entry["comments"]}),
-        "stand_ins": sorted({entry["exe"] for entry in entries}),
-        "ledger": str(out / "gh-calls.jsonl"),
-    }
-
-
-def detail_lines(text):
-    return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
-
-
-def seen(line, text):
-    return line in text or json.dumps(line, ensure_ascii=False)[1:-1] in text
-
-
-def coverage(run_json, tool_output):
-    """Report which open issues' bodies and comments appear in the tool output."""
-    run = json.loads(Path(run_json).read_text())
-    suite = json.loads(Path(run["suite"]).read_text())
-    case = next(item for item in suite["evals"] if item["id"] == run["case_id"])
-    snapshot = json.loads((Path(run["suite"]).parent / case["overlay"] / ".snapshot/issues.json").read_text())
-    text = Path(tool_output).read_text()
-    issues = [issue for issue in snapshot["issues"] if issue["state"] == "open"]
-    bodies = [i["number"] for i in issues if all(seen(line, text) for line in detail_lines(i["body"]))]
-    comments = [i["number"] for i in issues if i["comments"] and all(
-        seen(line, text) for comment in i["comments"] for line in detail_lines(comment["body"]))]
-    scope = case.get("read_scope", {})
-    covered = set(scope.get("text", [])) <= set(bodies) and set(scope.get("comments", [])) <= set(comments)
-    return {"body_issues": bodies, "comment_issues": comments, "covers_read_scope": covered}
+        summary = summarize(data)
+        out.mkdir(mode=0o700)
+        with open(out / "gh-calls.jsonl", "xb") as handle:
+            handle.write(data)
+    summary["ledger"] = str(out / "gh-calls.jsonl")
+    return summary
 
 
 def main():
@@ -194,23 +198,17 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     staging = commands.add_parser("stage")
     staging.add_argument("--run", required=True, help="run.json from prepare.py")
-    staging.add_argument("--dest", required=True, help="new directory for the read-only stand-in")
+    staging.add_argument("--dest", required=True, help="new absolute directory for the read-only stand-in")
     staging.add_argument("--tmpdir", required=True, help="the run's fresh temp directory")
     collecting = commands.add_parser("collect")
     collecting.add_argument("--run", required=True, help="run.json from prepare.py")
     collecting.add_argument("--out", required=True, help="new evidence directory outside the workspace")
-    checking = commands.add_parser("coverage")
-    checking.add_argument("--run", required=True, help="run.json from prepare.py")
-    checking.add_argument("--tool-output", required=True,
-                          help="text of the tool results that reached the candidate, from its transcript")
     args = parser.parse_args()
     try:
         if args.command == "stage":
-            result = stage(args.run, args.dest, args.tmpdir, os.environ.get("PATH", ""))
-        elif args.command == "collect":
-            result = collect(args.run, args.out)
+            result = stage(args.run, args.dest, args.tmpdir)
         else:
-            result = coverage(args.run, args.tool_output)
+            result = collect(args.run, args.out)
     except (OSError, ValueError, TimeoutError) as error:
         sys.stderr.write(f"stage_gh.py {args.command}: {error}\n")
         sys.exit(1)
