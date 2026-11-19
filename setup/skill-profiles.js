@@ -5,6 +5,7 @@ exports.csv = csv;
 exports.parseAgent = parseAgent;
 exports.parseAgents = parseAgents;
 exports.readJson = readJson;
+exports.isPathComponentName = isPathComponentName;
 exports.listProfiles = listProfiles;
 exports.resolveProfiles = resolveProfiles;
 const fs = require("node:fs");
@@ -71,10 +72,21 @@ function getObjectProperty(value, key) {
     }
     return value[key];
 }
+// Profile and local skill names become path components under skills/, so each
+// must be one plain component: no separators, no leading dot, no "..".
+function isPathComponentName(name) {
+    return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
+}
 function requireUnreservedSkillName(name) {
     if ((0, skill_names_1.isReservedSkillName)(name)) {
         fail(`Invalid or reserved skill name: ${name}`);
     }
+}
+function requireLocalSkillName(name) {
+    if (!isPathComponentName(name)) {
+        fail(`Invalid or reserved skill name: ${name}`);
+    }
+    requireUnreservedSkillName(name);
 }
 function profilePath(profileDir, name) {
     return path.join(profileDir, `${name}.json`);
@@ -102,6 +114,9 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
         }
         if (stack.includes(name)) {
             fail(`cyclic profile include: ${stack.concat(name).join(" -> ")}`);
+        }
+        if (!isPathComponentName(name)) {
+            fail(`Invalid profile name: ${name}`);
         }
         const filePath = profilePath(profileDir, name);
         if (!fs.existsSync(filePath)) {
@@ -148,7 +163,7 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
             if (typeof skillName !== "string" || skillName.trim() === "") {
                 fail(`${filePath}: local must contain skill names`);
             }
-            requireUnreservedSkillName(skillName);
+            requireLocalSkillName(skillName);
             const skillPath = path.join(localDir, skillName);
             if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
                 fail(`unknown local skill ${skillName}`);

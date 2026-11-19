@@ -94,10 +94,23 @@ function getObjectProperty(value: unknown, key: string): unknown {
   return (value as Record<string, unknown>)[key];
 }
 
+// Profile and local skill names become path components under skills/, so each
+// must be one plain component: no separators, no leading dot, no "..".
+export function isPathComponentName(name: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
+}
+
 function requireUnreservedSkillName(name: string): void {
   if (isReservedSkillName(name)) {
     fail(`Invalid or reserved skill name: ${name}`);
   }
+}
+
+function requireLocalSkillName(name: string): void {
+  if (!isPathComponentName(name)) {
+    fail(`Invalid or reserved skill name: ${name}`);
+  }
+  requireUnreservedSkillName(name);
 }
 
 function profilePath(profileDir: string, name: string): string {
@@ -129,6 +142,9 @@ export function resolveProfiles(dotfilesRoot: string, requestedProfiles: string[
     }
     if (stack.includes(name)) {
       fail(`cyclic profile include: ${stack.concat(name).join(" -> ")}`);
+    }
+    if (!isPathComponentName(name)) {
+      fail(`Invalid profile name: ${name}`);
     }
 
     const filePath = profilePath(profileDir, name);
@@ -179,7 +195,7 @@ export function resolveProfiles(dotfilesRoot: string, requestedProfiles: string[
       if (typeof skillName !== "string" || skillName.trim() === "") {
         fail(`${filePath}: local must contain skill names`);
       }
-      requireUnreservedSkillName(skillName);
+      requireLocalSkillName(skillName);
       const skillPath = path.join(localDir, skillName);
       if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
         fail(`unknown local skill ${skillName}`);

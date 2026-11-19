@@ -156,6 +156,37 @@ function Invoke-SetupSteps {
   }
 }
 
+# A child PowerShell run with -File would bind --out as the common parameter
+# -OutVariable or -OutBuffer, so export hands its arguments straight to Node,
+# which receives each one literally.
+function Invoke-SkillsExport {
+  param (
+    [Parameter(Mandatory = $true)]
+    [object]$SetupContext,
+    [string[]]$Arguments = @()
+  )
+
+  if (-not (Test-CommandAvailable -Name "node")) {
+    throw "Required command not found: node"
+  }
+  $runtime = Join-Path $SetupContext.DotfilesRoot "setup/skills.js"
+  $hadSetupHome = Test-Path Env:SETUP_HOME
+  $previousSetupHome = $Env:SETUP_HOME
+  try {
+    $Env:SETUP_HOME = $SetupContext.HomeDir
+    & node $runtime @Arguments
+    if ($LASTEXITCODE -ne 0) {
+      throw "Skills export failed."
+    }
+  } finally {
+    if ($hadSetupHome) {
+      $Env:SETUP_HOME = $previousSetupHome
+    } else {
+      Remove-Item Env:SETUP_HOME -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 try {
   Assert-MinimumPowerShellVersion
   $setupContext = Get-SetupContext -DefaultDotfilesRoot $DEFAULT_DOTFILES_ROOT
@@ -185,6 +216,13 @@ try {
         -SetupContext $setupContext -CopyArguments $copyArguments
     }
     "skills" {
+      if ($SubcommandArgs.Count -gt 0 -and $SubcommandArgs[0] -eq "export") {
+        if ($Copy) {
+          throw "-Copy is not supported for skills export."
+        }
+        Invoke-SkillsExport -SetupContext $setupContext -Arguments $SubcommandArgs
+        break
+      }
       Invoke-SetupPowerShellScript -ScriptPath $skillsScript -ArgumentList (
         @(
           "-HomeDir",

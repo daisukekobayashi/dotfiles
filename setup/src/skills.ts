@@ -1323,7 +1323,13 @@ function main(argv: string[]): void {
   if (argv[0] === "export") {
     const options = parseExportArgs(argv.slice(1));
     const context = setupContext();
-    exportSkills(options, { dotfilesRoot: context.dotfilesRoot, home: context.home, dryRun: context.dryRun, env: process.env });
+    exportSkills(options, {
+      dotfilesRoot: context.dotfilesRoot,
+      home: context.home,
+      dryRun: context.dryRun,
+      env: process.env,
+      gitCommand: () => (process.platform === "win32" ? resolveWindowsCommand("git") : "git"),
+    });
     return;
   }
 
