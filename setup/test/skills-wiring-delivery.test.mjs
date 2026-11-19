@@ -1078,7 +1078,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       "unknown verdict": [report((f) => reviewSummary(f, { Verdict: "Looks fine" })), /Verdict is not one of/],
       "missing reviewer": [report((f) => reviewSummary(f, { Reviewer: undefined })), /missing Reviewer/],
       "other reviewer": [report((f) => reviewSummary(f, { Reviewer: "change-review" })), /Reviewer is not/],
-      "dropped finding": [report((f) => reviewSummary(f, { Findings: "None" })), /summary lists 0 findings; the full report has 1/],
+      "dropped finding": [report((f) => reviewSummary(f, { Findings: "None" })), /summary lists 0 \[Medium\] introduced findings; the full report has 1/],
       "dropped deferred": [report((f) => reviewSummary(f, { "Deferred candidates": "None" })), /0 deferred candidates; the full report has 1/],
       "wrong round": [report((f) => reviewSummary(f, { Round: "2" })), /Round is not 1/],
       "unknown label": [report((f) => [...reviewSummary(f), "- Extra: x"]), /unknown label Extra/],
@@ -1086,8 +1086,8 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       "no summary": [() => reviewBody, /no summary/],
       "body only verdict": [(f) => ["**Verdict**", "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /full report (?:lacks|section)/],
       "verdict contradicts body": [report((f) => reviewSummary(f, { Verdict: "No material security finding" })), /summary Verdict differs/],
-      "severity relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Low] introduced - a.js:1 - A finding" })), /SEC1 is \[Low\] introduced; the full report has \[Medium\] introduced/],
-      "tag relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Medium] pre-existing - a.js:1 - A finding" })), /the full report has \[Medium\] introduced/],
+      "severity relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Low] introduced - a.js:1 - A finding" })), /summary lists 1 \[Low\] introduced findings; the full report has 0/],
+      "tag relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Medium] pre-existing - a.js:1 - A finding" })), /summary lists 1 \[Medium\] pre-existing findings; the full report has 0/],
       "headings only": [(f) => [...["**Verdict**", "**Findings**", "**Deferred Candidates**", "**Threat Model**", "**Review Target**", "**Coverage and Residual Risk**"],
         "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /section \*\*Verdict\*\* is empty/],
       "quoted heading moves sections": [(f) => [...reviewBody.slice(0, 7), "  **Verdict**", "  - No material security finding", ...reviewBody.slice(7),
@@ -1104,21 +1104,40 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.equal(run(await write("two-findings", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
       "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - c.js:3 - Second" }),
       "<!-- end-report-summary -->"])).status, 0);
-    const linked = ["- [Medium] Linked - [a.js:1](/wt/src/a.js:1) - confidence 0.9 - introduced"];
-    assert.equal(run(await write("linked-location", (f) => [...reviewBody.slice(0, 5), ...linked, ...reviewBody.slice(7),
-      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - src/a.js:1 - Linked" }), "<!-- end-report-summary -->"])).status, 0);
-    const repeated = run(await write("repeated-finding", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
+    // The check counts findings per severity and tag; it does not check which finding each item is.
+    assert.equal(run(await write("swapped-same-kind", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
       "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - a.js:1 - First" }),
-      "<!-- end-report-summary -->"]));
-    assert.equal(repeated.status, 3);
-    assert.match(repeated.stderr, /SEC2 location a\.js:1 does not match the full report's item 2/);
-    const sameLine = ["- [Medium] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - a.js:1 - confidence 0.9 - introduced"];
-    const sameLineRepeated = run(await write("same-location", (f) => [...reviewBody.slice(0, 5), ...sameLine, ...reviewBody.slice(7),
-      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - a.js:1 - First" }),
-      "<!-- end-report-summary -->"]));
-    assert.match(sameLineRepeated.stderr, /SEC2 title does not match the full report's item 2/);
-    assert.match(run(await write("deferred-location", report((f) => reviewSummary(f, { "Deferred candidates": "\n  - SECD1 - z.js:9 - A candidate" })))).stderr,
-      /SECD1 location z\.js:9 does not match/);
+      "<!-- end-report-summary -->"])).status, 0);
+    const mixed = ["- [High] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - c.js:3 - confidence 0.9 - introduced"];
+    assert.match(run(await write("mixed-kinds", (f) => [...reviewBody.slice(0, 5), ...mixed, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - c.js:3 - Second" }),
+      "<!-- end-report-summary -->"])).stderr, /summary lists 2 \[Medium\] introduced findings; the full report has 1/);
+
+    // Run through a symbolic link: the check still validates and never exits 0 without doing so.
+    const { symlink } = await import("node:fs/promises");
+    const linkedScript = path.join(root, "linked-check-report-handoff.mjs");
+    await symlink(script, linkedScript);
+    assert.equal(spawnSync(process.execPath, [linkedScript], { encoding: "utf8" }).status, 2);
+    const viaLink = (file) => spawnSync(process.execPath, [linkedScript, "--kind", "review", "--reviewer", "change-security-review",
+      "--base", base, "--head", head, "--round", "1", "--report", file], { encoding: "utf8" });
+    assert.match(viaLink(good).stdout, /^valid sha256=/);
+    assert.equal(viaLink(path.join(root, "truncated", "r1-change-security-review-a1.md")).status, 3);
+
+    // Windows: drive-qualified paths are accepted, and the check fails closed because it cannot verify privacy.
+    const asWin32 = `data:text/javascript,${encodeURIComponent('Object.defineProperty(process, "platform", { value: "win32" });')}`;
+    const runWin32 = (file) => spawnSync(process.execPath, ["--import", asWin32, script, "--kind", "worker", "--base", base,
+      "--head", head, "--round", "1", "--report", file], { encoding: "utf8", cwd: root });
+    assert.match(runWin32("C:\\records\\issue-1\\r1-worker-a1.md").stderr, /invalid: missing file/);
+    for (const bad of ["C:/records/r1.md", "/records/r1.md", "C:\\records\\..\\r1.md", "\\\\server\\share\\r1.md", "C:\\rec ords\\r1.md"]) {
+      assert.match(runWin32(bad).stderr, /not a drive-qualified absolute path/, bad);
+    }
+    await writeFile(path.join(root, "C:\\x\\r1-worker-a1.md"), "body\n");
+    const win32Existing = runWin32("C:\\x\\r1-worker-a1.md");
+    assert.equal(win32Existing.status, 3);
+    assert.match(win32Existing.stderr, /privacy cannot be verified on Windows/);
+    for (const bad of ["/records/../r1.md", "records/r1.md", "C:\\records\\r1.md", "/rec ords/r1.md"]) {
+      assert.match(run(bad).stderr, /not an absolute path/, bad);
+    }
 
     if (process.platform !== "win32") {
       const open = await write("open", report((f) => reviewSummary(f)), 0o775);
@@ -1143,16 +1162,6 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.match(runWorker(await write("worker-su-blank", worker({ Overview: "" })), ["--draft", "su"]).stderr, /empty Overview/);
     assert.match(runWorker(await write("worker-pf-blank", worker({ Tier: "" })), ["--draft", "preflight"]).stderr, /empty Tier/);
 
-    const { pathToFileURL } = await import("node:url");
-    const { reportPathError } = await import(pathToFileURL(script).href);
-    assert.equal(reportPathError("C:\\records\\issue-1\\r1-change-review-a1.md", "win32"), null);
-    for (const bad of ["C:/records/r1.md", "/records/r1.md", "C:\\records\\..\\r1.md", "\\\\server\\share\\r1.md", "C:\\rec ords\\r1.md"]) {
-      assert.match(reportPathError(bad, "win32"), /drive-qualified/, bad);
-    }
-    assert.equal(reportPathError("/records/issue-1/r1-change-review-a1.md", "linux"), null);
-    for (const bad of ["/records/../r1.md", "records/r1.md", "C:\\records\\r1.md", "/rec ords/r1.md"]) {
-      assert.match(reportPathError(bad, "darwin"), /absolute path/, bad);
-    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

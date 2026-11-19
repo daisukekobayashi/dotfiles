@@ -13,8 +13,10 @@
 // delimiter line. This script checks that:
 // - the report is an absolute path of [A-Za-z0-9/._-], or on Windows a
 //   drive-qualified one such as C:\\dir\\file.md of [A-Za-z0-9\\._-], in normal
-//   form, a regular file, and not a symbolic link, and on POSIX its parent directory is its own real path,
-//   owned by the current user, and closed to group and others (mode 700);
+//   form, a regular file, and not a symbolic link, and its parent directory is
+//   its own real path, owned by the current user, and closed to group and
+//   others (mode 700); on Windows, where this cannot be verified, the report
+//   is invalid;
 // - the full report is non-empty and, for a review, has the reviewer's Output
 //   headings;
 // - every summary label appears once, every required label appears, and no
@@ -22,10 +24,10 @@
 // - Base, Head, Round, and Report equal the arguments, and the reviewer,
 //   Completion, and Verdict take an allowed value;
 // - every label has a value or indented items;
-// - a review's summary Verdict equals the full report's, its findings match
-//   the full report's one to one in order, severity, tag, and location (and
-//   title where two share a location), and, for change-security-review, its
-//   SECD IDs match the deferred candidates the same way;
+// - a review's summary Verdict equals the full report's, it lists as many
+//   findings of each severity and tag as the full report, and, for
+//   change-security-review, as many SECD IDs as deferred candidates; it does
+//   not check which finding each item is;
 // - each required Output section has content, and headings start at column 0;
 // - a shared understanding draft has an Overview and a preflight draft a Tier;
 // - with --sha256, the file still has the recorded hash.
@@ -45,7 +47,6 @@
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 const DELIMITER = "<!-- report-summary v1 -->";
 const END = "<!-- end-report-summary -->";
@@ -53,7 +54,7 @@ const POSIX_PATH = /^\/[A-Za-z0-9/._-]+$/;
 const WIN32_PATH = /^[A-Za-z]:\\[A-Za-z0-9\\._-]+$/;
 
 // Returns why a report path is unacceptable on the platform, or null.
-export function reportPathError(report, platform = process.platform) {
+function reportPathError(report, platform = process.platform) {
   const [pattern, flavor, form] = platform === "win32"
     ? [WIN32_PATH, path.win32, "a drive-qualified absolute path of [A-Za-z0-9\\._-] in normal form"]
     : [POSIX_PATH, path.posix, "an absolute path of [A-Za-z0-9/._-] in normal form"];
@@ -63,30 +64,6 @@ export function reportPathError(report, platform = process.platform) {
 const invalid = (reason) => {
   process.stderr.write(`invalid: ${reason}\n`);
   process.exit(3);
-};
-
-// The `path:line` or other location texts a Markdown fragment names.
-const locations = (text) => {
-  const plainText = text.trim().replace(/^`|`$/g, "");
-  const link = /^\[([^\]]*)\]\(([^)]*)\)$/.exec(plainText);
-  return (link ? [link[1], link[2]] : [plainText]).map((item) => item.replace(/^`|`$/g, "").trim()).filter(Boolean);
-};
-const sameLocation = (a, b) => a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`)
-  || a.endsWith(`\\${b}`) || b.endsWith(`\\${a}`);
-// Whether one ` - `-separated segment of a full-report item names the location.
-const namesLocation = (line, location) => line.split(/ [-—] /).slice(1)
-  .some((segment) => locations(segment).some((a) => locations(location).some((b) => sameLocation(a, b))));
-
-// Pairs summary items with full-report items one to one, in order.
-const matchItems = (kind, items, lines) => {
-  if (items.length !== lines.length) invalid(`summary lists ${items.length} ${kind}; the full report has ${lines.length}`);
-  items.forEach(({ id, location, title }, i) => {
-    if (!namesLocation(lines[i], location)) invalid(`${id} location ${location} does not match the full report's item ${i + 1}`);
-    const sharing = lines.filter((line) => namesLocation(line, location)).length;
-    if (sharing > 1 && !lines[i].split(/ [-—] /).some((segment) => segment.replace(/^- (?:\*\*)?\[[^\]]+\]\s*/, "").replaceAll("*", "").trim() === title)) {
-      invalid(`${id} title does not match the full report's item ${i + 1}, which shares its location`);
-    }
-  });
 };
 
 const REVIEWERS = {
@@ -147,7 +124,9 @@ try {
   invalid("missing file");
 }
 if (!info.isFile()) invalid("report is not a regular file");
-if (process.platform !== "win32") {
+if (process.platform === "win32") {
+  invalid("report directory privacy cannot be verified on Windows; run the delivery on a POSIX host such as WSL");
+} else {
   const parent = path.dirname(report);
   if (realpathSync(parent) !== parent) invalid("report directory is not its own real path");
   const dir = statSync(parent);
@@ -224,12 +203,6 @@ const ids = (field, pattern) => {
   return [...seen.values()];
 };
 
-// A summary item's ID, location (its first segment), and title (the rest).
-const item = (id, rest) => {
-  const [location, ...title] = rest.split(" - ");
-  return { id, location: location.trim(), title: title.join(" - ").trim() };
-};
-
 if (args.kind === "review") {
   const reviewer = REVIEWERS[args.reviewer];
   for (const heading of reviewer.headings) {
@@ -244,16 +217,22 @@ if (args.kind === "review") {
   const findingPattern = new RegExp(`^\\s+- (${reviewer.prefix}\\d+) \\[(Critical|High|Medium|Low)\\] (introduced|worsened|pre-existing) - (.+)$`);
   const findings = ids(fields.get("Findings"), findingPattern);
   const reported = section(reviewer.findings).filter((line) => /^- (?:\*\*)?\[(?:Critical|High|Medium|Low)\]/.test(line));
-  matchItems("findings", findings.map((match) => item(match[0], match.at(-1))), reported);
-  reported.forEach((line, i) => {
+  // Counts per severity and tag; which finding each summary item is stays unchecked.
+  const count = (pairs) => pairs.reduce((map, key) => map.set(key, (map.get(key) ?? 0) + 1), new Map());
+  const summaryCounts = count(findings.map(([, severity, tag]) => `[${severity}] ${tag}`));
+  const bodyCounts = count(reported.map((line) => {
     const severity = /\[(Critical|High|Medium|Low)\]/.exec(line)[1];
-    const tag = [...line.matchAll(/\b(introduced|worsened|pre-existing)\b/g)].at(-1)?.[1];
-    const [id, summarySeverity, summaryTag] = findings[i];
-    if (severity !== summarySeverity || tag !== summaryTag) invalid(`${id} is [${summarySeverity}] ${summaryTag}; the full report has [${severity}] ${tag ?? "no tag"}`);
-  });
-  const deferred = ids(fields.get("Deferred candidates"), /^\s+- (SECD\d+) - (.+)$/);
-  const candidates = reviewer.deferred ? section(reviewer.deferred).filter((line) => / [-—] /.test(line)) : [];
-  matchItems("deferred candidates", deferred.map((match) => item(match[0], match.at(-1))), candidates);
+    const tag = [...line.matchAll(/\b(introduced|worsened|pre-existing)\b/g)].at(-1)?.[1] ?? "no tag";
+    return `[${severity}] ${tag}`;
+  }));
+  for (const key of new Set([...summaryCounts.keys(), ...bodyCounts.keys()])) {
+    const listed = summaryCounts.get(key) ?? 0;
+    const found = bodyCounts.get(key) ?? 0;
+    if (listed !== found) invalid(`summary lists ${listed} ${key} findings; the full report has ${found}`);
+  }
+  const deferred = ids(fields.get("Deferred candidates"), /^\s+- (SECD\d+) - \S/);
+  const candidates = reviewer.deferred ? section(reviewer.deferred).filter((line) => / [-—] /.test(line)).length : 0;
+  if (deferred.length !== candidates) invalid(`summary lists ${deferred.length} deferred candidates; the full report has ${candidates}`);
 } else {
   if (!["complete", "question", "blocked"].includes(value("Completion"))) invalid("Completion is not complete, question, or blocked");
   if (args.draft === "su" && isNone(fields.get("Overview"))) invalid("shared understanding draft has no Overview");
@@ -264,6 +243,5 @@ process.stdout.write(`valid sha256=${sha256} bytes=${bytes.length}\n`);
 if (args.show) process.stdout.write(`${[DELIMITER, ...summary, END].join("\n")}\n`);
 }
 
-// Run as a command, including through a symbolic link; importing only exports.
-const invokedAs = (file) => (process.platform === "win32" ? file.toLowerCase() : file);
-if (process.argv[1] && invokedAs(realpathSync(process.argv[1])) === invokedAs(fileURLToPath(import.meta.url))) main();
+// Always validate: this file is only ever run as a command, however it is invoked.
+main();
