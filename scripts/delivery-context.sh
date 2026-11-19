@@ -22,23 +22,24 @@ command -v jq >/dev/null 2>&1 || {
 
 # Classification is a heuristic for comparing like with like, not a shell
 # parser:
-# - The first line has a heredoc: Bash:write, or Bash:ambiguous when the line
-#   also has a quote, $(, a backtick, or bash -c / sh -c. A delimiter word
-#   that is wholly single- or double-quoted, such as <<'EOF' or <<-"END JSON",
-#   does not count as a quote.
-# - A tee or a redirect operator (>, >>, N>, N>>, &>, &>>; not >&N) at a token
-#   boundary (start, space, tab, ; & | ( ) { } or a quote), whose destination
-#   word is not exactly /dev/null: Bash:ambiguous when the command has a quote,
-#   $(, a backtick, or bash -c / sh -c anywhere, otherwise Bash:write.
+# - The first line has a heredoc (<< or <<-, not a <<< here-string):
+#   Bash:write, or Bash:ambiguous when the line also has a quote, $(, a
+#   backtick, or bash -c / sh -c. A delimiter word that is wholly single- or
+#   double-quoted and followed by whitespace or the line end, such as <<'EOF'
+#   or <<-"END JSON", does not count as a quote.
+# - tee, or a redirect operator anywhere (N>>, N>, &>>, &>, >>, >; not >&N),
+#   unless its destination word is exactly /dev/null: Bash:ambiguous when the
+#   command has a quote, $(, a backtick, or bash -c / sh -c anywhere,
+#   otherwise Bash:write. Uncertain cases fall toward write or ambiguous.
 # Writes cost their input; reads and fetches cost their result.
 # shellcheck disable=SC2016 # $ and backticks are jq regex text, not expansions.
 jq -s '
   def quoting: test("[\u0027\"`]|\\$\\(|\\b(ba)?sh -c");
-  def redirect: test("(?<![^\\s;&|(){}\u0027\"`])(?:tee(?=\\s|$)|(?>[0-9]+>>|[0-9]+>|&>>|&>|>>|>)(?!&)(?>[ \\t]*)(?!/dev/null(?:[\\s;&|()<>]|$))[^\\s;&|()<>])");
+  def redirect: test("\\btee\\b|(?>[0-9]*>>|[0-9]*>|&>>|&>)(?!&)(?>[ \\t]*)(?!/dev/null(?:[\\s;&|()<>]|$))");
   def kind:
     (split("\n")[0]
-      | gsub("<<-?[ \\t]*(?:\u0027[^\u0027]*\u0027|\"[^\"]*\")"; "<<EOF")) as $line
-    | if ($line | test("<<[^<]")) then
+      | gsub("(?<!<)<<(?!<)-?[ \\t]*(?:\u0027[^\u0027]*\u0027|\"[^\"]*\")(?=[ \\t]|$)"; "<<EOF")) as $line
+    | if ($line | test("(?<!<)<<(?!<)")) then
         (if ($line | quoting) then "Bash:ambiguous" else "Bash:write" end)
       elif quoting and redirect then "Bash:ambiguous"
       elif redirect then "Bash:write"

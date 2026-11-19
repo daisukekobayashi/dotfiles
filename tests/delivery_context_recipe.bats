@@ -74,7 +74,7 @@ assert_kind() {
   assert_kind Bash:write $'cat <<-"EOF" > a.md\nx\nEOF'
 }
 
-@test "delivery-context matches whole redirect operators at token boundaries" {
+@test "delivery-context matches whole redirect operators anywhere" {
   assert_kind Bash:ambiguous "bash -c 'true&&1>out.txt'"
   assert_kind Bash:ambiguous "bash -c 'true&&&>out.txt'"
   assert_kind Bash:write 'true&&1>out.txt'
@@ -83,8 +83,14 @@ assert_kind() {
   assert_kind Bash:write '(echo x)>out.txt'
   assert_kind Bash:write $'echo x\t>out.txt'
   assert_kind Bash:ambiguous 'echo "x">out.txt'
-  assert_kind Bash:other 'git log a->b'
-  assert_kind Bash:other 'git diff x12>y'
+  assert_kind Bash:write 'git log a->b'
+  assert_kind Bash:write 'git diff x12>y'
+  assert_kind Bash:write 'cat a.md>b.md'
+  assert_kind Bash:write 'cat notes.md>>snapshot.md'
+  assert_kind Bash:write 'printf x|tee>/tmp/log'
+  assert_kind Bash:write 'cat notes.md 2> >(wc -l)'
+  assert_kind Bash:write 'gh issue view 217 2>/dev/null>output.md'
+  assert_kind Bash:ambiguous "echo 'a -> b'"
 }
 
 @test "delivery-context excludes only an exact /dev/null destination" {
@@ -107,6 +113,13 @@ assert_kind() {
   assert_kind Bash:write $'cat <<-"END JSON" > a.txt\nx\nEND JSON'
   assert_kind Bash:write $'cat <<\t\'EOF\' > a.txt\nx\nEOF'
   assert_kind Bash:ambiguous $'cat <<\'EOF\' > "a b.txt"\nx\nEOF'
+}
+
+@test "delivery-context exempts only a complete quoted heredoc delimiter" {
+  assert_kind Bash:other 'jq . <<<"$output"'
+  assert_kind Bash:ambiguous 'jq . <<<"$output" > out.json'
+  assert_kind Bash:ambiguous $'cat <<\'END-JSON\'L > a.json\nx\nEND-JSONL'
+  assert_kind Bash:ambiguous $'cat <<"END\\"JSON" > a.json\nx\nEND"JSON'
 }
 
 @test "delivery-context classifies reads, fetches, and other commands" {
