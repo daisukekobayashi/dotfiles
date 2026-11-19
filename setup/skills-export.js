@@ -363,7 +363,7 @@ function readmeText(manifest, hasNodeScripts) {
         lines.push("None.", "");
     }
     else {
-        lines.push("These skills are not copied. Install them with the `skills` CLI from a new, empty directory outside any", "project, such as one made with `mktemp -d`. `npx` resolves commands and npm settings from its current", "directory, so running it inside a project can run code that project provides; dotfiles setup isolates its", "own installs the same way. The commands write `.agents/skills/` and `.claude/skills/` in that directory;", "copy the installed skill directories next to the skills from this bundle.", "", "```sh", 'cd "$(mktemp -d)"');
+        lines.push("These skills are not copied. Install them with the `skills` CLI from a new, empty directory outside any", "project, such as one made with `mktemp -d`. `npx` resolves commands and npm settings from its current", "directory, so running it inside a project can run code that project provides; dotfiles setup isolates its", `own installs the same way. The commands write ${agents.map((agent) => (agent === "codex" ? "`.agents/skills/`" : "`.claude/skills/`")).join(" and ")} in that`, "directory; copy the installed skill directories next to the skills from this bundle.", "", "```sh", 'cd "$(mktemp -d)"');
         for (const entry of manifest.external) {
             const args = ["skills", "add", entry.source, ...entry.skills.flatMap((name) => ["--skill", name]), ...agents.flatMap((agent) => ["--agent", agent])];
             lines.push(["npx", ...args.map(shellArg)].join(" "));
