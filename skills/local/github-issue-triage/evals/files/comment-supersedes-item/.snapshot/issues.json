@@ -1,0 +1,88 @@
+{
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "tasklet",
+    "default_branch": "main",
+    "description": "A small command-line task tracker."
+  },
+  "issues": [
+    {
+      "number": 20,
+      "title": "Export: add --columns option",
+      "state": "open",
+      "labels": [
+        "enhancement"
+      ],
+      "milestone": "export-v1",
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-03T09:00:00Z",
+      "updated_at": "2026-11-03T09:00:00Z",
+      "body": "## Summary\n\nLet `tasklet export --columns title` export only the named columns.\n\n## Acceptance Criteria\n\n- `--columns <list>` limits the CSV to the named columns.\n- An unknown column exits with status 2.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/cli.py`\n- `tests/test_export.py`\n",
+      "comments": [
+        {
+          "author": "maintainer-a",
+          "created_at": "2026-11-09T10:00:00Z",
+          "body": "Superseded by #23, which implements column selection together with column ordering. Do not start work here; this issue will be closed when #23 merges."
+        }
+      ],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 21,
+      "title": "Colorize list output",
+      "state": "open",
+      "labels": [
+        "polish"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-04T09:00:00Z",
+      "updated_at": "2026-11-04T09:00:00Z",
+      "body": "## Summary\n\nShow done tasks in green in `tasklet list` when the output is a terminal.\n\n## Acceptance Criteria\n\n- Done tasks are green on a terminal and plain otherwise.\n\n## Touched Areas\n\n- `tasklet/terminal.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 22,
+      "title": "Document export columns in README",
+      "state": "open",
+      "labels": [
+        "documentation"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-05T09:00:00Z",
+      "updated_at": "2026-11-05T09:00:00Z",
+      "body": "## Summary\n\nDescribe column selection and ordering in the README once it exists.\n\n## Acceptance Criteria\n\n- The README shows an example of choosing and ordering columns.\n\n## Dependencies\n\nBlocked by #23.\n\n## Touched Areas\n\n- `README.md`\n",
+      "comments": [],
+      "blocked_by": [
+        23
+      ],
+      "sub_issues": []
+    },
+    {
+      "number": 23,
+      "title": "Column selection and ordering",
+      "state": "open",
+      "labels": [
+        "enhancement"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-08T09:00:00Z",
+      "updated_at": "2026-11-08T09:00:00Z",
+      "body": "## Summary\n\nPart of export v1: let `tasklet export --columns done,title` choose CSV columns and their order. Supersedes #20, which covered selection only.\n\n## Acceptance Criteria\n\n- `--columns <list>` limits the CSV to the named columns, in the given order.\n- An unknown column exits with status 2.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/cli.py`\n- `tests/test_export.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    }
+  ],
+  "pull_requests": []
+}

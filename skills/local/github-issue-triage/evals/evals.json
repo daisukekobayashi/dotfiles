@@ -1,0 +1,398 @@
+{
+  "skill_name": "github-issue-triage",
+  "supporting_skills": [
+    "triage-common"
+  ],
+  "execution": {
+    "runs_per_condition": 3,
+    "run_timeout_minutes": 30,
+    "conditions": {
+      "default": "The current skill with the plain triage prompt; detail reads follow the detail band.",
+      "full-read": "The current skill with the same prompt plus a request to read every open issue in full, which the detail-read rule allows."
+    },
+    "comparison": "Both conditions are with-skill runs of the current skill. Each scenario has a default case and a full-read case with the same fixture, overlay, and expected answer. Run every case on both agents, three runs per case, and compare the conditions within each agent.",
+    "decision_rule": "Fixed before any run. A run matches when its recommended next issue equals expected.next, its current wave equals expected.current_wave as a set, and its next wave equals expected.next_wave as a set; in addition, it names no parallel group that pairs an issue in expected.not_parallel_with_next with expected.next. Full-read runs are graded by the same rule as a control. A scenario shows a detail-band regression when a default run fails the rule while the full-read runs of the same agent pass it; a failure in both conditions is a case or model problem and is not attributed to the detail band. Bytes read are recorded, not gated.",
+    "recorded_fields": {
+      "next": "The issue the report recommends next.",
+      "current_wave": "The issues the report lists in the current wave.",
+      "next_wave": "The issues the report lists in the next wave.",
+      "detail_reads": "The issues on the report's Detail reads line, and its list-only issues.",
+      "gh_bytes": "The sum of stdout_bytes over .snapshot/gh-calls.jsonl, with a subtotal per kind."
+    },
+    "agents": {
+      "claude": {
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "extra_args": [
+          "--model",
+          "claude-opus-5-5",
+          "--effort",
+          "high",
+          "--permission-mode",
+          "dontAsk",
+          "--allowedTools",
+          "Read Grep Glob Bash"
+        ],
+        "claude_settings": "claude-settings.json",
+        "fresh_tmpdir": {
+          "env": "CLAUDE_CODE_TMPDIR",
+          "max_per_uid_path_bytes": 44
+        },
+        "policy": "Both conditions get the same extra arguments plus --settings with the absolute path of claude_settings, resolved relative to this file, appended to the prepared launch_argv with the CLI's noninteractive flags and no permission-bypass flag. Each run gets a new, empty directory as the environment variable named in fresh_tmpdir.env, with a path short enough that <dir>/claude-<uid> stays within max_per_uid_path_bytes; a longer path makes the CLI fall back to the shared /tmp/claude-<uid>. Candidates may run commands inside the workspace under the OS sandbox in claude_settings: writes only to the workspace and the run's temp directory, no network, and no reads of ~/.dotfiles, ~/.claude, or ~/.agents. Edit and Write tools are not allowed. The run's environment puts <workspace>/bin first on PATH, so gh resolves to the offline snapshot stand-in in both conditions.",
+        "pre_run_checks": [
+          "Every effective Claude settings source other than claude_settings (user, project, local, and managed) sets no sandbox key and no permissions.allow rule; record the result and do not start runs otherwise.",
+          "Inherited hooks run outside the sandbox: no effective hook command runs or sources a file in the workspace or the run's temp directory; record the hook commands and do not start runs otherwise.",
+          "In a separately prepared throwaway workspace, under the same settings and sandbox: command -v gh prints <workspace>/bin/gh, gh repo view --json nameWithOwner --jq .nameWithOwner prints example/tasklet, and the call appends a line to .snapshot/gh-calls.jsonl; record the result and do not start runs otherwise."
+        ],
+        "post_run_checks": [
+          "<dir>/claude-<uid> exists under the run's fresh temp directory, showing that the run's TMPDIR did not fall back to the shared temp root; exclude the run otherwise.",
+          "Delete the run's workspace and temp directory once its transcript, final answer, and file hashes are retained."
+        ],
+        "path_prefix": "bin"
+      },
+      "codex": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "extra_args": [
+          "-m",
+          "gpt-6.1-sol",
+          "-c",
+          "model_reasoning_effort=\"high\"",
+          "-c",
+          "approval_policy=\"never\"",
+          "-c",
+          "web_search=\"disabled\"",
+          "-c",
+          "default_permissions=\"skill_eval\"",
+          "-c",
+          "permissions.skill_eval.filesystem={\":root\"=\"read\",\":workspace_roots\"=\"write\",\":tmpdir\"=\"write\",\"~/.dotfiles\"=\"none\",\"~/.claude\"=\"none\",\"~/.agents\"=\"none\",\"~/.codex/skills\"=\"none\",\"~/.codex/sessions\"=\"none\",\"~/.codex/archived_sessions\"=\"none\"}",
+          "--disable",
+          "hooks",
+          "--disable",
+          "memories",
+          "--disable",
+          "apps",
+          "--disable",
+          "plugins",
+          "--disable",
+          "remote_plugin",
+          "--disable",
+          "computer_use",
+          "--disable",
+          "browser_use",
+          "--disable",
+          "browser_use_external",
+          "--disable",
+          "in_app_browser",
+          "--disable",
+          "image_generation",
+          "--disable",
+          "tool_suggest",
+          "--disable",
+          "skill_mcp_dependency_install",
+          "--disable",
+          "goals"
+        ],
+        "fresh_tmpdir": {
+          "env": "TMPDIR"
+        },
+        "policy": "Both conditions insert exec after codex in the prepared launch_argv, keep its arguments, then append extra_args, one -c mcp_servers.<name>.enabled=false per MCP server found by the pre-run check, and --skip-git-repo-check --json -, with no --sandbox, approval-bypass, or hook-trust-bypass flag. The skill_eval permission profile lets commands write only to the workspace and the run's temp directory, blocks the network, and blocks reads of ~/.dotfiles, ~/.claude, ~/.agents, and Codex's installed skills and session transcripts. Commands that need more fail instead of asking, because the approval policy is never. Each run gets a new, empty directory as TMPDIR. apply_patch stays available, so the file-hash assertion catches an edit. The run's environment puts <workspace>/bin first on PATH, so gh resolves to the offline snapshot stand-in in both conditions.",
+        "pre_run_checks": [
+          "List the MCP servers in the effective Codex config and disable each one for both conditions with -c mcp_servers.<name>.enabled=false; record the names.",
+          "From an empty scratch directory, run codex debug prompt-input with the same -c and --disable arguments before the subcommand: the permissions instructions show the denied reads, restricted network, and approval policy never, and the tool list has no browser, computer-use, web search, or MCP server tool; record the result and do not start runs otherwise.",
+          "Run codex sandbox -P skill_eval with the same -c arguments from that directory: a write there succeeds, a write outside it fails, a read of each denied path fails, and a network request fails; record the result and do not start runs otherwise.",
+          "Global instructions that Codex loads, such as ~/.codex/AGENTS.md, apply to both conditions; record their presence.",
+          "With codex sandbox -P skill_eval and the same -c arguments, in a separately prepared throwaway workspace with <workspace>/bin first on PATH: command -v gh prints <workspace>/bin/gh, gh repo view --json nameWithOwner --jq .nameWithOwner prints example/tasklet, and the call appends a line to .snapshot/gh-calls.jsonl; record the result and do not start runs otherwise."
+        ],
+        "post_run_checks": [
+          "The run's event stream shows the pinned model and no turn with a different model or effort; exclude the run otherwise.",
+          "Delete the run's workspace and temp directory once its event stream, final answer, and file hashes are retained."
+        ],
+        "path_prefix": "bin"
+      }
+    },
+    "known_constraints": [
+      "The fixture has no .git directory, so git commands fail; the prompt states the git context.",
+      "The gh stand-in answers --jq through the system jq, so jq must be on PATH inside both sandboxes."
+    ],
+    "contamination": "Exclude a run whose transcript reads or edits a file under .snapshot/ directly, runs a gh other than <workspace>/bin/gh, or reaches a repository or installed skill outside the workspace, another run's workspace or temp directory, the shared temp root, or the network, and rerun it once under the same conditions. Report a second contaminated run as missing coverage."
+  },
+  "evals": [
+    {
+      "id": 1,
+      "name": "dependent-text-raises-blocker",
+      "scenario": "dependent-text-raises-blocker",
+      "condition": "default",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format.",
+      "expected_output": "The overview places #10 (export-v1 milestone) next and #11 (refactor) and #12 (polish, natively blocked by #11) low. #12's body shows it is a crash that makes export to a file unusable, a bug blocking the core path, so re-placing #12 together with its blocker moves #11 ahead of #10 as the foundation item that unblocks it.",
+      "expected": {
+        "next": 11,
+        "current_wave": [
+          10,
+          11,
+          13
+        ],
+        "next_wave": [
+          12
+        ],
+        "not_parallel_with_next": []
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/dependent-text-raises-blocker",
+      "files": [
+        "files/tasklet",
+        "files/dependent-text-raises-blocker"
+      ],
+      "assertions": [
+        "The recommended next issue is #11",
+        "The current wave is exactly #10, #11, and #13, in any order",
+        "The next wave is exactly #12, in any order",
+        "The report has a Detail reads line with the issues read in full and the list-only issues",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "dependent-text-raises-blocker-full-read",
+      "scenario": "dependent-text-raises-blocker",
+      "condition": "full-read",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format. Read every open issue in full, its body and comments, before ranking: #10, #11, #12, and #13.",
+      "expected_output": "The overview places #10 (export-v1 milestone) next and #11 (refactor) and #12 (polish, natively blocked by #11) low. #12's body shows it is a crash that makes export to a file unusable, a bug blocking the core path, so re-placing #12 together with its blocker moves #11 ahead of #10 as the foundation item that unblocks it.",
+      "expected": {
+        "next": 11,
+        "current_wave": [
+          10,
+          11,
+          13
+        ],
+        "next_wave": [
+          12
+        ],
+        "not_parallel_with_next": []
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/dependent-text-raises-blocker",
+      "files": [
+        "files/tasklet",
+        "files/dependent-text-raises-blocker"
+      ],
+      "assertions": [
+        "The recommended next issue is #11",
+        "The current wave is exactly #10, #11, and #13, in any order",
+        "The next wave is exactly #12, in any order",
+        "The Detail reads line lists every open issue: #10, #11, #12, and #13",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "comment-supersedes-item",
+      "scenario": "comment-supersedes-item",
+      "condition": "default",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format.",
+      "expected_output": "The overview places #20 (export-v1 milestone) next. A comment on #20 says #23 supersedes it and asks that no work start there, so #20 leaves the actionable set, and #23, whose body puts it on the export core path, becomes next; #22 waits on #23.",
+      "expected": {
+        "next": 23,
+        "current_wave": [
+          21,
+          23
+        ],
+        "next_wave": [
+          22
+        ],
+        "not_parallel_with_next": []
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/comment-supersedes-item",
+      "files": [
+        "files/tasklet",
+        "files/comment-supersedes-item"
+      ],
+      "assertions": [
+        "The recommended next issue is #23",
+        "The current wave is exactly #21, and #23, in any order",
+        "The next wave is exactly #22, in any order",
+        "The report has a Detail reads line with the issues read in full and the list-only issues",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "comment-supersedes-item-full-read",
+      "scenario": "comment-supersedes-item",
+      "condition": "full-read",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format. Read every open issue in full, its body and comments, before ranking: #20, #21, #22, and #23.",
+      "expected_output": "The overview places #20 (export-v1 milestone) next. A comment on #20 says #23 supersedes it and asks that no work start there, so #20 leaves the actionable set, and #23, whose body puts it on the export core path, becomes next; #22 waits on #23.",
+      "expected": {
+        "next": 23,
+        "current_wave": [
+          21,
+          23
+        ],
+        "next_wave": [
+          22
+        ],
+        "not_parallel_with_next": []
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/comment-supersedes-item",
+      "files": [
+        "files/tasklet",
+        "files/comment-supersedes-item"
+      ],
+      "assertions": [
+        "The recommended next issue is #23",
+        "The current wave is exactly #21, and #23, in any order",
+        "The next wave is exactly #22, in any order",
+        "The Detail reads line lists every open issue: #20, #21, #22, and #23",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "list-only-overlap-with-next",
+      "scenario": "list-only-overlap-with-next",
+      "condition": "default",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format.",
+      "expected_output": "#30 (export-v1 milestone) is next. #32 is a refactor whose body lists tasklet/export.py and tests/test_export.py, which #30 also touches, so #32 must not run in parallel with #30. #33 waits on #30.",
+      "expected": {
+        "next": 30,
+        "current_wave": [
+          30,
+          31,
+          32
+        ],
+        "next_wave": [
+          33
+        ],
+        "not_parallel_with_next": [
+          32
+        ]
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/list-only-overlap-with-next",
+      "files": [
+        "files/tasklet",
+        "files/list-only-overlap-with-next"
+      ],
+      "assertions": [
+        "The recommended next issue is #30",
+        "The current wave is exactly #30, #31, and #32, in any order",
+        "The next wave is exactly #33, in any order",
+        "No parallel group pairs #32 with #30; listing #32 as unverified for parallel work or as overlapping #30 is allowed",
+        "The report has a Detail reads line with the issues read in full and the list-only issues",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "list-only-overlap-with-next-full-read",
+      "scenario": "list-only-overlap-with-next",
+      "condition": "full-read",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format. Read every open issue in full, its body and comments, before ranking: #30, #31, #32, and #33.",
+      "expected_output": "#30 (export-v1 milestone) is next. #32 is a refactor whose body lists tasklet/export.py and tests/test_export.py, which #30 also touches, so #32 must not run in parallel with #30. #33 waits on #30.",
+      "expected": {
+        "next": 30,
+        "current_wave": [
+          30,
+          31,
+          32
+        ],
+        "next_wave": [
+          33
+        ],
+        "not_parallel_with_next": [
+          32
+        ]
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/list-only-overlap-with-next",
+      "files": [
+        "files/tasklet",
+        "files/list-only-overlap-with-next"
+      ],
+      "assertions": [
+        "The recommended next issue is #30",
+        "The current wave is exactly #30, #31, and #32, in any order",
+        "The next wave is exactly #33, in any order",
+        "No parallel group pairs #32 with #30; listing #32 as unverified for parallel work or as overlapping #30 is allowed",
+        "The Detail reads line lists every open issue: #30, #31, #32, and #33",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "no-propagation-control",
+      "scenario": "no-propagation-control",
+      "condition": "default",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format.",
+      "expected_output": "No detail read changes a placement: #50 (export-v1 milestone) is next and unblocks #51; #52 and #53 are polish and documentation. Open PR #55 touches only CI configuration.",
+      "expected": {
+        "next": 50,
+        "current_wave": [
+          50,
+          52,
+          53
+        ],
+        "next_wave": [
+          51
+        ],
+        "not_parallel_with_next": []
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/no-propagation-control",
+      "files": [
+        "files/tasklet",
+        "files/no-propagation-control"
+      ],
+      "assertions": [
+        "The recommended next issue is #50",
+        "The current wave is exactly #50, #52, and #53, in any order",
+        "The next wave is exactly #51, in any order",
+        "The report has a Detail reads line with the issues read in full and the list-only issues",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "no-propagation-control-full-read",
+      "scenario": "no-propagation-control",
+      "condition": "full-read",
+      "prompt": "Triage the open GitHub issues of this repository and recommend the next issue to handle. This copy has no git history: the branch is main, the worktree is clean, and there are no other worktrees. GitHub is reachable only through the gh command on PATH. Work directly in this session without subagents, leave the project files unedited, and report in the skill's output format. Read every open issue in full, its body and comments, before ranking: #50, #51, #52, and #53.",
+      "expected_output": "No detail read changes a placement: #50 (export-v1 milestone) is next and unblocks #51; #52 and #53 are polish and documentation. Open PR #55 touches only CI configuration.",
+      "expected": {
+        "next": 50,
+        "current_wave": [
+          50,
+          52,
+          53
+        ],
+        "next_wave": [
+          51
+        ],
+        "not_parallel_with_next": []
+      },
+      "fixture": "files/tasklet",
+      "overlay": "files/no-propagation-control",
+      "files": [
+        "files/tasklet",
+        "files/no-propagation-control"
+      ],
+      "assertions": [
+        "The recommended next issue is #50",
+        "The current wave is exactly #50, #52, and #53, in any order",
+        "The next wave is exactly #51, in any order",
+        "The Detail reads line lists every open issue: #50, #51, #52, and #53",
+        "Every gh command in the transcript has a matching line in .snapshot/gh-calls.jsonl, and the transcript reads no file under .snapshot/ directly",
+        "The project files other than .snapshot/gh-calls.jsonl remain byte-identical to the initial fixture"
+      ]
+    }
+  ]
+}

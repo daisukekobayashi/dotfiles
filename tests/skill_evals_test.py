@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -17,6 +20,7 @@ SPEC = importlib.util.spec_from_file_location(
 PREPARE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PREPARE)
 SUITE = ROOT / "skills/local/maintain-verification-skill/evals/evals.json"
+TRIAGE_SUITE = ROOT / "skills/local/github-issue-triage/evals/evals.json"
 
 
 class SkillEvaluationTests(unittest.TestCase):
@@ -232,6 +236,176 @@ class SkillEvaluationTests(unittest.TestCase):
             issue = suite.parent / case["overlay"] / "ISSUE.md"
             self.assertEqual(issue.is_file(), case["name"] != "no-issue-available", case["name"])
         self.check_plain_fixture_suite(suite, [claude["claude_settings"]])
+
+    def triage_snapshot(self, case):
+        path = TRIAGE_SUITE.parent / case["overlay"] / ".snapshot/issues.json"
+        return json.loads(path.read_text())
+
+    def prepare_triage(self, case_id, agent="claude"):
+        result = PREPARE.prepare(
+            TRIAGE_SUITE, case_id, agent, "with-skill",
+            self.root / f"run-{len(self.workspaces)}",
+        )
+        workspace = Path(result["workspace"])
+        self.workspaces.append(workspace)
+        return result, workspace
+
+    def run_gh(self, workspace, argv):
+        env = dict(os.environ, PATH=f"{workspace / 'bin'}{os.pathsep}{os.environ['PATH']}")
+        return subprocess.run(argv, cwd=workspace, env=env, capture_output=True,
+                              text=True, check=False, timeout=60)
+
+    @staticmethod
+    def touched_areas(body):
+        section = body.split("## Touched Areas", 1)[1].split("\n## ", 1)[0]
+        return set(re.findall(r"`([^`]+)`", section))
+
+    def test_triage_suite_pairs_default_and_full_read_runs_over_offline_snapshots(self):
+        data = json.loads(TRIAGE_SUITE.read_text())
+        self.assertEqual(data["supporting_skills"], ["triage-common"])
+        execution = data["execution"]
+        self.assertEqual((execution["runs_per_condition"], execution["run_timeout_minutes"]), (3, 30))
+        self.assertEqual(set(execution["conditions"]), {"default", "full-read"})
+        self.assertTrue(execution["decision_rule"].startswith("Fixed before any run."))
+        self.assertEqual(set(execution["recorded_fields"]),
+                         {"next", "current_wave", "next_wave", "detail_reads", "gh_bytes"})
+        claude, codex = execution["agents"]["claude"], execution["agents"]["codex"]
+        self.check_claude_policy(TRIAGE_SUITE, claude)
+        self.check_agent_policies(claude, codex)
+        for agent in (claude, codex):
+            self.assertEqual(agent["path_prefix"], "bin")
+            self.assertTrue(any("command -v gh" in check for check in agent["pre_run_checks"]))
+
+        files = TRIAGE_SUITE.parent / "files"
+        self.assertFalse(any(p.is_symlink() or p.name in (".git", "gh-calls.jsonl")
+                             for p in files.rglob("*")))
+        self.assertTrue(os.access(files / "tasklet/bin/gh", os.X_OK))
+        scenarios = {}
+        for case in data["evals"]:
+            scenarios.setdefault(case["scenario"], {})[case["condition"]] = case
+        self.assertEqual(set(scenarios), {
+            "dependent-text-raises-blocker", "comment-supersedes-item",
+            "list-only-overlap-with-next", "no-propagation-control",
+        })
+        for name, pair in scenarios.items():
+            with self.subTest(scenario=name):
+                self.assertEqual(set(pair), {"default", "full-read"})
+                default, full = pair["default"], pair["full-read"]
+                for key in ("fixture", "overlay", "files", "expected", "expected_output"):
+                    self.assertEqual(default[key], full[key], key)
+                snapshot = self.triage_snapshot(default)
+                issues = {issue["number"]: issue for issue in snapshot["issues"]}
+                open_numbers = sorted(n for n, issue in issues.items() if issue["state"] == "open")
+                self.assertTrue(full["prompt"].startswith(default["prompt"] + " Read every open issue in full"))
+                self.assertNotIn("in full", default["prompt"])
+                self.assertEqual([int(n) for n in re.findall(r"#(\d+)", full["prompt"])], open_numbers)
+
+                expected = default["expected"]
+                current, after = set(expected["current_wave"]), set(expected["next_wave"])
+                self.assertIn(expected["next"], current)
+                self.assertFalse(current & after)
+                self.assertLessEqual(current | after, set(open_numbers))
+                for number in current:
+                    self.assertFalse(issues[number]["blocked_by"], number)
+                for number in after:
+                    self.assertEqual(issues[number]["blocked_by"], [expected["next"]], number)
+                next_areas = self.touched_areas(issues[expected["next"]]["body"])
+                for number in expected["not_parallel_with_next"]:
+                    self.assertIn(number, current)
+                    self.assertTrue(self.touched_areas(issues[number]["body"]) & next_areas, number)
+                assertions = " ".join(default["assertions"])
+                self.assertIn(f"The recommended next issue is #{expected['next']}", assertions)
+        self.assertEqual(
+            scenarios["list-only-overlap-with-next"]["default"]["expected"]["not_parallel_with_next"], [32])
+
+        source_before = PREPARE.digest_tree(TRIAGE_SUITE.parent)
+        for case in data["evals"]:
+            for agent in ("codex", "claude"):
+                with self.subTest(case=case["name"], agent=agent):
+                    result, workspace = self.prepare_triage(case["id"], agent)
+                    self.assertIn(".snapshot/issues.json", result["initial_files"])
+                    self.assertIn("bin/gh", result["initial_files"])
+                    self.assertFalse((workspace / ".git").exists())
+                    self.assertFalse(any(Path(name).name in ("evals.json", "claude-settings.json")
+                                         for name in result["initial_files"]))
+                    guidance = workspace / ".guidance/skills"
+                    self.assertEqual(sorted(p.name for p in guidance.iterdir()),
+                                     ["github-issue-triage", "triage-common"])
+                    self.assertFalse((guidance / "github-issue-triage/evals").exists())
+        self.assertEqual(PREPARE.digest_tree(TRIAGE_SUITE.parent), source_before)
+
+    @unittest.skipUnless(shutil.which("jq"), "the gh stand-in runs --jq through jq")
+    def test_triage_gh_stand_in_answers_documented_commands_and_logs_bytes(self):
+        skill = (ROOT / "skills/local/github-issue-triage/SKILL.md").read_text()
+        # `gh issue` and `gh pr` alone name the calls that take --repo; they run nothing.
+        templates = [command for command in re.findall(r"`(gh [^`]+)`", skill)
+                     if command not in ("gh issue", "gh pr")]
+        self.assertEqual(len(templates), 7, templates)
+        repo = "github.com/example/tasklet"
+        data = json.loads(TRIAGE_SUITE.read_text())
+        for case in (case for case in data["evals"] if case["condition"] == "default"):
+            with self.subTest(scenario=case["scenario"]):
+                snapshot = self.triage_snapshot(case)
+                _, workspace = self.prepare_triage(case["id"])
+                calls = []
+
+                def call(argv):
+                    result = self.run_gh(workspace, argv)
+                    calls.append((argv, result))
+                    return result
+
+                for template in templates:
+                    command = (template.replace("<host>", "github.com")
+                               .replace("<owner>/<repo>", "example/tasklet"))
+                    argv = shlex.split(command)
+                    if argv[1] in ("issue", "pr"):
+                        argv += ["--repo", repo]
+                    if "<number>" not in command:
+                        result = call(argv)
+                        self.assertEqual(result.returncode, 0, (argv, result.stderr))
+                        continue
+                    numbers = ([pr["number"] for pr in snapshot["pull_requests"]]
+                               if argv[1] == "pr" else [i["number"] for i in snapshot["issues"]])
+                    for number in numbers:
+                        concrete = [arg.replace("<number>", str(number)) for arg in argv]
+                        result = call(concrete)
+                        self.assertEqual(result.returncode, 0, (concrete, result.stderr))
+                        if "blocked_by" in command:
+                            issue = next(i for i in snapshot["issues"] if i["number"] == number)
+                            got = [json.loads(line)["number"] for line in result.stdout.splitlines()]
+                            self.assertEqual(got, issue["blocked_by"])
+                        elif argv[1:3] == ["issue", "view"]:
+                            issue = next(i for i in snapshot["issues"] if i["number"] == number)
+                            got = json.loads(result.stdout)
+                            self.assertEqual((got["body"], [c["body"] for c in got["comments"]]),
+                                             (issue["body"], [c["body"] for c in issue["comments"]]))
+                        elif argv[1:3] == ["pr", "view"]:
+                            pr = next(p for p in snapshot["pull_requests"] if p["number"] == number)
+                            self.assertEqual(result.stdout.splitlines(), pr["files"])
+
+                snapshot_file = workspace / ".snapshot/issues.json"
+                before = snapshot_file.read_bytes()
+                for argv in (["gh", "issue", "edit", "10", "--add-label", "x"],
+                             ["gh", "issue", "comment", "10", "--body", "x"],
+                             ["gh", "pr", "merge", "1"],
+                             ["gh", "api", "-X", "POST", "repos/example/tasklet/issues/10/comments"],
+                             ["gh", "api", "repos/example/tasklet/issues/10/comments", "-f", "body=x"],
+                             ["gh", "issue", "list", "--repo", "other/repo"],
+                             ["gh", "search", "issues", "export"]):
+                    result = call(argv)
+                    self.assertNotEqual(result.returncode, 0, argv)
+                    self.assertEqual(result.stdout, "", argv)
+                self.assertEqual(snapshot_file.read_bytes(), before)
+
+                log = [json.loads(line) for line in
+                       (workspace / ".snapshot/gh-calls.jsonl").read_text().splitlines()]
+                self.assertEqual(len(log), len(calls))
+                for entry, (argv, result) in zip(log, calls):
+                    self.assertEqual(entry["argv"], argv[1:])
+                    self.assertEqual(entry["exit"], 0 if result.returncode == 0 else 1)
+                    self.assertEqual(entry["stdout_bytes"], len(result.stdout.encode()))
+                    self.assertEqual(entry["stderr_bytes"], len(result.stderr.encode()))
+                self.assertIn("issue view", {entry["kind"] for entry in log})
 
     def test_old_snapshot_is_supplied_without_the_judging_cases(self):
         bundle = self.root / "snapshot"

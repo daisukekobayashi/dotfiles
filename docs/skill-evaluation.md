@@ -74,6 +74,28 @@ skill_eval`, both with the same overrides, and record the results. A revision
 runs only the new skill and compares it with the baseline with-skill runs of the
 same agent; rerun the old snapshot when the model or CLI version changed.
 
+The `github-issue-triage` suite checks that triage under the detail band, which
+reads issue text only where the recommendation depends on it, keeps the
+recommendation of a triage that reads every issue in full. Each of its four
+scenarios is an offline snapshot of list data, native relationships, and issue
+text: a dependent whose text changes its blocker's rank, a comment that
+supersedes an item, a list-only item whose touched areas overlap the next item,
+and a control in which no read changes a placement. Each scenario has a
+`default` case and a `full-read` case with the same files and expected answer;
+the full-read prompt names every open issue for a detail read. The fixture's
+`bin/gh` answers the `gh` commands the skill documents from
+`.snapshot/issues.json`, applies `--jq` through the system `jq`, refuses every
+other command and every write, and logs each call's stdout bytes to
+`.snapshot/gh-calls.jsonl`. Its `execution` object puts `<workspace>/bin` first
+on `PATH` and otherwise uses the `change-review` policy for both agents. It also
+fixes, before any run, the decision rule: a run matches when its next issue,
+current wave, and next wave equal the case's `expected` answer, and, in the
+overlap scenario, it does not pair the overlapping issue with the next issue as
+parallel work. Full-read runs are graded the same way as a control, and a
+default run that fails where the full-read runs of the same agent pass marks a
+detail-band regression. Each run records its next issue, both waves, its detail
+reads, and its `gh` bytes; bytes are measured, not gated.
+
 `bats tests/setup_pstack_skills.bats tests/skill_evals.bats` checks both agent
 layouts and preparation behavior. Those checks do not establish real-model
 effectiveness. Native skill discovery/triggering is a separate check from the

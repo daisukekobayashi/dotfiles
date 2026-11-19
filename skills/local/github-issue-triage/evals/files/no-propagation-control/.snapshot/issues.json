@@ -1,0 +1,96 @@
+{
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "tasklet",
+    "default_branch": "main",
+    "description": "A small command-line task tracker."
+  },
+  "issues": [
+    {
+      "number": 50,
+      "title": "Export: add --output path option",
+      "state": "open",
+      "labels": [
+        "enhancement"
+      ],
+      "milestone": "export-v1",
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-03T09:00:00Z",
+      "updated_at": "2026-11-03T09:00:00Z",
+      "body": "## Summary\n\nLet `tasklet export --output tasks.csv` write to a file instead of stdout.\n\n## Acceptance Criteria\n\n- `--output <path>` writes the CSV to the path.\n- An unwritable path exits with status 2.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/cli.py`\n- `tests/test_export.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 51,
+      "title": "Export: optional UTF-8 BOM for spreadsheet apps",
+      "state": "open",
+      "labels": [
+        "enhancement"
+      ],
+      "milestone": "export-v1",
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-04T09:00:00Z",
+      "updated_at": "2026-11-04T09:00:00Z",
+      "body": "## Summary\n\nAdd `--bom` so spreadsheet apps detect UTF-8 in files written with `--output`.\n\n## Acceptance Criteria\n\n- `tasklet export --output tasks.csv --bom` starts the file with a UTF-8 BOM.\n\n## Dependencies\n\nBlocked by #50.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tests/test_export.py`\n",
+      "comments": [],
+      "blocked_by": [
+        50
+      ],
+      "sub_issues": []
+    },
+    {
+      "number": 52,
+      "title": "Align columns in list output",
+      "state": "open",
+      "labels": [
+        "polish"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-05T09:00:00Z",
+      "updated_at": "2026-11-05T09:00:00Z",
+      "body": "## Summary\n\nPad task titles in `tasklet list` so the columns line up.\n\n## Acceptance Criteria\n\n- Titles in `tasklet list` are padded to the longest title.\n\n## Touched Areas\n\n- `tasklet/terminal.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 53,
+      "title": "Docs: add a CONTRIBUTING guide",
+      "state": "open",
+      "labels": [
+        "documentation"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-06T09:00:00Z",
+      "updated_at": "2026-11-06T09:00:00Z",
+      "body": "## Summary\n\nAdd a short CONTRIBUTING guide with the test command.\n\n## Acceptance Criteria\n\n- CONTRIBUTING.md explains how to run the tests.\n\n## Touched Areas\n\n- `CONTRIBUTING.md`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    }
+  ],
+  "pull_requests": [
+    {
+      "number": 55,
+      "title": "ci: cache pip downloads",
+      "head": "ci/cache-pip",
+      "base": "main",
+      "labels": [
+        "ci"
+      ],
+      "updated_at": "2026-11-10T09:00:00Z",
+      "files": [
+        ".github/workflows/ci.yml"
+      ]
+    }
+  ]
+}

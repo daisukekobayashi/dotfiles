@@ -1,0 +1,399 @@
+#!/usr/bin/env python3
+"""Offline, read-only stand-in for the gh commands that triage uses.
+
+It answers from ../.snapshot/issues.json instead of GitHub and appends one JSON
+line per call to ../.snapshot/gh-calls.jsonl: the arguments, a command kind,
+the exit status, and the bytes written to stdout and stderr. Supported:
+`gh repo view`, `gh issue list`, `gh issue view`, `gh pr list`, `gh pr view`,
+`gh auth status`, `gh --version`, and GET `gh api` for an issue, its comments,
+its `dependencies/blocked_by` or `dependencies/blocking`, and its `sub_issues`.
+`--json` selects fields as gh does, and `--jq` runs through the system `jq`.
+Every other command, including every command that would change GitHub, exits
+non-zero.
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SNAPSHOT = os.path.join(ROOT, ".snapshot")
+DATA = os.path.join(SNAPSHOT, "issues.json")
+LOG = os.path.join(SNAPSHOT, "gh-calls.jsonl")
+
+VALUE_FLAGS = {
+    "--json", "--jq", "-q", "--repo", "-R", "--state", "-s", "--limit", "-L",
+    "--hostname", "--template", "-t", "--method", "-X", "--field", "-f",
+    "--raw-field", "-F", "--header", "-H", "--input", "--label", "-l",
+    "--search", "-S", "--author", "-A", "--assignee", "-a", "--milestone",
+    "-m", "--base", "-B", "--head",
+}
+BOOL_FLAGS = {"--paginate", "--comments", "-c", "--web", "-w", "--slurp", "--include", "-i"}
+MUTATING = {
+    "create", "edit", "close", "reopen", "comment", "delete", "merge", "lock",
+    "unlock", "pin", "unpin", "transfer", "develop", "ready", "review",
+    "checkout", "set-default", "fork", "clone", "rename", "archive", "sync",
+    "login", "logout", "refresh", "setup-git", "switch",
+}
+
+
+class Refusal(Exception):
+    """A command the snapshot cannot or must not answer."""
+
+    def __init__(self, message, kind="refused"):
+        super().__init__(message)
+        self.kind = kind
+
+
+def parse(args):
+    positional, options = [], {}
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg.startswith("-") and arg != "-":
+            name, _, inline = arg.partition("=")
+            if name in VALUE_FLAGS:
+                if not inline:
+                    index += 1
+                    if index >= len(args):
+                        raise Refusal(f"flag needs an argument: {name}", "usage")
+                    inline = args[index]
+                options.setdefault(name, []).append(inline)
+            elif name in BOOL_FLAGS and not inline:
+                options[name] = [True]
+            else:
+                raise Refusal(f"unknown flag: {arg}", "usage")
+        else:
+            positional.append(arg)
+        index += 1
+    return positional, options
+
+
+def option(options, *names, default=None):
+    for name in names:
+        if name in options:
+            return options[name][-1]
+    return default
+
+
+def load():
+    with open(DATA) as handle:
+        return json.load(handle)
+
+
+def check_repo(snapshot, value):
+    repo = snapshot["repository"]
+    full = f"{repo['owner']}/{repo['name']}"
+    accepted = {full, f"{repo['host']}/{full}", f"https://{repo['host']}/{full}"}
+    if value is not None and value.rstrip("/") not in accepted:
+        raise Refusal(f"GraphQL: Could not resolve to a Repository with the name '{value}'.", "not-found")
+
+
+def repo_url(snapshot):
+    repo = snapshot["repository"]
+    return f"https://{repo['host']}/{repo['owner']}/{repo['name']}"
+
+
+def find_issue(snapshot, number):
+    for issue in snapshot["issues"]:
+        if str(issue["number"]) == str(number).lstrip("#"):
+            return issue
+    raise Refusal(
+        f"GraphQL: Could not resolve to an issue or pull request with the number of {number}.",
+        "not-found",
+    )
+
+
+def find_pr(snapshot, number):
+    for pr in snapshot["pull_requests"]:
+        if str(pr["number"]) == str(number).lstrip("#"):
+            return pr
+    raise Refusal(f"GraphQL: Could not resolve to a PullRequest with the number of {number}.", "not-found")
+
+
+def label_objects(names):
+    return [{"id": f"LA_{name}", "name": name, "description": "", "color": "ededed"} for name in names]
+
+
+def gh_issue(snapshot, issue):
+    milestone = issue.get("milestone")
+    return {
+        "number": issue["number"],
+        "title": issue["title"],
+        "state": issue["state"].upper(),
+        "body": issue["body"],
+        "url": f"{repo_url(snapshot)}/issues/{issue['number']}",
+        "labels": label_objects(issue.get("labels", [])),
+        "milestone": {"number": 1, "title": milestone, "description": "", "dueOn": None} if milestone else None,
+        "assignees": [{"login": login, "name": ""} for login in issue.get("assignees", [])],
+        "author": {"login": issue["author"], "name": "", "is_bot": False},
+        "createdAt": issue["created_at"],
+        "updatedAt": issue["updated_at"],
+        "closedAt": None,
+        "comments": [
+            {
+                "author": {"login": comment["author"]},
+                "authorAssociation": "MEMBER",
+                "body": comment["body"],
+                "createdAt": comment["created_at"],
+                "id": f"IC_{issue['number']}_{index}",
+                "url": f"{repo_url(snapshot)}/issues/{issue['number']}#issuecomment-{index}",
+            }
+            for index, comment in enumerate(issue.get("comments", []), start=1)
+        ],
+    }
+
+
+def gh_pr(snapshot, pr):
+    return {
+        "number": pr["number"],
+        "title": pr["title"],
+        "state": "OPEN",
+        "headRefName": pr["head"],
+        "baseRefName": pr["base"],
+        "labels": label_objects(pr.get("labels", [])),
+        "updatedAt": pr["updated_at"],
+        "url": f"{repo_url(snapshot)}/pull/{pr['number']}",
+        "files": [{"path": path, "additions": 1, "deletions": 0} for path in pr.get("files", [])],
+    }
+
+
+def rest_issue(snapshot, issue):
+    repo = snapshot["repository"]
+    api = f"https://api.{repo['host']}/repos/{repo['owner']}/{repo['name']}"
+    milestone = issue.get("milestone")
+    return {
+        "url": f"{api}/issues/{issue['number']}",
+        "repository_url": api,
+        "html_url": f"{repo_url(snapshot)}/issues/{issue['number']}",
+        "id": 1000 + issue["number"],
+        "number": issue["number"],
+        "title": issue["title"],
+        "user": {"login": issue["author"], "type": "User"},
+        "labels": label_objects(issue.get("labels", [])),
+        "state": issue["state"],
+        "assignees": [{"login": login} for login in issue.get("assignees", [])],
+        "milestone": {"number": 1, "title": milestone, "state": "open"} if milestone else None,
+        "comments": len(issue.get("comments", [])),
+        "created_at": issue["created_at"],
+        "updated_at": issue["updated_at"],
+        "closed_at": None,
+        "body": issue["body"],
+    }
+
+
+def select(record, fields, available):
+    names = [name.strip() for name in fields.split(",") if name.strip()]
+    unknown = [name for name in names if name not in available]
+    if unknown:
+        raise Refusal(
+            f'Unknown JSON field: "{unknown[0]}"\nAvailable fields:\n  '
+            + "\n  ".join(sorted(available)),
+            "usage",
+        )
+    return {name: record[name] for name in names}
+
+
+def render(value, options):
+    if option(options, "--template", "-t") is not None:
+        raise Refusal("--template is not supported by the snapshot stand-in", "usage")
+    expression = option(options, "--jq", "-q")
+    text = json.dumps(value, indent=2, ensure_ascii=False) + "\n"
+    if expression is None:
+        return text
+    jq = shutil.which("jq")
+    if jq is None:
+        raise Refusal("gh stand-in: --jq needs jq on PATH", "error")
+    result = subprocess.run([jq, "-r", "-c", expression], input=text, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise Refusal(result.stderr.strip() or "jq failed", "usage")
+    return result.stdout
+
+
+def json_or_text(records, options, available, text):
+    fields = option(options, "--json")
+    if fields is None:
+        if option(options, "--jq", "-q") is not None:
+            raise Refusal("cannot use `--jq` without specifying `--json`", "usage")
+        return text
+    if isinstance(records, list):
+        return render([select(item, fields, available) for item in records], options)
+    return render(select(records, fields, available), options)
+
+
+def issue_text(issue, comments):
+    lines = [
+        f"title:\t{issue['title']}",
+        f"state:\t{issue['state']}",
+        f"author:\t{issue['author']['login']}",
+        f"labels:\t{', '.join(label['name'] for label in issue['labels'])}",
+        f"milestone:\t{issue['milestone']['title'] if issue['milestone'] else ''}",
+        f"number:\t{issue['number']}",
+        "--",
+        issue["body"],
+    ]
+    if comments:
+        for comment in issue["comments"]:
+            lines += ["--", f"author:\t{comment['author']['login']}", comment["body"]]
+    return "\n".join(lines) + "\n"
+
+
+def issue_command(snapshot, positional, options):
+    action = positional[0] if positional else ""
+    check_repo(snapshot, option(options, "--repo", "-R"))
+    issues = [gh_issue(snapshot, issue) for issue in snapshot["issues"]]
+    available = set(issues[0]) if issues else {"number"}
+    if action == "list":
+        state = option(options, "--state", "-s", default="open").upper()
+        limit = int(option(options, "--limit", "-L", default="30"))
+        label = option(options, "--label", "-l")
+        chosen = [issue for issue in issues if state == "ALL" or issue["state"] == state]
+        if label is not None:
+            chosen = [issue for issue in chosen if label in [item["name"] for item in issue["labels"]]]
+        chosen = sorted(chosen, key=lambda issue: issue["number"], reverse=True)[:limit]
+        text = "".join(
+            f"{issue['number']}\t{issue['state']}\t{issue['title']}\t"
+            f"{', '.join(item['name'] for item in issue['labels'])}\t{issue['updatedAt']}\n"
+            for issue in chosen
+        )
+        return "issue list", json_or_text(chosen, options, available, text)
+    if action == "view" and len(positional) == 2:
+        issue = gh_issue(snapshot, find_issue(snapshot, positional[1]))
+        text = issue_text(issue, "--comments" in options or "-c" in options)
+        return "issue view", json_or_text(issue, options, available, text)
+    raise Refusal(f"unsupported command: gh issue {' '.join(positional)}")
+
+
+def pr_command(snapshot, positional, options):
+    action = positional[0] if positional else ""
+    check_repo(snapshot, option(options, "--repo", "-R"))
+    pulls = [gh_pr(snapshot, pr) for pr in snapshot["pull_requests"]]
+    available = {"number", "title", "state", "headRefName", "baseRefName", "labels", "updatedAt", "url", "files"}
+    if action == "list":
+        limit = int(option(options, "--limit", "-L", default="30"))
+        chosen = pulls[:limit]
+        text = "".join(f"{pr['number']}\t{pr['title']}\t{pr['headRefName']}\tOPEN\n" for pr in chosen)
+        return "pr list", json_or_text(chosen, options, available, text)
+    if action == "view" and len(positional) == 2:
+        pr = gh_pr(snapshot, find_pr(snapshot, positional[1]))
+        text = f"title:\t{pr['title']}\nstate:\tOPEN\nnumber:\t{pr['number']}\n"
+        return "pr view", json_or_text(pr, options, available, text)
+    raise Refusal(f"unsupported command: gh pr {' '.join(positional)}")
+
+
+def repo_command(snapshot, positional, options):
+    if not positional or positional[0] != "view" or len(positional) > 2:
+        raise Refusal(f"unsupported command: gh repo {' '.join(positional)}")
+    check_repo(snapshot, positional[1] if len(positional) == 2 else None)
+    repo = snapshot["repository"]
+    record = {
+        "name": repo["name"],
+        "owner": {"login": repo["owner"]},
+        "nameWithOwner": f"{repo['owner']}/{repo['name']}",
+        "url": repo_url(snapshot),
+        "defaultBranchRef": {"name": repo["default_branch"]},
+        "description": repo.get("description", ""),
+        "isPrivate": False,
+    }
+    text = f"name:\t{record['nameWithOwner']}\ndescription:\t{record['description']}\n"
+    return "repo view", json_or_text(record, options, set(record), text)
+
+
+API_PATH = re.compile(
+    r"^repos/(?P<owner>[^/]+)/(?P<name>[^/]+)/issues/(?P<number>\d+)"
+    r"(?P<tail>/comments|/dependencies/blocked_by|/dependencies/blocking|/sub_issues)?$"
+)
+
+
+def api_command(snapshot, positional, options):
+    method = option(options, "--method", "-X", default="GET").upper()
+    if method != "GET" or any(name in options for name in ("--field", "-f", "--raw-field", "-F", "--input")):
+        raise Refusal("refused: the snapshot stand-in is read-only")
+    if len(positional) != 1:
+        raise Refusal("unsupported command: gh api needs one endpoint", "usage")
+    repo = snapshot["repository"]
+    hostname = option(options, "--hostname")
+    if hostname is not None and hostname != repo["host"]:
+        raise Refusal(f"HTTP 404: Not Found (https://api.{hostname}/{positional[0]})", "not-found")
+    endpoint = positional[0].lstrip("/").split("?", 1)[0]
+    match = API_PATH.match(endpoint)
+    if not match or (match["owner"], match["name"]) != (repo["owner"], repo["name"]):
+        raise Refusal(f"HTTP 404: Not Found (https://api.{repo['host']}/{endpoint})", "not-found")
+    issue = find_issue(snapshot, match["number"])
+    tail = match["tail"] or ""
+    if tail == "":
+        value, kind = rest_issue(snapshot, issue), "api issue"
+    elif tail == "/comments":
+        value = [
+            {
+                "id": index,
+                "user": {"login": comment["author"], "type": "User"},
+                "created_at": comment["created_at"],
+                "updated_at": comment["created_at"],
+                "author_association": "MEMBER",
+                "body": comment["body"],
+            }
+            for index, comment in enumerate(issue.get("comments", []), start=1)
+        ]
+        kind = "api comments"
+    elif tail == "/dependencies/blocked_by":
+        value = [rest_issue(snapshot, find_issue(snapshot, n)) for n in issue.get("blocked_by", [])]
+        kind = "api blocked_by"
+    elif tail == "/dependencies/blocking":
+        value = [
+            rest_issue(snapshot, other)
+            for other in snapshot["issues"]
+            if issue["number"] in other.get("blocked_by", [])
+        ]
+        kind = "api blocking"
+    else:
+        value = [rest_issue(snapshot, find_issue(snapshot, n)) for n in issue.get("sub_issues", [])]
+        kind = "api sub_issues"
+    return kind, render(value, options)
+
+
+def run(args):
+    if args in (["--version"], ["version"]):
+        return "version", "gh version 2.0.0 (offline snapshot stand-in)\n"
+    if not args:
+        raise Refusal("usage: gh <command> <subcommand> [flags]", "usage")
+    command, rest = args[0], args[1:]
+    if rest and rest[0] in MUTATING:
+        raise Refusal(f"refused: the snapshot stand-in is read-only; gh {command} {rest[0]} would change GitHub")
+    if command == "auth" and rest == ["status"]:
+        host = load()["repository"]["host"]
+        return "auth status", f"{host}\n  Logged in to {host} (offline snapshot stand-in)\n"
+    handlers = {"issue": issue_command, "pr": pr_command, "repo": repo_command, "api": api_command}
+    if command not in handlers:
+        raise Refusal(f"unsupported command: gh {command}")
+    positional, options = parse(rest)
+    return handlers[command](load(), positional, options)
+
+
+def main():
+    args = sys.argv[1:]
+    try:
+        kind, out, err, status = *run(args), "", 0
+    except Refusal as refusal:
+        kind, out, err, status = refusal.kind, "", f"{refusal}\n", 1
+    except (OSError, ValueError, KeyError) as error:
+        kind, out, err, status = "error", "", f"gh stand-in error: {error}\n", 1
+    out_bytes, err_bytes = out.encode(), err.encode()
+    entry = {"argv": args, "kind": kind, "exit": status,
+             "stdout_bytes": len(out_bytes), "stderr_bytes": len(err_bytes)}
+    try:
+        with open(LOG, "a") as handle:
+            handle.write(json.dumps(entry) + "\n")
+    except OSError as error:
+        sys.stderr.write(f"gh stand-in: cannot write the call log {LOG}: {error}\n")
+        return 3
+    sys.stdout.buffer.write(out_bytes)
+    sys.stderr.buffer.write(err_bytes)
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main())
