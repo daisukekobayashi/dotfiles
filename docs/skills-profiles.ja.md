@@ -744,7 +744,7 @@ Profile add/remove の補助コマンドは初期実装の対象外にします�
 - 値を取るオプション (`--profile`、`--agent`、`--exclude`、`--out`) の直後に別の `--` オプションが来た場合は、値がないものとして失敗します。`--` で始まるパスは `./--name` のように書きます。
 - `--scope` と `--copy` (PowerShell では `-Copy`) は export では使えません。
 - `SETUP_DRY_RUN=1` では選択結果を表示するだけで、何も書き出しません。
-- 出力ディレクトリは dotfiles リポジトリの外にある必要があります。Export は `--out` をファイルシステムと同じ方法で解決し (後に続く `..` より先に、存在する各リンクをたどります)、ディレクトリをファイルシステム上の同一性で比較します。そのため、大文字小文字を区別しないボリューム上で大文字小文字だけが異なる表記など、チェックアウトの別の書き方も拒否します。まだ存在しないディレクトリの後に `..` があると失敗します。
+- 出力ディレクトリは dotfiles リポジトリの外にある必要があります。Export は `--out` をファイルシステムと同じ方法で解決します。存在する最も長い先頭部分を書かれたとおりに OS に解決させ (`..` より先にリンクをたどります)、パスの構文はプラットフォームのものに従うので、Linux と macOS ではバックスラッシュは名前の一部です。ディレクトリはファイルシステム上の同一性で比較します。そのため、大文字小文字を区別しないボリューム上で大文字小文字だけが異なる表記など、チェックアウトの別の書き方も拒否します。まだ存在しないディレクトリの後の `..`、ファイルの下に続くパス、Windows での `C:bundle` のようなドライブ相対パスは失敗します。
 - PowerShell ではカンマ区切りの値を `'base,github'` のように引用符で囲みます。囲まないと PowerShell が配列として渡すためです。`setup.ps1` は export の引数をそのまま Node に渡すので、`--out` が PowerShell の共通パラメーターと解釈されることはありません。
 
 ### バンドルの構成
@@ -760,11 +760,11 @@ Profile add/remove の補助コマンドは初期実装の対象外にします�
 
 バンドルは `skills/local/<name>/`、`skills/profiles/`、`ai-rules/` だけから作ります。`claude/settings.json`、`codex/config.toml`、`codex/profiles/`、MCP 設定、その他のファイルは含めません。
 
-選択した skill も依存として追加した skill も、ルートに通常のファイルの `SKILL.md` を持つ必要があります。選択した local skill は `scripts/` や `references/` を含むディレクトリ全体を、実行ビットを保ったままコピーします。最上位の `evals/` はこのリポジトリ用の開発フィクスチャなのでコピーしません。選択した skill の中にシンボリックリンクがある場合や、選択した skill のディレクトリ自体がシンボリックリンクの場合、export は失敗します。
+選択した skill も依存として追加した skill も、ルートに名前がちょうど `SKILL.md` の通常のファイルを持つ必要があります。skill 内のファイル名はすべて正しい UTF-8 でなければなりません。選択した local skill は `scripts/` や `references/` を含むディレクトリ全体を、実行ビットを保ったままコピーします。最上位の `evals/` はこのリポジトリ用の開発フィクスチャなのでコピーしません。選択した skill の中にシンボリックリンクがある場合や、選択した skill のディレクトリ自体がシンボリックリンクの場合、export は失敗します。
 
 読み取りはすべて dotfiles のチェックアウト内に限ります。Export は中身を読む前に、`ai-rules/`、`skills/local/`、`skills/profiles/`、選択した各 skill ディレクトリ、各 profile ファイル (`includes` で読むものを含む)、各ルールファイルが、シンボリックリンクではない実際のディレクトリまたはファイルで、チェックアウト内に解決されることを確認します。パースに失敗した profile は名前と位置だけを報告し、内容は表示しません。Profile 名、`includes` の各要素、local skill 名はそれぞれ 1 つのパス要素 (`[A-Za-z0-9][A-Za-z0-9._-]*`) でなければなりません。この制約はインストールと検証でも同じです。
 
-ルールファイルは Node で組み立て、`ai-rules/scripts/compose-rules.sh <agent>` を `--with-metadata` なしで実行した結果と同じ内容 (UTF-8 のバイトオーダーマークも含む) にします。これにより `setup.ps1` からも Bash なしで export できます。`ai-rules/base/global.md` はそのまま共有します。
+ルールファイルは Node で組み立て、`ai-rules/scripts/compose-rules.sh <agent>` を `--with-metadata` なしで実行した結果と同じ内容 (UTF-8 のバイトオーダーマークも含む。スクリプトの `grep` と同じく、バイトオーダーマークだけの上書きファイルも内容ありとして扱う) にします。これにより `setup.ps1` からも Bash なしで export できます。`ai-rules/base/global.md` はそのまま共有します。
 
 外部 skill はコピーしません。マニフェストに `{source, skills}` として記録し、README に source ごとの `npx skills add <source> --skill <name> ... --agent <agent>` コマンドを、各引数をシェル用に引用し、setup 自身と同じくコピーでインストールする `--copy` を付けて載せます。Export が受け付けるのは `owner/repo` 形式の source と単純な skill 名だけなので、profile からこれらのコマンドにシェル構文を入れることはできません。README では、これらのコマンドをどのプロジェクトにも属さない新しい空のディレクトリで実行するよう案内します。`npx` はカレントディレクトリからコマンドと npm の設定を解決するためで、setup 自身のインストールも同じように分離しています。`skills-lock.json` は `skills` CLI の管理物のままにし、export ではコピーも生成もしません。
 
@@ -817,8 +817,8 @@ Linux と macOS では、`<out>` の直接の親ディレクトリが、sticky �
 
 バンドルを所定の場所へ移動する前に、すべてのファイルのパスと内容を大文字小文字を区別せずに検査し、次のものを探します。
 
-- setup が使い得るホームディレクトリ (`SETUP_HOME`、`HOME`、`USERPROFILE`、`setup.ps1` の `CUSTOM_HOME`、OS のホーム)。どちらのパス区切り文字の形も、JSON や JavaScript でエスケープした形 (二重のバックスラッシュ、`\/`) も対象にします。`setup.ps1` は明示的に設定された `SETUP_HOME` を維持します。
-- dotfiles リポジトリで読んだ `git config user.name` と `user.email`。未設定のキーは対象外ですが、`git` がない場合やその他の読み取りエラーでは export は失敗します。この読み取りでは、git に別のリポジトリを指させたり設定を注入したりする変数 (`GIT_DIR`、`GIT_WORK_TREE`、`GIT_CONFIG`、`GIT_CONFIG_PARAMETERS`、`GIT_CONFIG_COUNT` とそのキーと値など) を除くので、dotfiles リポジトリの設定とグローバル・システムの設定を読みます。Windows では `git` を `PATH` から探し、カレントディレクトリからは実行しません。
+- setup が使い得るホームディレクトリ (`SETUP_HOME`、`HOME`、`USERPROFILE`、`setup.ps1` の `CUSTOM_HOME`、OS のホーム、アカウントのホームディレクトリ)。それぞれ与えられたとおりの形、末尾の区切り文字を除いた形、実パスを対象にします。どちらのパス区切り文字の形も、JSON や JavaScript でエスケープした形 (二重のバックスラッシュ、`\/`) も対象にします。`setup.ps1` は明示的に設定された `SETUP_HOME` を維持します。
+- dotfiles リポジトリで読んだ `git config user.name` と `user.email`。未設定のキーは対象外ですが、`git` がない場合やその他の読み取りエラーでは export は失敗します。この読み取りでは、git に別のリポジトリを指させたり設定を注入したりする変数 (Windows では名前の大文字小文字を区別しません。`GIT_DIR`、`GIT_WORK_TREE`、`GIT_CONFIG`、`GIT_CONFIG_PARAMETERS`、`GIT_CONFIG_COUNT` とそのキーと値など) を除くので、dotfiles リポジトリの設定とグローバル・システムの設定を読みます。Windows では `git` を `PATH` から探し、カレントディレクトリからは実行しません。
 - 個人マーカーファイルの各マーカー
 
 個人マーカーファイルは、どの OS でも `${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/export-personal-markers` です。`XDG_CONFIG_HOME` がない場合、上記の各ホームディレクトリの下から読みます。1 行に 1 つのマーカーを文字どおり書きます。空行と `#` で始まる行は無視します。マーカー自体が個人情報なので、このファイルはリポジトリの外に置きます。既定のファイルがなくても構いません。`SETUP_EXPORT_PERSONAL_MARKERS_FILE` でパスを上書きでき、値が空の場合や指定したファイルが存在しない場合、export は失敗します。

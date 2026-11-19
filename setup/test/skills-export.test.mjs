@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { chmod, cp, lstat, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
@@ -1072,8 +1072,7 @@ test("a marker file path error does not print the git identity", { skip: process
     await writeFile(blocker, "a file, not a directory\n");
     const result = runExport(["--profile", "base", "--out", fixture.out], fixture, { XDG_CONFIG_HOME: path.join(blocker, "config") });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /ENOTDIR/);
-    assert.match(result.stderr, /<redacted>/);
+    assert.match(result.stderr, /cannot read the default personal marker file: ENOTDIR/);
     assert.doesNotMatch(result.stderr, /Fixture Person/i);
   }));
 
@@ -1165,6 +1164,18 @@ test("a manifest that is a FIFO is refused without blocking", { skip: process.pl
   }));
 
 // Round 4.
+// Probes whether the fixture volume tells letter cases apart.
+const caseSensitiveTemp = (() => {
+  // Fixtures live in setup/node_modules/.cache, so probe that volume.
+  const probe = mkdtempSync(path.join(repoRoot, "setup", "node_modules", ".cache", "skills-case-"));
+  try {
+    writeFileSync(path.join(probe, "Probe"), "");
+    return !existsSync(path.join(probe, "probe"));
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
+})();
+
 // D19: an option never takes another option as its value.
 test("a value option followed by another option fails as missing its value", () =>
   withFixture(async (fixture) => {
@@ -1251,7 +1262,15 @@ test("an --out that is an ancestor of the checkout is refused", () =>
   }));
 
 // D23: case-insensitive collisions and the staged tree.
-test("bundle paths that differ only in letter case fail the export", () =>
+test("case collisions are found in synthetic path lists", () => {
+  const { requireNoCaseCollisions } = require("../skills-export.js");
+  assert.throws(() => requireNoCaseCollisions(["skills/gamma/Notes.md", "skills/gamma/notes.md"]), /skills\/gamma\/Notes\.md and skills\/gamma\/notes\.md/);
+  assert.throws(() => requireNoCaseCollisions(["skills/Gamma/SKILL.md", "skills/gamma/SKILL.md"]), /skills\/Gamma and skills\/gamma/);
+  assert.throws(() => requireNoCaseCollisions(["README.md", "readme.md"]), /README\.md and readme\.md/);
+  requireNoCaseCollisions(["skills/a/SKILL.md", "skills/b/SKILL.md", "README.md"]);
+});
+
+test("bundle paths that differ only in letter case fail the export", { skip: !caseSensitiveTemp && "the temporary volume is case-insensitive" }, () =>
   withFixture(async (fixture) => {
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "Notes.md"), "One.\n");
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md"), "Two.\n");
@@ -1399,4 +1418,93 @@ test("rules keep a UTF-8 byte order mark", () =>
     assertOk(runExport(["--profile", "base", "--agent", "codex", "--out", fixture.out], fixture));
     const bytes = await readFile(path.join(fixture.out, "AGENTS.md"));
     assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+  }));
+
+// Round 5.
+// R5a: --out uses the platform's path syntax.
+test("--out keeps a POSIX backslash in a name and refuses a path below a file", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    const out = path.join(fixture.outParent, "back\\slash");
+    assertOk(runExport(["--profile", "base", "--out", out], fixture));
+    assert.deepEqual(await readdir(fixture.outParent), ["back\\slash"]);
+
+    await writeFile(path.join(fixture.root, "plain-file"), "x");
+    const result = runExport(["--profile", "base", "--out", path.join(fixture.root, "plain-file", "bundle")], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /output path continues below a file/);
+  }));
+
+test("a drive-relative --out is refused on Windows", { skip: process.platform !== "win32" && "Windows only" }, () =>
+  withFixture(async (fixture) => {
+    const result = runExport(["--profile", "base", "--out", "C:bundle"], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /relative to a drive's current directory/);
+  }));
+
+// R5b: every spelling of a home is a marker.
+test("homes are matched as given, trimmed, and through their real path", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    const realHome = path.join(fixture.root, "real-home");
+    await mkdir(realHome);
+    const linkHome = path.join(fixture.root, "link-home");
+    await symlink(realHome, linkHome);
+    const notes = path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md");
+    for (const [home, written] of [
+      [`${linkHome}/`, `${linkHome}/x`],
+      [linkHome, `${realHome}/x`],
+    ]) {
+      await writeFile(notes, `See ${written}\n`);
+      await assertPersonalFailure(fixture, { HOME: home, SETUP_HOME: home }, /skills\/gamma\/notes\.md: home path/);
+    }
+  }));
+
+// R5c: names must be UTF-8, and no two sources share an output path.
+test("a skill file name that is not UTF-8 fails the export, and such an entry blocks --force", { skip: process.platform !== "linux" && "needs a filesystem that allows non-UTF-8 names" }, () =>
+  withFixture(async (fixture) => {
+    const badName = Buffer.concat([Buffer.from(path.join(fixture.dotfiles, "skills", "local", "gamma") + "/"), Buffer.from([0x62, 0xff, 0x2e, 0x6d, 0x64])]);
+    writeFileSync(badName, "x");
+    let result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /local skill gamma contains a file name that is not UTF-8/);
+    rmSync(badName);
+
+    assertOk(runExport(["--profile", "work", "--out", fixture.out], fixture));
+    writeFileSync(Buffer.concat([Buffer.from(`${fixture.out}/`), Buffer.from([0x62, 0xff])]), "x");
+    result = runExport(["--profile", "work", "--out", fixture.out, "--force"], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /entries not written by skills export: <a name that is not UTF-8>/);
+  }));
+
+// R5f: Windows environment names are case-insensitive.
+test("git override variables are removed in any letter case on Windows", () => {
+  const { gitEnvironment } = require("../skills-export.js");
+  const env = { Git_Dir: "x", git_config_parameters: "y", GIT_CONFIG_KEY_0: "z", GIT_CONFIG_GLOBAL: "keep", PATH: "keep" };
+  assert.deepEqual(Object.keys(gitEnvironment(env, "win32")).sort(), ["GIT_CONFIG_GLOBAL", "PATH"]);
+  assert.deepEqual(Object.keys(gitEnvironment(env, "linux")).sort(), ["GIT_CONFIG_GLOBAL", "Git_Dir", "PATH", "git_config_parameters"]);
+});
+
+// R5g: the entry must be named exactly SKILL.md.
+test("a skill with only skill.md, not SKILL.md, fails the export", () =>
+  withFixture(async (fixture) => {
+    const dir = path.join(fixture.dotfiles, "skills", "local", "delta");
+    await rm(path.join(dir, "SKILL.md"));
+    await writeFile(path.join(dir, "skill.md"), "---\nname: delta\n---\n");
+    const result = runExport(["--profile", "base", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /local skill delta has no SKILL\.md file/);
+  }));
+
+// R5h: a byte order mark alone counts as content, as in compose-rules.sh.
+test("an override holding only a byte order mark is composed like compose-rules.sh", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.dotfiles, "ai-rules", "agents", "codex.md"), Buffer.from([0xef, 0xbb, 0xbf, 0x0a]));
+    assertOk(runExport(["--profile", "base", "--agent", "codex", "--out", fixture.out], fixture));
+    const expected = path.join(fixture.root, "expected-AGENTS.md");
+    const script = path.join(fixture.dotfiles, "ai-rules", "scripts", "compose-rules.sh");
+    await mkdir(path.dirname(script), { recursive: true });
+    await cp(path.join(repoRoot, "ai-rules", "scripts", "compose-rules.sh"), script);
+    const composed = spawnSync("bash", [script, "codex", expected], { encoding: "utf8" });
+    assert.equal(composed.status, 0, composed.stderr);
+    assert.deepEqual(await readFile(path.join(fixture.out, "AGENTS.md")), await readFile(expected));
+    assert.match(await readFile(path.join(fixture.out, "AGENTS.md"), "utf8"), /\n---\n/);
   }));

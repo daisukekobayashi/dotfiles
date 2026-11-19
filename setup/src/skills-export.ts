@@ -125,34 +125,39 @@ function isInsideOrSame(candidate: string, root: string): boolean {
   return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
-// Resolves --out the way the filesystem does: each existing component is
-// resolved, links included, before a following ".." applies. Components past
-// the first missing one are appended as written and may not contain "..".
+// Resolves --out as the filesystem does: the longest existing prefix, as
+// written, is resolved by the operating system (links before ".."), and the
+// missing rest is appended. Path syntax is the platform's own, so a POSIX
+// backslash stays part of a name.
 function physicalPath(target: string): string {
+  if (process.platform === "win32" && /^[A-Za-z]:(?![\\/])/.test(target)) {
+    fail(`output path is relative to a drive's current directory; use an absolute path: ${target}`);
+  }
   const absolute = path.isAbsolute(target) ? target : `${process.cwd()}${path.sep}${target}`;
   const root = path.parse(absolute).root;
-  let current = fs.realpathSync(root);
-  let missing = false;
-  for (const part of absolute.slice(root.length).split(/[\\/]+/)) {
-    if (part === "" || part === ".") {
-      continue;
-    }
-    if (part === "..") {
-      if (missing) {
-        fail(`output path has ".." after a directory that does not exist: ${target}`);
+  const parts = absolute.slice(root.length).split(process.platform === "win32" ? /[\\/]+/ : /\/+/).filter((part) => part !== "");
+  let existing = 0;
+  for (; existing < parts.length; existing += 1) {
+    const prefix = root + parts.slice(0, existing + 1).join(path.sep);
+    try {
+      fs.lstatSync(prefix);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        break;
       }
-      current = path.dirname(current);
-      continue;
-    }
-    const next = path.join(current, part);
-    if (!missing && fs.lstatSync(next, { throwIfNoEntry: false })) {
-      current = fs.realpathSync(next);
-    } else {
-      missing = true;
-      current = next;
+      fail(code === "ENOTDIR" ? `output path continues below a file: ${target}` : `cannot resolve the output path: ${code}`);
     }
   }
-  return current;
+  const real = fs.realpathSync.native(root + parts.slice(0, existing).join(path.sep));
+  const rest = parts.slice(existing).filter((part) => part !== ".");
+  if (rest.includes("..")) {
+    fail(`output path has ".." after a directory that does not exist: ${target}`);
+  }
+  if (rest.length > 0 && !fs.statSync(real).isDirectory()) {
+    fail(`output path continues below a file: ${target}`);
+  }
+  return path.join(real, ...rest);
 }
 
 function sameEntry(left: fs.Stats, right: fs.Stats): boolean {
@@ -233,11 +238,27 @@ function readText(file: string, label: string): string {
 // Lists a skill's files relative to its directory, without the top-level
 // evals/ directory, which holds development fixtures for this repository.
 // A symbolic link fails the export because the bundle must hold real files.
+// Entry names that are not valid UTF-8 cannot be written into the manifest
+// faithfully, so they fail the export.
+function entryNames(directory: string, label: string): fs.Dirent[] {
+  const entries = fs.readdirSync(directory, { withFileTypes: true, encoding: "buffer" });
+  return entries
+    .map((entry) => {
+      let name: string;
+      try {
+        name = new TextDecoder("utf-8", { fatal: true }).decode(entry.name);
+      } catch {
+        fail(`${label} contains a file name that is not UTF-8`);
+      }
+      return Object.assign(entry, { name }) as unknown as fs.Dirent;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function skillFiles(skillDir: string, skillName: string): string[] {
   const files: string[] = [];
   function walk(relativeDir: string): void {
-    const entries = fs.readdirSync(path.join(skillDir, relativeDir), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
+    for (const entry of entryNames(path.join(skillDir, relativeDir), `local skill ${skillName}`)) {
       if (relativeDir === "" && entry.name === "evals") {
         continue;
       }
@@ -328,7 +349,8 @@ function requireSkillRoot(sources: Sources, name: string): string {
     fail(`unknown local skill ${name}`);
   }
   const skillDir = requireSourcePath(sources.root, `skills/local/${name}`, "directory");
-  if (!fs.lstatSync(path.join(skillDir, "SKILL.md"), { throwIfNoEntry: false })?.isFile()) {
+  // The entry must be named exactly SKILL.md, not another case of it.
+  if (!fs.readdirSync(skillDir).includes("SKILL.md") || !fs.lstatSync(path.join(skillDir, "SKILL.md")).isFile()) {
     fail(`local skill ${name} has no SKILL.md file`);
   }
   return skillDir;
@@ -440,7 +462,9 @@ function composeRules(dotfilesRoot: string, overrideName: string): string {
   const overrideRelative = `ai-rules/agents/${overrideName}`;
   if (fs.lstatSync(path.join(dotfilesRoot, overrideRelative), { throwIfNoEntry: false })) {
     const override = read(overrideRelative);
-    if (/\S/.test(override)) {
+    // Like compose-rules.sh's grep '[^[:space:]]': anything but ASCII
+    // whitespace, a byte order mark included, counts as content.
+    if (/[^ \t\n\v\f\r]/.test(override)) {
       docs.push(override);
     }
   }
@@ -553,16 +577,31 @@ class Markers {
 }
 
 // The homes setup may use: the effective setup home, HOME, USERPROFILE,
-// setup.ps1's CUSTOM_HOME, and the OS home.
+// setup.ps1's CUSTOM_HOME, the OS home, and the account's home directory.
 function homes(context: ExportContext): string[] {
-  return unique([context.home, context.env.HOME, context.env.USERPROFILE, context.env.CUSTOM_HOME, os.homedir()].filter((home): home is string => Boolean(home)));
+  let accountHome: string | undefined;
+  try {
+    accountHome = os.userInfo().homedir;
+  } catch {
+    accountHome = undefined;
+  }
+  return unique([context.home, context.env.HOME, context.env.USERPROFILE, context.env.CUSTOM_HOME, os.homedir(), accountHome].filter((home): home is string => Boolean(home)));
 }
 
-// Each home is matched with either separator, and as written escaped in JSON
-// or JavaScript (doubled backslashes, escaped slashes).
+// Each home is matched as given, trimmed of trailing separators, and through
+// its real path, each with either separator and as escaped in JSON or
+// JavaScript (doubled backslashes, escaped slashes).
 function addHomeMarkers(markers: Markers, context: ExportContext): void {
+  const spellings: string[] = [];
   for (const home of homes(context)) {
-    const trimmed = home.replace(/[\\/]+$/, "");
+    spellings.push(home, home.replace(/[\\/]+$/, ""));
+    try {
+      spellings.push(fs.realpathSync.native(home));
+    } catch {
+      // A home that does not exist has no real path.
+    }
+  }
+  for (const trimmed of unique(spellings)) {
     if (trimmed.length > 2) {
       const slashed = trimmed.split("\\").join("/");
       const backslashed = trimmed.split("/").join("\\");
@@ -576,10 +615,12 @@ function addHomeMarkers(markers: Markers, context: ExportContext): void {
 // Variables that point git at another repository or inject configuration
 // would read some other identity, so the lookup runs without them: it reads
 // the dotfiles repository's own config plus global and system config.
-function gitEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function gitEnvironment(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv {
   const cleaned = { ...env };
   for (const key of Object.keys(cleaned)) {
-    if (/^GIT_(DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|NAMESPACE|CONFIG|CONFIG_PARAMETERS|CONFIG_COUNT|CONFIG_KEY_\d+|CONFIG_VALUE_\d+)$/.test(key)) {
+    // Windows environment names are case-insensitive.
+    const name = platform === "win32" ? key.toUpperCase() : key;
+    if (/^GIT_(DIR|WORK_TREE|COMMON_DIR|INDEX_FILE|OBJECT_DIRECTORY|NAMESPACE|CONFIG|CONFIG_PARAMETERS|CONFIG_COUNT|CONFIG_KEY_\d+|CONFIG_VALUE_\d+)$/.test(name)) {
       delete cleaned[key];
     }
   }
@@ -636,15 +677,21 @@ function addConfiguredMarkers(markers: Markers, context: ExportContext): void {
   }
   const role = required ? "override personal marker file" : "default personal marker file";
   for (const file of files) {
-    // Only a missing entry is skipped; a broken link or unreadable file fails.
-    if (!fs.lstatSync(file, { throwIfNoEntry: false })) {
-      if (required) {
-        fail(`${MARKERS_FILE_ENV} names a missing file`);
-      }
-      continue;
-    }
+    // Only a missing default file is skipped; a broken link or any other
+    // error fails, naming the role and error code but never the path.
     let bytes: Buffer;
     try {
+      try {
+        fs.lstatSync(file);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error;
+        }
+        if (required) {
+          fail(`${MARKERS_FILE_ENV} names a missing file`);
+        }
+        continue;
+      }
       if (!fs.statSync(file).isFile()) {
         fail(`the ${role} is not a regular file`);
       }
@@ -748,8 +795,16 @@ function listEntries(directory: string): { files: string[]; others: string[] } {
   const files: string[] = [];
   const others: string[] = [];
   function walk(relativeDir: string): void {
-    for (const entry of fs.readdirSync(path.join(directory, relativeDir), { withFileTypes: true })) {
-      const relative = toPosix(path.join(relativeDir, entry.name));
+    for (const entry of fs.readdirSync(path.join(directory, relativeDir), { withFileTypes: true, encoding: "buffer" })) {
+      let name: string;
+      try {
+        name = new TextDecoder("utf-8", { fatal: true }).decode(entry.name);
+      } catch {
+        // Export never writes such a name, so it is always an extra entry.
+        others.push(toPosix(path.join(relativeDir, "<a name that is not UTF-8>")));
+        continue;
+      }
+      const relative = toPosix(path.join(relativeDir, name));
       if (entry.isDirectory()) {
         const before = files.length + others.length;
         walk(relative);
@@ -944,7 +999,11 @@ function runExport(options: ExportOptions, context: ExportContext, markers: Mark
     const sourceDir = requireSkillRoot(sources, skill.name);
     for (const relative of skillFiles(sourceDir, skill.name)) {
       const source = path.join(sourceDir, relative);
-      contents.set(toPosix(path.join("skills", skill.name, relative)), { bytes: fs.readFileSync(source), mode: fs.statSync(source).mode & 0o777 });
+      const bundlePath = toPosix(path.join("skills", skill.name, relative));
+      if (contents.has(bundlePath)) {
+        fail(`two source files map to the same bundle path: ${bundlePath}`);
+      }
+      contents.set(bundlePath, { bytes: fs.readFileSync(source), mode: fs.statSync(source).mode & 0o777 });
     }
   }
   for (const target of rules) {
@@ -1000,7 +1059,7 @@ function runExport(options: ExportOptions, context: ExportContext, markers: Mark
 
 // Two output paths that differ only in letter case would merge or overwrite
 // each other on a case-insensitive volume.
-function requireNoCaseCollisions(files: string[]): void {
+export function requireNoCaseCollisions(files: string[]): void {
   const seen = new Map<string, string>();
   const collisions = new Set<string>();
   for (const file of files) {
