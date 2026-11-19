@@ -7,7 +7,7 @@ import * as path from "node:path";
 import { copyMarker, copyMetadata, parseCopyMarker, planSharedLink, sameSnapshot, snapshot, stageSharedLinks } from "./shared-links";
 import { isReservedSkillName } from "./skill-names";
 import { type Agent, type Scope, type ExternalSkillSource, type SkillsPlan, csv, fail, listProfiles, parseAgents, resolveProfiles } from "./skill-profiles";
-import { exportSkills, parseExportArgs } from "./skills-export";
+import { runExportCommand } from "./skills-export";
 import { createPrivateDirs, planPrivateDir, privateSkillsBase as resolvePrivateSkillsBase } from "./private-base";
 
 type Action = "install" | "profile-validate";
@@ -1321,9 +1321,8 @@ function setupContext(): SetupContext {
 
 function main(argv: string[]): void {
   if (argv[0] === "export") {
-    const options = parseExportArgs(argv.slice(1));
     const context = setupContext();
-    exportSkills(options, {
+    runExportCommand(argv.slice(1), {
       dotfilesRoot: context.dotfilesRoot,
       home: context.home,
       dryRun: context.dryRun,

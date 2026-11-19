@@ -54,7 +54,9 @@ function readJson(filePath) {
         return JSON.parse(raw);
     }
     catch (error) {
-        fail(`failed to parse ${filePath}: ${error.message}`);
+        // JSON.parse messages quote the input; report only where parsing stopped.
+        const position = /position (\d+)/.exec(error.message)?.[1];
+        fail(`failed to parse ${filePath}: invalid JSON${position ? ` at position ${position}` : ""}`);
     }
 }
 function ensureArray(value, filePath, key) {
@@ -101,7 +103,9 @@ function listProfiles(profileDir) {
         .map((entry) => path.basename(entry, ".json"))
         .sort();
 }
-function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
+// beforeRead runs before each profile file is read, including included ones,
+// so a caller can refuse a file before any of its content is parsed.
+function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope, beforeRead) {
     const profileDir = path.join(dotfilesRoot, "skills", "profiles");
     const localDir = path.join(dotfilesRoot, "skills", "local");
     const expanded = [];
@@ -122,6 +126,7 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope) {
         if (!fs.existsSync(filePath)) {
             fail(`unknown profile ${name}`);
         }
+        beforeRead?.(filePath, name);
         const profile = readJson(filePath);
         const includes = ensureArray(getObjectProperty(profile, "includes"), filePath, "includes");
         for (const includeName of includes) {

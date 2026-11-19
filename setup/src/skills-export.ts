@@ -12,7 +12,9 @@ export const BUNDLE_MANIFEST = "skills-bundle.json";
 const GENERATED_BY = "dotfiles setup skills export";
 const SCHEMA_VERSION = 1;
 const MARKERS_FILE_ENV = "SETUP_EXPORT_PERSONAL_MARKERS_FILE";
-const TOP_LEVEL_FILES = new Set(["AGENTS.md", "CLAUDE.md", "README.md", BUNDLE_MANIFEST]);
+const AGENTS = ["codex", "claude-code"] as const;
+const SOURCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const REFERENCE_PATTERN = /((?:\.\.\/)+)([A-Za-z0-9_][A-Za-z0-9._-]*)\/([A-Za-z0-9._/-]*)/g;
 
 export interface ExportOptions {
   profiles: string[];
@@ -124,9 +126,10 @@ function toPosix(relative: string): string {
   return relative.split(path.sep).join("/");
 }
 
+// Judges ".." by path component, so a child named "..share" stays inside.
 function isInsideOrSame(candidate: string, root: string): boolean {
   const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 function isStrictlyInside(candidate: string, root: string): boolean {
@@ -154,14 +157,33 @@ function realPathOfPossiblyMissing(target: string): string {
   }
 }
 
-// Every source read must resolve inside its allowed root, so a link in the
-// checkout cannot bring other files into a bundle.
-function requireRealInside(target: string, rootReal: string, label: string): string {
-  const real = fs.realpathSync(target);
-  if (!isInsideOrSame(real, rootReal)) {
-    fail(`${label} resolves outside ${path.basename(rootReal)}/: ${target}`);
+// Every source read must stay inside the dotfiles checkout. Each component
+// below the checkout root must be a real directory or file, never a link, and
+// the result must resolve inside the real checkout root; the check runs before
+// anything under it is read.
+function requireSourcePath(dotfilesRoot: string, dotfilesReal: string, relative: string, kind: "directory" | "file"): string {
+  const parts = relative.split("/");
+  let current = dotfilesRoot;
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+    const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+    const shown = parts.slice(0, index + 1).join("/");
+    if (!stat) {
+      fail(`${shown} not found in the dotfiles repository`);
+    }
+    if (stat.isSymbolicLink()) {
+      fail(`${shown} is a symbolic link; export reads only real files in the dotfiles repository`);
+    }
+    const last = index === parts.length - 1;
+    const wantDirectory = !last || kind === "directory";
+    if (wantDirectory ? !stat.isDirectory() : !stat.isFile()) {
+      fail(`${shown} is not a ${last ? kind : "directory"}`);
+    }
   }
-  return real;
+  if (!isInsideOrSame(fs.realpathSync(current), dotfilesReal)) {
+    fail(`${relative} resolves outside the dotfiles repository`);
+  }
+  return current;
 }
 
 // Lists a skill's files relative to its directory, without the top-level
@@ -192,36 +214,89 @@ function skillFiles(skillDir: string, skillName: string): string[] {
   return files;
 }
 
+interface Sources {
+  root: string;
+  real: string;
+  localDir: string;
+  profilesDir: string;
+}
+
 // A selected skill root must be a real directory inside skills/local.
-function requireSkillRoot(localDir: string, localReal: string, name: string): string {
+function requireSkillRoot(sources: Sources, name: string): string {
   if (!isPathComponentName(name)) {
     fail(`Invalid or reserved skill name: ${name}`);
   }
-  const skillDir = path.join(localDir, name);
-  const stat = fs.lstatSync(skillDir, { throwIfNoEntry: false });
-  if (!stat) {
+  if (!fs.lstatSync(path.join(sources.localDir, name), { throwIfNoEntry: false })) {
     fail(`unknown local skill ${name}`);
   }
-  if (stat.isSymbolicLink()) {
-    fail(`local skill ${name} is a symbolic link`);
-  }
-  if (!stat.isDirectory()) {
-    fail(`local skill ${name} is not a directory`);
-  }
-  requireRealInside(skillDir, localReal, `local skill ${name}`);
-  return skillDir;
+  return requireSourcePath(sources.root, sources.real, `skills/local/${name}`, "directory");
 }
 
-// A skill depends on another local skill when one of its files links into it
-// relative to the skill directory, such as ../delivery-common/scripts/x.mjs.
-// Bare skill names in prose are not dependencies.
-function skillDependencies(skillDir: string, skillName: string, localNames: ReadonlySet<string>): Set<string> {
+// Decodes text strictly. A UTF-8 or UTF-16 byte order mark selects the
+// encoding; UTF-32 and any invalid sequence fail closed.
+function decodeStrict(buffer: Buffer, label: string): { text: string; bom: boolean } {
+  const starts = (...bytes: number[]): boolean => bytes.every((byte, index) => buffer[index] === byte);
+  if (starts(0xff, 0xfe, 0x00, 0x00) || starts(0x00, 0x00, 0xfe, 0xff)) {
+    fail(`cannot read ${label}: UTF-32 text is not supported`);
+  }
+  try {
+    if (starts(0xef, 0xbb, 0xbf)) {
+      return { text: new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(3)), bom: true };
+    }
+    if (starts(0xff, 0xfe)) {
+      return { text: new TextDecoder("utf-16le", { fatal: true }).decode(buffer.subarray(2)), bom: true };
+    }
+    if (starts(0xfe, 0xff)) {
+      return { text: new TextDecoder("utf-16le", { fatal: true }).decode(Buffer.from(buffer.subarray(2)).swap16()), bom: true };
+    }
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(buffer), bom: false };
+  } catch {
+    fail(`cannot read ${label}: it is neither UTF-8 nor UTF-16 with a byte order mark`);
+  }
+}
+
+// Text for scanning: strict decoding, plus both UTF-16 readings when text
+// without a byte order mark contains NUL bytes.
+function textForScan(buffer: Buffer, label: string): string {
+  const { text, bom } = decodeStrict(buffer, label);
+  if (bom || !buffer.includes(0)) {
+    return text;
+  }
+  const even = buffer.length - (buffer.length % 2);
+  return `${text}\n${buffer.subarray(0, even).toString("utf16le")}\n${Buffer.from(buffer.subarray(0, even)).swap16().toString("utf16le")}`;
+}
+
+interface Reference {
+  written: string;
+  resolved: string;
+}
+
+// Relative ../<name>/... references in a file, each resolved exactly from the
+// file's own directory.
+function fileReferences(file: string, text: string): Reference[] {
+  const references: Reference[] = [];
+  for (const match of text.matchAll(REFERENCE_PATTERN)) {
+    const ups = match[1] ?? "";
+    const rest = (match[3] ?? "").replace(/[./]+$/, "");
+    const written = `${ups}${match[2] ?? ""}${rest ? `/${rest}` : ""}`;
+    references.push({ written, resolved: path.resolve(path.dirname(file), written) });
+  }
+  return references;
+}
+
+// A skill depends on another local skill when one of its files references a
+// path inside that skill, such as ../delivery-common/scripts/x.mjs from
+// SKILL.md. Bare skill names in prose are not dependencies.
+function skillDependencies(sources: Sources, skillDir: string, skillName: string, localNames: ReadonlySet<string>): Set<string> {
   const dependencies = new Set<string>();
-  const pattern = /\.\.\/([A-Za-z0-9_][A-Za-z0-9._-]*)\//g;
   for (const relative of skillFiles(skillDir, skillName)) {
-    const text = fs.readFileSync(path.join(skillDir, relative), "utf8");
-    for (const match of text.matchAll(pattern)) {
-      const target = match[1] ?? "";
+    const file = path.join(skillDir, relative);
+    const text = textForScan(fs.readFileSync(file), `skills/${skillName}/${toPosix(relative)}`);
+    for (const reference of fileReferences(file, text)) {
+      if (!isStrictlyInside(reference.resolved, sources.localDir)) {
+        continue;
+      }
+      const target = path.relative(sources.localDir, reference.resolved).split(path.sep)[0] ?? "";
       if (target !== skillName && localNames.has(target)) {
         dependencies.add(target);
       }
@@ -236,10 +311,10 @@ interface Selection {
   excluded: string[];
 }
 
-function selectSkills(localDir: string, localReal: string, profileLocal: string[], external: ExternalSkillSource[], exclude: string[]): Selection {
+function selectSkills(sources: Sources, profileLocal: string[], external: ExternalSkillSource[], exclude: string[]): Selection {
   const localNames = new Set(
     fs
-      .readdirSync(localDir, { withFileTypes: true })
+      .readdirSync(sources.localDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && isPathComponentName(entry.name))
       .map((entry) => entry.name),
   );
@@ -249,7 +324,7 @@ function selectSkills(localDir: string, localReal: string, profileLocal: string[
   const dependenciesOf = (name: string): Set<string> => {
     let dependencies = dependencyCache.get(name);
     if (!dependencies) {
-      dependencies = skillDependencies(requireSkillRoot(localDir, localReal, name), name, localNames);
+      dependencies = skillDependencies(sources, requireSkillRoot(sources, name), name, localNames);
       dependencyCache.set(name, dependencies);
     }
     return dependencies;
@@ -308,7 +383,7 @@ function selectSkills(localDir: string, localReal: string, profileLocal: string[
 // owner/repo sources and plain skill names are accepted.
 function requireSafeExternal(external: ExternalSkillSource[]): void {
   for (const entry of external) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(entry.source)) {
+    if (!SOURCE_PATTERN.test(entry.source)) {
       fail(`unsupported external skill source for export: ${JSON.stringify(entry.source)} (expected owner/repo)`);
     }
     for (const name of entry.skills) {
@@ -324,21 +399,23 @@ export function shellArg(value: string): string {
   return /^[A-Za-z0-9_./=:@-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+function readRuleFile(sources: Sources, relative: string): string {
+  const file = requireSourcePath(sources.root, sources.real, relative, "file");
+  const { text } = decodeStrict(fs.readFileSync(file), relative);
+  if (text.includes("\0")) {
+    fail(`cannot read ${relative}: it contains NUL characters`);
+  }
+  return text;
+}
+
 // Mirrors ai-rules/scripts/compose-rules.sh without --with-metadata, in Node
 // so setup.ps1 can export without Bash.
-export function composeRules(dotfilesRoot: string, overrideName: string): string {
-  const rulesDir = path.join(dotfilesRoot, "ai-rules");
-  const basePath = path.join(rulesDir, "base", "global.md");
-  if (!fs.existsSync(basePath)) {
-    fail(`base rule file not found: ${basePath}`);
-  }
-  const rulesReal = fs.realpathSync(rulesDir);
-  requireRealInside(basePath, rulesReal, "base rule file");
-  const docs = [fs.readFileSync(basePath, "utf8")];
-  const overridePath = path.join(rulesDir, "agents", overrideName);
-  if (fs.existsSync(overridePath)) {
-    requireRealInside(overridePath, rulesReal, `agent rule file ${overrideName}`);
-    const override = fs.readFileSync(overridePath, "utf8");
+function composeRules(sources: Sources, overrideName: string): string {
+  requireSourcePath(sources.root, sources.real, "ai-rules", "directory");
+  const docs = [readRuleFile(sources, "ai-rules/base/global.md")];
+  const overrideRelative = `ai-rules/agents/${overrideName}`;
+  if (fs.lstatSync(path.join(sources.root, overrideRelative), { throwIfNoEntry: false })) {
+    const override = readRuleFile(sources, overrideRelative);
     if (/\S/.test(override)) {
       docs.push(override);
     }
@@ -451,7 +528,12 @@ interface PersonalMarker {
   token: string;
 }
 
-// Hides marker values in everything export prints.
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|/]/g, "\\$&");
+}
+
+// Hides marker values in everything export prints. Matching runs on the
+// original text, so case folding that changes lengths cannot shift the range.
 class Redactor {
   private markers: PersonalMarker[] = [];
 
@@ -462,12 +544,7 @@ class Redactor {
   redact(text: string): string {
     let result = text;
     for (const marker of this.markers) {
-      const lowered = marker.value.toLowerCase();
-      let index = result.toLowerCase().indexOf(lowered);
-      while (index !== -1) {
-        result = result.slice(0, index) + marker.token + result.slice(index + marker.value.length);
-        index = result.toLowerCase().indexOf(lowered, index + marker.token.length);
-      }
+      result = result.replace(new RegExp(escapeRegExp(marker.value), "giu"), marker.token);
     }
     return result;
   }
@@ -546,14 +623,21 @@ function configuredMarkers(context: ExportContext): PersonalMarker[] {
   }
   const { files, required } = markerFiles(context);
   for (const file of files) {
-    if (!fs.existsSync(file)) {
-      if (required) {
-        fail(`${MARKERS_FILE_ENV} names a missing file`);
+    let buffer: Buffer;
+    try {
+      buffer = fs.readFileSync(file);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" && !required) {
+        continue;
       }
-      continue;
+      fail(code === "ENOENT" ? `${MARKERS_FILE_ENV} names a missing file` : `cannot read the personal marker file ${file}: ${code ?? (error as Error).message}`);
     }
-    const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
-    lines.forEach((line, index) => {
+    const { text } = decodeStrict(buffer, "the personal marker file");
+    if (text.includes("\0")) {
+      fail("cannot read the personal marker file: it contains NUL characters (save it as UTF-8, or as UTF-16 with a byte order mark)");
+    }
+    text.split(/\r?\n/).forEach((line, index) => {
       const value = line.trim();
       if (value && !value.startsWith("#")) {
         markers.push({ kind: `personal marker on line ${index + 1} of the marker file`, value, token: "<redacted>" });
@@ -561,29 +645,6 @@ function configuredMarkers(context: ExportContext): PersonalMarker[] {
     });
   }
   return markers;
-}
-
-// Decodes a file for scanning. UTF-16 with a byte order mark is decoded as
-// such; text with NUL bytes is also scanned as UTF-16; anything that is not
-// valid UTF-8 otherwise fails closed rather than skipping the scan.
-function textForScan(buffer: Buffer, relative: string): string {
-  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
-    return buffer.subarray(2).toString("utf16le");
-  }
-  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
-    return Buffer.from(buffer.subarray(2)).swap16().toString("utf16le");
-  }
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
-  } catch {
-    fail(`cannot scan ${relative} for personal data: it is neither UTF-8 nor UTF-16 with a byte order mark`);
-  }
-  if (buffer.includes(0)) {
-    const even = buffer.length - (buffer.length % 2);
-    text += `\n${buffer.subarray(0, even).toString("utf16le")}\n${Buffer.from(buffer.subarray(0, even)).swap16().toString("utf16le")}`;
-  }
-  return text;
 }
 
 function checkPersonalData(staging: string, files: string[], markers: PersonalMarker[], redactor: Redactor): void {
@@ -601,27 +662,17 @@ function checkPersonalData(staging: string, files: string[], markers: PersonalMa
   }
 }
 
-// Every relative ../<name>/... reference in a staged skill must resolve inside
-// the bundle, either from the referring file or from its skill directory.
+// Every relative ../<name>/... reference in a staged skill must resolve,
+// exactly as written from the referring file, to an existing path inside the
+// bundle's skills/ directory.
 function checkStagedLinks(staging: string, files: string[]): void {
   const skillsRoot = path.join(staging, "skills");
-  const pattern = /((?:\.\.\/)+)([A-Za-z0-9_][A-Za-z0-9._-]*)\/([A-Za-z0-9._/-]*)/g;
   const unresolved: string[] = [];
   for (const relative of files.filter((file) => file.startsWith("skills/"))) {
-    const [, skillName] = relative.split("/");
     const file = stagedPath(staging, relative);
-    const text = textForScan(fs.readFileSync(file), relative);
-    for (const match of text.matchAll(pattern)) {
-      const ups = match[1] ?? "";
-      const name = match[2] ?? "";
-      const rest = (match[3] ?? "").replace(/[./]+$/, "");
-      const target = rest ? `${name}/${rest}` : name;
-      const candidates = [path.resolve(path.dirname(file), `${ups}${target}`), path.resolve(skillsRoot, target)];
-      if (skillName && ups === "../") {
-        candidates.push(path.resolve(skillsRoot, skillName, target));
-      }
-      if (!candidates.some((candidate) => isInsideOrSame(candidate, skillsRoot) && fs.existsSync(candidate))) {
-        unresolved.push(`${relative} -> ${ups}${target}`);
+    for (const reference of fileReferences(file, textForScan(fs.readFileSync(file), relative))) {
+      if (!isInsideOrSame(reference.resolved, skillsRoot) || !fs.existsSync(reference.resolved)) {
+        unresolved.push(`${relative} -> ${reference.written}`);
       }
     }
   }
@@ -630,58 +681,103 @@ function checkStagedLinks(staging: string, files: string[]): void {
   }
 }
 
-function isGeneratedPath(file: string): boolean {
-  if (TOP_LEVEL_FILES.has(file)) {
-    return true;
-  }
-  const parts = file.split("/");
-  return (
-    parts.length >= 3 &&
-    parts[0] === "skills" &&
-    isPathComponentName(parts[1] ?? "") &&
-    parts.every((part) => part !== "" && part !== "." && part !== ".." && !/[\\:\0]/.test(part))
-  );
-}
-
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-// Accepts only a manifest this export version writes, with file paths it can
-// generate; anything else is not a previous bundle.
+function isNameList(value: unknown, nonEmpty: boolean): value is string[] {
+  return isStringArray(value) && (!nonEmpty || value.length > 0) && new Set(value).size === value.length && value.every(isPathComponentName);
+}
+
+function hasExactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): boolean {
+  const keys = Object.keys(value);
+  return required.every((key) => key in value) && keys.every((key) => required.includes(key) || optional.includes(key));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// A file path export could have written for a skill: under a listed skill,
+// with plain components, and not in the skill's top-level evals/.
+function isSkillFile(file: string, skills: ReadonlySet<string>): boolean {
+  const parts = file.split("/");
+  return (
+    parts.length >= 3 &&
+    parts[0] === "skills" &&
+    skills.has(parts[1] ?? "") &&
+    parts[2] !== "evals" &&
+    parts.every((part) => part !== "" && part !== "." && part !== ".." && !/[\\:\0]/.test(part))
+  );
+}
+
+// Accepts only a manifest this export version writes, whose fields agree with
+// each other and whose files are exactly what export generates for them.
 function validManifestFiles(value: unknown): string[] | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return undefined;
   }
-  const record = value as Record<string, unknown>;
-  const local = record.local;
-  const external = record.external;
-  const files = record.files;
-  const valid =
-    record.schemaVersion === SCHEMA_VERSION &&
-    record.generatedBy === GENERATED_BY &&
-    isStringArray(record.requestedProfiles) &&
-    isStringArray(record.expandedProfiles) &&
-    isStringArray(record.agents) &&
-    record.agents.every((agent) => agent === "codex" || agent === "claude-code") &&
-    isStringArray(record.excluded) &&
-    isStringArray(record.rules) &&
-    record.rules.every((rule) => rule === "AGENTS.md" || rule === "CLAUDE.md") &&
-    Array.isArray(local) &&
-    local.every(
-      (skill) =>
-        skill &&
-        typeof skill === "object" &&
-        isPathComponentName(String((skill as Record<string, unknown>).name)) &&
-        ["profile", "dependency"].includes(String((skill as Record<string, unknown>).origin)),
-    ) &&
-    Array.isArray(external) &&
-    external.every((entry) => entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).source === "string" && isStringArray((entry as Record<string, unknown>).skills)) &&
-    isStringArray(files) &&
-    new Set(files).size === files.length &&
-    files.includes(BUNDLE_MANIFEST) &&
-    files.every(isGeneratedPath);
-  return valid ? (files as string[]) : undefined;
+  const keys = ["schemaVersion", "generatedBy", "requestedProfiles", "expandedProfiles", "agents", "local", "excluded", "external", "rules", "files"];
+  if (!hasExactKeys(value, keys) || value.schemaVersion !== SCHEMA_VERSION || value.generatedBy !== GENERATED_BY) {
+    return undefined;
+  }
+  const { requestedProfiles, expandedProfiles, agents, local, excluded, external, rules, files } = value;
+  if (!isNameList(requestedProfiles, true) || !isNameList(expandedProfiles, true) || !isNameList(excluded, false)) {
+    return undefined;
+  }
+  if (!isStringArray(agents) || agents.length === 0 || new Set(agents).size !== agents.length || !agents.every((agent) => (AGENTS as readonly string[]).includes(agent))) {
+    return undefined;
+  }
+  const expectedRules = RULES_TARGETS.filter((target) => agents.includes(target.agent)).map((target) => target.file);
+  if (!isStringArray(rules) || rules.join("\n") !== expectedRules.join("\n")) {
+    return undefined;
+  }
+  if (!Array.isArray(local)) {
+    return undefined;
+  }
+  const localNames = new Set<string>();
+  for (const skill of local) {
+    if (!isRecord(skill) || typeof skill.name !== "string" || !isPathComponentName(skill.name) || localNames.has(skill.name)) {
+      return undefined;
+    }
+    localNames.add(skill.name);
+    const valid =
+      skill.origin === "profile"
+        ? hasExactKeys(skill, ["name", "origin"])
+        : skill.origin === "dependency" && hasExactKeys(skill, ["name", "origin", "requiredBy"]) && isNameList(skill.requiredBy, true);
+    if (!valid) {
+      return undefined;
+    }
+  }
+  for (const skill of local as BundleSkill[]) {
+    if (skill.requiredBy && !skill.requiredBy.every((name) => localNames.has(name))) {
+      return undefined;
+    }
+  }
+  if (
+    !Array.isArray(external) ||
+    !external.every((entry) => isRecord(entry) && hasExactKeys(entry, ["source", "skills"]) && typeof entry.source === "string" && SOURCE_PATTERN.test(entry.source) && isNameList(entry.skills, true))
+  ) {
+    return undefined;
+  }
+  if (!isStringArray(files) || new Set(files).size !== files.length) {
+    return undefined;
+  }
+  const topLevel = new Set(["README.md", BUNDLE_MANIFEST, ...expectedRules]);
+  const skillsWithFiles = new Set<string>();
+  for (const file of files) {
+    if (topLevel.has(file)) {
+      continue;
+    }
+    if (!isSkillFile(file, localNames)) {
+      return undefined;
+    }
+    skillsWithFiles.add(file.split("/")[1] ?? "");
+  }
+  if (![...topLevel].every((file) => files.includes(file)) || skillsWithFiles.size !== localNames.size) {
+    return undefined;
+  }
+  return files;
 }
 
 function listEntries(directory: string): { files: string[]; others: string[] } {
@@ -707,21 +803,26 @@ function listEntries(directory: string): { files: string[]; others: string[] } {
   return { files, others };
 }
 
-// Returns the entries of a previous bundle that its manifest does not list.
-function bundleExtras(directory: string): string[] | undefined {
+// Returns the files of a previous bundle when its manifest is valid and lists
+// every entry; otherwise fails, naming the entries it did not write.
+function requirePreviousBundle(directory: string, out: string): string[] {
   let manifest: unknown;
   try {
     manifest = JSON.parse(fs.readFileSync(path.join(directory, BUNDLE_MANIFEST), "utf8"));
   } catch {
-    return undefined;
+    manifest = undefined;
   }
   const listed = validManifestFiles(manifest);
   if (!listed) {
-    return undefined;
+    fail(`--force replaces only a previous skills bundle, and ${out} has no valid ${BUNDLE_MANIFEST} (schema version ${SCHEMA_VERSION})`);
   }
   const allowed = new Set(listed);
   const { files, others } = listEntries(directory);
-  return files.filter((file) => !allowed.has(file)).concat(others).sort();
+  const extras = files.filter((file) => !allowed.has(file)).concat(others).sort();
+  if (extras.length > 0) {
+    fail(`refusing to replace ${out}: entries not written by skills export: ${extras.join(", ")}`);
+  }
+  return listed;
 }
 
 type OutState = { kind: "absent" } | { kind: "empty" } | { kind: "bundle" };
@@ -750,13 +851,38 @@ function inspectOut(out: string, force: boolean): OutState {
   return { kind: "bundle" };
 }
 
-function requirePreviousBundle(directory: string, out: string): void {
-  const extras = bundleExtras(directory);
-  if (!extras) {
-    fail(`--force replaces only a previous skills bundle, and ${out} has no valid ${BUNDLE_MANIFEST} (schema version ${SCHEMA_VERSION})`);
+// Another user who can rename entries in a directory above --out could swap
+// staging or the moved-aside output for a link, so export refuses such a
+// directory: writable by others without the sticky bit, or owned and writable
+// by another user other than root. Windows has no POSIX modes to check.
+function requireSafeOutParents(out: string): void {
+  if (process.platform === "win32" || typeof process.getuid !== "function") {
+    return;
   }
-  if (extras.length > 0) {
-    fail(`refusing to replace ${out}: entries not written by skills export: ${extras.join(", ")}`);
+  const uid = process.getuid();
+  const chains = new Set<string>();
+  for (const start of [path.dirname(path.resolve(out)), path.dirname(realPathOfPossiblyMissing(out))]) {
+    let current = start;
+    for (;;) {
+      chains.add(current);
+      const parent = path.dirname(current);
+      if (parent === current) {
+        break;
+      }
+      current = parent;
+    }
+  }
+  for (const directory of Array.from(chains).sort()) {
+    const stat = fs.statSync(directory, { throwIfNoEntry: false });
+    if (!stat) {
+      continue;
+    }
+    if ((stat.mode & 0o002) !== 0 && (stat.mode & 0o1000) === 0) {
+      fail(`refusing to export under ${directory}: other users can write to it and it has no sticky bit`);
+    }
+    if (stat.uid !== uid && stat.uid !== 0 && (stat.mode & 0o200) !== 0) {
+      fail(`refusing to export under ${directory}: it is owned and writable by another user`);
+    }
   }
 }
 
@@ -764,16 +890,44 @@ function uniqueSibling(out: string, label: string): string {
   return path.join(path.dirname(out), `.${path.basename(out)}.${label}-${process.pid}-${Date.now()}`);
 }
 
+// Removes only the entries the recheck verified, files with unlink and
+// directories with rmdir, so anything added later stays. Returns false when
+// something remains.
+function removeVerified(previous: string, files: string[]): boolean {
+  const directories = new Set<string>();
+  for (const file of files) {
+    const target = path.join(previous, ...file.split("/"));
+    if (fs.lstatSync(target, { throwIfNoEntry: false })?.isFile()) {
+      fs.unlinkSync(target);
+    }
+    const parts = file.split("/");
+    for (let depth = parts.length - 1; depth > 0; depth -= 1) {
+      directories.add(parts.slice(0, depth).join("/"));
+    }
+  }
+  const ordered = Array.from(directories).sort((left, right) => right.split("/").length - left.split("/").length);
+  for (const directory of ordered.concat([""])) {
+    try {
+      fs.rmdirSync(path.join(previous, ...directory.split("/").filter(Boolean)));
+    } catch {
+      // A directory that is not empty holds something the recheck did not
+      // see; leave it.
+    }
+  }
+  return !fs.existsSync(previous);
+}
+
 // Moves an existing --out aside, rechecks exactly what was moved, and only
 // then puts the new bundle in place. Until the new bundle is in place, any
 // failure moves the old directory back.
-function install(staging: string, out: string, state: OutState, say: (message: string) => void): void {
+function install(staging: string, out: string, state: OutState, warn: (message: string) => void): void {
   if (state.kind === "absent") {
     fs.renameSync(staging, out);
     return;
   }
   const previous = uniqueSibling(out, "previous");
   fs.renameSync(out, previous);
+  let verified: string[] = [];
   try {
     if (state.kind === "empty") {
       const entries = fs.readdirSync(previous);
@@ -781,7 +935,7 @@ function install(staging: string, out: string, state: OutState, say: (message: s
         fail(`refusing to replace ${out}: entries appeared during export: ${entries.sort().join(", ")}`);
       }
     } else {
-      requirePreviousBundle(previous, out);
+      verified = requirePreviousBundle(previous, out);
     }
     fs.renameSync(staging, out);
   } catch (error) {
@@ -792,28 +946,36 @@ function install(staging: string, out: string, state: OutState, say: (message: s
     }
     throw error;
   }
+  let removed = false;
+  let reason = "entries remain that the recheck did not verify";
   try {
-    fs.rmSync(previous, { recursive: true, force: false });
+    removed = removeVerified(previous, verified);
   } catch (error) {
-    say(`Warning: the new bundle is installed at ${out}, but the previous one could not be removed and remains at ${previous}: ${(error as Error).message}`);
+    reason = (error as Error).message;
+  }
+  if (!removed) {
+    warn(`Warning: the new bundle is installed at ${out}, but the previous one was not fully removed and remains at ${previous}: ${reason}`);
   }
 }
 
-export function exportSkills(options: ExportOptions, context: ExportContext): void {
+// Loads the personal markers before anything else, so no message, including
+// an argument error, can print a marker value.
+export function runExportCommand(argv: string[], context: ExportContext): void {
   const redactor = new Redactor();
   const home = homeMarkers(context);
   redactor.add(home);
-  const say = (message: string): void => console.log(redactor.redact(message));
   try {
-    const markers = home.concat(configuredMarkers(context));
-    redactor.add(markers.filter((marker) => !home.includes(marker)));
-    runExport(options, context, markers, redactor, say);
+    const configured = configuredMarkers(context);
+    redactor.add(configured);
+    const options = parseExportArgs(argv);
+    runExport(options, context, home.concat(configured), redactor);
   } catch (error) {
     fail(redactor.redact((error as Error).message));
   }
 }
 
-function runExport(options: ExportOptions, context: ExportContext, markers: PersonalMarker[], redactor: Redactor, say: (message: string) => void): void {
+function runExport(options: ExportOptions, context: ExportContext, markers: PersonalMarker[], redactor: Redactor): void {
+  const say = (message: string): void => console.log(redactor.redact(message));
   const out = path.resolve(options.out);
   const dotfilesReal = fs.realpathSync(context.dotfilesRoot);
   const outReal = realPathOfPossiblyMissing(out);
@@ -821,23 +983,29 @@ function runExport(options: ExportOptions, context: ExportContext, markers: Pers
     fail(`output directory must be outside the dotfiles repository: ${out}`);
   }
 
-  const localDir = path.join(context.dotfilesRoot, "skills", "local");
-  const localReal = requireRealInside(localDir, dotfilesReal, "skills/local");
-  const profilesDir = path.join(context.dotfilesRoot, "skills", "profiles");
-  const profilesReal = requireRealInside(profilesDir, dotfilesReal, "skills/profiles");
-  const plan = resolveProfiles(context.dotfilesRoot, options.profiles, options.agents, "export");
-  for (const name of plan.expandedProfiles) {
-    requireRealInside(path.join(profilesDir, `${name}.json`), profilesReal, `profile ${name}`);
-  }
+  const sources: Sources = {
+    root: context.dotfilesRoot,
+    real: dotfilesReal,
+    localDir: requireSourcePath(context.dotfilesRoot, dotfilesReal, "skills/local", "directory"),
+    profilesDir: requireSourcePath(context.dotfilesRoot, dotfilesReal, "skills/profiles", "directory"),
+  };
+  const plan = resolveProfiles(context.dotfilesRoot, options.profiles, options.agents, "export", (_file, name) => {
+    if (!isPathComponentName(name)) {
+      fail(`Invalid profile name: ${name}`);
+    }
+    if (fs.lstatSync(path.join(sources.profilesDir, `${name}.json`), { throwIfNoEntry: false })) {
+      requireSourcePath(sources.root, sources.real, `skills/profiles/${name}.json`, "file");
+    }
+  });
   requireSafeExternal(plan.external);
   const selection = selectSkills(
-    localDir,
-    localReal,
+    sources,
     plan.local.map((skill) => skill.name),
     plan.external,
     options.exclude,
   );
   const state = inspectOut(out, options.force);
+  requireSafeOutParents(out);
   const rules = RULES_TARGETS.filter((target) => options.agents.includes(target.agent));
   const dependencies = selection.local.filter((skill) => skill.origin === "dependency");
 
@@ -856,15 +1024,16 @@ function runExport(options: ExportOptions, context: ExportContext, markers: Pers
   }
 
   fs.mkdirSync(path.dirname(out), { recursive: true });
+  requireSafeOutParents(out);
   const staging = fs.realpathSync(fs.mkdtempSync(path.join(path.dirname(out), `.${path.basename(out)}.staging-`)));
   let installed = false;
   try {
     const files: string[] = [];
     for (const skill of selection.local) {
-      copySkill(requireSkillRoot(localDir, localReal, skill.name), staging, skill.name, files);
+      copySkill(requireSkillRoot(sources, skill.name), staging, skill.name, files);
     }
     for (const target of rules) {
-      fs.writeFileSync(stagedPath(staging, target.file), composeRules(context.dotfilesRoot, target.override));
+      fs.writeFileSync(stagedPath(staging, target.file), composeRules(sources, target.override));
       files.push(target.file);
     }
     files.push("README.md", BUNDLE_MANIFEST);

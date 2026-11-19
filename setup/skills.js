@@ -1202,9 +1202,8 @@ function setupContext() {
 }
 function main(argv) {
     if (argv[0] === "export") {
-        const options = (0, skills_export_1.parseExportArgs)(argv.slice(1));
         const context = setupContext();
-        (0, skills_export_1.exportSkills)(options, {
+        (0, skills_export_1.runExportCommand)(argv.slice(1), {
             dotfilesRoot: context.dotfilesRoot,
             home: context.home,
             dryRun: context.dryRun,

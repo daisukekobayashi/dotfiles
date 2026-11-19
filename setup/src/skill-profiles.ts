@@ -73,7 +73,9 @@ export function readJson(filePath: string): unknown {
   try {
     return JSON.parse(raw);
   } catch (error) {
-    fail(`failed to parse ${filePath}: ${(error as Error).message}`);
+    // JSON.parse messages quote the input; report only where parsing stopped.
+    const position = /position (\d+)/.exec((error as Error).message)?.[1];
+    fail(`failed to parse ${filePath}: invalid JSON${position ? ` at position ${position}` : ""}`);
   }
 }
 
@@ -128,7 +130,15 @@ export function listProfiles(profileDir: string): string[] {
     .sort();
 }
 
-export function resolveProfiles(dotfilesRoot: string, requestedProfiles: string[], agents: Agent[], scope: Scope | "validate" | "export"): SkillsPlan {
+// beforeRead runs before each profile file is read, including included ones,
+// so a caller can refuse a file before any of its content is parsed.
+export function resolveProfiles(
+  dotfilesRoot: string,
+  requestedProfiles: string[],
+  agents: Agent[],
+  scope: Scope | "validate" | "export",
+  beforeRead?: (filePath: string, name: string) => void,
+): SkillsPlan {
   const profileDir = path.join(dotfilesRoot, "skills", "profiles");
   const localDir = path.join(dotfilesRoot, "skills", "local");
   const expanded: string[] = [];
@@ -152,6 +162,7 @@ export function resolveProfiles(dotfilesRoot: string, requestedProfiles: string[
       fail(`unknown profile ${name}`);
     }
 
+    beforeRead?.(filePath, name);
     const profile = readJson(filePath);
     const includes = ensureArray(getObjectProperty(profile, "includes"), filePath, "includes");
     for (const includeName of includes) {

@@ -574,7 +574,7 @@ test("export rejects a selected skill root that is a symbolic link", { skip: pro
     await writeProfile(fixture.dotfiles, "linked", { description: "Linked", local: ["linked"] });
     const result = runExport(["--profile", "linked", "--out", fixture.out], fixture);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /local skill linked is a symbolic link/);
+    assert.match(result.stderr, /skills\/local\/linked is a symbolic link/);
     assert.deepEqual(await readdir(fixture.outParent), []);
   }));
 
@@ -585,7 +585,7 @@ test("export rejects profile and rule files that resolve outside their roots", {
     await symlink(outsideProfile, path.join(fixture.dotfiles, "skills", "profiles", "outside.json"));
     let result = runExport(["--profile", "outside", "--out", fixture.out], fixture);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /profile outside resolves outside profiles\//);
+    assert.match(result.stderr, /skills\/profiles\/outside\.json is a symbolic link/);
 
     const outsideRule = path.join(fixture.root, "claude-rule.md");
     await writeFile(outsideRule, "Outside rule.\n");
@@ -593,7 +593,7 @@ test("export rejects profile and rule files that resolve outside their roots", {
     await symlink(outsideRule, path.join(fixture.dotfiles, "ai-rules", "agents", "claude.md"));
     result = runExport(["--profile", "base", "--out", fixture.out], fixture);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /agent rule file claude\.md resolves outside ai-rules\//);
+    assert.match(result.stderr, /ai-rules\/agents\/claude\.md is a symbolic link/);
     assert.deepEqual(await readdir(fixture.outParent), []);
   }));
 
@@ -691,16 +691,16 @@ test("a failed backup removal reports the installed bundle and where the backup 
   withFixture(async (fixture) => {
     assertOk(runExport(["--profile", "work", "--out", fixture.out], fixture));
     const result = runExportPatched(["--profile", "base", "--out", fixture.out, "--force"], fixture, `
-      const rm = fs.rmSync;
-      fs.rmSync = (target, options) => {
+      const rmdir = fs.rmdirSync;
+      fs.rmdirSync = (target, options) => {
         if (path.basename(target).includes(".previous-")) {
           throw new Error("injected cleanup failure");
         }
-        return rm(target, options);
+        return rmdir(target, options);
       };
     `);
     assertOk(result);
-    assert.match(result.stderr, /the new bundle is installed at .*bundle, but the previous one could not be removed and remains at .*\.bundle\.previous-/);
+    assert.match(result.stderr, /the new bundle is installed at .*bundle, but the previous one was not fully removed and remains at .*\.bundle\.previous-/);
     assert.match(result.stdout, /Skills bundle written/);
     assert.deepEqual((await readManifest(fixture.out)).requestedProfiles, ["base"]);
     const left = (await readdir(fixture.outParent)).filter((name) => name.startsWith(".bundle.previous-"));
@@ -765,7 +765,7 @@ test("personal data check scans UTF-16 text and rejects undecodable files", () =
     await assertPersonalFailure(fixture, {}, /skills\/gamma\/credit\.md: git user\.name/);
 
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "credit.md"), Buffer.from([0x41, 0xc3, 0x28, 0x0a]));
-    await assertPersonalFailure(fixture, {}, /cannot scan skills\/gamma\/credit\.md for personal data/);
+    await assertPersonalFailure(fixture, {}, /cannot read skills\/gamma\/credit\.md: it is neither UTF-8 nor UTF-16/);
   }));
 
 test("the default marker file is read from both SETUP_HOME and the OS home", () =>
@@ -856,3 +856,214 @@ test("export resolves git through the Windows command search", () => {
   const source = require("node:fs").readFileSync(path.join(repoRoot, "setup", "src", "skills.ts"), "utf8");
   assert.match(source, /gitCommand: \(\) => \(process\.platform === "win32" \? resolveWindowsCommand\("git"\) : "git"\)/);
 });
+
+// Round 2.
+// D11: source roots and containment.
+test("export refuses source roots that are symbolic links", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    for (const relative of ["ai-rules", "skills/local", "skills/profiles"]) {
+      const real = path.join(fixture.dotfiles, relative);
+      const moved = path.join(fixture.root, `moved-${relative.replace("/", "-")}`);
+      await cp(real, moved, { recursive: true });
+      await rm(real, { recursive: true });
+      await symlink(moved, real);
+      const result = runExport(["--profile", "base", "--out", fixture.out], fixture);
+      assert.notEqual(result.status, 0, relative);
+      assert.match(result.stderr, new RegExp(`${relative.replace("/", "\\/")} is a symbolic link`));
+      await rm(real);
+      await cp(moved, real, { recursive: true });
+    }
+    assert.deepEqual(await readdir(fixture.outParent), []);
+  }));
+
+test("export refuses an included profile that is a symbolic link before reading it", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    const outside = path.join(fixture.root, "outside.json");
+    await writeFile(outside, "{ not json: outside-fragment }");
+    await symlink(outside, path.join(fixture.dotfiles, "skills", "profiles", "linked.json"));
+    await writeProfile(fixture.dotfiles, "includer", { description: "Includer", includes: ["linked"], local: [] });
+    const result = runExport(["--profile", "includer", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skills\/profiles\/linked\.json is a symbolic link/);
+    assert.doesNotMatch(result.stderr, /outside-fragment/);
+  }));
+
+test("profile parse errors do not echo the profile contents", () =>
+  withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.dotfiles, "skills", "profiles", "broken.json"), "{ \"local\": [secret-fragment] }");
+    const result = runExport(["--profile", "broken", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /broken\.json: invalid JSON/);
+    assert.doesNotMatch(result.stderr, /secret-fragment/);
+  }));
+
+test("a child directory named ..share counts as inside the dotfiles repository", () =>
+  withFixture(async (fixture) => {
+    const result = runExport(["--profile", "base", "--out", path.join(fixture.dotfiles, "..share", "bundle")], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /must be outside the dotfiles repository/);
+  }));
+
+// D12: the backup keeps entries added after the recheck.
+test("entries added to the backup after the recheck are kept, with a warning", () =>
+  withFixture(async (fixture) => {
+    for (const setup of ["bundle", "empty"]) {
+      await rm(fixture.out, { recursive: true, force: true });
+      for (const name of await readdir(fixture.outParent)) {
+        await rm(path.join(fixture.outParent, name), { recursive: true, force: true });
+      }
+      if (setup === "bundle") {
+        assertOk(runExport(["--profile", "work", "--out", fixture.out], fixture));
+      } else {
+        await mkdir(fixture.out);
+      }
+      const result = runExportPatched(["--profile", "base", "--out", fixture.out, ...(setup === "bundle" ? ["--force"] : [])], fixture, `
+        const rename = fs.renameSync;
+        fs.renameSync = (from, to) => {
+          if (path.basename(from).includes(".staging-")) {
+            const previous = fs.readdirSync(path.dirname(out)).find((name) => name.includes(".previous-"));
+            fs.writeFileSync(path.join(path.dirname(out), previous, "late-note.txt"), "mine\\n");
+          }
+          return rename(from, to);
+        };
+      `);
+      assertOk(result);
+      assert.match(result.stderr, /the previous one was not fully removed and remains at .*\.bundle\.previous-/, setup);
+      const previous = (await readdir(fixture.outParent)).find((name) => name.includes(".previous-"));
+      assert.ok(previous, setup);
+      assert.deepEqual(await readdir(path.join(fixture.outParent, previous)), ["late-note.txt"], setup);
+      assert.deepEqual((await readManifest(fixture.out)).requestedProfiles, ["base"]);
+    }
+  }));
+
+// D13: unsafe parents.
+test("export refuses an output parent that others can write without the sticky bit", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    const shared = path.join(fixture.root, "shared");
+    await mkdir(shared);
+    await chmod(shared, 0o777);
+    let result = runExport(["--profile", "base", "--out", path.join(shared, "bundle")], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /other users can write to it and it has no sticky bit/);
+    assert.deepEqual(await readdir(shared), []);
+
+    result = runExport(["--profile", "base", "--out", path.join(shared, "nested", "bundle")], fixture);
+    assert.notEqual(result.status, 0);
+    assert.deepEqual(await readdir(shared), []);
+
+    await chmod(shared, 0o1777);
+    result = runExport(["--profile", "base", "--out", path.join(shared, "bundle")], fixture);
+    assertOk(result);
+  }));
+
+// D14: strict manifests.
+test("export --force refuses manifests whose fields disagree or list files export would not write", () =>
+  withFixture(async (fixture) => {
+    assertOk(runExport(["--profile", "work", "--out", fixture.out], fixture));
+    const original = await readManifest(fixture.out);
+    const dependency = original.local.find((skill) => skill.origin === "dependency");
+    const cases = {
+      "missing README": { ...original, files: original.files.filter((file) => file !== "README.md") },
+      "dependency without requiredBy": { ...original, local: original.local.map((skill) => (skill === dependency ? { name: skill.name, origin: "dependency" } : skill)) },
+      "dependency without name": { ...original, local: original.local.map((skill) => (skill === dependency ? { origin: "dependency", requiredBy: ["alpha"] } : skill)) },
+      "unselected skill files": { ...original, files: [...original.files, "skills/bogus/evals/unrelated.txt"].sort() },
+      "evals files": { ...original, files: [...original.files, "skills/alpha/evals/unrelated.txt"].sort() },
+      "rules without agent": { ...original, agents: ["codex"] },
+      "extra key": { ...original, note: "x" },
+      "requiredBy unknown": { ...original, local: original.local.map((skill) => (skill === dependency ? { ...skill, requiredBy: ["ghost"] } : skill)) },
+      "skill without files": { ...original, local: [...original.local, { name: "zeta", origin: "profile" }] },
+      "unsafe source": { ...original, external: [{ source: "a b/c", skills: ["x"] }] },
+    };
+    for (const [label, manifest] of Object.entries(cases)) {
+      await writeFile(path.join(fixture.out, "skills-bundle.json"), JSON.stringify(manifest));
+      const result = runExport(["--profile", "base", "--out", fixture.out, "--force"], fixture);
+      assert.notEqual(result.status, 0, label);
+      assert.match(result.stderr, /no valid skills-bundle\.json/, label);
+    }
+    await writeFile(path.join(fixture.out, "skills-bundle.json"), `${JSON.stringify(original, null, 2)}\n`);
+    assertOk(runExport(["--profile", "base", "--out", fixture.out, "--force"], fixture));
+  }));
+
+// D15: redaction everywhere.
+test("argument errors and Unicode paths never print a marker", () =>
+  withFixture(async (fixture) => {
+    await mkdir(path.join(fixture.xdgConfig, "dotfiles"), { recursive: true });
+    await writeFile(path.join(fixture.xdgConfig, "dotfiles", "export-personal-markers"), "hush-word\n");
+    let result = runExport(["--profile", "base", "--agent", "hush-word", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /unsupported skills agent: <redacted>/);
+    assert.doesNotMatch(result.stderr, /hush-word/i);
+
+    result = runExport(["--profile", "base", "--out", fixture.out, "--bogus-hush-word"], fixture);
+    assert.notEqual(result.status, 0);
+    assert.doesNotMatch(result.stderr, /hush-word/i);
+
+    const out = path.join(fixture.outParent, "İİİİ-hush-word", "bundle");
+    result = runExport(["--profile", "base", "--out", out], fixture);
+    assertOk(result);
+    assert.match(result.stdout, /İİİİ-<redacted>/);
+    assert.doesNotMatch(result.stdout + result.stderr, /hush-word|ush-word|sh-word/i);
+  }));
+
+// D16: strict decoding of inputs.
+test("a UTF-16 marker file is decoded and a BOM-less one fails", () =>
+  withFixture(async (fixture) => {
+    await mkdir(path.join(fixture.xdgConfig, "dotfiles"), { recursive: true });
+    const markerFile = path.join(fixture.xdgConfig, "dotfiles", "export-personal-markers");
+    await writeFile(markerFile, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("leaf skill\r\n", "utf16le")]));
+    await assertPersonalFailure(fixture, {}, /skills\/gamma\/SKILL\.md: personal marker on line 1/);
+
+    await writeFile(markerFile, Buffer.from("leaf skill\n", "utf16le"));
+    const result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /personal marker file: it contains NUL characters/);
+
+    await writeFile(markerFile, Buffer.from([0x41, 0xc3, 0x28, 0x0a]));
+    const invalid = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(invalid.status, 0);
+    assert.match(invalid.stderr, /cannot read the personal marker file: it is neither UTF-8 nor UTF-16/);
+  }));
+
+test("a default marker path that cannot be read fails the export", () =>
+  withFixture(async (fixture) => {
+    await mkdir(path.join(fixture.xdgConfig, "dotfiles", "export-personal-markers"), { recursive: true });
+    const result = runExport(["--profile", "base", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot read the personal marker file .*EISDIR/);
+  }));
+
+test("UTF-32 text in a skill and invalid UTF-8 rules fail closed", () =>
+  withFixture(async (fixture) => {
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "gamma", "wide.md"), Buffer.concat([Buffer.from([0xff, 0xfe, 0x00, 0x00]), Buffer.from("A\0\0\0")]));
+    let result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot read skills\/gamma\/wide\.md: UTF-32 text is not supported/);
+    await rm(path.join(fixture.dotfiles, "skills", "local", "gamma", "wide.md"));
+
+    await writeFile(path.join(fixture.dotfiles, "ai-rules", "base", "global.md"), Buffer.from([0x41, 0xc3, 0x28, 0x0a]));
+    result = runExport(["--profile", "base", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot read ai-rules\/base\/global\.md: it is neither UTF-8 nor UTF-16/);
+    assert.deepEqual(await readdir(fixture.outParent), []);
+  }));
+
+// D17: references resolve exactly from their file.
+test("a reference that climbs out of skills/ fails even when a same-named skill exists", () =>
+  withFixture(async (fixture) => {
+    await writeSkill(fixture.dotfiles, "alpha", "Read `../beta/references/guide.md` and ../../beta/SKILL.md.\n");
+    const result = runExport(["--profile", "work", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skills\/alpha\/SKILL\.md -> \.\.\/\.\.\/beta\/SKILL\.md/);
+  }));
+
+test("dependencies are found in UTF-16 files", () =>
+  withFixture(async (fixture) => {
+    await writeProfile(fixture.dotfiles, "wide", { description: "Wide", local: ["epsilon"] });
+    await writeFile(
+      path.join(fixture.dotfiles, "skills", "local", "epsilon", "notes.md"),
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("Run ../gamma/scripts/check.mjs.\n", "utf16le")]),
+    );
+    const result = runExport(["--profile", "wide", "--out", fixture.out], fixture);
+    assertOk(result);
+    assert.match(result.stdout, /Added as a dependency: gamma \(required by epsilon\)/);
+  }));

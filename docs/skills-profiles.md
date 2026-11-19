@@ -783,7 +783,7 @@ The bundle is built only from `skills/local/<name>/`, `skills/profiles/`, and `a
 
 Each selected local skill is copied as a whole directory, including `scripts/` and `references/`, with its executable bits. The top-level `evals/` directory is skipped: it holds development fixtures for this repository. A symbolic link inside a selected skill, or a selected skill directory that is itself a symbolic link, fails the export.
 
-Every read stays inside its source root: profile files must resolve inside `skills/profiles/`, skill directories inside `skills/local/`, and rule files inside `ai-rules/`, after resolving symbolic links. Profile names, `includes` entries, and local skill names must each be one path component (`[A-Za-z0-9][A-Za-z0-9._-]*`), which install and validation also enforce. Every write goes into the staging directory.
+Every read stays inside the dotfiles checkout. Before reading anything under them, export requires `ai-rules/`, `skills/local/`, `skills/profiles/`, each selected skill directory, each profile file (including every `includes` entry), and each rule file to be real directories or files, not symbolic links, that resolve inside the checkout. A profile that fails to parse is reported by name and position only, never by its contents. Profile names, `includes` entries, and local skill names must each be one path component (`[A-Za-z0-9][A-Za-z0-9._-]*`), which install and validation also enforce. Every write goes into the staging directory.
 
 The rules files are composed in Node with the same output as `ai-rules/scripts/compose-rules.sh <agent>` without `--with-metadata`, so `setup.ps1` can export without Bash. `ai-rules/base/global.md` is shared as is.
 
@@ -791,9 +791,9 @@ External skills are not copied. The manifest records them as `{source, skills}` 
 
 ### Dependency Closure
 
-A local skill depends on another local skill when one of its files links into that skill relative to the skill directory, such as `../delivery-common/scripts/check-branch-name.mjs` (see [Shared Scripts](#shared-scripts)). Export adds such skills transitively, prints `Added as a dependency: <skill> (required by <skills>)`, and records them with `origin: "dependency"`.
+A local skill depends on another local skill when a reference in one of its files, resolved from that file's directory, points into that skill, such as `../delivery-common/scripts/check-branch-name.mjs` in `SKILL.md` (see [Shared Scripts](#shared-scripts)). Files are decoded the same way as for the personal data check, so UTF-16 files count. Export adds such skills transitively, prints `Added as a dependency: <skill> (required by <skills>)`, and records them with `origin: "dependency"`.
 
-After copying, every relative `../<name>/...` reference in the bundle must resolve inside it, from the referring file or from its skill directory; a reference to a missing file, an unselected skill, or an `evals/` file fails the export. A dependency whose name is also a selected external skill fails as a name collision.
+After copying, every relative `../<name>/...` reference in the bundle must resolve, exactly as written from the referring file's directory, to an existing path inside the bundle's `skills/`; a reference to a missing file, an unselected skill, or an `evals/` file fails the export. A dependency whose name is also a selected external skill fails as a name collision.
 
 A skill name mentioned in prose, such as a workflow skill that runs `change-review`, is not a dependency. Name mentions cross provider boundaries: `delivery-common` names both GitHub and Azure DevOps skills, so following them would put nearly every workflow skill in any bundle. Choose those skills through profiles instead, for example `base,github` rather than `github` alone, as for installs.
 
@@ -825,10 +825,12 @@ A skill name mentioned in prose, such as a workflow skill that runs `change-revi
 
 Export builds the bundle in a staging directory next to `<out>`, runs the personal data check there, and only then moves it into place. Any failure removes the staging directory and leaves `<out>` as it was.
 
+On Linux and macOS, export refuses to write when the parent of `<out>` or any directory above it, on the given path or after resolving links, is writable by other users without the sticky bit, or is owned and writable by a user other than you and root. Another user could otherwise swap the staging or moved-aside directory for a link. Sticky shared directories such as `/tmp`, and directories under your home, are allowed. Windows skips this check.
+
 - A missing or empty `<out>` is written.
 - A non-empty `<out>` fails unless `--force` is given.
-- With `--force`, export replaces `<out>` only when it is a previous bundle: its `skills-bundle.json` is a complete schema version 1 manifest whose `files` are paths export can write (top-level bundle files or `skills/<name>/...`, no absolute or `..` paths), and it lists every file in the directory. Any other entry, such as a hand-added note or a `.git/` directory, fails even with `--force` and is named in the error, so export never deletes files it did not write.
-- To replace an existing directory, empty or a previous bundle, export moves it aside, checks the moved directory again, and only then moves the new bundle in. Any failure up to that point moves the old directory back. If the old directory cannot be removed afterwards, export succeeds, warns that the new bundle is installed, and names where the old one remains.
+- With `--force`, export replaces `<out>` only when it is a previous bundle: its `skills-bundle.json` is a schema version 1 manifest with exactly the documented fields and types, whose fields agree (each dependency names the skills that require it, `rules` matches `agents`), whose `files` are exactly what export writes for that content (`README.md`, the manifest, the rules files, and files under each listed skill outside its top-level `evals/`, with no absolute or `..` paths), and which lists every file in the directory. Any other entry, such as a hand-added note or a `.git/` directory, fails even with `--force` and is named in the error, so export never deletes files it did not write.
+- To replace an existing directory, empty or a previous bundle, export moves it aside, checks the moved directory again, and only then moves the new bundle in. Any failure up to that point moves the old directory back. Afterwards export removes only the files it verified, one by one, and then their now-empty directories. Anything added to the old directory after the check stays there; export then succeeds, warns that the new bundle is installed, and names where the old directory remains.
 
 ### Personal Data Check
 
@@ -840,9 +842,9 @@ Before the bundle is moved into place, export scans every file's path and conten
 
 The personal marker file is `${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/export-personal-markers` on every OS. Without `XDG_CONFIG_HOME`, export reads it under both the setup home (`SETUP_HOME`) and the OS home when they differ. It holds one literal marker per line; blank lines and lines starting with `#` are ignored. Keep it outside the repository, because the markers are personal data. A missing default file is allowed. `SETUP_EXPORT_PERSONAL_MARKERS_FILE` overrides the path; when it is empty or names a missing file, export fails.
 
-Files are scanned as UTF-8, or as UTF-16 when they start with a byte order mark; text containing NUL bytes is also scanned as UTF-16. Any other file that is not valid UTF-8 fails the export instead of going unscanned.
+Files are scanned as UTF-8, or as UTF-16 when they start with a byte order mark; text containing NUL bytes is also scanned as UTF-16. UTF-32, and any other file that is not valid UTF-8, fails the export instead of going unscanned. The marker file and rule files are decoded the same way, and must not contain NUL characters. A default marker file that is missing is skipped; any other error reading it fails the export.
 
-A match fails the export with each file and the kind of match, such as `skills/x/SKILL.md: git user.email`. Export never prints a matched value: every message, including the selection summary, shows the home path as `<home>` and other markers as `<redacted>`.
+A match fails the export with each file and the kind of match, such as `skills/x/SKILL.md: git user.email`. Export never prints a matched value: markers are loaded before arguments are parsed, and every message, including argument errors and the selection summary, shows the home path as `<home>` and other markers as `<redacted>`.
 
 ## External Skills
 
