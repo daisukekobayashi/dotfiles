@@ -1,6 +1,7 @@
 # tasklet
 
 tasklet is a small command-line task tracker that stores tasks in a local file.
+See [CONTRIBUTING](CONTRIBUTING.md) for how to run the tests.
 
 ## Core features
 

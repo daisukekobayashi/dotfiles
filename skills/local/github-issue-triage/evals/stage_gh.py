@@ -12,23 +12,34 @@ prints the launch environment. PATH is fixed, never inherited: the staged
 `bin`, then FIXED_PATH. Inherited Claude hooks run outside the sandbox with
 the agent process's PATH, so this keeps every bare hook command and `gh` off
 directories the candidate can write. GH_SNAPSHOT_LOG names the ledger in the
-workspace.
+workspace. Because the agent CLI usually lives outside FIXED_PATH, stage also
+resolves the prepared launch_argv's CLI to an absolute executable from the
+caller's PATH, before the fixed PATH applies, checks it lies outside the
+workspace, the temp directory, and the staging directory, and prints the
+launch_argv to use for both the pre-run checks and the launch.
 
 collect: within one deadline, opens `<workspace>/.snapshot/gh-calls.jsonl`
 without blocking or following symbolic links, accepts only a single-link
 regular file within a byte limit, validates each record as it reads it,
 copies the bytes to a new evidence directory outside the workspace, and prints
 the totals and the issues that successful `gh issue view` calls read in full.
+It derives each record's form and issue from its arguments and exit status
+with the stand-in's own command rules, loaded from the committed fixture, and
+rejects a record whose stored form or detail disagrees; grading uses only the
+derived values, and the byte totals are informational.
 Any failure exits non-zero, and the run is then excluded.
 """
 
 import argparse
 import contextlib
 import hashlib
+import importlib.machinery
+import importlib.util
 import io
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import stat
 import sys
@@ -111,8 +122,9 @@ def read_regular(root, relative, max_bytes=MAX_BYTES):
     return data
 
 
-def stage(run_json, dest, tmpdir):
+def stage(run_json, dest, tmpdir, caller_path=None):
     run = json.loads(Path(run_json).read_text())
+    caller_path = os.environ.get("PATH", "") if caller_path is None else caller_path
     workspace = os.path.realpath(run["workspace"])
     if not os.path.isabs(dest):
         raise ValueError("the staging directory must be an absolute path")
@@ -122,6 +134,12 @@ def stage(run_json, dest, tmpdir):
     # dest is new, so neither root can lie below it; only the other direction needs a check.
     if any(inside(dest, root) for root in (workspace, tmpdir)):
         raise ValueError("the staging directory must be outside the workspace and the run's temp directory")
+    cli = shutil.which(run["launch_argv"][0], path=caller_path)
+    if cli is None:
+        raise ValueError(f"cannot resolve {run['launch_argv'][0]} on the caller's PATH")
+    cli = os.path.realpath(cli)
+    if any(inside(cli, root) for root in (workspace, tmpdir, dest)):
+        raise ValueError(f"{cli} lies in a directory the candidate can write")
     dest.mkdir(mode=0o700)
     for relative in STAGED:
         data = read_regular(workspace, relative)
@@ -137,6 +155,7 @@ def stage(run_json, dest, tmpdir):
         "PATH": os.pathsep.join([str(dest / "bin"), *FIXED_PATH]),
         "GH_SNAPSHOT_LOG": os.path.join(workspace, LEDGER),
         "stand_in": str(dest / "bin/gh"),
+        "launch_argv": [cli, *run["launch_argv"][1:]],
     }
 
 
@@ -160,22 +179,61 @@ def record(line):
     return entry
 
 
-def summarize(data):
-    """Validate the ledger line by line, keeping only running totals."""
+def stand_in_rules():
+    """Load the committed stand-in, never the workspace copy, for its command rules."""
+    source = str(Path(__file__).resolve().parent / "files/tasklet/bin/gh")
+    loader = importlib.machinery.SourceFileLoader("gh_stand_in", source)
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader("gh_stand_in", loader))
+    loader.exec_module(module)
+    return module
+
+
+def derive(entry, rules, snapshot):
+    """Return the (form, detail) the arguments and exit status imply, or raise ValueError."""
+    try:
+        form, number = rules.match(entry["argv"], snapshot["repository"])
+    except rules.Refusal:
+        form, number = None, None
+    if entry["exit"] == 0:
+        if form is None:
+            raise ValueError("a successful record names an undocumented call")
+        items = snapshot["pull_requests"] if form == "pr view" else snapshot["issues"]
+        if number is not None and number not in {item["number"] for item in items}:
+            raise ValueError("a successful record names an unknown number")
+        derived = (form, number if form == "issue view" else None)
+    else:
+        derived = (None, None)
+    if (entry["form"], entry["detail"]) != derived:
+        raise ValueError("a ledger record's form or detail disagrees with its arguments")
+    return derived
+
+
+def summarize(data, snapshot):
+    """Validate the ledger line by line, keeping only running totals of derived values."""
+    rules = stand_in_rules()
     calls, total, by_form, detail, stand_ins = 0, 0, {}, set(), set()
     for raw in io.BytesIO(data):
         if not raw.strip():
             continue
         entry = record(raw)
+        form, number = derive(entry, rules, snapshot)
         calls += 1
         total += entry["stdout_bytes"]
-        key = entry["form"] or "refused"
+        key = form or "refused"
         by_form[key] = by_form.get(key, 0) + entry["stdout_bytes"]
-        if entry["detail"] is not None:
-            detail.add(entry["detail"])
+        if number is not None:
+            detail.add(number)
         stand_ins.add(entry["exe"])
     return {"calls": calls, "gh_bytes": total, "gh_bytes_by_form": by_form,
             "detail_issues": sorted(detail), "stand_ins": sorted(stand_ins)}
+
+
+def case_snapshot(run):
+    """Read the case's snapshot from the committed suite, not the workspace."""
+    suite_path = Path(run["suite"])
+    suite = json.loads(suite_path.read_text())
+    case = next(item for item in suite["evals"] if item["id"] == run["case_id"])
+    return json.loads((suite_path.parent / case["overlay"] / ".snapshot/issues.json").read_text())
 
 
 def collect(run_json, out, max_bytes=MAX_BYTES, seconds=DEADLINE_SECONDS):
@@ -185,7 +243,7 @@ def collect(run_json, out, max_bytes=MAX_BYTES, seconds=DEADLINE_SECONDS):
         raise ValueError("the evidence directory must be outside the workspace")
     with deadline(seconds):
         data = read_regular(run["workspace"], LEDGER, max_bytes)
-        summary = summarize(data)
+        summary = summarize(data, case_snapshot(run))
         out.mkdir(mode=0o700)
         with open(out / "gh-calls.jsonl", "xb") as handle:
             handle.write(data)

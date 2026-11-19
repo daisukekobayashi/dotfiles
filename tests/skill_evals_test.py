@@ -257,12 +257,20 @@ class SkillEvaluationTests(unittest.TestCase):
         self.workspaces.append(workspace)
         return result, workspace, output / "run.json"
 
+    def fake_cli(self, directory, name="claude"):
+        directory.mkdir(parents=True, exist_ok=True)
+        cli = directory / name
+        cli.write_text("#!/bin/sh\nexit 0\n")
+        cli.chmod(0o755)
+        return cli
+
     def stage_triage(self, case_id):
         result, workspace, run_json = self.prepare_triage(case_id)
         tmpdir = self.root / f"tmp-{len(self.workspaces)}"
         tmpdir.mkdir()
         dest = self.root / f"stage-{len(self.workspaces)}"
-        env = STAGE.stage(run_json, str(dest), tmpdir)
+        self.cli = self.fake_cli(self.root / "trusted-cli")
+        env = STAGE.stage(run_json, str(dest), tmpdir, str(self.cli.parent))
         self.staged.append(dest)
         return workspace, run_json, dest, env
 
@@ -295,6 +303,8 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertIn("a default run in addition names no parallel group", rule)
         self.assertIn("it comes from the arguments of reconciled ledger calls", rule)
         self.assertIn("A full-read run counts only when detail_issues holds every issue in read_scope.detail", rule)
+        self.assertIn("a detail-band regression only when a majority of that case's valid full-read runs", rule)
+        self.assertIn("inconclusive (suspected case defect)", rule)
         self.assertEqual(set(execution["recorded_fields"]), {
             "next", "current_wave", "next_wave", "parallel_groups", "detail_reads", "gh_bytes"})
         self.assertEqual(set(execution["gh_stand_in"]), {"stage", "collect", "forms", "note"})
@@ -305,6 +315,10 @@ class SkillEvaluationTests(unittest.TestCase):
         for agent in (claude, codex):
             self.assertIn("stage_gh.py stage", agent["policy"])
             self.assertIn("never inherited", agent["policy"])
+            self.assertIn("resolves the prepared launch_argv's CLI to an absolute executable", agent["policy"])
+            self.assertTrue(any("with the printed absolute CLI" in check for check in agent["pre_run_checks"]))
+            self.assertTrue(any("derives each record's form and issue from its arguments" in check
+                                for check in agent["post_run_checks"]))
             self.assertTrue(any("staged stand-in" in check and "hook command" in check
                                 for check in agent["pre_run_checks"]))
             collect = [i for i, check in enumerate(agent["post_run_checks"]) if "stage_gh.py collect" in check]
@@ -366,6 +380,10 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual([n for n, text in texts if re.search(r"(?i)supersed", text)], [20])
         self.assertEqual(superseding["issues"][0]["comments"][0]["body"].split()[:3],
                          ["Superseded", "by", "#23,"])
+        # Every current-wave issue is still open work in the fixture: #13's broken link exists.
+        readme = (files / "tasklet/README.md").read_text()
+        self.assertIn("(CONTRIBUTING.md)", readme)
+        self.assertFalse((files / "tasklet/CONTRIBUTING.md").exists())
         # The dependent's title names it a follow-up, which puts it in the detail band.
         dependent = self.triage_snapshot(scenarios["dependent-text-raises-blocker"]["default"])
         self.assertTrue(next(i for i in dependent["issues"] if i["number"] == 12)["title"]
@@ -400,24 +418,33 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual((dest / "bin/gh").read_bytes(), (workspace / "bin/gh").read_bytes())
         self.assertEqual(self.run_gh(env, ["repo", "view", "--json", "nameWithOwner,url,defaultBranchRef"]).returncode, 0)
 
+        # The agent CLI is resolved before the fixed PATH applies, and only from trusted directories.
+        self.assertEqual(env["launch_argv"], [os.path.realpath(self.cli), "--disable-slash-commands"])
+        for name, cli_path in (("missing", str(self.root / "empty-dir")),
+                               ("in-tmpdir", str(self.fake_cli(tmpdir / "bin").parent)),
+                               ("in-workspace", str(self.fake_cli(workspace / "cli").parent))):
+            with self.subTest(cli=name), self.assertRaises(ValueError):
+                STAGE.stage(run_json, str(self.root / f"stage-cli-{name}"), tmpdir, cli_path)
+            self.assertFalse((self.root / f"stage-cli-{name}").exists())
+        shutil.rmtree(workspace / "cli")
         for bad in ("relative-stage", str(workspace / "inside"), str(tmpdir / "inside"),
                     str(self.root / "a:b")):
             with self.subTest(dest=bad), self.assertRaises(ValueError):
-                STAGE.stage(run_json, bad, tmpdir)
+                STAGE.stage(run_json, bad, tmpdir, str(self.cli.parent))
             self.assertFalse(Path(bad).exists(), bad)
         # A different letter case names the same directory on a case-insensitive file system.
         alias = str(workspace).swapcase()
         if os.path.exists(alias):
             self.assertTrue(STAGE.inside(alias + "/inside", workspace))
             with self.assertRaises(ValueError):
-                STAGE.stage(run_json, alias + "/inside", tmpdir)
+                STAGE.stage(run_json, alias + "/inside", tmpdir, str(self.cli.parent))
         (workspace / "bin/gh").write_text("#!/bin/sh\necho changed\n")
         with self.assertRaises(ValueError):
-            STAGE.stage(run_json, str(self.root / "stage-changed"), tmpdir)
+            STAGE.stage(run_json, str(self.root / "stage-changed"), tmpdir, str(self.cli.parent))
         (workspace / "bin/gh").unlink()
         (workspace / "bin/gh").symlink_to(dest / "bin/gh")
         with self.assertRaises(OSError):
-            STAGE.stage(run_json, str(self.root / "stage-linked"), tmpdir)
+            STAGE.stage(run_json, str(self.root / "stage-linked"), tmpdir, str(self.cli.parent))
 
     def test_triage_collect_validates_a_regular_ledger_within_one_deadline(self):
         workspace, run_json, dest, env = self.stage_triage(5)
@@ -475,12 +502,23 @@ class SkillEvaluationTests(unittest.TestCase):
                            ("evidence-extra-key", json.dumps(dict(lines[0], extra=1)).encode() + b"\n"),
                            ("evidence-detail-without-view", json.dumps(dict(lines[1], detail=30)).encode() + b"\n"),
                            ("evidence-refusal-with-form", json.dumps(dict(lines[2], form="issue view")).encode() + b"\n"),
+                           # Stored values must equal what the arguments and exit status imply.
+                           ("evidence-detail-mismatch", json.dumps(dict(lines[0], detail=31)).encode() + b"\n"),
+                           ("evidence-detail-dropped", json.dumps(dict(lines[0], detail=None)).encode() + b"\n"),
+                           ("evidence-argv-mismatch", json.dumps(dict(lines[0], argv=[
+                               "issue", "view", "31", *lines[0]["argv"][3:]])).encode() + b"\n"),
+                           ("evidence-undocumented-success", json.dumps(dict(lines[1], argv=["auth", "status"])).encode() + b"\n"),
+                           ("evidence-unknown-number", json.dumps(dict(lines[0], detail=999, argv=[
+                               "issue", "view", "999", *lines[0]["argv"][3:]])).encode() + b"\n"),
                            ("evidence-long-line", b" " * (STAGE.MAX_LINE_BYTES + 1) + b"{}\n")):
             ledger_path.write_bytes(ledger + line)
             rejected(name, ValueError)
+        consistent = dict(lines[0], detail=31, argv=["issue", "view", "31", *lines[0]["argv"][3:]])
+        ledger_path.write_bytes(ledger + json.dumps(consistent).encode() + b"\n")
+        self.assertEqual(STAGE.collect(run_json, self.root / "evidence-consistent")["detail_issues"], [31, 32])
         ledger_path.write_bytes(ledger)
         # The deadline also covers validation and retention, not only the read.
-        with mock.patch.object(STAGE, "summarize", side_effect=lambda data: time.sleep(5)):
+        with mock.patch.object(STAGE, "summarize", side_effect=lambda data, snapshot: time.sleep(5)):
             rejected("evidence-slow", TimeoutError, seconds=0.2)
         self.assertEqual(STAGE.collect(run_json, self.root / "evidence-again")["calls"], 3)
 
@@ -599,7 +637,7 @@ class SkillEvaluationTests(unittest.TestCase):
                     else:
                         self.assertIsNone(entry["detail"], args)
                     self.assertEqual(entry["form"] is None, result.returncode != 0, args)
-                summary = STAGE.summarize((workspace / ".snapshot/gh-calls.jsonl").read_bytes())
+                summary = STAGE.summarize((workspace / ".snapshot/gh-calls.jsonl").read_bytes(), snapshot)
                 self.assertEqual(summary["detail_issues"], sorted(issues))
 
     def test_old_snapshot_is_supplied_without_the_judging_cases(self):
