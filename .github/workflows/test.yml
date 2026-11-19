@@ -99,6 +99,184 @@ jobs:
               print(f"| {seconds:.1f} | {cell(file)} | {cell(name)} |")
           EOF
 
+      # [temporary] Issue #222: measures where tests/list_processes.bats spends its
+      # time. Revert before merge. It never fails the job.
+      - name: "[temporary] Measure list_processes.bats"
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          m="${RUNNER_TEMP}/measure"
+          shims="${m}/shims"
+          log="${m}/calls.tsv"
+          mkdir -p "${shims}"
+          : >"${log}"
+          bash_path="$(command -v bash)"
+          real_ps="$(command -v ps)"
+          real_env="$(command -v env)"
+          real_sleep="$(command -v sleep)"
+
+          # ps and lsof: time the real call and log tool, test, the bash running the
+          # script, the -o field, start, end.
+          for tool in ps lsof; do
+            real="$(command -v "${tool}" || true)"
+            [[ -n "${real}" ]] || continue
+            cat >"${shims}/${tool}" <<EOF
+          #!${bash_path}
+          field=- prev=
+          for arg in "\$@"; do
+            [[ "\${prev}" == -o ]] && field="\${arg}"
+            prev="\${arg}"
+          done
+          start="\${EPOCHREALTIME}"
+          "${real}" "\$@"
+          rc=\$?
+          end="\${EPOCHREALTIME}"
+          caller="\${MEASURE_SHELL:-}"
+          if [[ -z "\${caller}" ]]; then
+            parent=""
+            if [[ -r "/proc/\${PPID}/cmdline" ]]; then
+              while IFS= read -r -d '' arg; do parent+="\${arg} "; done <"/proc/\${PPID}/cmdline"
+            else
+              parent="\$("${real_ps}" -o args= -p "\${PPID}" 2>/dev/null)"
+            fi
+            case "\${parent}" in
+              *list-processes*) caller="script run directly" ;;
+              *) caller=harness ;;
+            esac
+          fi
+          printf '%s\t%s\t%s\t%s\t%s\t%s\n' ${tool} "\${BATS_TEST_DESCRIPTION:-?}" "\${caller}" \
+            "\${field}" "\${start}" "\${end}" >>"${log}"
+          exit "\${rc}"
+          EOF
+          done
+
+          # sleep: log the requested time, then become the real sleep with the same
+          # argv, so fixture pids and their args stay as the tests expect.
+          cat >"${shims}/sleep" <<EOF
+          #!${bash_path}
+          printf 'sleep\t%s\t%s\t%s\t-\t-\n' "\${BATS_TEST_DESCRIPTION:-?}" "\${MEASURE_SHELL:-harness}" "\$1" >>"${log}"
+          exec -a sleep "${real_sleep}" "\$@"
+          EOF
+
+          # env: run_lookup starts the script as `env VAR=... <bash> <script>`; export
+          # that bash so the ps and lsof shims below it can attribute their calls.
+          cat >"${shims}/env" <<EOF
+          #!${bash_path}
+          for arg in "\$@"; do
+            case "\${arg}" in -* | *=*) continue ;; esac
+            [[ "\${arg##*/}" == bash ]] && export MEASURE_SHELL="\${arg}"
+            break
+          done
+          exec "${real_env}" "\$@"
+          EOF
+          chmod +x "${shims}"/*
+
+          start="${EPOCHREALTIME}"
+          status=0
+          PATH="${shims}:${PATH}" bats --timing tests/list_processes.bats >"${m}/tap.txt" 2>&1 || status=$?
+          end="${EPOCHREALTIME}"
+          cat "${m}/tap.txt"
+
+          python3 - "${log}" "${m}/tap.txt" "${status}" "${start}" "${end}" <<'PY' | tee -a "${GITHUB_STEP_SUMMARY}"
+          import collections
+          import os
+          import re
+          import subprocess
+          import sys
+
+          log, tap, status, start, end = sys.argv[1:]
+
+
+          def num(value):
+              return float(value.replace(",", "."))
+
+
+          versions = {}
+
+
+          def label(shell):
+              if not shell.startswith("/"):
+                  return shell
+              if shell not in versions:
+                  try:
+                      versions[shell] = subprocess.run(
+                          [shell, "-c", "echo ${BASH_VERSION}"], capture_output=True, text=True, timeout=10
+                      ).stdout.strip() or "?"
+                  except (OSError, subprocess.SubprocessError):
+                      versions[shell] = "?"
+              return f"{shell} ({versions[shell]})"
+
+
+          calls = collections.defaultdict(lambda: [0, 0.0])  # (test, shell, kind) -> [count, seconds]
+          fields = collections.defaultdict(lambda: [0, 0.0])  # (shell, field) -> [count, seconds]
+          with open(log, encoding="utf-8", errors="replace") as lines:
+              for line in lines:
+                  parts = line.rstrip("\n").split("\t")
+                  if len(parts) != 6:
+                      continue
+                  tool, test, shell, field, t0, t1 = parts
+                  shell = label(shell)
+                  if tool == "sleep":
+                      try:
+                          seconds = num(field)
+                      except ValueError:
+                          continue
+                      kind = "fixture" if seconds >= 10 else "wait"
+                      calls[(test, shell, kind)][0] += 1
+                      calls[(test, shell, kind)][1] += 0 if kind == "fixture" else seconds
+                      continue
+                  seconds = num(t1) - num(t0)
+                  calls[(test, shell, tool)][0] += 1
+                  calls[(test, shell, tool)][1] += seconds
+                  if tool == "ps":
+                      fields[(shell, field)][0] += 1
+                      fields[(shell, field)][1] += seconds
+
+          times = {}
+          with open(tap, encoding="utf-8", errors="replace") as lines:
+              for line in lines:
+                  match = re.match(r"(?:not )?ok \d+ (.*?)(?: # skip.*?)?(?: #)? in (\d+) ?ms$", line.rstrip("\n"))
+                  if match:
+                      times[match.group(1)] = int(match.group(2)) / 1000
+
+          print(f"### [temporary] list_processes.bats measurement ({os.environ.get('RUNNER_OS', '?')})\n")
+          print(f"bats exit status {status}, {num(end) - num(start):.1f}s in total. "
+                "Waits are requested sleep times under 10s; fixtures are longer sleeps started.\n")
+
+
+          def cell(count_seconds, with_seconds=True):
+              count, seconds = count_seconds
+              return f"{count} / {seconds:.1f}s" if with_seconds else str(count)
+
+
+          print("#### By caller\n")
+          print("| Caller | lsof calls / time | ps calls / time | waits / time | fixtures |")
+          print("|---|---|---|---|---|")
+          totals = collections.defaultdict(lambda: [0, 0.0])
+          for (test, shell, kind), value in calls.items():
+              totals[(shell, kind)][0] += value[0]
+              totals[(shell, kind)][1] += value[1]
+          for shell in sorted({shell for shell, _ in totals}):
+              print(f"| {shell} | {cell(totals[(shell, 'lsof')])} | {cell(totals[(shell, 'ps')])} | "
+                    f"{cell(totals[(shell, 'wait')])} | {cell(totals[(shell, 'fixture')], False)} |")
+
+          print("\n#### ps calls by lookup\n")
+          print("| Caller | -o field | calls | time |")
+          print("|---|---|---:|---:|")
+          for (shell, field), (count, seconds) in sorted(fields.items()):
+              print(f"| {shell} | `{field}` | {count} | {seconds:.1f}s |")
+
+          print("\n#### Slowest tests\n")
+          print("| Test | total | caller | lsof | ps | waits | fixtures |")
+          print("|---|---:|---|---|---|---|---|")
+          for test, seconds in sorted(times.items(), key=lambda item: item[1], reverse=True)[:15]:
+              shells = sorted({shell for t, shell, _ in calls if t == test})
+              for shell in shells:
+                  print(f"| {test.replace('|', '/')} | {seconds:.1f}s | {shell} | {cell(calls[(test, shell, 'lsof')])} | "
+                        f"{cell(calls[(test, shell, 'ps')])} | {cell(calls[(test, shell, 'wait')])} | "
+                        f"{cell(calls[(test, shell, 'fixture')], False)} |")
+          PY
+
   windows:
     runs-on: windows-latest
     env:
