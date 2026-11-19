@@ -82,7 +82,7 @@ Give each worker a focused prompt with:
 - a reminder that other workers may be active in sibling worktrees, so do not revert or edit outside the assigned scope
 - a decision rule: choose defaults only for implementation tactics; return contract, boundary, compatibility, and security decisions to the coordinator as questions with options and a recommendation, even when they look low-risk, and continue only work that does not depend on them; never ask the user directly
 - a check rule: run checks under [Foreground Checks](../delivery-common/SKILL.md#foreground-checks)
-- the expected return format: status, files changed, files changed outside its touched areas, tests run, open questions, every default chosen, blockers, and any follow-up needed
+- the expected return format: status, files changed, files changed outside its touched areas, tests run, open questions, every default chosen, blockers, and any follow-up needed; when the caller assigns report paths, as a full report in that file and only the worker summary in the reply, under [Report Handoff](../delivery-common/references/report-handoff.md#worker-summary)
 
 Do not use one worker for all requested issues. Do not let multiple workers edit
 the same worktree. If a worker reports that its issue depends on another active

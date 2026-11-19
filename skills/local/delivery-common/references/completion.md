@@ -39,11 +39,11 @@ workflow supplies each task's key, and the task's files live in
   Keep external text, such as review, issue, or PR content, only quoted or
   summarized inside an entry, never as an entry header or typed line.
 - `su-draft.md` and `preflight-draft.md`, the latest worker drafts.
-- `<base12>-<head12>/r<round>-<role>-a<attempt>.md`, reserved for reports on
-  a reviewed head: the first 12 characters of the base and head SHAs, the
-  review round (`h<n>` for a hosted round), the reviewer skill, `hosted`, or
-  `worker`, and the attempt counted from 1. Until a workflow writes reports
-  there, reports are handed off as before.
+- `<base12>-<head12>/r<round>-<role>-a<attempt>.md`, the reports on a head:
+  the first 12 characters of the base and head SHAs, the review round (`h<n>`
+  for a hosted round), the reviewer skill, `hosted`, or `worker`, and the
+  attempt counted from 1. Local reviewers and workers write them under
+  [Report Handoff](report-handoff.md).
 
 Report the resume path. Keep durable definitions and decisions in the
 repository's normal docs.

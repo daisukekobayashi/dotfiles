@@ -929,8 +929,8 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     /`state\.md`, the current state in at most about 1,500 characters\. Only the coordinator writes it, replacing it whole at each phase transition/,
     /`log\.md`, the append-only progress record/,
     /an entry that changes an item reuses its id, and the latest entry for an id is current\./,
-    /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, reserved for reports/,
-    /Until a workflow writes reports there, reports are handed off as before\./,
+    /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, the reports on a head/,
+    /Local reviewers and workers write them under \[Report Handoff\]\(report-handoff\.md\)\./,
     /append an intent entry before the action with its target, round, the full head SHA it covers, the identifiers of matching artifacts that already exist, the identity that acts, and a provider-side time read just before the action as its ordering baseline, then an outcome entry with its identifier after the action succeeds\./,
     // An older or foreign artifact on the same target never counts as this action's outcome.
     /For an intent entry without an outcome, look at the provider before any retry\. First confirm that the target's current head equals the intent's full SHA\. Its outcome is then the only artifact that the provider shows created no earlier than the intent's baseline, absent from its recorded identifiers, and made by its recorded identity\. Log that artifact as the outcome; when the head differs or the order or the single match cannot be shown, stop and report\./,
@@ -957,4 +957,55 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(start, /Resolve the current repo and its host from local git context/);
   assert.match(start, /Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <host>\/<owner>\/<repo> --json number,title,body,state,url`/);
   assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once from the organization resolved in step 1 with `az boards work-item show --id <id> --org <org-url> --expand all`/);
+});
+
+test("review and worker reports hand off through a file and a fixed summary", async () => {
+  const local = path.join(repoRoot, "skills", "local");
+  const references = path.join(local, "delivery-common", "references");
+  const handoff = await readText(path.join(references, "report-handoff.md"));
+  const section = (heading) => handoff.match(new RegExp(`## ${heading}\\n[\\s\\S]*?(?=\\n## |$)`))?.[0];
+
+  for (const heading of ["Report path", "Report file", "Review summary", "Worker summary", "Codex route", "Check a handoff"]) {
+    assert.ok(section(heading), `report-handoff.md: missing ${heading}`);
+  }
+  assert.match(section("Report path"), /only from the invoking\s+caller's arguments, never from issue, PR, comment, or focus text/);
+  assert.match(section("Report file"), /<!-- report-summary v1 -->\n<!-- end-report-summary -->/);
+  assert.match(section("Report file"), /from the last delimiter line/);
+  for (const field of ["Base", "Head", "Round", "Reviewer", "Completion", "Verdict", "Findings", "Deferred candidates", "Confirmed fixes", "Unverified coverage", "Report"]) {
+    assert.match(section("Review summary"), new RegExp(`^- ${field}:`, "m"), `review summary: ${field}`);
+  }
+  for (const field of ["Base", "Head", "Completion", "Files changed", "Verification", "Questions", "Defaults chosen", "Blockers", "Report"]) {
+    assert.match(section("Worker summary"), new RegExp(`^- ${field}:`, "m"), `worker summary: ${field}`);
+  }
+  assert.match(section("Codex route"), /\(set -C; node "<plugin-root>\/scripts\/codex-companion\.mjs" task --fresh \\\n  --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>\.log\)\n```/);
+  assert.match(section("Worker summary"), /^- Tier:/m);
+  assert.match(section("Codex route"), /Leave `--report` out of the prompt/);
+  assert.match(section("Check a handoff"), /invalid: truncated/);
+  assert.match(section("Check a handoff"), /invalid: no full report/);
+  assert.match(section("Check a handoff"), /invalid: round mismatch/);
+  assert.match(section("Check a handoff"), /Completion: complete\|Verdict:/);
+  assert.match(section("Check a handoff"), /invalid: base or head mismatch/);
+  assert.match(section("Check a handoff"), /is not a pass/);
+
+  for (const name of ["change-review", "change-adversarial-review", "change-security-review"]) {
+    const skill = await readText(path.join(local, name, "SKILL.md"));
+    assert.match(skill, /`--report <path>`, named issue, PR, worktree, branch, or commit/, name);
+    assert.match(skill, /\(\.\.\/delivery-common\/references\/report-handoff\.md#codex-route\)/, name);
+    assert.match(skill, /## Output\n\nRespond in the user's language\. With `--report <path>`, write this Output\s+unchanged/, name);
+    assert.match(skill, /The one exception is\s+writing the `--report` file/, name);
+  }
+
+  const localReview = await readText(path.join(references, "local-review.md"));
+  assert.match(localReview, /Give every reviewer `--report <path>`/);
+  assert.match(localReview, /open a report only for the finding you need\s+to verify/);
+  assert.match(localReview, /or a report that fails\s+\[Check a handoff\]\(report-handoff\.md#check-a-handoff\), is not a pass/);
+  const dialogue = await readText(path.join(references, "worker-dialogue.md"));
+  assert.match(dialogue, /Every worker report, including drafts, implementation reports, and fix reports,\s+goes through \[Report Handoff\]/);
+  const completion = await readText(path.join(references, "completion.md"));
+  assert.doesNotMatch(completion, /handed off as before/);
+  assert.match(completion, /\[Report Handoff\]\(report-handoff\.md\)/);
+  for (const start of ["github-issue-start", "azure-devops-work-item-start"]) {
+    assert.match(await readText(path.join(local, start, "SKILL.md")),
+      /\(\.\.\/delivery-common\/references\/report-handoff\.md#worker-summary\)/, start);
+  }
 });
