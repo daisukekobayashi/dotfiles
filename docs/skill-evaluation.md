@@ -88,46 +88,41 @@ number of issues, rounds, and phases) from their Claude Code transcripts,
 separate files, so these numbers cover the coordinator alone.
 
 ```bash
-f="$HOME/.claude/projects/PROJECT/SESSION.jsonl"  # replace PROJECT and SESSION
-# Peak context tokens of the coordinator.
-jq -s '[.[] | select(.type=="assistant" and (.isSidechain|not) and .message.usage)
-  | .message.usage | .input_tokens + (.cache_creation_input_tokens//0)
-  + (.cache_read_input_tokens//0)] | max' "$f"
-# Compaction count.
-jq -s '[.[] | select(.type=="system" and .subtype=="compact_boundary")] | length' "$f"
-# Characters by tool: writes cost their input, reads and fetches their result.
-jq -s '[.[] | select(.isSidechain|not)] as $e
-  | ([$e[] | select(.type=="assistant") | .message.content[]? | select(.type=="tool_use")
-      | {key: .id, value: {
-          kind: (if .name=="Bash" then (.input.command
-              | (split("\n")[0]) as $line
-              | "\\btee\\b|(^|[^0-9&>])>>?[ ]*(?!/dev/null|&)[^ ]" as $redirect
-              | if ($line | test("<<[^<]") and (test("\\$\\(|`|\\b(ba)?sh -c") | not)) then "Bash:write"
-                elif test("[\u0027\"`]|\\$\\(|\\b(ba)?sh -c") and test($redirect) then "Bash:ambiguous"
-                elif test($redirect) then "Bash:write"
-                elif test("(^|[;&| ])(cat|sed -n|head|tail) [^|]*\\.md") then "Bash:read-md"
-                elif test("gh issue (view|list)|az boards work-item show") then "Bash:issue-fetch"
-                else "Bash:other" end)
-            else .name end),
-          input: ((.input.command // .input.content // .input.new_string // (.input | tostring)) | length)}}]
-      | from_entries) as $use
-  | [$e[] | select(.type=="user") | .message.content[]? | select(.type=="tool_result")
-      | ($use[.tool_use_id] // {kind: "?", input: 0})
-        + {result: (.content | if type=="string" then length
-            else ([.[]? | .text? // ""] | add // "" | length) end)}]
-  | group_by(.kind) | map({kind: .[0].kind, calls: length,
-      input_chars: (map(.input) | add), result_chars: (map(.result) | add)})
-  | sort_by(-(.input_chars + .result_chars))' "$f"
+scripts/delivery-context.sh ~/.claude/projects/PROJECT/SESSION.jsonl
 ```
 
-Also count missed reviews and decisions: a review the tier selected that did
-not run, or a user decision the coordinator acted on without asking. The last
-query is a heuristic for comparing like with like, not a shell parser. It
-counts a heredoc or an unquoted `tee` or redirect as a write before any read.
-A command with a quote, `$(`, a backtick, or `bash -c` or `sh -c` that also has
-a `>` or `tee` anywhere is `Bash:ambiguous`; classify those calls manually.
-Compare `input_chars` for writes and `result_chars` for reads and issue
-fetches.
+It prints one JSON object: `peak_tokens` (peak context tokens of the
+coordinator), `compactions` (compaction count), and `tools` (calls and
+characters by tool kind; writes cost their input, reads and fetches their
+result). Compare `input_chars` for writes and `result_chars` for reads and
+issue fetches. `tests/delivery_context_recipe.bats` covers the
+classification with synthetic transcripts.
+
+Also count missed reviews and decisions by hand: a review the tier selected
+that did not run, or a user decision the coordinator acted on without asking.
+Check the reviewers each round's tier selected in the progress record against
+the review reports and log entries, and the decisions it records against the
+transcript's questions to the user.
+
+The `Bash` kinds are a heuristic for comparing like with like, not a shell
+parser:
+
+- A heredoc on the first line is `Bash:write`, or `Bash:ambiguous` when that
+  line also has a quote, `$(`, a backtick, `bash -c`, or `sh -c`. A quoted
+  delimiter such as `<<'EOF'` does not count as a quote.
+- A `tee` or a redirect (`>`, `>>`, `N>`, `N>>`, `&>`, `&>>`; not to
+  `/dev/null` or `>&N`) is `Bash:write`, or `Bash:ambiguous` when the command
+  has a quote, `$(`, a backtick, `bash -c`, or `sh -c` anywhere.
+- Writes are checked before reads. Classify `Bash:ambiguous` calls manually.
+
+Before comparing two deliveries, check that they are comparable:
+
+- The installed skills match the base being measured: compare the session
+  start with the reflog of the branch the skills are installed from.
+- Note reads of the skills under change in the task's own worktree, and the
+  same file read twice through different paths, such as `.claude/skills` and
+  `skills/local`.
+- The review route matches, such as Codex for local reviews.
 
 A delivery-skill change can be checked before such a run with a static
 **chars-read proxy**: for each phase in delivery-common's Phase sections, sum

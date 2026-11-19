@@ -86,16 +86,33 @@ hooks・memories・plugins・apps・ブラウザー・コンピューター操�
 issue数・ラウンド数・フェーズが近い2回のデリバリーを、Claude Codeの
 transcript `~/.claude*/projects/<project>/<session>.jsonl` から測ります。
 サブエージェントのtranscriptは別ファイルなので、数値は進行役だけのものです。
-ピークトークン数、compaction回数、ツール別の結果文字数のjqは
-[英語版](skill-evaluation.md#delivery-coordinator-context)を使います。
+測定には `scripts/delivery-context.sh <session.jsonl>` を使います。
+出力は1つのJSONで、`peak_tokens`(進行役のピークトークン数)、`compactions`
+(compaction回数)、`tools`(ツール種別ごとの呼び出し数と文字数)を含みます。
+書き込みは `input_chars`、読み込みとissue取得は `result_chars` で比べます。
+分類は `tests/delivery_context_recipe.bats` が合成transcriptで確かめます。
+`Bash` の分類規則と比較前の確認項目は
+[英語版](skill-evaluation.md#delivery-coordinator-context)を参照してください。
 
 あわせて、見落としたレビュー(tierが選んだのに実行されなかったもの)と
-判断(ユーザーに聞かずに進めたもの)を数えます。最後のjqは同じ条件同士を
-比べるための近似で、シェルの構文解析はしません。heredocと、引用符の外にある
-`tee`・リダイレクトを読み込みより先に書き込みと判定します。引用符・`$(`・
-バッククォート・`bash -c`・`sh -c` のいずれかを含み、どこかに `>` か `tee` も
-ある呼び出しは `Bash:ambiguous` になるので、手作業で分類します。書き込みは
-`input_chars`、読み込みとissue取得は `result_chars` で比べます。
+判断(ユーザーに聞かずに進めたもの)を手作業で数えます。進捗記録にある
+各ラウンドのtierが選んだレビュアーをレビュー結果とログに、記録された判断を
+transcript上のユーザーへの質問に照らします。
+
+`Bash` の分類は同じ条件同士を比べるための近似で、シェルの構文解析はしません。
+1行目のheredocは書き込みで、同じ行に引用符・`$(`・バッククォート・`bash -c`・
+`sh -c` があれば `Bash:ambiguous` です(`<<'EOF'` のような区切り語の引用符は
+数えません)。`tee` とリダイレクト(`>`・`>>`・`N>`・`N>>`・`&>`・`&>>`。
+`/dev/null` と `>&N` は除く)は書き込みで、コマンドのどこかに引用符・`$(`・
+バッククォート・`bash -c`・`sh -c` があれば `Bash:ambiguous` です。
+書き込みの判定は読み込みより先です。`Bash:ambiguous` は手作業で分類します。
+
+比べる前に、2回のデリバリーが比較できるか確かめます。インストール済みの
+スキルが測定対象のベースと一致すること(セッション開始時刻とスキルの
+インストール元ブランチのreflogを比べる)、作業worktree内の変更中スキルの
+読み込みや、`.claude/skills` と `skills/local` のような別経路からの同じ
+ファイルの二重読み込みがないか、レビュー経路(ローカルレビューにCodexを
+使うかなど)が同じかを確認します。
 
 実行前の確認には静的な**読み込み文字数の代理指標**を使えます。
 delivery-commonのPhase sectionsの各フェーズについて、`delivery-common/SKILL.md`

@@ -45,7 +45,7 @@ jobs:
 
       - name: ShellCheck
         if: runner.os == 'Linux'
-        run: shellcheck -S warning setup.sh lib/common.sh setup/*.sh tests/setup_suite.bash tests/helpers/*.bash tests/*.bats
+        run: shellcheck -S warning setup.sh lib/common.sh setup/*.sh scripts/delivery-context.sh tests/setup_suite.bash tests/helpers/*.bash tests/*.bats
 
       - name: Node tests
         run: npm --prefix setup test
