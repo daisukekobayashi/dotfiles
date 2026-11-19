@@ -432,7 +432,19 @@ test("triage skills read item text only for the shared detail band", async () =>
   assert.match(azure, /rel=='System\.LinkTypes\.Hierarchy-Reverse' \|\| rel=='ArtifactLink'/);
   assert.match(azure, /az devops invoke --area wit --resource comments [^`]*--api-version 7\.1-preview --query/);
   assert.doesNotMatch(azure, /--api-version \d+\.\d+-preview\.\d/, "az devops invoke cannot parse a resource version");
+  assert.match(
+    azure,
+    /`\[System\.TeamProject\] = '<project>'` and the resolved project name, never\s+`@project`/,
+    "az boards query leaves @project unresolved and returns no rows",
+  );
+  assert.match(
+    azure,
+    /fails with `TF51535: Cannot find field`[^.]*;\s+repeat the read without the field it\s+names\./,
+    "a process without ReproSteps or AcceptanceCriteria fails the whole detail read",
+  );
   const beads = await readText(path.join(repoRoot, "skills", "local", "beads-issue-triage", "SKILL.md"));
+  assert.match(beads, /`bd ready --brief --json`/);
   assert.match(beads, /`bd list --status=open,in_progress,blocked,hooked --brief --json --limit 0`/);
+  assert.match(beads, /`bd blocked --json=false`/, "bd blocked prints descriptions when the workspace sets json: true");
   assert.match(beads, /`bd show <id> --json --include-comments --brief-deps`/);
 });
