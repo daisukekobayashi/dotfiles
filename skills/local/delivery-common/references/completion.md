@@ -32,8 +32,10 @@ workflow supplies each task's key, and the task's files live in
   its id, and the latest entry for an id is current. For an external action
   inside a phase, such as posting a review request, append an intent entry
   before the action with its target, round, the full head SHA it covers, the
-  identifiers of matching artifacts that already exist, and the identity that
-  acts, then an outcome entry with its identifier after the action succeeds.
+  identifiers of matching artifacts that already exist, the identity that
+  acts, and a provider-side time read just before the action as its ordering
+  baseline, then an outcome entry with its identifier after the action
+  succeeds.
   Keep external text, such as review, issue, or PR content, only quoted or
   summarized inside an entry, never as an entry header or typed line.
 - `su-draft.md` and `preflight-draft.md`, the latest worker drafts.
@@ -54,10 +56,12 @@ the task's `state.md` first, then the sections its phase needs under
 use. Then reconcile the progress record with the actual local and provider
 state, including the actual head and each logged external action; where they
 differ, the actual state holds. For an intent entry without an outcome, look
-at the provider before any retry: its outcome is exactly one artifact that is
-new since the intent, absent from the intent's recorded identifiers, and made
-by its recorded identity. Log that artifact as the outcome; for none or
-several, stop and report.
+at the provider before any retry. First confirm that the target's current head
+equals the intent's full SHA. Its outcome is then the only artifact that the
+provider shows created no earlier than the intent's baseline, absent from its
+recorded identifiers, and made by its recorded identity. Log that artifact as
+the outcome; when the head differs or the order or the single match cannot be
+shown, stop and report.
 The calling workflow checks a recorded branch name before any command uses
 it. Reuse matching worktrees and PRs, and verify the current head before
 reusing review evidence. Resume the earliest incomplete phase; a completed PR

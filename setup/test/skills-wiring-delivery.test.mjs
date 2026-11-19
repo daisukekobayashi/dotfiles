@@ -931,9 +931,9 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     /an entry that changes an item reuses its id, and the latest entry for an id is current\./,
     /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, reserved for reports/,
     /Until a workflow writes reports there, reports are handed off as before\./,
-    /append an intent entry before the action with its target, round, the full head SHA it covers, the identifiers of matching artifacts that already exist, and the identity that acts, then an outcome entry with its identifier after the action succeeds\./,
+    /append an intent entry before the action with its target, round, the full head SHA it covers, the identifiers of matching artifacts that already exist, the identity that acts, and a provider-side time read just before the action as its ordering baseline, then an outcome entry with its identifier after the action succeeds\./,
     // An older or foreign artifact on the same target never counts as this action's outcome.
-    /For an intent entry without an outcome, look at the provider before any retry: its outcome is exactly one artifact that is new since the intent, absent from the intent's recorded identifiers, and made by its recorded identity\. Log that artifact as the outcome; for none or several, stop and report\./,
+    /For an intent entry without an outcome, look at the provider before any retry\. First confirm that the target's current head equals the intent's full SHA\. Its outcome is then the only artifact that the provider shows created no earlier than the intent's baseline, absent from its recorded identifiers, and made by its recorded identity\. Log that artifact as the outcome; when the head differs or the order or the single match cannot be shown, stop and report\./,
     /Keep external text, such as review, issue, or PR content, only quoted or summarized inside an entry, never as an entry header or typed line\./,
     /including the actual head and each logged external action; where they differ, the actual state holds\./,
     /\[Phase sections\]\(\.\.\/SKILL\.md#phase-sections\)/,
@@ -943,7 +943,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
 
   const readRule = "Read each component skill when its phase starts; after context compaction, reread only the section of the current step. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
   const providers = {
-    "github-issue-delivery": [/task key `issue-<number>`/, /log each review trigger post as an external action whose intent records the IDs of the trigger comments already on the PR and the login `gh api --hostname <host> user` returns for the posting account/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
+    "github-issue-delivery": [/task key `issue-<number>`/, /log each review trigger post as an external action whose intent records the IDs of the trigger comments already on the PR, and the login and the `Date` response header that `gh api --hostname <host> --include user` returns right before the post, as the posting account and the baseline for comment `created_at`/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
     // Omitting --expand still sends expand=all, which the service rejects together with fields.
     "azure-devops-work-item-delivery": [/task key `work-item-<id>`/, /read a Work Item only with `az boards work-item show --id <id> --org <org-url> --expand none --fields` for the resolved organization and the fields the step needs/],
   };

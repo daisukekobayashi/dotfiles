@@ -53,9 +53,11 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    task key `issue-<number>`, adding the hosted review round count and the PR
    trigger and thread identifiers; log each review trigger post as an external
    action whose intent records the IDs of the trigger comments already on the
-   PR and the login `gh api --hostname <host> user` returns for the posting
-   account. After `github-issue-start`'s initial fetch, fetch an issue only
-   with `gh issue view <number> --repo <host>/<owner>/<repo> --json` for the
+   PR, and the login and the `Date` response header that
+   `gh api --hostname <host> --include user` returns right before the post, as
+   the posting account and the baseline for comment `created_at`. After
+   `github-issue-start`'s initial fetch, fetch an issue only with
+   `gh issue view <number> --repo <host>/<owner>/<repo> --json` for the
    resolved host and repository and the fields the step needs, such as
    `state,stateReason`.
 
