@@ -94,8 +94,9 @@ a read-only directory outside every path the candidate can write and prints a
 fixed launch `PATH`, never inherited: the staged copy, then `/usr/bin`, `/bin`,
 `/usr/sbin`, and `/sbin`. Because the agent CLI is usually elsewhere, `stage`
 first resolves it to an absolute executable from the coordinator's `PATH`,
-rejects one the candidate could write, and prints the launch arguments with
-that path for both the pre-run checks and the launch. Inherited Claude hooks
+along with the interpreter of a `#!/usr/bin/env <interpreter>` launcher,
+rejects one it cannot resolve or the candidate could write, and prints the
+launch arguments with those paths for both the pre-run checks and the launch. Inherited Claude hooks
 run outside the sandbox with the fixed `PATH`, and a pre-run check records
 that every hook executable resolves outside the writable roots or not at all. After the run and before cleanup,
 `stage_gh.py collect`, within one deadline, opens the call log without

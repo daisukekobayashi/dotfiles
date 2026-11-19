@@ -33,8 +33,6 @@ Any failure exits non-zero, and the run is then excluded.
 import argparse
 import contextlib
 import hashlib
-import importlib.machinery
-import importlib.util
 import io
 import json
 import os
@@ -43,6 +41,7 @@ import shutil
 import signal
 import stat
 import sys
+import types
 
 STAGED = ("bin/gh", ".snapshot/issues.json")
 LEDGER = ".snapshot/gh-calls.jsonl"
@@ -122,6 +121,37 @@ def read_regular(root, relative, max_bytes=MAX_BYTES):
     return data
 
 
+def resolve_outside(name, caller_path, untrusted):
+    found = shutil.which(name, path=caller_path)
+    if found is None:
+        raise ValueError(f"cannot resolve {name} on the caller's PATH")
+    found = os.path.realpath(found)
+    if any(inside(found, root) for root in untrusted):
+        raise ValueError(f"{found} lies in a directory the candidate can write")
+    return found
+
+
+def trusted_executable(name, caller_path, untrusted):
+    """Return the argv prefix that runs name without a PATH lookup at launch.
+
+    A launcher whose shebang is `#!/usr/bin/env <interpreter>` would look the
+    interpreter up on the fixed PATH, so the interpreter is resolved here too
+    and placed first. Any other env shebang, such as one with options, is
+    refused; a shebang that names an absolute interpreter needs no lookup.
+    """
+    launcher = resolve_outside(name, caller_path, untrusted)
+    with open(launcher, "rb") as handle:
+        first = handle.read(256).split(b"\n", 1)[0]
+    if not first.startswith(b"#!"):
+        return [launcher]
+    words = first[2:].decode(errors="replace").split()
+    if not words or os.path.basename(words[0]) != "env":
+        return [launcher]
+    if len(words) != 2 or words[1].startswith("-"):
+        raise ValueError(f"unsupported env shebang in {launcher}: {first.decode(errors='replace')}")
+    return [resolve_outside(words[1], caller_path, untrusted), launcher]
+
+
 def stage(run_json, dest, tmpdir, caller_path=None):
     run = json.loads(Path(run_json).read_text())
     caller_path = os.environ.get("PATH", "") if caller_path is None else caller_path
@@ -134,12 +164,7 @@ def stage(run_json, dest, tmpdir, caller_path=None):
     # dest is new, so neither root can lie below it; only the other direction needs a check.
     if any(inside(dest, root) for root in (workspace, tmpdir)):
         raise ValueError("the staging directory must be outside the workspace and the run's temp directory")
-    cli = shutil.which(run["launch_argv"][0], path=caller_path)
-    if cli is None:
-        raise ValueError(f"cannot resolve {run['launch_argv'][0]} on the caller's PATH")
-    cli = os.path.realpath(cli)
-    if any(inside(cli, root) for root in (workspace, tmpdir, dest)):
-        raise ValueError(f"{cli} lies in a directory the candidate can write")
+    launcher = trusted_executable(run["launch_argv"][0], caller_path, (workspace, tmpdir, dest))
     dest.mkdir(mode=0o700)
     for relative in STAGED:
         data = read_regular(workspace, relative)
@@ -155,7 +180,7 @@ def stage(run_json, dest, tmpdir, caller_path=None):
         "PATH": os.pathsep.join([str(dest / "bin"), *FIXED_PATH]),
         "GH_SNAPSHOT_LOG": os.path.join(workspace, LEDGER),
         "stand_in": str(dest / "bin/gh"),
-        "launch_argv": [cli, *run["launch_argv"][1:]],
+        "launch_argv": [*launcher, *run["launch_argv"][1:]],
     }
 
 
@@ -180,11 +205,15 @@ def record(line):
 
 
 def stand_in_rules():
-    """Load the committed stand-in, never the workspace copy, for its command rules."""
-    source = str(Path(__file__).resolve().parent / "files/tasklet/bin/gh")
-    loader = importlib.machinery.SourceFileLoader("gh_stand_in", source)
-    module = importlib.util.module_from_spec(importlib.util.spec_from_loader("gh_stand_in", loader))
-    loader.exec_module(module)
+    """Load the committed stand-in, never the workspace copy, for its command rules.
+
+    The source is compiled in memory, so no bytecode is written into the fixture,
+    which prepare.py would otherwise copy into every workspace.
+    """
+    source = Path(__file__).resolve().parent / "files/tasklet/bin/gh"
+    module = types.ModuleType("gh_stand_in")
+    module.__file__ = str(source)
+    exec(compile(source.read_text(), str(source), "exec"), module.__dict__)
     return module
 
 

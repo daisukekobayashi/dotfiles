@@ -257,10 +257,10 @@ class SkillEvaluationTests(unittest.TestCase):
         self.workspaces.append(workspace)
         return result, workspace, output / "run.json"
 
-    def fake_cli(self, directory, name="claude"):
+    def fake_cli(self, directory, name="claude", shebang="#!/bin/sh"):
         directory.mkdir(parents=True, exist_ok=True)
         cli = directory / name
-        cli.write_text("#!/bin/sh\nexit 0\n")
+        cli.write_text(f"{shebang}\nexit 0\n")
         cli.chmod(0o755)
         return cli
 
@@ -427,6 +427,25 @@ class SkillEvaluationTests(unittest.TestCase):
                 STAGE.stage(run_json, str(self.root / f"stage-cli-{name}"), tmpdir, cli_path)
             self.assertFalse((self.root / f"stage-cli-{name}").exists())
         shutil.rmtree(workspace / "cli")
+        # An env-shebang launcher, such as npm's codex, would look its interpreter up on the fixed PATH.
+        npm = self.root / "npm-bin"
+        interpreter = self.fake_cli(npm, "fakeinterp")
+        launcher = self.fake_cli(npm / "launcher", shebang="#!/usr/bin/env fakeinterp")
+        trusted = os.pathsep.join([str(launcher.parent), str(npm)])
+        env_launch = STAGE.stage(run_json, str(self.root / "stage-env"), tmpdir, trusted)
+        self.staged.append(self.root / "stage-env")
+        self.assertEqual(env_launch["launch_argv"], [os.path.realpath(interpreter), os.path.realpath(launcher),
+                                                     "--disable-slash-commands"])
+        planted = self.fake_cli(tmpdir / "interp", "fakeinterp")
+        for name, shebang, cli_path in (
+                ("interpreter-missing", "#!/usr/bin/env missinginterp", str(launcher.parent)),
+                ("interpreter-in-tmpdir", "#!/usr/bin/env fakeinterp",
+                 os.pathsep.join([str(launcher.parent), str(planted.parent)])),
+                ("env-options", "#!/usr/bin/env -S fakeinterp", trusted)):
+            self.fake_cli(launcher.parent, shebang=shebang)
+            with self.subTest(launcher=name), self.assertRaises(ValueError):
+                STAGE.stage(run_json, str(self.root / f"stage-{name}"), tmpdir, cli_path)
+            self.assertFalse((self.root / f"stage-{name}").exists())
         for bad in ("relative-stage", str(workspace / "inside"), str(tmpdir / "inside"),
                     str(self.root / "a:b")):
             with self.subTest(dest=bad), self.assertRaises(ValueError):
@@ -513,6 +532,14 @@ class SkillEvaluationTests(unittest.TestCase):
                            ("evidence-long-line", b" " * (STAGE.MAX_LINE_BYTES + 1) + b"{}\n")):
             ledger_path.write_bytes(ledger + line)
             rejected(name, ValueError)
+        # Loading the stand-in's rules writes nothing into the committed fixture, even with bytecode enabled.
+        ledger_path.write_bytes(ledger)
+        fixture = TRIAGE_SUITE.parent / "files"
+        before = PREPARE.digest_tree(fixture)
+        with mock.patch.object(sys, "dont_write_bytecode", False):
+            STAGE.collect(run_json, self.root / "evidence-bytecode")
+        self.assertEqual(PREPARE.digest_tree(fixture), before)
+        self.assertFalse(any(p.name == "__pycache__" for p in TRIAGE_SUITE.parent.rglob("*")))
         consistent = dict(lines[0], detail=31, argv=["issue", "view", "31", *lines[0]["argv"][3:]])
         ledger_path.write_bytes(ledger + json.dumps(consistent).encode() + b"\n")
         self.assertEqual(STAGE.collect(run_json, self.root / "evidence-consistent")["detail_issues"], [31, 32])
