@@ -9,10 +9,10 @@ summaries and opens a report only for the finding it needs to verify.
 
 The caller assigns each report one path. It creates the task's directory and
 each report directory with `mkdir -m 700`, as the current user, before the
-first report in it, so no other user can read or swap them. A directory that
-already exists, such as one made before this rule, must be its own real path
-and owned by the current user; run `chmod 700` on it and `chmod 600` on the
-reports and logs in it, or stop and report. The records root and every
+first report in it, so no other user can read or swap them. When an existing
+report directory is not mode 700, is not its own real path, or is not owned by
+the current user, stop and report it for the user to fix; never change its
+mode. The records root and every
 directory above it must not be writable by another account unless sticky,
 as the default root under the user's home is; agents running as the same user
 are trusted not to rewrite reports. Reports on

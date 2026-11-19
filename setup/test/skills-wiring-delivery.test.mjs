@@ -982,7 +982,8 @@ test("review and worker reports hand off through a file and a fixed summary", as
   assert.match(section("Worker summary"), /^- Tier:/m);
   assert.match(section("Worker summary"), /^- Overview:/m);
   assert.match(section("Report path"), /`mkdir -m 700`/);
-  assert.match(section("Report path"), /already exists[\s\S]*`chmod 700`/);
+  assert.match(section("Report path"), /existing\s+report directory is not mode 700, is not its own real path, or is not owned by\s+the current user, stop and report it/);
+  assert.doesNotMatch(handoff, /chmod/);
   assert.match(section("Report path"), /must not be writable by another account unless sticky/);
   assert.match(section("Codex route"), /Leave `--report` out of the prompt/);
   assert.match(section("Check a handoff"), /\[`check-report-handoff\.mjs`\]\(\.\.\/scripts\/check-report-handoff\.mjs\)/);
