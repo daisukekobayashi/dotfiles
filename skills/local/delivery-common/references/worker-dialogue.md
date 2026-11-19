@@ -37,7 +37,8 @@ Local reviews still require their own delegation capabilities.
 
 For each target, in this order:
 
-1. The worker runs `shared-understanding` in draft mode and returns its draft.
+1. The worker runs `shared-understanding` in draft mode, writes its draft to
+   `su-draft.md`, and returns its summary.
 2. The coordinator verifies the draft: check the cited sources behind the
    decisions and undecided points it will present, and return gaps such as an
    uncited claim or a one-sided option list to the worker for a revised draft.
@@ -54,7 +55,8 @@ For each target, in this order:
 4. The worker sets the tentative tier under [Risk Tier](risk-tier.md), runs
    `design-preflight-with-docs` in draft mode with the shared understanding
    result in the mode the tier's [Tier procedure](risk-tier.md#tier-procedure)
-   selects, and returns its draft with the tier and its ratings.
+   selects, writes its draft to `preflight-draft.md`, and returns its summary
+   with the tier and its ratings.
 5. The coordinator verifies the preflight draft the same way. For a Low
    tentative tier, apply Risk Tier's
    [Low check](risk-tier.md#set-and-update-the-tier) before asking. When the
@@ -106,3 +108,14 @@ decision that should have been a question.
 Workers run their checks under
 [Foreground Checks](../SKILL.md#foreground-checks), and the coordinator handles
 each worker's turn-end result under it.
+
+Every worker report, including drafts, implementation reports, and fix reports,
+goes through [Report Handoff](report-handoff.md#report-path): the coordinator
+assigns the path; the worker writes the full report, the delimiter line, and the
+[Worker summary](report-handoff.md#worker-summary) to that file as
+[Report file](report-handoff.md#report-file) sets out and replies with only the
+summary; and the coordinator runs
+[Check a handoff](report-handoff.md#check-a-handoff) with `--kind worker`
+before acting on it.
+The coordinator passes the task, drafts, and settled decisions as paths to
+existing material instead of pasting them.

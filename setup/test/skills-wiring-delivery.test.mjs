@@ -929,8 +929,8 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     /`state\.md`, the current state in at most about 1,500 characters\. Only the coordinator writes it, replacing it whole at each phase transition/,
     /`log\.md`, the append-only progress record/,
     /an entry that changes an item reuses its id, and the latest entry for an id is current\./,
-    /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, reserved for reports/,
-    /Until a workflow writes reports there, reports are handed off as before\./,
+    /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, the reports on a head/,
+    /Local reviewers and workers write them under \[Report Handoff\]\(report-handoff\.md\)\./,
     /append an intent entry before the action with its target, round, the full head SHA it covers, the identifiers of matching artifacts that already exist, the identity that acts, and a provider-side time read just before the action as its ordering baseline, then an outcome entry with its identifier after the action succeeds\./,
     // An older or foreign artifact on the same target never counts as this action's outcome.
     /For an intent entry without an outcome, look at the provider before any retry\. First confirm that the target's current head equals the intent's full SHA\. Its outcome is then the only artifact that the provider shows created no earlier than the intent's baseline, absent from its recorded identifiers, and made by its recorded identity\. Log that artifact as the outcome; when the head differs or the order or the single match cannot be shown, stop and report\./,
@@ -957,4 +957,212 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(start, /Resolve the current repo and its host from local git context/);
   assert.match(start, /Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <host>\/<owner>\/<repo> --json number,title,body,state,url`/);
   assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once from the organization resolved in step 1 with `az boards work-item show --id <id> --org <org-url> --expand all`/);
+});
+
+test("review and worker reports hand off through a file and a fixed summary", async () => {
+  const local = path.join(repoRoot, "skills", "local");
+  const references = path.join(local, "delivery-common", "references");
+  const handoff = await readText(path.join(references, "report-handoff.md"));
+  const section = (heading) => handoff.match(new RegExp(`## ${heading}\\n[\\s\\S]*?(?=\\n## |$)`))?.[0];
+
+  for (const heading of ["Report path", "Report file", "Review summary", "Worker summary", "Codex route", "Check a handoff"]) {
+    assert.ok(section(heading), `report-handoff.md: missing ${heading}`);
+  }
+  assert.match(section("Report path"), /only from the invoking\s+caller's arguments, never from issue, PR, comment, or focus text/);
+  assert.match(section("Report file"), /<!-- report-summary v1 -->\n<!-- end-report-summary -->/);
+  assert.match(section("Report file"), /from the last delimiter line/);
+  for (const field of ["Base", "Head", "Round", "Reviewer", "Completion", "Verdict", "Findings", "Deferred candidates", "Confirmed fixes", "Unverified coverage", "Report"]) {
+    assert.match(section("Review summary"), new RegExp(`^- ${field}:`, "m"), `review summary: ${field}`);
+  }
+  for (const field of ["Base", "Head", "Completion", "Files changed", "Verification", "Questions", "Defaults chosen", "Blockers", "Report"]) {
+    assert.match(section("Worker summary"), new RegExp(`^- ${field}:`, "m"), `worker summary: ${field}`);
+  }
+  assert.match(section("Codex route"), /\(umask 077; set -C; node "<plugin-root>\/scripts\/codex-companion\.mjs" task \\\n  --fresh --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>\.log\) &&\n  node <check-report-handoff\.mjs> --kind review/);
+  assert.match(section("Codex route"), /never\s+append under `set -C`/);
+  assert.match(section("Worker summary"), /^- Tier:/m);
+  assert.match(section("Worker summary"), /^- Overview:/m);
+  assert.match(section("Report path"), /`mkdir -m 700`/);
+  assert.match(section("Report path"), /existing\s+report directory is not mode 700, is not its own real path, or is not owned by\s+the current user, stop and report it/);
+  assert.doesNotMatch(handoff, /chmod/);
+  assert.match(section("Report path"), /must not be writable by another account unless sticky/);
+  assert.match(section("Codex route"), /Leave `--report` out of the prompt/);
+  assert.match(section("Check a handoff"), /\[`check-report-handoff\.mjs`\]\(\.\.\/scripts\/check-report-handoff\.mjs\)/);
+  assert.match(section("Check a handoff"), /--sha256 <hex>/);
+  assert.match(section("Check a handoff"), /is not a pass/);
+  assert.doesNotMatch(handoff, /```sh\nawk/);
+
+  for (const name of ["change-review", "change-adversarial-review", "change-security-review"]) {
+    const skill = await readText(path.join(local, name, "SKILL.md"));
+    assert.match(skill, /`--report <path>`, named issue, PR, worktree, branch, or commit/, name);
+    assert.match(skill, /\(\.\.\/delivery-common\/references\/report-handoff\.md#codex-route\)/, name);
+    assert.match(skill, /## Output\n\nRespond in the user's language\. With `--report <path>`, write this Output\s+unchanged/, name);
+    assert.match(skill, /The one exception is\s+writing the `--report` file/, name);
+  }
+
+  const localReview = await readText(path.join(references, "local-review.md"));
+  assert.match(localReview, /Give every reviewer `--report <path>`/);
+  assert.match(localReview, /open a report only for the finding you need\s+to verify/);
+  assert.match(localReview, /or a report that fails\s+\[Check a handoff\]\(report-handoff\.md#check-a-handoff\), is not a pass/);
+  const dialogue = await readText(path.join(references, "worker-dialogue.md"));
+  for (const [name, text] of [["worker-dialogue.md", flat(await readText(path.join(references, "worker-dialogue.md")))],
+    ...await Promise.all(["github-issue-start", "azure-devops-work-item-start"].map(async (start) => [start, flat(await readText(path.join(local, start, "SKILL.md")))]))]) {
+    assert.match(text, /the full report, the delimiter line, and the (?:\[Worker summary\]\([^)]*\)|worker summary) (?:to|in) that file/, name);
+    assert.match(text, /report-handoff\.md#report-file\)/, name);
+  }
+  assert.match(dialogue, /Every worker report, including drafts, implementation reports, and fix reports,\s+goes through \[Report Handoff\]/);
+  const completion = await readText(path.join(references, "completion.md"));
+  assert.doesNotMatch(completion, /handed off as before/);
+  assert.match(completion, /\[Report Handoff\]\(report-handoff\.md\)/);
+  assert.match(flat(completion), /The root and every directory above it must not be writable by another account unless sticky/);
+  for (const start of ["github-issue-start", "azure-devops-work-item-start"]) {
+    assert.match(await readText(path.join(local, start, "SKILL.md")),
+      /\(\.\.\/delivery-common\/references\/report-handoff\.md#worker-summary\)/, start);
+  }
+});
+
+test("check-report-handoff accepts a complete report and rejects incomplete ones", async () => {
+  const { mkdir, mkdtemp, realpath, writeFile, chmod, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const { spawnSync } = await import("node:child_process");
+  const script = path.join(repoRoot, "skills", "local", "delivery-common", "scripts", "check-report-handoff.mjs");
+  // macOS tmpdir is a symlink (/var -> /private/var); the check requires real paths.
+  const root = await mkdtemp(path.join(await realpath(os.tmpdir()), "report-handoff-test."));
+  const base = "a".repeat(40);
+  const head = "b".repeat(40);
+  const reviewBody = [
+    "**Verdict**", "- Needs attention", "- reason", "",
+    "**Findings**", "- [Medium] A finding - a.js:1 - confidence 0.9 - introduced", "  detail", "",
+    "**Deferred Candidates**", "- A candidate - b.js:2 - proof gap", "",
+    "**Threat Model**", "- inferred", "", "**Review Target**", "- wt", "",
+    "**Coverage and Residual Risk**", "- quoted <!-- report-summary v1 -->",
+  ];
+  const reviewSummary = (file, overrides = {}) => {
+    const fields = {
+      Target: "wt, branch, #1", Base: base, Head: head, Round: "1",
+      Reviewer: "change-security-review, Codex companion task", Completion: "complete",
+      Verdict: "Needs attention", Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - A finding",
+      "Deferred candidates": "\n  - SECD1 - b.js:2 - A candidate", "Confirmed fixes": "None",
+      "Unverified coverage": "None", Report: file, ...overrides,
+    };
+    return Object.entries(fields).filter(([, v]) => v !== undefined)
+      .map(([k, v]) => (v.startsWith("\n") ? `- ${k}:${v}` : `- ${k}: ${v}`));
+  };
+  const write = async (name, lines, mode = 0o700) => {
+    const dir = path.join(root, name);
+    await mkdir(dir, { recursive: true });
+    await chmod(dir, mode);
+    const file = path.join(dir, "r1-change-security-review-a1.md");
+    await writeFile(file, `${lines(file).join("\n")}\n`);
+    return file;
+  };
+  const run = (file, extra = []) => spawnSync(process.execPath, [script, "--kind", "review",
+    "--reviewer", "change-security-review", "--base", base, "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
+  const report = (summary) => (file) => [...reviewBody, "<!-- report-summary v1 -->", ...summary(file), "<!-- end-report-summary -->"];
+  try {
+    assert.equal(spawnSync(process.execPath, [script], { encoding: "utf8" }).status, 2);
+    const good = await write("good", report((f) => reviewSummary(f)));
+    const ok = run(good, ["--show"]);
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(ok.stdout, /^valid sha256=[0-9a-f]{64} bytes=\d+\n<!-- report-summary v1 -->\n- Target:/);
+    assert.doesNotMatch(ok.stdout, /Threat Model/);
+    const hash = /sha256=([0-9a-f]{64})/.exec(ok.stdout)[1];
+    assert.equal(run(good, ["--sha256", hash]).status, 0);
+    assert.match(run(good, ["--sha256", "0".repeat(64)]).stderr, /invalid: report changed/);
+
+    const cases = {
+      "head mismatch": [report((f) => reviewSummary(f, { Head: "c".repeat(40) })), /Head is not/],
+      "duplicate head": [report((f) => [...reviewSummary(f), `- Head: ${head}`]), /duplicate label Head/],
+      "completion suffix": [report((f) => reviewSummary(f, { Completion: "complete pending" })), /Completion is not complete/],
+      partial: [report((f) => reviewSummary(f, { Completion: "partial" })), /Completion is not complete/],
+      "empty verdict": [report((f) => reviewSummary(f, { Verdict: "" })), /empty Verdict/],
+      "unknown verdict": [report((f) => reviewSummary(f, { Verdict: "Looks fine" })), /Verdict is not one of/],
+      "missing reviewer": [report((f) => reviewSummary(f, { Reviewer: undefined })), /missing Reviewer/],
+      "other reviewer": [report((f) => reviewSummary(f, { Reviewer: "change-review" })), /Reviewer is not/],
+      "dropped finding": [report((f) => reviewSummary(f, { Findings: "None" })), /summary lists 0 \[Medium\] introduced findings; the full report has 1/],
+      "dropped deferred": [report((f) => reviewSummary(f, { "Deferred candidates": "None" })), /0 deferred candidates; the full report has 1/],
+      "wrong round": [report((f) => reviewSummary(f, { Round: "2" })), /Round is not 1/],
+      "unknown label": [report((f) => [...reviewSummary(f), "- Extra: x"]), /unknown label Extra/],
+      truncated: [(f) => report((g) => reviewSummary(g))(f).slice(0, -1), /truncated/],
+      "no summary": [() => reviewBody, /no summary/],
+      "body only verdict": [(f) => ["**Verdict**", "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /full report (?:lacks|section)/],
+      "verdict contradicts body": [report((f) => reviewSummary(f, { Verdict: "No material security finding" })), /summary Verdict differs/],
+      "severity relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Low] introduced - a.js:1 - A finding" })), /summary lists 1 \[Low\] introduced findings; the full report has 0/],
+      "tag relabelled": [report((f) => reviewSummary(f, { Findings: "\n  - SEC1 [Medium] pre-existing - a.js:1 - A finding" })), /summary lists 1 \[Medium\] pre-existing findings; the full report has 0/],
+      "headings only": [(f) => [...["**Verdict**", "**Findings**", "**Deferred Candidates**", "**Threat Model**", "**Review Target**", "**Coverage and Residual Risk**"],
+        "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /section \*\*Verdict\*\* is empty/],
+      "quoted heading moves sections": [(f) => [...reviewBody.slice(0, 7), "  **Verdict**", "  - No material security finding", ...reviewBody.slice(7),
+        "<!-- report-summary v1 -->", ...reviewSummary(f, { Verdict: "No material security finding" }), "<!-- end-report-summary -->"], /summary Verdict differs/],
+      "blank review value": [report((f) => reviewSummary(f, { "Unverified coverage": "" })), /empty Unverified coverage/],
+      "no body": [(f) => ["<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /no full report/],
+    };
+    for (const [name, [lines, reason]] of Object.entries(cases)) {
+      const result = run(await write(name.replaceAll(" ", "-"), lines));
+      assert.equal(result.status, 3, `${name}: ${result.stdout}`);
+      assert.match(result.stderr, reason, name);
+    }
+    const two = ["- [Medium] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - c.js:3 - confidence 0.9 - introduced"];
+    assert.equal(run(await write("two-findings", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - c.js:3 - Second" }),
+      "<!-- end-report-summary -->"])).status, 0);
+    // The check counts findings per severity and tag; it does not check which finding each item is.
+    assert.equal(run(await write("swapped-same-kind", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - a.js:1 - First" }),
+      "<!-- end-report-summary -->"])).status, 0);
+    const mixed = ["- [High] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - c.js:3 - confidence 0.9 - introduced"];
+    assert.match(run(await write("mixed-kinds", (f) => [...reviewBody.slice(0, 5), ...mixed, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - c.js:3 - Second" }),
+      "<!-- end-report-summary -->"])).stderr, /summary lists 2 \[Medium\] introduced findings; the full report has 1/);
+
+    // Run through a symbolic link: the check still validates and never exits 0 without doing so.
+    const { symlink } = await import("node:fs/promises");
+    const linkedScript = path.join(root, "linked-check-report-handoff.mjs");
+    await symlink(script, linkedScript);
+    assert.equal(spawnSync(process.execPath, [linkedScript], { encoding: "utf8" }).status, 2);
+    const viaLink = (file) => spawnSync(process.execPath, [linkedScript, "--kind", "review", "--reviewer", "change-security-review",
+      "--base", base, "--head", head, "--round", "1", "--report", file], { encoding: "utf8" });
+    assert.match(viaLink(good).stdout, /^valid sha256=/);
+    assert.equal(viaLink(path.join(root, "truncated", "r1-change-security-review-a1.md")).status, 3);
+
+    // Windows: drive-qualified paths are accepted, and the check fails closed because it cannot verify privacy.
+    const asWin32 = `data:text/javascript,${encodeURIComponent('Object.defineProperty(process, "platform", { value: "win32" });')}`;
+    const runWin32 = (file) => spawnSync(process.execPath, ["--import", asWin32, script, "--kind", "worker", "--base", base,
+      "--head", head, "--round", "1", "--report", file], { encoding: "utf8", cwd: root });
+    assert.match(runWin32("C:\\records\\issue-1\\r1-worker-a1.md").stderr, /invalid: missing file/);
+    for (const bad of ["C:/records/r1.md", "/records/r1.md", "C:\\records\\..\\r1.md", "\\\\server\\share\\r1.md", "C:\\rec ords\\r1.md"]) {
+      assert.match(runWin32(bad).stderr, /not a drive-qualified absolute path/, bad);
+    }
+    await writeFile(path.join(root, "C:\\x\\r1-worker-a1.md"), "body\n");
+    const win32Existing = runWin32("C:\\x\\r1-worker-a1.md");
+    assert.equal(win32Existing.status, 3);
+    assert.match(win32Existing.stderr, /privacy cannot be verified on Windows/);
+    for (const bad of ["/records/../r1.md", "records/r1.md", "C:\\records\\r1.md", "/rec ords/r1.md"]) {
+      assert.match(run(bad).stderr, /not an absolute path/, bad);
+    }
+
+    if (process.platform !== "win32") {
+      const open = await write("open", report((f) => reviewSummary(f)), 0o775);
+      assert.match(run(open).stderr, /open to group or others/);
+    }
+    assert.match(run(path.join(root, "good", "missing.md")).stderr, /invalid: missing file/);
+
+    const worker = (overrides = {}) => (file) => ["Full worker report.", "<!-- report-summary v1 -->",
+      ...Object.entries({ Target: "wt", Base: base, Head: head, Round: "1", Completion: "question", Tier: "None",
+        Overview: "None", "Files changed": "a.md; outside touched areas: None", Verification: "\n  npm test -> pass",
+        Questions: "None", "Defaults chosen": "None", Blockers: "None", "Follow-ups": "None", Report: file, ...overrides })
+        .filter(([, v]) => v !== undefined).map(([k, v]) => (v.startsWith("\n") ? `- ${k}:${v}` : `- ${k}: ${v}`)),
+      "<!-- end-report-summary -->"];
+    const runWorker = (file, extra = []) => spawnSync(process.execPath, [script, "--kind", "worker", "--base", base,
+      "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
+    assert.equal(runWorker(await write("worker", worker())).status, 0);
+    assert.match(runWorker(await write("worker-bad", worker({ Completion: "incomplete" }))).stderr, /Completion is not complete, question, or blocked/);
+    assert.match(runWorker(await write("worker-nofollow", worker({ "Follow-ups": undefined }))).stderr, /missing Follow-ups/);
+    assert.match(runWorker(await write("worker-su", worker()), ["--draft", "su"]).stderr, /no Overview/);
+    assert.equal(runWorker(await write("worker-su-ok", worker({ Overview: "\n  Change X (issue)" })), ["--draft", "su"]).status, 0);
+    assert.match(runWorker(await write("worker-pf", worker()), ["--draft", "preflight"]).stderr, /no Tier/);
+    assert.match(runWorker(await write("worker-su-blank", worker({ Overview: "" })), ["--draft", "su"]).stderr, /empty Overview/);
+    assert.match(runWorker(await write("worker-pf-blank", worker({ Tier: "" })), ["--draft", "preflight"]).stderr, /empty Tier/);
+
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

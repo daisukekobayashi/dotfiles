@@ -17,6 +17,15 @@ Include [Foreground Checks](../SKILL.md#foreground-checks) in every reviewer
 brief, for full reviews and focused follow-ups, and handle each reviewer's
 turn-end result under it.
 
+Give every reviewer `--report <path>` under
+[Report Handoff](report-handoff.md#report-path) for full reviews and focused
+follow-ups. Pass the task, accepted design and docs, and earlier dispositions
+as paths to existing material, such as the task URL, the docs, and the progress
+record, instead of pasting them. Run
+[Check a handoff](report-handoff.md#check-a-handoff) on each report with
+`--kind review` and record its hash line, decide from the returned summaries,
+and open a report only for the finding you need to verify.
+
 Report the selected route. A required reviewer that is unavailable or cannot be
 invoked under its policy is a missing prerequisite under
 [Missing Prerequisites](../SKILL.md#missing-prerequisites); the implementation
@@ -147,8 +156,8 @@ independent of the implementation owner: a separate fresh subagent of the
 current host for each, or a separate fresh run of the explicitly named tool for
 each, as the skills define. Report the reduced independence of same-host
 subagents. Give each the same exact
-worktree, branch, committed head, `--base <base-sha> --scope branch`, task
-criteria, accepted design/docs, and the user's delivery request. Require the
+worktree, branch, committed head, `--base <base-sha> --scope branch`, paths to the task
+criteria and accepted design/docs, and the user's delivery request. Require the
 normal review's findings, test gaps, verdict, and coverage, and the adversarial
 review's verdict, concrete failure paths, coverage, and residual risk, and the
 security review's verdict, findings, deferred candidates, threat model, and
@@ -174,7 +183,8 @@ Tier procedure selects, and no material actionable finding or human decision
 remains open. A required new full review counts as the most recent one only
 after it completes. Recorded deferrals of minor or pre-existing findings do not
 require another round or a result with zero findings. Failed, unavailable,
-empty, or partial review output is not a pass.
+empty, or partial review output, or a report that fails
+[Check a handoff](report-handoff.md#check-a-handoff), is not a pass.
 
 Allow at most the local review rounds the Tier procedure sets per target
 across the delivery, including resumes. Count the initial full review, each
