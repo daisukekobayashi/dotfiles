@@ -56,12 +56,13 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/bats-report"
           bats --timing --print-output-on-failure --report-formatter junit --output "${RUNNER_TEMP}/bats-report" tests
 
-      # Lists the slowest tests whether bats passed or failed; it never fails the job.
+      # Lists the slowest tests in the log and the job summary whether bats passed
+      # or failed; it never fails the job.
       - name: Slowest bats tests
         if: ${{ !cancelled() && steps.bats.outcome != 'skipped' }}
         continue-on-error: true
         run: |
-          python3 - "${RUNNER_TEMP}/bats-report/report.xml" >>"${GITHUB_STEP_SUMMARY}" <<'EOF'
+          python3 - "${RUNNER_TEMP}/bats-report/report.xml" <<'EOF' | tee -a "${GITHUB_STEP_SUMMARY}" || true
           import os
           import re
           import sys
