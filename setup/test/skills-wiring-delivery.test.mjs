@@ -1100,6 +1100,26 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       assert.equal(result.status, 3, `${name}: ${result.stdout}`);
       assert.match(result.stderr, reason, name);
     }
+    const two = ["- [Medium] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - c.js:3 - confidence 0.9 - introduced"];
+    assert.equal(run(await write("two-findings", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - c.js:3 - Second" }),
+      "<!-- end-report-summary -->"])).status, 0);
+    const linked = ["- [Medium] Linked - [a.js:1](/wt/src/a.js:1) - confidence 0.9 - introduced"];
+    assert.equal(run(await write("linked-location", (f) => [...reviewBody.slice(0, 5), ...linked, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - src/a.js:1 - Linked" }), "<!-- end-report-summary -->"])).status, 0);
+    const repeated = run(await write("repeated-finding", (f) => [...reviewBody.slice(0, 5), ...two, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - a.js:1 - First" }),
+      "<!-- end-report-summary -->"]));
+    assert.equal(repeated.status, 3);
+    assert.match(repeated.stderr, /SEC2 location a\.js:1 does not match the full report's item 2/);
+    const sameLine = ["- [Medium] First - a.js:1 - confidence 0.9 - introduced", "- [Medium] Second - a.js:1 - confidence 0.9 - introduced"];
+    const sameLineRepeated = run(await write("same-location", (f) => [...reviewBody.slice(0, 5), ...sameLine, ...reviewBody.slice(7),
+      "<!-- report-summary v1 -->", ...reviewSummary(f, { Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - First\n  - SEC2 [Medium] introduced - a.js:1 - First" }),
+      "<!-- end-report-summary -->"]));
+    assert.match(sameLineRepeated.stderr, /SEC2 title does not match the full report's item 2/);
+    assert.match(run(await write("deferred-location", report((f) => reviewSummary(f, { "Deferred candidates": "\n  - SECD1 - z.js:9 - A candidate" })))).stderr,
+      /SECD1 location z\.js:9 does not match/);
+
     if (process.platform !== "win32") {
       const open = await write("open", report((f) => reviewSummary(f)), 0o775);
       assert.match(run(open).stderr, /open to group or others/);
@@ -1122,6 +1142,17 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.match(runWorker(await write("worker-pf", worker()), ["--draft", "preflight"]).stderr, /no Tier/);
     assert.match(runWorker(await write("worker-su-blank", worker({ Overview: "" })), ["--draft", "su"]).stderr, /empty Overview/);
     assert.match(runWorker(await write("worker-pf-blank", worker({ Tier: "" })), ["--draft", "preflight"]).stderr, /empty Tier/);
+
+    const { pathToFileURL } = await import("node:url");
+    const { reportPathError } = await import(pathToFileURL(script).href);
+    assert.equal(reportPathError("C:\\records\\issue-1\\r1-change-review-a1.md", "win32"), null);
+    for (const bad of ["C:/records/r1.md", "/records/r1.md", "C:\\records\\..\\r1.md", "\\\\server\\share\\r1.md", "C:\\rec ords\\r1.md"]) {
+      assert.match(reportPathError(bad, "win32"), /drive-qualified/, bad);
+    }
+    assert.equal(reportPathError("/records/issue-1/r1-change-review-a1.md", "linux"), null);
+    for (const bad of ["/records/../r1.md", "records/r1.md", "C:\\records\\r1.md", "/rec ords/r1.md"]) {
+      assert.match(reportPathError(bad, "darwin"), /absolute path/, bad);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

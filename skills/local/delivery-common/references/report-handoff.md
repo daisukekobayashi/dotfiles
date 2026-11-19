@@ -26,10 +26,12 @@ commit. A worker's shared understanding and preflight drafts replace
 1, as their round. Every other report gets a new path; when the path or its
 `.log` already exists, take the next attempt number.
 
-A valid path is absolute, uses only ASCII letters, digits, `/`, `.`, `_`, and
-`-`, lies outside the reviewed worktree or under a directory that
-`git check-ignore` reports as ignored, sits in a directory that is its own real
-path, and does not exist yet unless it is a draft. For any other path, write
+A valid path is absolute and in normal form and uses only ASCII letters,
+digits, `/`, `.`, `_`, and `-`; on Windows it is drive-qualified with `\` in
+place of `/`, such as `C:\records\r1-change-review-a1.md`. It lies outside
+the reviewed worktree or under a directory that `git check-ignore` reports as
+ignored, sits in a directory that is its own real path, and does not exist yet
+unless it is a draft. For any other path, write
 nothing and report the path error.
 
 The review skills take the path as `--report <path>`, only from the invoking
@@ -78,7 +80,10 @@ List every item; never drop one for its severity, tag, or class, and write
 ```
 
 Number findings in Output order as `CR<n>`, `ADV<n>`, or `SEC<n>` by reviewer,
-and `change-security-review` deferred candidates as `SECD<n>`. Keep
+and `change-security-review` deferred candidates as `SECD<n>`. Give each item
+the location its full-report item names, such as `path:line`, and that item's
+title; the check pairs items with the full report one to one by order and
+location, and by title where two share a location. Keep
 pre-existing, Low, and minor findings and every deferred candidate. A review
 that could not complete reports `partial` or `failed`.
 
