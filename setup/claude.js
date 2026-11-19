@@ -90,6 +90,18 @@ function withConnection(shared, connection) {
     }
     return { ...shared, ...(connection.model !== undefined ? { model: connection.model } : {}), env };
 }
+// rules/ already carries the global rules. Under CLAUDE_CONFIG_DIR, Claude Code
+// still finds ~/.claude/CLAUDE.md as an ancestor project file from repositories
+// under home, which loads the rules twice and hides the repository's AGENTS.md.
+function withoutHomeInstructions(shared, home) {
+    const excludes = shared.claudeMdExcludes ?? [];
+    if (!Array.isArray(excludes) || !excludes.every(item => typeof item === "string")) {
+        throw new Error("Expected a string array for claudeMdExcludes in claude/settings.json");
+    }
+    // Glob patterns treat a backslash as an escape, so use forward slashes.
+    const file = path.join(home, ".claude", "CLAUDE.md").split(path.sep).join("/");
+    return excludes.includes(file) ? shared : { ...shared, claudeMdExcludes: [...excludes, file] };
+}
 async function readAuthToken(fromStdin) {
     let token;
     if (fromStdin) {
@@ -530,7 +542,7 @@ Names: 1-64 lowercase letters, digits, hyphens, underscores; start with a letter
     if (saved && (saved.version !== 1 || saved.env !== env || !table(saved.settings)))
         throw new Error("Invalid Claude environment baseline");
     const connection = readConnection({ ...readConnection(saved?.connection), ...requested });
-    const source = withConnection(readSettings(readOptional(path.join(dotfiles, "claude/settings.json"), "claude/settings.json"), "claude/settings.json"), connection);
+    const source = withoutHomeInstructions(withConnection(readSettings(readOptional(path.join(dotfiles, "claude/settings.json"), "claude/settings.json"), "claude/settings.json"), connection), home);
     let settings = source;
     let memory;
     if (!existing) {
