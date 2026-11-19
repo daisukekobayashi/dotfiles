@@ -16,8 +16,11 @@ Codex:       $github-issue-delivery 12 36 56 60
 
 ## Scope and Authorization
 
-Use the current repository and explicitly requested issues. Read the component
-skills before their phases and call them under
+Use the current repository and explicitly requested issues. Read each
+component skill when its phase starts; after context compaction, reread only
+the section of the current step. Read delivery-common's references by its
+[Phase sections](../delivery-common/SKILL.md#phase-sections). Call the
+component skills under
 [Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
 the exact target is the issue, branch, and worktree. An explicit user request
 for this full workflow selects its delegated shared understanding, preflight,
@@ -46,8 +49,11 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    the worker.
 3. Follow Worker Dialogue for each issue's shared understanding and preflight.
 4. Keep a progress record per issue under
-   [Delivery Completion](../delivery-common/references/completion.md), adding
-   the hosted review round count and the PR trigger and thread identifiers.
+   [Delivery Completion](../delivery-common/references/completion.md) with the
+   task key `issue-<number>`, adding the hosted review round count and the PR
+   trigger and thread identifiers. After `github-issue-start`'s initial fetch,
+   fetch an issue only with `gh issue view <number> --json` and the fields the
+   step needs, such as `state,stateReason`.
 
 On resume, follow Delivery Completion's Resume with GitHub state. Stop and
 report the recorded branch unless it is a **safe branch name** before running

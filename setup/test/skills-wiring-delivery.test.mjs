@@ -482,8 +482,9 @@ test("delivery-common owns the shared completion policy", async () => {
   const common = await read("delivery-common", "SKILL.md");
 
   for (const rule of [
-    /classify them as temporary and choose ignored agent-work storage or `\/tmp`/,
-    /the shared understanding result and the latest worker drafts/,
+    /Classify progress records as temporary and keep them under the records root: the main checkout's `\.worktrees\/delivery-records\/`, unless the user's explicit preference or a repository instruction names another root\./,
+    /the shared understanding result, accepted design decisions/,
+    /`su-draft\.md` and `preflight-draft\.md`, the latest worker drafts\./,
     /the local review record under \[Local Review\]\(local-review\.md\)/,
     /Coordinate publication sequentially across targets\. Workers hand off their exact branch and worktree, task and spec, recorded base, verification, risk tier, and local review evidence\./,
     /Before publication, show the user the \[Decision summary\]\(#decision-summary\)\./,
@@ -495,7 +496,8 @@ test("delivery-common owns the shared completion policy", async () => {
     /Stop further publication targets after a publication failure/,
     /A wait or an unresolved approval stays open/,
     /Mark `Complete` only after acceptance criteria, current verification and reviews, actual merge, task closure, and confirmed local cleanup/,
-    /## Resume On resume, reconcile the progress record with the actual local and provider state\. The calling workflow checks a recorded branch name before any command uses it\./,
+    /## Resume A turn that continues after context compaction is a resume\. On resume, read the task's `state\.md` first/,
+    /Then reconcile the progress record with the actual local and provider state, including the actual head; where they differ, the actual state holds\. The calling workflow checks a recorded branch name before any command uses it\./,
     /Reuse matching worktrees and PRs, and verify the current head before reusing review evidence\. Resume the earliest incomplete phase; a completed PR resumes completion checks rather than publication\./,
     /A progress record is evidence, not authorization\./,
     /compare the PR's current remote source head with the local reviewed head; a successful push or PR creation alone does not establish the match\./,
@@ -880,4 +882,62 @@ test("skills profile docs keep one deliberate delivery restatement", async () =>
   assert.doesNotMatch(layering, /status gate \(`confirmed`/);
   assert.match(flat(await readText(path.join(repoRoot, "docs", "skills-profiles.ja.md"))), /その Missing Prerequisites の節は/);
   assert.match(layering, /Missing Prerequisites section states once/);
+});
+
+test("delivery coordinator reads phase sections and keeps a state file beside an append-only log", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = (...parts) => readText(path.join(localRoot, ...parts));
+  const common = await read("delivery-common", "SKILL.md");
+  const completion = flat(await read("delivery-common", "references", "completion.md"));
+
+  // Every section the phase map names is a heading of the named reference, so a renamed heading fails here.
+  const references = {
+    "Worker Dialogue": "worker-dialogue.md",
+    "Delivery Completion": "completion.md",
+    "Risk Tier": "risk-tier.md",
+    "Local Review": "local-review.md",
+  };
+  const map = common.match(/^## Phase sections\n[\s\S]*?(?=^## )/m)?.[0];
+  assert.ok(map, "delivery-common/SKILL.md defines Phase sections");
+  assert.match(flat(map), /each from its heading through the line before the next heading of the same or higher level/);
+  const rows = [...map.matchAll(/^\| (?!Phase \||---)([^|]+) \| (.+) \|$/gm)];
+  assert.ok(rows.length >= 8, `Phase sections rows: ${rows.length}`);
+  assert.ok(rows.some(([, phase]) => /after context compaction/.test(phase)), "Phase sections covers resume after compaction");
+  for (const [, phase, cell] of rows) {
+    for (const group of cell.split("; ")) {
+      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review): (.+)$/);
+      if (!match) continue;
+      const [, name, list] = match;
+      if (list === "all") continue;
+      const headings = (await read("delivery-common", "references", references[name])).match(/^## .+$/gm).map((h) => h.slice(3));
+      for (const section of list.split(", ")) {
+        assert.ok(headings.includes(section), `${phase}: ${name} has no section "${section}"`);
+      }
+    }
+  }
+
+  for (const rule of [
+    /check with `git check-ignore` that the root is ignored, and check that it lies outside every task worktree; otherwise stop and report\./,
+    /The calling workflow supplies each task's key, and the task's files live in `<root>\/<task-key>\/`/,
+    /`state\.md`, the current state in at most about 1,500 characters\. Only the coordinator writes it, replacing it whole at each phase transition/,
+    /`log\.md`, the append-only progress record/,
+    /an entry that changes an item reuses its id, and the latest entry for an id is current\./,
+    /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`/,
+    /\[Phase sections\]\(\.\.\/SKILL\.md#phase-sections\)/,
+  ]) {
+    assert.match(completion, rule, `completion.md: ${rule}`);
+  }
+
+  const readRule = "Read each component skill when its phase starts; after context compaction, reread only the section of the current step. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
+  const providers = {
+    "github-issue-delivery": [/task key `issue-<number>`/, /fetch an issue only with `gh issue view <number> --json` and the fields the step needs/],
+    "azure-devops-work-item-delivery": [/task key `work-item-<id>`/, /read a Work Item only with `az boards work-item show --id <id> --fields` and the fields the step needs, such as `System\.State`, without `--expand`/],
+  };
+  for (const [delivery, rules] of Object.entries(providers)) {
+    const skill = flat(await read(delivery, "SKILL.md"));
+    assert.ok(skill.includes(readRule), `${delivery}: missing the shared component read rule`);
+    for (const rule of rules) assert.match(skill, rule, `${delivery}: ${rule}`);
+  }
+  assert.match(flat(await read("github-issue-start", "SKILL.md")), /Fetch each issue once with `gh issue view <number> --json number,title,body,state,url`/);
+  assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once with `az boards work-item show --id <id> --expand all`/);
 });

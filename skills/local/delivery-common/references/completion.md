@@ -7,21 +7,47 @@ provider-specific items next to its link to this reference.
 
 ## Progress record
 
-Before writing progress records, classify them as temporary and choose ignored
-agent-work storage or `/tmp`. Keep a separate record per task: task URL and
-scope, the shared understanding result and the latest worker drafts, worktree,
-branch, base ref and SHA, current phase, accepted design decisions, risk tier
-with its reasons and head, verification, the local review record under
-[Local Review](local-review.md), PR and published head, finding dispositions,
-the self-closure list under Local Review, follow-up candidates, blockers, and
-next action, plus the calling workflow's additions. Report the resume path.
-Keep durable definitions and decisions in the repository's normal docs.
+Classify progress records as temporary and keep them under the records root:
+the main checkout's `.worktrees/delivery-records/`, unless the user's explicit
+preference or a repository instruction names another root. Before the first
+write, check with `git check-ignore` that the root is ignored, and check that
+it lies outside every task worktree; otherwise stop and report. The calling
+workflow supplies each task's key, and the task's files live in
+`<root>/<task-key>/`:
+
+- `state.md`, the current state in at most about 1,500 characters. Only the
+  coordinator writes it, replacing it whole at each phase transition: task URL,
+  worktree, branch, base ref and SHA, recorded head, current phase and next
+  action, risk tier at that head and the heaviest tier recorded, local review
+  round count, PR and published head, pending user decisions in one line each,
+  blockers, and the counts of open finding dispositions, self-closures, and
+  follow-up candidates, plus the calling workflow's additions.
+- `log.md`, the append-only progress record: task scope, the shared
+  understanding result, accepted design decisions, risk tier with its reasons
+  and head, verification, the local review record under
+  [Local Review](local-review.md), PR and published head, finding
+  dispositions, the self-closure list under Local Review, follow-up candidates,
+  the decision summary, and blockers. Begin each entry with its type and a
+  stable id, such as `[disposition D3]`; an entry that changes an item reuses
+  its id, and the latest entry for an id is current.
+- `su-draft.md` and `preflight-draft.md`, the latest worker drafts.
+- `<base12>-<head12>/r<round>-<role>-a<attempt>.md`, a report on a reviewed
+  head: the first 12 characters of the base and head SHAs, the review round
+  (`h<n>` for a hosted round), the reviewer skill, `hosted`, or `worker`, and the attempt
+  counted from 1.
+
+Report the resume path. Keep durable definitions and decisions in the
+repository's normal docs.
 
 ## Resume
 
-On resume, reconcile the progress record with the actual local and provider
-state. The calling workflow checks a recorded branch name before any command
-uses it. Reuse matching worktrees and PRs, and verify the current head before
+A turn that continues after context compaction is a resume. On resume, read
+the task's `state.md` first, then the sections its phase needs under
+[Phase sections](../SKILL.md#phase-sections) and the `log.md` entries they
+use. Then reconcile the progress record with the actual local and provider
+state, including the actual head; where they differ, the actual state holds.
+The calling workflow checks a recorded branch name before any command uses
+it. Reuse matching worktrees and PRs, and verify the current head before
 reusing review evidence. Resume the earliest incomplete phase; a completed PR
 resumes completion checks rather than publication. A recorded shared
 understanding result and settled preflight decisions carry forward, except an

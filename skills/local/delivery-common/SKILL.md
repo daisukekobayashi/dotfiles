@@ -21,7 +21,8 @@ published-head check and advance after publication, the merge confirmation,
 bounds, the final report and `Complete` rule, and follow-up candidates. Apply
 [Missing Prerequisites](#missing-prerequisites) whenever a phase lacks what it
 needs, and [Foreground Checks](#foreground-checks) to every delegated worker
-and reviewer and to each result they return.
+and reviewer and to each result they return. The coordinator reads these
+references by [Phase sections](#phase-sections).
 
 The calling workflow owns implementation, assessment decisions, how its hosted
 review runs, publication, and approvals;
@@ -30,6 +31,25 @@ pass to the skills it calls. Where shared text names the calling workflow's
 additions, the calling workflow lists its provider-specific items next to its
 link. Return the completed results, review scope, reviewed snapshot, and tier
 to that caller.
+
+## Phase sections
+
+When a phase starts, the coordinator reads the reference sections listed for
+it below that are not already in its context, each from its heading through
+the line before the next heading of the same or higher level. A section that a
+listed section links to by its heading anchor joins the list. Read Delivery
+Completion's Bounds whenever a phase stops or stalls.
+
+| Phase | Sections |
+| --- | --- |
+| Prepare and dispatch | Worker Dialogue: Assign the worker; Delivery Completion: Progress record |
+| Shared understanding and preflight | Worker Dialogue: Draft and ask, Worker defaults; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Tier procedure |
+| Implementation | Worker Dialogue: Preflight and implementation |
+| Local reviews and focused follow-up | Local Review: all; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Select the security review, Tier procedure |
+| Publication | Delivery Completion: Decision summary, Before publication, After publication; Risk Tier: Recommend human review |
+| Merge | Delivery Completion: Decision summary, Merge confirmation |
+| Report and cleanup | Delivery Completion: Report and complete, Follow-up candidates |
+| Resume, including after context compaction | Delivery Completion: Progress record, Resume; then the sections of the phase the task's state file names |
 
 ## Delegated Authorization
 

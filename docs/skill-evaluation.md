@@ -78,3 +78,46 @@ same agent; rerun the old snapshot when the model or CLI version changed.
 layouts and preparation behavior. Those checks do not establish real-model
 effectiveness. Native skill discovery/triggering is a separate check from the
 comparison of supplied instructions.
+
+## Delivery coordinator context
+
+To compare how much context a delivery coordinator uses before and after a
+change to the delivery skills, measure two comparable deliveries (a similar
+number of issues, rounds, and phases) from their Claude Code transcripts,
+`~/.claude*/projects/<project>/<session>.jsonl`. Subagent transcripts are
+separate files, so these numbers cover the coordinator alone.
+
+```bash
+f=<session>.jsonl
+# Peak context tokens of the coordinator.
+jq -s '[.[] | select(.type=="assistant" and (.isSidechain|not) and .message.usage)
+  | .message.usage | .input_tokens + (.cache_creation_input_tokens//0)
+  + (.cache_read_input_tokens//0)] | max' "$f"
+# Compaction count.
+jq -s '[.[] | select(.type=="system" and .subtype=="compact_boundary")] | length' "$f"
+# Tool result characters by tool, with Bash split into reads, issue fetches, and heredoc writes.
+jq -s '[.[] | select(.isSidechain|not)] as $e
+  | ([$e[] | select(.type=="assistant") | .message.content[]? | select(.type=="tool_use")
+      | {key: .id, value: (if .name=="Bash" then (.input.command
+          | if test("(^|[;&| ])(cat|sed -n|head|tail) [^|]*\\.md") then "Bash:read-md"
+            elif test("gh issue (view|list)") then "Bash:gh-issue"
+            elif test("<<") then "Bash:heredoc" else "Bash:other" end)
+          else .name end)}] | from_entries) as $kind
+  | [$e[] | select(.type=="user") | .message.content[]? | select(.type=="tool_result")
+      | {k: ($kind[.tool_use_id] // "?"), n: (.content | if type=="string" then length
+          else ([.[]? | .text? // ""] | add // "" | length) end)}]
+  | group_by(.k) | map({kind: .[0].k, calls: length, chars: (map(.n) | add)})
+  | sort_by(-.chars)' "$f"
+```
+
+Also count missed reviews and decisions: a review the tier selected that did
+not run, or a user decision the coordinator acted on without asking. Heredoc
+writes cost their command text, which these results do not count.
+
+A delivery-skill change can be checked before such a run with a static
+**chars-read proxy**: for each phase in delivery-common's Phase sections, sum
+the characters of `delivery-common/SKILL.md` and of the listed reference
+sections, each from its `##` heading to the next, adding every section they
+link to by heading anchor, and compare it with the whole files read at the
+base. The proxy measures what the rules direct the coordinator to read, not
+what an agent actually reads.
