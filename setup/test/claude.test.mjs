@@ -45,6 +45,10 @@ function snapshot(f) {
     .map(name => [name, fs.readFileSync(path.join(f.destination, name), "utf8")]));
 }
 
+function homeInstructions(f) {
+  return path.join(f.home, ".claude", "CLAUDE.md").split(path.sep).join("/");
+}
+
 function updateSource(f, change) {
   const file = path.join(f.dotfiles, "claude/settings.json");
   const value = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -184,7 +188,7 @@ test("creates independent settings from the shared source and links every instal
   assert.equal(fs.readFileSync(path.join(f.destination, ".claude-pick"), "utf8"), "1\n");
   const settings = JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
   const shared = JSON.parse(fs.readFileSync(path.join(f.dotfiles, "claude/settings.json"), "utf8"));
-  assert.deepEqual(settings, { ...shared, env: {
+  assert.deepEqual(settings, { ...shared, claudeMdExcludes: [homeInstructions(f)], env: {
     ...shared.env,
     CLAUDE_MEM_DATA_DIR: path.join(f.destination, "claude-mem"),
     CLAUDE_MEM_WORKER_PORT: settings.env?.CLAUDE_MEM_WORKER_PORT,
@@ -206,6 +210,41 @@ test("creates independent settings from the shared source and links every instal
   assert.equal(fs.existsSync(path.join(f.destination, ".credentials.json")), false);
   assert.equal(fs.existsSync(path.join(f.destination, "mcp.json")), false);
   assert.equal(fs.readFileSync(path.join(f.home, ".claude/settings.json"), "utf8"), '{"enabledPlugins":{"private":true}}\n');
+});
+
+test("environments exclude the default home instructions once, keeping shared exclusions", t => {
+  const f = fixture(t);
+  const read = () => JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8"));
+  const baseline = () => JSON.parse(fs.readFileSync(path.join(f.destination, ".dotfiles-env.json"), "utf8")).settings;
+  success(f.initialize());
+  assert.deepEqual(read().claudeMdExcludes, [homeInstructions(f)]);
+  assert.deepEqual(baseline().claudeMdExcludes, [homeInstructions(f)]);
+  updateSource(f, value => { value.claudeMdExcludes = ["**/vendor/CLAUDE.md", homeInstructions(f)]; });
+  success(f.initialize());
+  assert.deepEqual(read().claudeMdExcludes, ["**/vendor/CLAUDE.md", homeInstructions(f)]);
+  assert.equal(fs.readFileSync(path.join(f.home, ".claude/settings.json"), "utf8"), '{"enabledPlugins":{"private":true}}\n');
+});
+
+test("environments created before the exclusion gain it on refresh", t => {
+  const f = fixture(t);
+  success(f.initialize());
+  for (const name of ["settings.json", ".dotfiles-env.json"]) {
+    const file = path.join(f.destination, name);
+    const value = JSON.parse(fs.readFileSync(file, "utf8"));
+    delete (name === "settings.json" ? value : value.settings).claudeMdExcludes;
+    fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
+  }
+  success(f.initialize());
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.destination, "settings.json"), "utf8")).claudeMdExcludes, [homeInstructions(f)]);
+});
+
+test("a malformed shared claudeMdExcludes fails before creating an environment", t => {
+  const f = fixture(t);
+  updateSource(f, value => { value.claudeMdExcludes = "**/CLAUDE.md"; });
+  const result = f.initialize();
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /claudeMdExcludes/);
+  assert.equal(fs.existsSync(f.destination), false);
 });
 
 test("gateway setup saves connection and token only in the selected local home", t => {

@@ -93,7 +93,12 @@ memory = {
     'CLAUDE_MEM_WORKER_HOST': '127.0.0.1',
 }
 assert int(memory['CLAUDE_MEM_WORKER_PORT']) >= 37800
-assert d == {**shared_settings, 'env': {**shared_settings.get('env', {}), **memory}}
+home_instructions = str(p.parent.parent / '.claude/CLAUDE.md')
+assert d == {
+    **shared_settings,
+    'claudeMdExcludes': [*shared_settings.get('claudeMdExcludes', []), home_instructions],
+    'env': {**shared_settings.get('env', {}), **memory},
+}
 assert json.loads((p / 'claude-mem/settings.json').read_text()) == memory
 assert not (p / 'claude-mem/claude-mem.db').exists()
 assert stat.S_IMODE(p.stat().st_mode) == 0o700
