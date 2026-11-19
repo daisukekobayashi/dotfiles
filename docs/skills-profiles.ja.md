@@ -722,6 +722,96 @@ Node runtime の責務:
 
 Profile add/remove の補助コマンドは初期実装の対象外にします。Profile JSON は手で編集し, `./setup.sh skills profile validate` で検証します。
 
+## Export
+
+`skills export` は、選択した skill と agent ルールを自己完結したバンドルとしてディレクトリに書き出します。dotfiles リポジトリ全体や個人設定を渡さずに skill 環境を共有するためのコマンドです。
+
+```sh
+./setup.sh skills export --profile base,github --out ~/share/ai-skills
+./setup.sh skills export --profile base --agent codex --exclude ask-matt --out ~/share/ai-skills --force
+```
+
+```powershell
+.\setup.ps1 skills export --profile base,github --out $HOME\share\ai-skills
+```
+
+- `--profile <csv>` と `--out <dir>` は必須です。Profile はインストールと同じく、`setup/src/skill-profiles.ts` の共通 resolver で解決します。
+- `--agent` はインストールと同じ `codex` と `claude-code` を受け付けます。繰り返し指定とカンマ区切りが使え、省略時は両方です。
+- `--exclude <csv>` は local skill と外部 skill のどちらも除外できます。含まれる skill が依存する skill を除外すると `<dependency> is required by <skill>` で失敗します。Profile が含まない skill を指定しても失敗します。
+- `--force` は以前のバンドルだけを置き換えます (後述)。
+- `--scope` と `--copy` (PowerShell では `-Copy`) は export では使えません。
+- `SETUP_DRY_RUN=1` では選択結果を表示するだけで、何も書き出しません。
+- 出力ディレクトリは dotfiles リポジトリの外にする必要があります。
+
+### バンドルの構成
+
+```text
+<out>/
+  skills/<name>/       # local skill の実ファイルコピー
+  AGENTS.md            # Codex 用ルール (codex 選択時)
+  CLAUDE.md            # Claude Code 用ルール (claude-code 選択時)
+  README.md            # 各部分の配置先と外部 skill のインストールコマンド
+  skills-bundle.json   # マニフェスト
+```
+
+バンドルは `skills/local/<name>/`、`skills/profiles/`、`ai-rules/` だけから作ります。`claude/settings.json`、`codex/config.toml`、`codex/profiles/`、MCP 設定、その他のファイルは含めません。
+
+選択した local skill は `scripts/` や `references/` を含むディレクトリ全体を、実行ビットを保ったままコピーします。最上位の `evals/` はこのリポジトリ用の開発フィクスチャなのでコピーしません。選択した skill の中にシンボリックリンクがあると export は失敗します。
+
+ルールファイルは Node で組み立て、`ai-rules/scripts/compose-rules.sh <agent>` を `--with-metadata` なしで実行した結果と同じ内容にします。これにより `setup.ps1` からも Bash なしで export できます。`ai-rules/base/global.md` はそのまま共有します。
+
+外部 skill はコピーしません。マニフェストに `{source, skills}` として記録し、README に source ごとの `npx skills add <source> --skill <name> ... --agent <agent>` コマンドを載せます。`skills-lock.json` は `skills` CLI の管理物のままにし、export ではコピーも生成もしません。
+
+### 依存 skill の追加
+
+ある local skill のファイルが、skill ディレクトリからの相対パスで別の local skill へリンクしているとき、その skill に依存しているとみなします。例: `../delivery-common/scripts/check-branch-name.mjs` ([共有スクリプト](#共有スクリプト) を参照)。Export はこうした skill を推移的に追加し、`Added as a dependency: <skill> (required by <skills>)` と表示して、`origin: "dependency"` として記録します。
+
+本文で skill 名に触れているだけ (たとえば `change-review` を実行する workflow skill) では依存とみなしません。名前の言及は provider の境界をまたぎます。`delivery-common` は GitHub と Azure DevOps の両方の skill 名に触れているので、名前をたどるとほぼすべての workflow skill がどのバンドルにも入ってしまいます。こうした skill はインストールと同じく profile で選びます。たとえば `github` 単体ではなく `base,github` を指定します。
+
+### マニフェスト
+
+`skills-bundle.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedBy": "dotfiles setup skills export",
+  "requestedProfiles": ["github"],
+  "expandedProfiles": ["github"],
+  "agents": ["codex", "claude-code"],
+  "local": [
+    { "name": "delivery-common", "origin": "dependency", "requiredBy": ["github-issue-delivery"] },
+    { "name": "github-issue-delivery", "origin": "profile" }
+  ],
+  "excluded": [],
+  "external": [{ "source": "owner/repo", "skills": ["name"] }],
+  "rules": ["AGENTS.md", "CLAUDE.md"],
+  "files": ["AGENTS.md", "CLAUDE.md", "README.md", "skills-bundle.json", "skills/delivery-common/SKILL.md"]
+}
+```
+
+`files` には export が書いたすべてのファイルを、`/` 区切りでソートして記録します。出力は決定的で、タイムスタンプや絶対パスを含みません。
+
+### 出力ディレクトリ
+
+Export は `<out>` の隣のステージングディレクトリでバンドルを組み立て、そこで個人情報チェックを行ってから所定の場所に移動します。どこかで失敗した場合はステージングディレクトリを削除し、`<out>` は元のまま残します。
+
+- `<out>` が存在しないか空なら、そこに書き出します。
+- `<out>` が空でなければ、`--force` がない限り失敗します。
+- `--force` で置き換えるのは、`<out>` が以前のバンドルの場合だけです。つまり `skills-bundle.json` が読めて、export の `generatedBy` を持ち、ディレクトリ内のすべてのファイルを列挙している必要があります。手で追加したメモや `.git/` などそれ以外のエントリがあると `--force` でも失敗し、エラーでそのエントリを示します。Export が書いていないファイルを消すことはありません。
+
+### 個人情報チェック
+
+バンドルを所定の場所へ移動する前に、すべてのファイルのパスと内容を大文字小文字を区別せずに検査し、次のものを探します。
+
+- ホームディレクトリ (`SETUP_HOME` または `HOME`、および OS のホームディレクトリ)。どちらのパス区切り文字の形も対象にします。
+- dotfiles リポジトリで読んだ `git config user.name` と `user.email`
+- 個人マーカーファイルの各マーカー
+
+個人マーカーファイルは、どの OS でも `${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/export-personal-markers` です。1 行に 1 つのマーカーを文字どおり書きます。空行と `#` で始まる行は無視します。マーカー自体が個人情報なので、このファイルはリポジトリの外に置きます。既定のファイルがなくても構いません。`SETUP_EXPORT_PERSONAL_MARKERS_FILE` でパスを上書きでき、指定したファイルが存在しないと export は失敗します。
+
+一致があると export は失敗し、`skills/x/SKILL.md: git user.email` のようにファイルと一致の種類を示します。一致した値そのものは表示しません。
+
 ## External Skills
 
 Project scope では公式 CLI を使います。

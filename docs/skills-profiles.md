@@ -746,6 +746,96 @@ Node runtime responsibilities:
 
 Profile add/remove helper commands are intentionally out of scope for the first implementation. Edit profile JSON by hand and use `./setup.sh skills profile validate`.
 
+## Export
+
+`skills export` writes a self-contained bundle of selected skills and agent rules to a directory, so the skill setup can be shared without the dotfiles repository or personal settings.
+
+```sh
+./setup.sh skills export --profile base,github --out ~/share/ai-skills
+./setup.sh skills export --profile base --agent codex --exclude ask-matt --out ~/share/ai-skills --force
+```
+
+```powershell
+.\setup.ps1 skills export --profile base,github --out $HOME\share\ai-skills
+```
+
+- `--profile <csv>` and `--out <dir>` are required. Profiles resolve exactly as for installs, through the shared resolver in `setup/src/skill-profiles.ts`.
+- `--agent` takes the install vocabulary, `codex` and `claude-code`, repeatable or comma-separated, and defaults to both.
+- `--exclude <csv>` drops local or external skills. Excluding a skill that an included skill depends on fails with `<dependency> is required by <skill>`; naming a skill the profiles do not include fails.
+- `--force` replaces only a previous bundle (see below).
+- `--scope` and `--copy` (`-Copy` in PowerShell) do not apply to export.
+- `SETUP_DRY_RUN=1` prints the selection and writes nothing.
+- The output directory must be outside the dotfiles repository.
+
+### Bundle Layout
+
+```text
+<out>/
+  skills/<name>/       # Real-file copies of local skills
+  AGENTS.md            # Rules for Codex, when codex is selected
+  CLAUDE.md            # Rules for Claude Code, when claude-code is selected
+  README.md            # Where each part goes, external install commands
+  skills-bundle.json   # Manifest
+```
+
+The bundle is built only from `skills/local/<name>/`, `skills/profiles/`, and `ai-rules/`. It never contains `claude/settings.json`, `codex/config.toml`, `codex/profiles/`, MCP configuration, or any other file.
+
+Each selected local skill is copied as a whole directory, including `scripts/` and `references/`, with its executable bits. The top-level `evals/` directory is skipped: it holds development fixtures for this repository. A symbolic link inside a selected skill fails the export.
+
+The rules files are composed in Node with the same output as `ai-rules/scripts/compose-rules.sh <agent>` without `--with-metadata`, so `setup.ps1` can export without Bash. `ai-rules/base/global.md` is shared as is.
+
+External skills are not copied. The manifest records them as `{source, skills}` and the README gives one `npx skills add <source> --skill <name> ... --agent <agent>` command per source. `skills-lock.json` stays owned by the `skills` CLI; export neither copies nor synthesizes it.
+
+### Dependency Closure
+
+A local skill depends on another local skill when one of its files links into that skill relative to the skill directory, such as `../delivery-common/scripts/check-branch-name.mjs` (see [Shared Scripts](#shared-scripts)). Export adds such skills transitively, prints `Added as a dependency: <skill> (required by <skills>)`, and records them with `origin: "dependency"`.
+
+A skill name mentioned in prose, such as a workflow skill that runs `change-review`, is not a dependency. Name mentions cross provider boundaries: `delivery-common` names both GitHub and Azure DevOps skills, so following them would put nearly every workflow skill in any bundle. Choose those skills through profiles instead, for example `base,github` rather than `github` alone, as for installs.
+
+### Manifest
+
+`skills-bundle.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedBy": "dotfiles setup skills export",
+  "requestedProfiles": ["github"],
+  "expandedProfiles": ["github"],
+  "agents": ["codex", "claude-code"],
+  "local": [
+    { "name": "delivery-common", "origin": "dependency", "requiredBy": ["github-issue-delivery"] },
+    { "name": "github-issue-delivery", "origin": "profile" }
+  ],
+  "excluded": [],
+  "external": [{ "source": "owner/repo", "skills": ["name"] }],
+  "rules": ["AGENTS.md", "CLAUDE.md"],
+  "files": ["AGENTS.md", "CLAUDE.md", "README.md", "skills-bundle.json", "skills/delivery-common/SKILL.md"]
+}
+```
+
+`files` lists every file the export wrote, sorted, with `/` separators. Output is deterministic: no timestamps or absolute paths.
+
+### Output Directory
+
+Export builds the bundle in a staging directory next to `<out>`, runs the personal data check there, and only then moves it into place. Any failure removes the staging directory and leaves `<out>` as it was.
+
+- A missing or empty `<out>` is written.
+- A non-empty `<out>` fails unless `--force` is given.
+- With `--force`, export replaces `<out>` only when it is a previous bundle: its `skills-bundle.json` parses, has the export's `generatedBy`, and lists every file in the directory. Any other entry, such as a hand-added note or a `.git/` directory, fails even with `--force` and is named in the error, so export never deletes files it did not write.
+
+### Personal Data Check
+
+Before the bundle is moved into place, export scans every file's path and contents, case-insensitively, for:
+
+- the home directory (`SETUP_HOME` or `HOME`, and the OS home directory), with either path separator;
+- `git config user.name` and `user.email`, read in the dotfiles repository;
+- each marker in the personal marker file.
+
+The personal marker file is `${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/export-personal-markers` on every OS. It holds one literal marker per line; blank lines and lines starting with `#` are ignored. Keep it outside the repository, because the markers are personal data. A missing default file is allowed. `SETUP_EXPORT_PERSONAL_MARKERS_FILE` overrides the path; when it names a missing file, export fails.
+
+A match fails the export with each file and the kind of match, such as `skills/x/SKILL.md: git user.email`, without printing the matched value.
+
 ## External Skills
 
 For project scope, use official CLI installation:
