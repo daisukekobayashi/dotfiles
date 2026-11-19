@@ -22,9 +22,9 @@ Give every reviewer `--report <path>` under
 follow-ups. Pass the task, accepted design and docs, and earlier dispositions
 as paths to existing material, such as the task URL, the docs, and the progress
 record, instead of pasting them. Run
-[Check a handoff](report-handoff.md#check-a-handoff) on each report, decide
-from the returned summaries, and open a report only for the finding you need
-to verify.
+[Check a handoff](report-handoff.md#check-a-handoff) on each report with
+`--kind review` and record its hash line, decide from the returned summaries,
+and open a report only for the finding you need to verify.
 
 Report the selected route. A required reviewer that is unavailable or cannot be
 invoked under its policy is a missing prerequisite under

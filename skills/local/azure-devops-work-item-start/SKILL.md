@@ -105,9 +105,11 @@ exact target, and existing approvals to the worker; a brief alone grants none.
      look low-risk, and continues only work that does not depend on them. It
      never asks the user directly, and its report lists open questions and
      every default it chose. When the caller assigns report paths, the worker
-     writes its full report to that file and replies with only the worker
-     summary under
-     [Report Handoff](../delivery-common/references/report-handoff.md#worker-summary).
+     writes the full report, the delimiter line, and the worker summary to that
+     file under
+     [Report file](../delivery-common/references/report-handoff.md#report-file)
+     and replies with only the
+     [worker summary](../delivery-common/references/report-handoff.md#worker-summary).
    - A worker runs checks under
      [Foreground Checks](../delivery-common/SKILL.md#foreground-checks).
 7. Report each Work Item summary, branch, worktree path, base commit, baseline

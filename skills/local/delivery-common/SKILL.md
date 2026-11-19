@@ -118,3 +118,9 @@ worktree cleanup skills of both providers run it to decide whether to delete the
 remote branch, to build the targets the user confirms or a Caller preview, and
 to compare them right before any removal; its header gives the usage and exit
 codes.
+
+[`scripts/check-report-handoff.mjs`](scripts/check-report-handoff.mjs) is the
+shared **report handoff check**. Delivery coordinators and Codex-routed review
+callers run it on each report under
+[Report Handoff](references/report-handoff.md#check-a-handoff); its header
+gives the usage, checks, and exit codes.

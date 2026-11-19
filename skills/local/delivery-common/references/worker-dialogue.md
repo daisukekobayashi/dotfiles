@@ -111,8 +111,11 @@ each worker's turn-end result under it.
 
 Every worker report, including drafts, implementation reports, and fix reports,
 goes through [Report Handoff](report-handoff.md#report-path): the coordinator
-assigns the path, the worker writes the full report there and replies with only
-the [Worker summary](report-handoff.md#worker-summary), and the coordinator
-runs [Check a handoff](report-handoff.md#check-a-handoff) before acting on it.
+assigns the path; the worker writes the full report, the delimiter line, and the
+[Worker summary](report-handoff.md#worker-summary) to that file as
+[Report file](report-handoff.md#report-file) sets out and replies with only the
+summary; and the coordinator runs
+[Check a handoff](report-handoff.md#check-a-handoff) with `--kind worker`
+before acting on it.
 The coordinator passes the task, drafts, and settled decisions as paths to
 existing material instead of pasting them.

@@ -977,15 +977,16 @@ test("review and worker reports hand off through a file and a fixed summary", as
   for (const field of ["Base", "Head", "Completion", "Files changed", "Verification", "Questions", "Defaults chosen", "Blockers", "Report"]) {
     assert.match(section("Worker summary"), new RegExp(`^- ${field}:`, "m"), `worker summary: ${field}`);
   }
-  assert.match(section("Codex route"), /\(set -C; node "<plugin-root>\/scripts\/codex-companion\.mjs" task --fresh \\\n  --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>\.log\)\n```/);
+  assert.match(section("Codex route"), /\(umask 077; set -C; node "<plugin-root>\/scripts\/codex-companion\.mjs" task \\\n  --fresh --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>\.log\)\n```/);
+  assert.match(section("Codex route"), /never\s+append under `set -C`/);
   assert.match(section("Worker summary"), /^- Tier:/m);
+  assert.match(section("Worker summary"), /^- Overview:/m);
+  assert.match(section("Report path"), /`mkdir -m 700`/);
   assert.match(section("Codex route"), /Leave `--report` out of the prompt/);
-  assert.match(section("Check a handoff"), /invalid: truncated/);
-  assert.match(section("Check a handoff"), /invalid: no full report/);
-  assert.match(section("Check a handoff"), /invalid: round mismatch/);
-  assert.match(section("Check a handoff"), /Completion: complete\|Verdict:/);
-  assert.match(section("Check a handoff"), /invalid: base or head mismatch/);
+  assert.match(section("Check a handoff"), /\[`check-report-handoff\.mjs`\]\(\.\.\/scripts\/check-report-handoff\.mjs\)/);
+  assert.match(section("Check a handoff"), /--sha256 <hex>/);
   assert.match(section("Check a handoff"), /is not a pass/);
+  assert.doesNotMatch(handoff, /```sh\nawk/);
 
   for (const name of ["change-review", "change-adversarial-review", "change-security-review"]) {
     const skill = await readText(path.join(local, name, "SKILL.md"));
@@ -1000,6 +1001,11 @@ test("review and worker reports hand off through a file and a fixed summary", as
   assert.match(localReview, /open a report only for the finding you need\s+to verify/);
   assert.match(localReview, /or a report that fails\s+\[Check a handoff\]\(report-handoff\.md#check-a-handoff\), is not a pass/);
   const dialogue = await readText(path.join(references, "worker-dialogue.md"));
+  for (const [name, text] of [["worker-dialogue.md", flat(await readText(path.join(references, "worker-dialogue.md")))],
+    ...await Promise.all(["github-issue-start", "azure-devops-work-item-start"].map(async (start) => [start, flat(await readText(path.join(local, start, "SKILL.md")))]))]) {
+    assert.match(text, /the full report, the delimiter line, and the (?:\[Worker summary\]\([^)]*\)|worker summary) (?:to|in) that file/, name);
+    assert.match(text, /report-handoff\.md#report-file\)/, name);
+  }
   assert.match(dialogue, /Every worker report, including drafts, implementation reports, and fix reports,\s+goes through \[Report Handoff\]/);
   const completion = await readText(path.join(references, "completion.md"));
   assert.doesNotMatch(completion, /handed off as before/);
@@ -1007,5 +1013,100 @@ test("review and worker reports hand off through a file and a fixed summary", as
   for (const start of ["github-issue-start", "azure-devops-work-item-start"]) {
     assert.match(await readText(path.join(local, start, "SKILL.md")),
       /\(\.\.\/delivery-common\/references\/report-handoff\.md#worker-summary\)/, start);
+  }
+});
+
+test("check-report-handoff accepts a complete report and rejects incomplete ones", async () => {
+  const { mkdir, mkdtemp, writeFile, chmod, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const { spawnSync } = await import("node:child_process");
+  const script = path.join(repoRoot, "skills", "local", "delivery-common", "scripts", "check-report-handoff.mjs");
+  const root = await mkdtemp(path.join(os.tmpdir(), "report-handoff-test."));
+  const base = "a".repeat(40);
+  const head = "b".repeat(40);
+  const reviewBody = [
+    "**Verdict**", "- Needs attention", "- reason", "",
+    "**Findings**", "- [Medium] A finding - a.js:1 - confidence 0.9 - introduced", "  detail", "",
+    "**Deferred Candidates**", "- A candidate - b.js:2 - proof gap", "",
+    "**Threat Model**", "- inferred", "", "**Review Target**", "- wt", "",
+    "**Coverage and Residual Risk**", "- quoted <!-- report-summary v1 -->",
+  ];
+  const reviewSummary = (file, overrides = {}) => {
+    const fields = {
+      Target: "wt, branch, #1", Base: base, Head: head, Round: "1",
+      Reviewer: "change-security-review, Codex companion task", Completion: "complete",
+      Verdict: "Needs attention", Findings: "\n  - SEC1 [Medium] introduced - a.js:1 - A finding",
+      "Deferred candidates": "\n  - SECD1 - b.js:2 - A candidate", "Confirmed fixes": "None",
+      "Unverified coverage": "None", Report: file, ...overrides,
+    };
+    return Object.entries(fields).filter(([, v]) => v !== undefined)
+      .map(([k, v]) => (v.startsWith("\n") ? `- ${k}:${v}` : `- ${k}: ${v}`));
+  };
+  const write = async (name, lines, mode = 0o700) => {
+    const dir = path.join(root, name);
+    await mkdir(dir, { recursive: true });
+    await chmod(dir, mode);
+    const file = path.join(dir, "r1-change-security-review-a1.md");
+    await writeFile(file, `${lines(file).join("\n")}\n`);
+    return file;
+  };
+  const run = (file, extra = []) => spawnSync(process.execPath, [script, "--kind", "review",
+    "--reviewer", "change-security-review", "--base", base, "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
+  const report = (summary) => (file) => [...reviewBody, "<!-- report-summary v1 -->", ...summary(file), "<!-- end-report-summary -->"];
+  try {
+    assert.equal(spawnSync(process.execPath, [script], { encoding: "utf8" }).status, 2);
+    const good = await write("good", report((f) => reviewSummary(f)));
+    const ok = run(good, ["--show"]);
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.match(ok.stdout, /^valid sha256=[0-9a-f]{64} bytes=\d+\n<!-- report-summary v1 -->\n- Target:/);
+    assert.doesNotMatch(ok.stdout, /Threat Model/);
+    const hash = /sha256=([0-9a-f]{64})/.exec(ok.stdout)[1];
+    assert.equal(run(good, ["--sha256", hash]).status, 0);
+    assert.match(run(good, ["--sha256", "0".repeat(64)]).stderr, /invalid: report changed/);
+
+    const cases = {
+      "head mismatch": [report((f) => reviewSummary(f, { Head: "c".repeat(40) })), /Head is not/],
+      "duplicate head": [report((f) => [...reviewSummary(f), `- Head: ${head}`]), /duplicate label Head/],
+      "completion suffix": [report((f) => reviewSummary(f, { Completion: "complete pending" })), /Completion is not complete/],
+      partial: [report((f) => reviewSummary(f, { Completion: "partial" })), /Completion is not complete/],
+      "empty verdict": [report((f) => reviewSummary(f, { Verdict: "" })), /Verdict is not one of/],
+      "missing reviewer": [report((f) => reviewSummary(f, { Reviewer: undefined })), /missing Reviewer/],
+      "other reviewer": [report((f) => reviewSummary(f, { Reviewer: "change-review" })), /Reviewer is not/],
+      "dropped finding": [report((f) => reviewSummary(f, { Findings: "None" })), /summary lists 0 findings; the full report has 1/],
+      "dropped deferred": [report((f) => reviewSummary(f, { "Deferred candidates": "None" })), /0 deferred candidates; the full report has 1/],
+      "wrong round": [report((f) => reviewSummary(f, { Round: "2" })), /Round is not 1/],
+      "unknown label": [report((f) => [...reviewSummary(f), "- Extra: x"]), /unknown label Extra/],
+      truncated: [(f) => report((g) => reviewSummary(g))(f).slice(0, -1), /truncated/],
+      "no summary": [() => reviewBody, /no summary/],
+      "body only verdict": [(f) => ["**Verdict**", "<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /full report lacks/],
+      "no body": [(f) => ["<!-- report-summary v1 -->", ...reviewSummary(f), "<!-- end-report-summary -->"], /no full report/],
+    };
+    for (const [name, [lines, reason]] of Object.entries(cases)) {
+      const result = run(await write(name.replaceAll(" ", "-"), lines));
+      assert.equal(result.status, 3, `${name}: ${result.stdout}`);
+      assert.match(result.stderr, reason, name);
+    }
+    if (process.platform !== "win32") {
+      const open = await write("open", report((f) => reviewSummary(f)), 0o775);
+      assert.match(run(open).stderr, /open to group or others/);
+    }
+    assert.match(run(path.join(root, "good", "missing.md")).stderr, /invalid: missing file/);
+
+    const worker = (overrides = {}) => (file) => ["Full worker report.", "<!-- report-summary v1 -->",
+      ...Object.entries({ Target: "wt", Base: base, Head: head, Round: "1", Completion: "question", Tier: "None",
+        Overview: "None", "Files changed": "a.md; outside touched areas: None", Verification: "\n  npm test -> pass",
+        Questions: "None", "Defaults chosen": "None", Blockers: "None", "Follow-ups": "None", Report: file, ...overrides })
+        .filter(([, v]) => v !== undefined).map(([k, v]) => (v.startsWith("\n") ? `- ${k}:${v}` : `- ${k}: ${v}`)),
+      "<!-- end-report-summary -->"];
+    const runWorker = (file, extra = []) => spawnSync(process.execPath, [script, "--kind", "worker", "--base", base,
+      "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
+    assert.equal(runWorker(await write("worker", worker())).status, 0);
+    assert.match(runWorker(await write("worker-bad", worker({ Completion: "incomplete" }))).stderr, /Completion is not complete, question, or blocked/);
+    assert.match(runWorker(await write("worker-nofollow", worker({ "Follow-ups": undefined }))).stderr, /missing Follow-ups/);
+    assert.match(runWorker(await write("worker-su", worker()), ["--draft", "su"]).stderr, /no Overview/);
+    assert.equal(runWorker(await write("worker-su-ok", worker({ Overview: "\n  Change X (issue)" })), ["--draft", "su"]).status, 0);
+    assert.match(runWorker(await write("worker-pf", worker()), ["--draft", "preflight"]).stderr, /no Tier/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
