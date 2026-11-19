@@ -43,7 +43,7 @@
     },
     {
       "number": 12,
-      "title": "Tidy terminal output",
+      "title": "Follow-up to #11: tidy terminal output",
       "state": "open",
       "labels": [
         "polish"

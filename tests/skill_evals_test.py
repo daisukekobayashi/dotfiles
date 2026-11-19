@@ -21,6 +21,9 @@ PREPARE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PREPARE)
 SUITE = ROOT / "skills/local/maintain-verification-skill/evals/evals.json"
 TRIAGE_SUITE = ROOT / "skills/local/github-issue-triage/evals/evals.json"
+STAGE_SPEC = importlib.util.spec_from_file_location("stage_gh", TRIAGE_SUITE.parent / "stage_gh.py")
+STAGE = importlib.util.module_from_spec(STAGE_SPEC)
+STAGE_SPEC.loader.exec_module(STAGE)
 
 
 class SkillEvaluationTests(unittest.TestCase):
@@ -28,8 +31,13 @@ class SkillEvaluationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="skill-check-")
         self.root = Path(self.temp.name)
         self.workspaces = []
+        self.staged = []
 
     def tearDown(self):
+        for dest in self.staged:
+            for path in (dest, dest / "bin", dest / ".snapshot"):
+                if path.is_dir():
+                    path.chmod(0o755)
         for workspace in self.workspaces:
             shutil.rmtree(workspace)
         self.temp.cleanup()
@@ -242,18 +250,26 @@ class SkillEvaluationTests(unittest.TestCase):
         return json.loads(path.read_text())
 
     def prepare_triage(self, case_id, agent="claude"):
-        result = PREPARE.prepare(
-            TRIAGE_SUITE, case_id, agent, "with-skill",
-            self.root / f"run-{len(self.workspaces)}",
-        )
+        output = self.root / f"run-{len(self.workspaces)}"
+        result = PREPARE.prepare(TRIAGE_SUITE, case_id, agent, "with-skill", output)
         workspace = Path(result["workspace"])
         self.workspaces.append(workspace)
-        return result, workspace
+        return result, workspace, output / "run.json"
 
-    def run_gh(self, workspace, argv):
-        env = dict(os.environ, PATH=f"{workspace / 'bin'}{os.pathsep}{os.environ['PATH']}")
-        return subprocess.run(argv, cwd=workspace, env=env, capture_output=True,
-                              text=True, check=False, timeout=60)
+    def stage_triage(self, case_id):
+        result, workspace, run_json = self.prepare_triage(case_id)
+        tmpdir = self.root / f"tmp-{len(self.workspaces)}"
+        tmpdir.mkdir()
+        dest = self.root / f"stage-{len(self.workspaces)}"
+        env = STAGE.stage(run_json, dest, tmpdir, os.environ["PATH"])
+        self.staged.append(dest)
+        return workspace, run_json, dest, env
+
+    def run_gh(self, env, args):
+        # The staged stand-in runs by absolute path, so no host gh can answer.
+        return subprocess.run([env["stand_in"], *args], env=dict(os.environ, **{
+            "PATH": env["PATH"], "GH_SNAPSHOT_LOG": env["GH_SNAPSHOT_LOG"]}),
+            capture_output=True, text=True, check=False, timeout=60)
 
     @staticmethod
     def touched_areas(body):
@@ -266,15 +282,22 @@ class SkillEvaluationTests(unittest.TestCase):
         execution = data["execution"]
         self.assertEqual((execution["runs_per_condition"], execution["run_timeout_minutes"]), (3, 30))
         self.assertEqual(set(execution["conditions"]), {"default", "full-read"})
-        self.assertTrue(execution["decision_rule"].startswith("Fixed before any run."))
-        self.assertEqual(set(execution["recorded_fields"]),
-                         {"next", "current_wave", "next_wave", "detail_reads", "gh_bytes"})
+        rule = execution["decision_rule"]
+        self.assertTrue(rule.startswith("Fixed before any run."))
+        self.assertIn("a default run in addition names no parallel group", rule)
+        self.assertIn("never from the report", rule)
+        self.assertEqual(set(execution["recorded_fields"]), {
+            "next", "current_wave", "next_wave", "parallel_groups", "detail_reads", "gh_bytes"})
+        self.assertTrue((TRIAGE_SUITE.parent / "stage_gh.py").is_file())
         claude, codex = execution["agents"]["claude"], execution["agents"]["codex"]
         self.check_claude_policy(TRIAGE_SUITE, claude)
         self.check_agent_policies(claude, codex)
         for agent in (claude, codex):
-            self.assertEqual(agent["path_prefix"], "bin")
-            self.assertTrue(any("command -v gh" in check for check in agent["pre_run_checks"]))
+            self.assertIn("stage_gh.py stage", agent["policy"])
+            self.assertTrue(any("staged stand-in" in check for check in agent["pre_run_checks"]))
+            collect = [i for i, check in enumerate(agent["post_run_checks"]) if "stage_gh.py collect" in check]
+            delete = [i for i, check in enumerate(agent["post_run_checks"]) if check.startswith("Delete")]
+            self.assertTrue(collect and delete and collect[0] < delete[0])
 
         files = TRIAGE_SUITE.parent / "files"
         self.assertFalse(any(p.is_symlink() or p.name in (".git", "gh-calls.jsonl")
@@ -299,8 +322,12 @@ class SkillEvaluationTests(unittest.TestCase):
                 self.assertTrue(full["prompt"].startswith(default["prompt"] + " Read every open issue in full"))
                 self.assertNotIn("in full", default["prompt"])
                 self.assertEqual([int(n) for n in re.findall(r"#(\d+)", full["prompt"])], open_numbers)
+                self.assertEqual(full["read_scope"], {
+                    "text": open_numbers,
+                    "comments": [n for n in open_numbers if issues[n]["comments"]]})
 
                 expected = default["expected"]
+                self.assertEqual(default["read_scope"], {"list_only": expected["not_parallel_with_next"]})
                 current, after = set(expected["current_wave"]), set(expected["next_wave"])
                 self.assertIn(expected["next"], current)
                 self.assertFalse(current & after)
@@ -313,26 +340,109 @@ class SkillEvaluationTests(unittest.TestCase):
                 for number in expected["not_parallel_with_next"]:
                     self.assertIn(number, current)
                     self.assertTrue(self.touched_areas(issues[number]["body"]) & next_areas, number)
-                assertions = " ".join(default["assertions"])
-                self.assertIn(f"The recommended next issue is #{expected['next']}", assertions)
+                self.assertIn(f"The recommended next issue is #{expected['next']}", default["assertions"])
+                # The no-pair guard grades only the default run; the control's groups are recorded.
+                self.assertFalse(any("parallel group" in item for item in full["assertions"]))
+                self.assertEqual(any("parallel group" in item for item in default["assertions"]),
+                                 bool(expected["not_parallel_with_next"]))
         self.assertEqual(
             scenarios["list-only-overlap-with-next"]["default"]["expected"]["not_parallel_with_next"], [32])
+
+        # The supersession reaches the triage only through #20's comment.
+        superseding = self.triage_snapshot(scenarios["comment-supersedes-item"]["default"])
+        texts = [(issue["number"], issue["title"] + "\n" + issue["body"]) for issue in superseding["issues"]]
+        texts += [(issue["number"], comment["body"]) for issue in superseding["issues"]
+                  for comment in issue["comments"]]
+        self.assertEqual([n for n, text in texts if re.search(r"(?i)supersed", text)], [20])
+        self.assertEqual(superseding["issues"][0]["comments"][0]["body"].split()[:3],
+                         ["Superseded", "by", "#23,"])
+        # The dependent's title names it a follow-up, which puts it in the detail band.
+        dependent = self.triage_snapshot(scenarios["dependent-text-raises-blocker"]["default"])
+        self.assertTrue(next(i for i in dependent["issues"] if i["number"] == 12)["title"]
+                        .startswith("Follow-up to #11"))
 
         source_before = PREPARE.digest_tree(TRIAGE_SUITE.parent)
         for case in data["evals"]:
             for agent in ("codex", "claude"):
                 with self.subTest(case=case["name"], agent=agent):
-                    result, workspace = self.prepare_triage(case["id"], agent)
+                    result, workspace, _ = self.prepare_triage(case["id"], agent)
                     self.assertIn(".snapshot/issues.json", result["initial_files"])
                     self.assertIn("bin/gh", result["initial_files"])
                     self.assertFalse((workspace / ".git").exists())
-                    self.assertFalse(any(Path(name).name in ("evals.json", "claude-settings.json")
+                    self.assertFalse(any(Path(name).name in ("evals.json", "claude-settings.json", "stage_gh.py")
                                          for name in result["initial_files"]))
                     guidance = workspace / ".guidance/skills"
                     self.assertEqual(sorted(p.name for p in guidance.iterdir()),
                                      ["github-issue-triage", "triage-common"])
                     self.assertFalse((guidance / "github-issue-triage/evals").exists())
         self.assertEqual(PREPARE.digest_tree(TRIAGE_SUITE.parent), source_before)
+
+    def test_triage_stage_keeps_candidate_writable_paths_off_path(self):
+        workspace, run_json, dest, env = self.stage_triage(1)
+        tmpdir = self.root / "tmp-1"
+        hostile = os.pathsep.join(["", ".", "bin", str(workspace / "bin"), str(tmpdir),
+                                   str(tmpdir / "x"), "/usr/bin", "/usr/bin"])
+        self.assertEqual(STAGE.trusted_path(hostile, [str(workspace), str(tmpdir)]), ["/usr/bin"])
+        entries = env["PATH"].split(os.pathsep)
+        self.assertEqual(entries[0], str(dest / "bin"))
+        for entry in entries:
+            self.assertTrue(os.path.isabs(entry), entry)
+            self.assertFalse(STAGE.inside(entry, workspace) or STAGE.inside(entry, tmpdir), entry)
+        self.assertEqual(Path(env["stand_in"]), (dest / "bin/gh").resolve())
+        self.assertEqual(Path(env["GH_SNAPSHOT_LOG"]),
+                         workspace.resolve() / ".snapshot/gh-calls.jsonl")
+        for path in (dest, dest / "bin", dest / ".snapshot", dest / "bin/gh", dest / ".snapshot/issues.json"):
+            self.assertFalse(path.stat().st_mode & 0o222, path)
+        self.assertEqual((dest / "bin/gh").read_bytes(), (workspace / "bin/gh").read_bytes())
+
+        with self.assertRaises(ValueError):
+            STAGE.stage(run_json, workspace / "inside", tmpdir, os.environ["PATH"])
+        with self.assertRaises(ValueError):
+            STAGE.stage(run_json, tmpdir / "inside", tmpdir, os.environ["PATH"])
+        (workspace / "bin/gh").write_text("#!/bin/sh\necho changed\n")
+        with self.assertRaises(ValueError):
+            STAGE.stage(run_json, self.root / "stage-changed", tmpdir, os.environ["PATH"])
+        (workspace / "bin/gh").unlink()
+        (workspace / "bin/gh").symlink_to(dest / "bin/gh")
+        with self.assertRaises(OSError):
+            STAGE.stage(run_json, self.root / "stage-linked", tmpdir, os.environ["PATH"])
+
+    def test_triage_collect_reads_only_a_regular_ledger_inside_the_workspace(self):
+        workspace, run_json, dest, env = self.stage_triage(5)
+        self.assertEqual(self.run_gh(env, ["issue", "view", "32", "--json", "body"]).returncode, 0)
+        self.assertEqual(self.run_gh(env, ["issue", "list", "--json", "number"]).returncode, 0)
+        self.run_gh(env, ["issue", "edit", "30"])
+        summary = STAGE.collect(run_json, self.root / "evidence")
+        ledger = (workspace / ".snapshot/gh-calls.jsonl").read_bytes()
+        self.assertEqual((self.root / "evidence/gh-calls.jsonl").read_bytes(), ledger)
+        lines = [json.loads(line) for line in ledger.decode().splitlines()]
+        self.assertEqual(summary["calls"], 3)
+        self.assertEqual(summary["gh_bytes"], sum(line["stdout_bytes"] for line in lines))
+        self.assertEqual(summary["text_issues"], [32])
+        self.assertEqual(summary["comment_issues"], [])
+        self.assertEqual(summary["stand_ins"], [env["stand_in"]])
+        with self.assertRaises(FileExistsError):
+            STAGE.collect(run_json, self.root / "evidence")
+        with self.assertRaises(ValueError):
+            STAGE.collect(run_json, workspace / "evidence")
+
+        outside = self.root / "outside.jsonl"
+        outside.write_text("{}\n")
+        (workspace / ".snapshot/gh-calls.jsonl").unlink()
+        (workspace / ".snapshot/gh-calls.jsonl").symlink_to(outside)
+        with self.assertRaises(OSError):
+            STAGE.collect(run_json, self.root / "evidence-file-link")
+        (workspace / ".snapshot/gh-calls.jsonl").unlink()
+        (workspace / ".snapshot/gh-calls.jsonl").mkdir()
+        with self.assertRaises((OSError, ValueError)):
+            STAGE.collect(run_json, self.root / "evidence-dir")
+        (workspace / ".snapshot/gh-calls.jsonl").rmdir()
+        moved = self.root / "moved-snapshot"
+        (workspace / ".snapshot").rename(moved)
+        (moved / "gh-calls.jsonl").write_text("{}\n")
+        (workspace / ".snapshot").symlink_to(moved)
+        with self.assertRaises(OSError):
+            STAGE.collect(run_json, self.root / "evidence-dir-link")
 
     @unittest.skipUnless(shutil.which("jq"), "the gh stand-in runs --jq through jq")
     def test_triage_gh_stand_in_answers_documented_commands_and_logs_bytes(self):
@@ -346,66 +456,95 @@ class SkillEvaluationTests(unittest.TestCase):
         for case in (case for case in data["evals"] if case["condition"] == "default"):
             with self.subTest(scenario=case["scenario"]):
                 snapshot = self.triage_snapshot(case)
-                _, workspace = self.prepare_triage(case["id"])
+                issues = {issue["number"]: issue for issue in snapshot["issues"]}
+                workspace, _, dest, env = self.stage_triage(case["id"])
                 calls = []
 
-                def call(argv):
-                    result = self.run_gh(workspace, argv)
-                    calls.append((argv, result))
+                def call(args):
+                    result = self.run_gh(env, args)
+                    calls.append((args, result))
                     return result
 
                 for template in templates:
                     command = (template.replace("<host>", "github.com")
                                .replace("<owner>/<repo>", "example/tasklet"))
-                    argv = shlex.split(command)
-                    if argv[1] in ("issue", "pr"):
-                        argv += ["--repo", repo]
+                    args = shlex.split(command)[1:]
+                    if args[0] in ("issue", "pr"):
+                        args += ["--repo", repo]
                     if "<number>" not in command:
-                        result = call(argv)
-                        self.assertEqual(result.returncode, 0, (argv, result.stderr))
+                        result = call(args)
+                        self.assertEqual(result.returncode, 0, (args, result.stderr))
                         continue
                     numbers = ([pr["number"] for pr in snapshot["pull_requests"]]
-                               if argv[1] == "pr" else [i["number"] for i in snapshot["issues"]])
+                               if args[0] == "pr" else list(issues))
                     for number in numbers:
-                        concrete = [arg.replace("<number>", str(number)) for arg in argv]
+                        concrete = [arg.replace("<number>", str(number)) for arg in args]
                         result = call(concrete)
                         self.assertEqual(result.returncode, 0, (concrete, result.stderr))
                         if "blocked_by" in command:
-                            issue = next(i for i in snapshot["issues"] if i["number"] == number)
                             got = [json.loads(line)["number"] for line in result.stdout.splitlines()]
-                            self.assertEqual(got, issue["blocked_by"])
-                        elif argv[1:3] == ["issue", "view"]:
-                            issue = next(i for i in snapshot["issues"] if i["number"] == number)
+                            self.assertEqual(got, issues[number]["blocked_by"])
+                        elif args[:2] == ["issue", "view"]:
                             got = json.loads(result.stdout)
                             self.assertEqual((got["body"], [c["body"] for c in got["comments"]]),
-                                             (issue["body"], [c["body"] for c in issue["comments"]]))
-                        elif argv[1:3] == ["pr", "view"]:
+                                             (issues[number]["body"],
+                                              [c["body"] for c in issues[number]["comments"]]))
+                        elif args[:2] == ["pr", "view"]:
                             pr = next(p for p in snapshot["pull_requests"] if p["number"] == number)
                             self.assertEqual(result.stdout.splitlines(), pr["files"])
 
-                snapshot_file = workspace / ".snapshot/issues.json"
+                # Compact JSON, as gh prints when stdout is not a terminal.
+                result = call(["repo", "view", "--json", "nameWithOwner,defaultBranchRef"])
+                self.assertEqual(result.stdout,
+                                 '{"nameWithOwner":"example/tasklet","defaultBranchRef":{"name":"main"}}\n')
+                # Supported filters apply; an empty match is an empty list.
+                result = call(["pr", "list", "--state", "closed", "--json", "number"])
+                self.assertEqual(result.stdout, "[]\n")
+                result = call(["issue", "list", "--label", "polish", "--json", "number"])
+                self.assertEqual([item["number"] for item in json.loads(result.stdout)],
+                                 sorted((n for n, i in issues.items() if "polish" in i["labels"]), reverse=True))
+                result = call(["issue", "list", "--milestone", "export-v1", "--limit", "1", "--json", "number"])
+                self.assertEqual(len(json.loads(result.stdout)), 1)
+
+                snapshot_file = dest / ".snapshot/issues.json"
                 before = snapshot_file.read_bytes()
-                for argv in (["gh", "issue", "edit", "10", "--add-label", "x"],
-                             ["gh", "issue", "comment", "10", "--body", "x"],
-                             ["gh", "pr", "merge", "1"],
-                             ["gh", "api", "-X", "POST", "repos/example/tasklet/issues/10/comments"],
-                             ["gh", "api", "repos/example/tasklet/issues/10/comments", "-f", "body=x"],
-                             ["gh", "issue", "list", "--repo", "other/repo"],
-                             ["gh", "search", "issues", "export"]):
-                    result = call(argv)
-                    self.assertNotEqual(result.returncode, 0, argv)
-                    self.assertEqual(result.stdout, "", argv)
+                for args in (["issue", "edit", "10", "--add-label", "x"],
+                             ["issue", "comment", "10", "--body", "x"],
+                             ["pr", "merge", "1"],
+                             ["api", "-X", "POST", "repos/example/tasklet/issues/10/comments"],
+                             ["api", "repos/example/tasklet/issues/10/comments", "-f", "body=x"],
+                             ["api", "repos/example/tasklet/issues/10?state=closed"],
+                             ["issue", "list", "--repo", "other/repo"],
+                             ["issue", "list", "--search", "export"],
+                             ["issue", "list", "--state", "merged"],
+                             ["issue", "view", "10", "--web"],
+                             ["pr", "list", "--author", "someone"],
+                             ["pr", "view", "1", "--comments"],
+                             ["repo", "view", "--web"],
+                             ["search", "issues", "export"]):
+                    result = call(args)
+                    self.assertNotEqual(result.returncode, 0, args)
+                    self.assertEqual(result.stdout, "", args)
                 self.assertEqual(snapshot_file.read_bytes(), before)
 
                 log = [json.loads(line) for line in
                        (workspace / ".snapshot/gh-calls.jsonl").read_text().splitlines()]
                 self.assertEqual(len(log), len(calls))
-                for entry, (argv, result) in zip(log, calls):
-                    self.assertEqual(entry["argv"], argv[1:])
+                for entry, (args, result) in zip(log, calls):
+                    self.assertEqual(entry["argv"], args)
                     self.assertEqual(entry["exit"], 0 if result.returncode == 0 else 1)
                     self.assertEqual(entry["stdout_bytes"], len(result.stdout.encode()))
                     self.assertEqual(entry["stderr_bytes"], len(result.stderr.encode()))
-                self.assertIn("issue view", {entry["kind"] for entry in log})
+                    self.assertEqual(entry["exe"], env["stand_in"])
+                    exposed = [n for n, issue in issues.items()
+                               if json.dumps(issue["body"])[1:-1] in result.stdout or issue["body"] in result.stdout]
+                    self.assertEqual(entry["text"], exposed, args)
+                    if args[:2] == ["issue", "view"] and entry["exit"] == 0:
+                        number = int(args[2])
+                        self.assertEqual(entry["text"], [number])
+                        self.assertEqual(entry["comments"], [number] if issues[number]["comments"] else [])
+                    elif "--jq" in args and args[0] == "api":
+                        self.assertEqual((entry["text"], entry["comments"]), ([], []))
 
     def test_old_snapshot_is_supplied_without_the_judging_cases(self):
         bundle = self.root / "snapshot"

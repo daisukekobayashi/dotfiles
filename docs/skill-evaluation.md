@@ -78,23 +78,36 @@ The `github-issue-triage` suite checks that triage under the detail band, which
 reads issue text only where the recommendation depends on it, keeps the
 recommendation of a triage that reads every issue in full. Each of its four
 scenarios is an offline snapshot of list data, native relationships, and issue
-text: a dependent whose text changes its blocker's rank, a comment that
+text: a dependent whose text changes its blocker's rank, a comment that alone
 supersedes an item, a list-only item whose touched areas overlap the next item,
 and a control in which no read changes a placement. Each scenario has a
 `default` case and a `full-read` case with the same files and expected answer;
 the full-read prompt names every open issue for a detail read. The fixture's
 `bin/gh` answers the `gh` commands the skill documents from
-`.snapshot/issues.json`, applies `--jq` through the system `jq`, refuses every
-other command and every write, and logs each call's stdout bytes to
-`.snapshot/gh-calls.jsonl`. Its `execution` object puts `<workspace>/bin` first
-on `PATH` and otherwise uses the `change-review` policy for both agents. It also
-fixes, before any run, the decision rule: a run matches when its next issue,
-current wave, and next wave equal the case's `expected` answer, and, in the
-overlap scenario, it does not pair the overlapping issue with the next issue as
-parallel work. Full-read runs are graded the same way as a control, and a
-default run that fails where the full-read runs of the same agent pass marks a
-detail-band regression. Each run records its next issue, both waves, its detail
-reads, and its `gh` bytes; bytes are measured, not gated.
+`.snapshot/issues.json`, applies the filters it accepts, prints compact JSON as
+`gh` does off a terminal, applies `--jq` through the system `jq`, refuses every
+other command, flag, and write, and logs each call's stdout bytes and the
+issues whose text the call returned. Before launch, `evals/stage_gh.py stage`
+copies that stand-in into a read-only directory outside every path the
+candidate can write and prints the launch `PATH`: the staged copy first, then
+the caller's `PATH` without empty, relative, workspace, or temp-directory
+entries. Inherited Claude hooks run outside the sandbox with that `PATH`, so a
+candidate cannot plant an executable for them. After the run, `stage_gh.py
+collect` copies the call log, read only as a regular file inside the
+workspace, to the run's evidence directory before cleanup, and the run is
+reconciled with its transcript. The `execution` object otherwise uses the
+`change-review` policy for both agents and fixes the decision rule before any
+run: a run matches when its next issue, current wave, and next wave equal the
+case's `expected` answer, and a default run in the overlap scenario also must
+not pair the overlapping issue with the next issue as parallel work. The read
+scope comes from the call log, not the report: a full-read run that did not
+receive every issue's text and comments is rerun, a default run that received
+every issue's text does not count as detail-band evidence, and a default
+overlap run that read the overlapping issue does not count for the list-only
+guard. A counted default run that fails where the full-read runs of the same
+agent pass marks a detail-band regression. Each run records its next issue,
+both waves, its parallel groups, its detail reads, and its `gh` bytes; bytes
+are measured, not gated.
 
 `bats tests/setup_pstack_skills.bats tests/skill_evals.bats` checks both agent
 layouts and preparation behavior. Those checks do not establish real-model

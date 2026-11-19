@@ -78,7 +78,7 @@
       "author": "maintainer-a",
       "created_at": "2026-10-08T09:00:00Z",
       "updated_at": "2026-11-08T09:00:00Z",
-      "body": "## Summary\n\nPart of export v1: let `tasklet export --columns done,title` choose CSV columns and their order. Supersedes #20, which covered selection only.\n\n## Acceptance Criteria\n\n- `--columns <list>` limits the CSV to the named columns, in the given order.\n- An unknown column exits with status 2.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/cli.py`\n- `tests/test_export.py`\n",
+      "body": "## Summary\n\nPart of export v1: let `tasklet export --columns done,title` choose CSV columns and their order.\n\n## Acceptance Criteria\n\n- `--columns <list>` limits the CSV to the named columns, in the given order.\n- An unknown column exits with status 2.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/cli.py`\n- `tests/test_export.py`\n",
       "comments": [],
       "blocked_by": [],
       "sub_issues": []
