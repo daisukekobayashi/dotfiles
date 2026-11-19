@@ -427,7 +427,7 @@ test("triage skills read item text only for the shared detail band", async () =>
   }
   const azure = await readText(path.join(repoRoot, "skills", "local", "azure-devops-work-item-triage", "SKILL.md"));
   assert.match(azure, /--expand relations --query "relations\[\?rel=='System\.LinkTypes\.Dependency-Reverse'/);
-  assert.match(azure, /`az boards work-item show --id <id> --expand none --fields System\.State,System\.Description,System\.CommentCount`/);
+  assert.match(azure, /`az boards work-item show --id <id> --expand none --fields System\.State,System\.Description,Microsoft\.VSTS\.TCM\.ReproSteps,Microsoft\.VSTS\.Common\.AcceptanceCriteria,System\.CommentCount`,/);
   assert.doesNotMatch(azure, /work-item show --id <[a-z-]+> --fields/, "azure --fields without --expand none conflicts with the default expansion");
   assert.match(azure, /rel=='System\.LinkTypes\.Hierarchy-Reverse' \|\| rel=='ArtifactLink'/);
   assert.match(azure, /az devops invoke --area wit --resource comments [^`]*--api-version 7\.1-preview --query/);
