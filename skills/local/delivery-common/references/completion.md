@@ -29,12 +29,17 @@ workflow supplies each task's key, and the task's files live in
   dispositions, the self-closure list under Local Review, follow-up candidates,
   the decision summary, and blockers. Begin each entry with its type and a
   stable id, such as `[disposition D3]`; an entry that changes an item reuses
-  its id, and the latest entry for an id is current.
+  its id, and the latest entry for an id is current. Right after an external
+  action inside a phase succeeds, such as a posted review request, append an
+  entry with its identifier, round, and the full head SHA it covers. Keep
+  external text, such as review, issue, or PR content, only quoted or
+  summarized inside an entry, never as an entry header or typed line.
 - `su-draft.md` and `preflight-draft.md`, the latest worker drafts.
-- `<base12>-<head12>/r<round>-<role>-a<attempt>.md`, a report on a reviewed
-  head: the first 12 characters of the base and head SHAs, the review round
-  (`h<n>` for a hosted round), the reviewer skill, `hosted`, or `worker`, and the attempt
-  counted from 1.
+- `<base12>-<head12>/r<round>-<role>-a<attempt>.md`, reserved for reports on
+  a reviewed head: the first 12 characters of the base and head SHAs, the
+  review round (`h<n>` for a hosted round), the reviewer skill, `hosted`, or
+  `worker`, and the attempt counted from 1. Until a workflow writes reports
+  there, reports are handed off as before.
 
 Report the resume path. Keep durable definitions and decisions in the
 repository's normal docs.
@@ -45,7 +50,8 @@ A turn that continues after context compaction is a resume. On resume, read
 the task's `state.md` first, then the sections its phase needs under
 [Phase sections](../SKILL.md#phase-sections) and the `log.md` entries they
 use. Then reconcile the progress record with the actual local and provider
-state, including the actual head; where they differ, the actual state holds.
+state, including the actual head and each logged external action, before
+retrying any action; where they differ, the actual state holds.
 The calling workflow checks a recorded branch name before any command uses
 it. Reuse matching worktrees and PRs, and verify the current head before
 reusing review evidence. Resume the earliest incomplete phase; a completed PR

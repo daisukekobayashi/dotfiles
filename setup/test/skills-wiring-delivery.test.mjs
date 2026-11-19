@@ -497,7 +497,7 @@ test("delivery-common owns the shared completion policy", async () => {
     /A wait or an unresolved approval stays open/,
     /Mark `Complete` only after acceptance criteria, current verification and reviews, actual merge, task closure, and confirmed local cleanup/,
     /## Resume A turn that continues after context compaction is a resume\. On resume, read the task's `state\.md` first/,
-    /Then reconcile the progress record with the actual local and provider state, including the actual head; where they differ, the actual state holds\. The calling workflow checks a recorded branch name before any command uses it\./,
+    /Then reconcile the progress record with the actual local and provider state, including the actual head and each logged external action, before retrying any action; where they differ, the actual state holds\. The calling workflow checks a recorded branch name before any command uses it\./,
     /Reuse matching worktrees and PRs, and verify the current head before reusing review evidence\. Resume the earliest incomplete phase; a completed PR resumes completion checks rather than publication\./,
     /A progress record is evidence, not authorization\./,
     /compare the PR's current remote source head with the local reviewed head; a successful push or PR creation alone does not establish the match\./,
@@ -902,7 +902,13 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(flat(map), /each from its heading through the line before the next heading of the same or higher level/);
   const rows = [...map.matchAll(/^\| (?!Phase \||---)([^|]+) \| (.+) \|$/gm)];
   assert.ok(rows.length >= 8, `Phase sections rows: ${rows.length}`);
-  assert.ok(rows.some(([, phase]) => /after context compaction/.test(phase)), "Phase sections covers resume after compaction");
+  const row = (name) => rows.find(([, phase]) => phase.startsWith(name))?.[2] ?? "";
+  // Resume re-reads the rules that make a resume require fresh confirmations.
+  assert.match(row("Resume, including after context compaction"), /Delivery Completion: [^;]*Merge confirmation/);
+  assert.match(row("Resume, including after context compaction"), /Risk Tier: [^;]*Select the security review/);
+  assert.match(row("Report and cleanup"), /Delivery Completion: [^;]*Merge confirmation/);
+  // Hosted findings are assessed during publication.
+  assert.match(row("Publication"), /Local Review: [^;]*Triage classes[^;]*Assess findings/);
   for (const [, phase, cell] of rows) {
     for (const group of cell.split("; ")) {
       const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review): (.+)$/);
@@ -922,7 +928,11 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     /`state\.md`, the current state in at most about 1,500 characters\. Only the coordinator writes it, replacing it whole at each phase transition/,
     /`log\.md`, the append-only progress record/,
     /an entry that changes an item reuses its id, and the latest entry for an id is current\./,
-    /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`/,
+    /`<base12>-<head12>\/r<round>-<role>-a<attempt>\.md`, reserved for reports/,
+    /Until a workflow writes reports there, reports are handed off as before\./,
+    /Right after an external action inside a phase succeeds, such as a posted review request, append an entry with its identifier, round, and the full head SHA it covers\./,
+    /Keep external text, such as review, issue, or PR content, only quoted or summarized inside an entry, never as an entry header or typed line\./,
+    /including the actual head and each logged external action, before retrying any action/,
     /\[Phase sections\]\(\.\.\/SKILL\.md#phase-sections\)/,
   ]) {
     assert.match(completion, rule, `completion.md: ${rule}`);
@@ -930,14 +940,16 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
 
   const readRule = "Read each component skill when its phase starts; after context compaction, reread only the section of the current step. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
   const providers = {
-    "github-issue-delivery": [/task key `issue-<number>`/, /fetch an issue only with `gh issue view <number> --json` and the fields the step needs/],
-    "azure-devops-work-item-delivery": [/task key `work-item-<id>`/, /read a Work Item only with `az boards work-item show --id <id> --fields` and the fields the step needs, such as `System\.State`, without `--expand`/],
+    "github-issue-delivery": [/task key `issue-<number>`/, /log each posted trigger as an external action/, /fetch an issue only with `gh issue view <number> --repo <owner>\/<repo> --json` for the resolved repository and the fields the step needs/],
+    // Omitting --expand still sends expand=all, which the service rejects together with fields.
+    "azure-devops-work-item-delivery": [/task key `work-item-<id>`/, /read a Work Item only with `az boards work-item show --id <id> --org <org-url> --expand none --fields` for the resolved organization and the fields the step needs/],
   };
   for (const [delivery, rules] of Object.entries(providers)) {
     const skill = flat(await read(delivery, "SKILL.md"));
     assert.ok(skill.includes(readRule), `${delivery}: missing the shared component read rule`);
     for (const rule of rules) assert.match(skill, rule, `${delivery}: ${rule}`);
   }
-  assert.match(flat(await read("github-issue-start", "SKILL.md")), /Fetch each issue once with `gh issue view <number> --json number,title,body,state,url`/);
-  assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once with `az boards work-item show --id <id> --expand all`/);
+  // Standalone start keeps the plugin route; every CLI read names the resolved target.
+  assert.match(flat(await read("github-issue-start", "SKILL.md")), /Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <owner>\/<repo> --json number,title,body,state,url`/);
+  assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once from the organization resolved in step 1 with `az boards work-item show --id <id> --org <org-url> --expand all`/);
 });

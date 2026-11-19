@@ -90,8 +90,9 @@ transcript `~/.claude*/projects/<project>/<session>.jsonl` から測ります。
 [英語版](skill-evaluation.md#delivery-coordinator-context)を使います。
 
 あわせて、見落としたレビュー(tierが選んだのに実行されなかったもの)と
-判断(ユーザーに聞かずに進めたもの)を数えます。heredocでの書き込みは
-コマンド本文がコストになり、ツール結果の文字数には含まれません。
+判断(ユーザーに聞かずに進めたもの)を数えます。最後のjqはheredoc・`tee`・
+リダイレクトによる書き込みを読み込みより先に判定します。書き込みは
+`input_chars`、読み込みとissue取得は `result_chars` で比べます。
 
 実行前の確認には静的な**読み込み文字数の代理指標**を使えます。
 delivery-commonのPhase sectionsの各フェーズについて、`delivery-common/SKILL.md`

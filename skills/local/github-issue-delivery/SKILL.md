@@ -51,9 +51,10 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
 4. Keep a progress record per issue under
    [Delivery Completion](../delivery-common/references/completion.md) with the
    task key `issue-<number>`, adding the hosted review round count and the PR
-   trigger and thread identifiers. After `github-issue-start`'s initial fetch,
-   fetch an issue only with `gh issue view <number> --json` and the fields the
-   step needs, such as `state,stateReason`.
+   trigger and thread identifiers; log each posted trigger as an external
+   action. After `github-issue-start`'s initial fetch, fetch an issue only with
+   `gh issue view <number> --repo <owner>/<repo> --json` for the resolved
+   repository and the fields the step needs, such as `state,stateReason`.
 
 On resume, follow Delivery Completion's Resume with GitHub state. Stop and
 report the recorded branch unless it is a **safe branch name** before running

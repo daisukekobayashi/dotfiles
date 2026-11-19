@@ -61,8 +61,9 @@ cycle.
    task key `work-item-<id>`, adding the organization, project and repository
    IDs, the PR ID and source/target refs, the policy and merge state, and the
    Work Item state. After `azure-devops-work-item-start`'s initial fetch, read a
-   Work Item only with `az boards work-item show --id <id> --fields` and the
-   fields the step needs, such as `System.State`, without `--expand`.
+   Work Item only with `az boards work-item show --id <id> --org <org-url>
+   --expand none --fields` for the resolved organization and the fields the
+   step needs, such as `System.State`.
 
 On resume, follow Delivery Completion's Resume with Azure DevOps state. Stop
 and report the recorded branch unless it is a **safe branch name** before

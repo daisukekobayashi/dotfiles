@@ -25,8 +25,8 @@ exact target, and existing approvals to the worker; a brief alone grants none.
 
 1. Resolve the current Azure DevOps organization, project, repository, and parse
    every Work Item ID in the prompt.
-2. Fetch each Work Item once with `az boards work-item show --id <id> --expand all`,
-   and hand off the dependencies and touched areas collected below so later
+2. Fetch each Work Item once from the organization resolved in step 1 with
+   `az boards work-item show --id <id> --org <org-url> --expand all`, and hand off the dependencies and touched areas collected below so later
    phases need not fetch it again.
    - Collect dependencies from `Predecessor` relations and from
      `Blocked by #<id>` lines in the description.

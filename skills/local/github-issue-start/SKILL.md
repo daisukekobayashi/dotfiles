@@ -22,7 +22,7 @@ and existing approvals to the worker; a brief alone grants none.
 ## Workflow
 
 1. Resolve the current repo from local git context and parse every `#<issue>` in the prompt.
-2. Fetch each issue once with `gh issue view <number> --json number,title,body,state,url`, and hand off the dependencies and touched areas collected below so later phases need not fetch the body again.
+2. Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <owner>/<repo> --json number,title,body,state,url`, and hand off the dependencies and touched areas collected below so later phases need not fetch the body again.
    - Collect dependencies from `Blocked by #<n>` lines in each body and from GitHub's native relationships with `gh api repos/<owner>/<repo>/issues/<number>/dependencies/blocked_by`. If the relationship API is unavailable or fails, use the body lines alone and say so.
    - Collect each issue's `Touched Areas` section when present. When it is absent, infer likely areas from the body and repository, and label them as inferred.
    - When multiple issues were provided, list open PRs and fetch changed files with `gh pr view <number> --json files` for PRs that may overlap with the requested issues.

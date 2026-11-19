@@ -88,31 +88,38 @@ number of issues, rounds, and phases) from their Claude Code transcripts,
 separate files, so these numbers cover the coordinator alone.
 
 ```bash
-f=<session>.jsonl
+f="$HOME/.claude/projects/PROJECT/SESSION.jsonl"  # replace PROJECT and SESSION
 # Peak context tokens of the coordinator.
 jq -s '[.[] | select(.type=="assistant" and (.isSidechain|not) and .message.usage)
   | .message.usage | .input_tokens + (.cache_creation_input_tokens//0)
   + (.cache_read_input_tokens//0)] | max' "$f"
 # Compaction count.
 jq -s '[.[] | select(.type=="system" and .subtype=="compact_boundary")] | length' "$f"
-# Tool result characters by tool, with Bash split into reads, issue fetches, and heredoc writes.
+# Characters by tool: writes cost their input, reads and fetches their result.
 jq -s '[.[] | select(.isSidechain|not)] as $e
   | ([$e[] | select(.type=="assistant") | .message.content[]? | select(.type=="tool_use")
-      | {key: .id, value: (if .name=="Bash" then (.input.command
-          | if test("(^|[;&| ])(cat|sed -n|head|tail) [^|]*\\.md") then "Bash:read-md"
-            elif test("gh issue (view|list)") then "Bash:gh-issue"
-            elif test("<<") then "Bash:heredoc" else "Bash:other" end)
-          else .name end)}] | from_entries) as $kind
+      | {key: .id, value: {
+          kind: (if .name=="Bash" then (.input.command
+              | if test("<<|\\btee\\b|(^|[^0-9&>])>>?[ ]*(?!/dev/null|&)[^ ]") then "Bash:write"
+                elif test("(^|[;&| ])(cat|sed -n|head|tail) [^|]*\\.md") then "Bash:read-md"
+                elif test("gh issue (view|list)|az boards work-item show") then "Bash:issue-fetch"
+                else "Bash:other" end)
+            else .name end),
+          input: ((.input.command // .input.content // .input.new_string // (.input | tostring)) | length)}}]
+      | from_entries) as $use
   | [$e[] | select(.type=="user") | .message.content[]? | select(.type=="tool_result")
-      | {k: ($kind[.tool_use_id] // "?"), n: (.content | if type=="string" then length
-          else ([.[]? | .text? // ""] | add // "" | length) end)}]
-  | group_by(.k) | map({kind: .[0].k, calls: length, chars: (map(.n) | add)})
-  | sort_by(-.chars)' "$f"
+      | ($use[.tool_use_id] // {kind: "?", input: 0})
+        + {result: (.content | if type=="string" then length
+            else ([.[]? | .text? // ""] | add // "" | length) end)}]
+  | group_by(.kind) | map({kind: .[0].kind, calls: length,
+      input_chars: (map(.input) | add), result_chars: (map(.result) | add)})
+  | sort_by(-(.input_chars + .result_chars))' "$f"
 ```
 
 Also count missed reviews and decisions: a review the tier selected that did
-not run, or a user decision the coordinator acted on without asking. Heredoc
-writes cost their command text, which these results do not count.
+not run, or a user decision the coordinator acted on without asking. The last
+query classifies heredoc, `tee`, and redirect writes before reads, so compare
+`input_chars` for writes and `result_chars` for reads and issue fetches.
 
 A delivery-skill change can be checked before such a run with a static
 **chars-read proxy**: for each phase in delivery-common's Phase sections, sum
