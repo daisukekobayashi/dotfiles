@@ -99,10 +99,10 @@ verdict rule in the Report section.
    before adding the count, or count them from its output.
 5. **Does it reproduce?** Run each side at least 5 times, alternating (A, B,
    A, B, and so on) so warmup, lazy initialization, caches, and drift favor
-   neither. Report the median and range. A gap smaller than the run-to-run
-   variation is no measurable difference. Compare the measured spread with
-   the noise floor you wrote down. When the call is close, use a rank-sum test
-   or the harness's own statistics.
+   neither. Record the median and range, and compare the measured spread with
+   the noise floor you wrote down; the verdict rule in the Report section says
+   what each outcome means. When the call is close, use a rank-sum test or the
+   harness's own statistics.
 6. **Does it matter?** Next to any micro result, measure the end-to-end path a
    user waits on, with realistic data sizes and concurrency, and report the
    micro result as a share of the whole. A helper that takes 1% of a request
@@ -119,9 +119,10 @@ verdict rule in the Report section.
   inconclusive. In ballpark mode, label it a one-run estimate.
 - Verdict rule: any check the mode requires that was not run makes the verdict
   inconclusive; name each gap. In full mode, the verdict is also inconclusive
-  when the measured spread is larger than the written noise floor or than the
-  effect, when you claim a difference but cannot name the limiter, or when a
-  side ran untuned.
+  when the measured spread is larger than the written noise floor, when you
+  claim a difference but cannot name the limiter, or when a side ran untuned.
+  Otherwise, an effect within the run-to-run spread is no measurable
+  difference.
 - Give the number with its unit, the run count, the range, and the limiter.
   For example, "p50 41 ms -> 33 ms, median of 7 runs per side, range 32 to
   35 ms after, bound by JSON parsing on one core."
