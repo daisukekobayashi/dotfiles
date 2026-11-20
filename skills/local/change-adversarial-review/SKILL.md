@@ -1,6 +1,6 @@
 ---
 name: change-adversarial-review
-description: Use only when explicitly invoked with `$change-adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items.
+description: Use only when explicitly invoked with `$change-adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items. It executes the reviewed head's code in a disposable worktree to prove findings, automatically only for the user's own changes.
 ---
 
 # Change Adversarial Review
@@ -15,7 +15,9 @@ repros only in a disposable worktree under
 
 Unless you are the reviewer this section launched, you are the launcher under
 [Repro Runs](../delivery-common/references/repro-runs.md#roles). Before the
-reviewer starts, create its disposable worktree at the reviewed head under
+reviewer starts, decide whether runs are automatic under
+[Provenance](../delivery-common/references/repro-runs.md#provenance), and
+create its disposable worktree at the reviewed head under
 [Disposable worktree](../delivery-common/references/repro-runs.md#disposable-worktree).
 After it ends, including a failed run or a bound, remove it under
 [Remove](../delivery-common/references/repro-runs.md#remove), then rerun each
@@ -26,7 +28,8 @@ before acting on its finding.
 By default, run this review in one fresh subagent of the current host instead
 of the current session: a Claude Code subagent on Claude Code, a Codex subagent
 on Codex. Give it this skill's path, the arguments, target, focus, caller
-context, and the disposable worktree's path, and require it to follow the steps
+context, the disposable worktree's path, and whether runs are automatic, and
+require it to follow the steps
 below without editing the reviewed worktree, running commands only in the
 disposable worktree under
 [Boundary](../delivery-common/references/repro-runs.md#boundary). Report the
@@ -142,7 +145,9 @@ weight it heavily, but still report any other material issue you can defend.
 
 ### Prove
 
-Back each finding with a run against the real code where a run is possible:
+Back each finding with a run against the real code where a run is possible
+and the launcher reports that runs are automatic under
+[Provenance](../delivery-common/references/repro-runs.md#provenance):
 a failing test, a repro script, or command output that shows the wrong
 behavior, run in the disposable worktree under
 [Repro Runs](../delivery-common/references/repro-runs.md) and within its
@@ -155,8 +160,10 @@ For a design flaw, try a probe of the current tree first.
 Keep a finding that no run can show, and give it the
 [Proof](../delivery-common/references/repro-runs.md#proof) status
 `unproven: <reason>`; its severity and tag stay as the evidence supports. Do
-not run a command whose effects leave the disposable worktree: name it and
-report the finding `unproven: needs approval`. A run that reaches its bound or
+not run a command whose effects leave the disposable worktree, or any command
+when runs need approval: name the exact commands and report the finding
+`unproven: needs approval`. Restore dependencies with lifecycle scripts off
+under [Boundary](../delivery-common/references/repro-runs.md#boundary). A run that reaches its bound or
 fails proves nothing.
 
 ### Finding Bar
@@ -233,7 +240,7 @@ and return only the report path and its completion:
 
 **Coverage and Residual Risk**
 - <coverage, skipped evidence, test gaps, stale refs, uncertainty>
-- <repro runs: total time, bounds reached, and the boundary's residual scope>
+- <repro runs: provenance, total time, bounds reached, evidence path, and the boundary's residual scope>
 ```
 
 Report every material defect under Material Findings with a label and tag;

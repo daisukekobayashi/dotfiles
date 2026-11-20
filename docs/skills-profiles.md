@@ -145,7 +145,10 @@ report, the reviewer runs repros only there (Codex with `--write` and that
 worktree as `--cwd`), and the coordinator copies the evidence, removes the
 worktree without confirmation, and reruns each proving command in a fresh one
 before acting on the finding. Commands whose effects would leave the worktree
-wait for the user's approval, and each finding reports its proof status, so a
+wait for the user's approval, as do all runs on a head that is not the user's
+own work, such as an external pull request; dependencies restore with
+lifecycle scripts off, and the coordinator inspects each retained command and
+repro file before rerunning it. Each finding reports its proof status, so a
 finding no run can show stays `unproven` instead of being dropped.
 `delivery-common`'s `repro-runs.md` holds these rules and their bounds, and
 [ADR 0002](adr/0002-run-to-prove-isolation.md) records why.

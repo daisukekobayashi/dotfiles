@@ -144,7 +144,10 @@ head で detached の worktree をレビュー report の横に作り、reviewer
 再現を実行します（Codex は `--write` を付け、その worktree を `--cwd` にします）。
 コーディネーターは証拠をコピーしてから worktree を確認なしで削除し、finding に
 基づいて行動する前に、新しい worktree で各証明コマンドを再実行します。影響が
-worktree の外に出るコマンドはユーザーの承認を待ちます。各 finding は証明の状態を
+worktree の外に出るコマンドはユーザーの承認を待ちます。外部の pull request など、
+ユーザー自身の作業ではない head での実行もすべて承認を待ちます。依存関係は
+lifecycle script を無効にして復元し、コーディネーターは保存されたコマンドと再現
+ファイルを確認してから再実行します。各 finding は証明の状態を
 報告するので、実行で示せない finding は捨てられずに `unproven` として残ります。
 これらのルールと上限は `delivery-common` の `repro-runs.md` にあり、理由は
 [ADR 0002](adr/0002-run-to-prove-isolation.ja.md) に記録しています。

@@ -16,7 +16,8 @@ concurrently, run them one at a time and report that.
 `change-adversarial-review` backs its findings with runs against the real code
 under [Repro Runs](repro-runs.md). The coordinator is its launcher and parent:
 it creates and removes the reviewer's disposable worktree and reruns each
-proving command before acting on the finding.
+proving command before acting on the finding. The delivery's own worker head
+makes runs automatic under [Provenance](repro-runs.md#provenance).
 
 Include [Foreground Checks](../SKILL.md#foreground-checks) in every reviewer
 brief, for full reviews and focused follow-ups, and handle each reviewer's

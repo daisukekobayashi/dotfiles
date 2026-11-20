@@ -42,9 +42,20 @@ required reviewer does not depend on an optional pstack skill.
   launcher to remove, without confirmation, only a disposable worktree it
   created for that run, also after a failure or a bound. Every other removal
   keeps its confirmation.
+- **Provenance.** A run executes the reviewed code, its tests, and its
+  dependencies with the user's privileges, so the author of that code is an
+  attacker position, as is the author of text that steers the reviewer's
+  repros. Runs are automatic only for the delivery's own worker head or the
+  invoking user's own local changes. For any other head, such as an external
+  pull request or someone else's branch or commit, the reviewer runs nothing,
+  reports the exact commands as `unproven: needs approval`, and the parent runs
+  them only after the user approves them in the user's own message. The skill's
+  description states that it executes the reviewed code.
 - **Boundary.** Commands whose effects stay inside the disposable worktree run
-  automatically, including lockfile-respecting dependency restoration, with
-  `TMPDIR` and package-manager caches pointed inside it. Commands with effects
+  automatically, including lockfile-respecting dependency restoration with
+  lifecycle scripts off (`--ignore-scripts`), with `TMPDIR` and
+  package-manager caches pointed inside it; a check that needs those scripts
+  asks for approval of the restoration command that runs them. Commands with effects
   outside it, such as Docker, home or global configuration, privilege, remote
   writes, shared ports or processes, or opt-in end-to-end suites, are not run
   by the reviewer: the finding is reported `unproven: needs approval` with the
@@ -54,8 +65,9 @@ required reviewer does not depend on an optional pstack skill.
   sandbox protects `.git` and a linked worktree's gitdir but also allows
   `/tmp`, `$TMPDIR`, and the network that the user's Codex configuration
   enables, and the companion cannot override that per run. The subagent route
-  has only the host's permission mode. Every review reports this residual
-  scope.
+  and the parent's rerun have only the host's permission mode, and no
+  instruction binds what the reviewed code does once it runs; the provenance
+  gate covers that. Every review reports this residual scope.
 - **Findings without a run.** A finding no run can show is kept, labeled
   `unproven: <reason>`, with its severity and tag unchanged. `Do not ship`
   stands only on a proven introduced or worsened blocker, or one the parent
@@ -67,7 +79,17 @@ required reviewer does not depend on an optional pstack skill.
   is part of a required reviewer, not an optional workflow, and has no
   registry entry.
 - **Evidence.** Each finding's repro files, command, exit status, and output
-  excerpt are copied beside the report before the worktree is removed. The
+  excerpt are copied, never following a symbolic link, beside the report, or
+  without a report into the launcher's `mktemp -d` directory, before the
+  worktree is removed. The `command` file holds the directory relative to the
+  worktree root and one line of POSIX `sh`.
+- **Parent rerun.** The parent runs outside any sandbox, so before a rerun it
+  displays and reads the command and every repro file, checks that every path
+  is relative, has no `..`, and is no symbolic link, and treats anything that
+  touches the outside of the worktree as `unproven: needs approval`.
+- **Paths.** Disposable worktree paths are built from the real path of their
+  parent directory, since git lists worktrees by real path; macOS's
+  `mktemp -d` returns `/var/...` for `/private/var/...`. The
   review block gains a required per-finding `proof`; `change-review` and
   `change-security-review` write `not requested`. The block moves to the
   `<!-- report-summary v3 -->` delimiter, and the check accepts a v2 block only
@@ -84,6 +106,10 @@ required reviewer does not depend on an optional pstack skill.
   subagent would hold removal power over the repository.
 - **Codex stays read-only, or runs only with enforced network isolation.**
   Either removes most of the Codex route's ability to prove findings.
+- **Run any reviewed head automatically, or rerun in a sandbox only.** Running
+  an external pull request's code without approval exposes the user's
+  credentials and network to its author; the companion offers no sandbox for
+  the parent's own rerun.
 - **Drop findings without a run, as upstream does.** Reviews of skill-text
   changes, most of this repository's deliveries, would return nothing.
 - **Keep the v2 block and add `proof` as a breaking change.** In-flight
