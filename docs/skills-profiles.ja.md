@@ -519,8 +519,10 @@ delivery は `delivery-common` の
 [Optional Workflows](../skills/local/delivery-common/references/optional-workflows.md)
 の registry に登録された pstack workflow だけを実行します。design preflight の
 草案では、interface・data shape・module boundary の one-way door に関する質問に
-`architect` を実行し、High tier ではそのうえで2案が残る質問に `arena` を実行します。
-`arena` の候補は設計スケッチです。未インストールの場合や trigger・tier の条件を
+`architect` を実行し、High tier ではそのうえで2案が残る質問に、`architect` とは
+別の registry entry として `arena` を実行します。`arena` の候補は設計スケッチです。
+delegation がない場合は、coordinator が `architect` を設計のみで自ら実行し、
+`arena` は実行しません。未インストールの場合や trigger・tier の条件を
 満たさない場合は not run として報告します。shared understanding と preflight の
 草案では、現状の挙動や経緯についての主張ごとに `how` または `why` の方法を
 明記します。これらの skill 自体は実行しません。ADR 0001 のその他の行は子 issue で
@@ -538,8 +540,7 @@ frontmatter に `disable-model-invocation: true` を設定します。
 としての起動も認めます。`change-*review` が delivery の phase を記述するのと同じ形です。
 Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出します。
 他の skill からの参照だけでは起動しません。`architect` は、ユーザーが
-`arena` を明示起動した場合と delivery の High tier の preflight が実行する場合を
-除き、自身で設計案を比較します。
+`arena` を明示起動した場合を除き、自身で設計案を比較します。
 
 `how`・`why`・`architect` はタスクの description に従って選択できます。
 共通原則3つは、必要な場面や他の workflow から参照します。

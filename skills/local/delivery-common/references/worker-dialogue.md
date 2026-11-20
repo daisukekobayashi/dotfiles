@@ -61,10 +61,15 @@ For each target, in this order:
    door in an interface, data shape, or module boundary, it applies the
    `architect` entry, then the `arena` entry, of the
    [Optional Workflows](optional-workflows.md#registry) registry, and shows
-   each run's result under its question. It passes each entry's time bound to
-   the skill as its budget and measures wall-clock time from launch to result;
-   a run past its bound is `stopped: time bound` even when it returned a
-   result.
+   each run's result under its question. It invokes `arena` explicitly,
+   forwarding the user's delivery request and exact target: an explicit
+   `$arena` mention on Codex, the skill call on Claude Code. For this entry, an
+   explicit-only skill that the agent can invoke by explicit mention counts as
+   installed. Without delegation, the coordinator applies the `architect`
+   entry itself, design only, and `arena` reports `not run: unavailable` (no
+   delegation). Whoever runs an entry passes its time bound to the skill as
+   its budget and measures wall-clock time from launch to result; a run past
+   its bound is `stopped: time bound` even when it returned a result.
 5. The coordinator verifies the preflight draft the same way. For a Low
    tentative tier, apply Risk Tier's
    [Low check](risk-tier.md#set-and-update-the-tier) before asking. When the

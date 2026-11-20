@@ -540,8 +540,10 @@ workflow only through its entry in the `delivery-common`
 [Optional Workflows](../skills/local/delivery-common/references/optional-workflows.md)
 registry. The design preflight draft runs `architect` on a question about a
 one-way door in an interface, data shape, or module boundary, and at High tier
-runs `arena` on such a question that still has two viable shapes, with design
-sketches as its candidates. Each is reported as not run when it is not
+runs `arena` after `architect`, as its own registry entry, on such a question
+that still has two viable shapes, with design sketches as its candidates.
+Without delegation, the coordinator runs `architect` itself, design only, and
+`arena` is not run. Each is reported as not run when it is not
 installed or its trigger or tier does not hold. Shared understanding and
 preflight drafts name the `how` or `why` method behind each claim about
 current behavior or history, without running those skills. Other ADR 0001
@@ -560,8 +562,7 @@ explicitly user-requested `github-issue-delivery` or
 state their delivery phases.
 Use `$skill-name` in Codex or `/skill-name` in Claude Code. References from
 another skill do not activate these workflows; `architect` compares alternatives
-directly unless the user explicitly invokes `arena` or a delivery's High-tier
-preflight runs it.
+directly unless the user explicitly invokes `arena`.
 
 `how`, `why`, and `architect` remain discoverable by their task descriptions.
 The three principles can be consulted when relevant or by another workflow.

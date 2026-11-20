@@ -1470,23 +1470,37 @@ test("delivery preflight runs architect, then arena at High tier, as registered 
   assert.equal(architect[3], "All tiers");
   assert.equal(architect[4], "15 minutes per invocation");
   assert.match(architect[5], /^Phase input: `decisions` with the qualifying questions, then `shared-understanding`$/);
-  assert.match(architect[6], /in its own context, for design only/);
+  assert.match(architect[6], /in its own context, for design only, or without delegation the coordinator itself, for design only/);
   assert.match(architect[7], /as input to its recommendation only/);
   assert.match(arena[1], /^Design preflight draft, after `architect`/);
   assert.match(arena[2], /^After `architect` ran, a qualifying question still has two viable shapes$/);
   assert.equal(arena[3], "High");
   assert.equal(arena[4], "30 minutes per invocation");
   assert.match(arena[5], /`architect`'s compared shapes, then `shared-understanding`/);
+  // arena stays explicit-only on Codex, so delivery names how it invokes it and when it counts as installed.
+  assert.match(arena[6], /^The worker, invoking `arena` explicitly with the user's delivery request and exact target \(an explicit `\$arena` mention on Codex, the skill call on Claude Code\), so this explicit-only skill counts as installed when the agent can invoke it by explicit mention;/);
   assert.match(arena[6], /design sketches only, with no file edits or worktrees; without delegation, `not run: unavailable` \(no delegation\) and no sequential comparison/);
   assert.match(arena[7], /as input to its recommendation only/);
 
   // The phase text links the registry instead of restating its bounds.
   assert.match(dialogue, /For the draft's questions about a one-way door in an interface, data shape, or module boundary, it applies the `architect` entry, then the `arena` entry, of the \[Optional Workflows\]\(optional-workflows\.md#registry\) registry/);
+  assert.match(dialogue, /It invokes `arena` explicitly, forwarding the user's delivery request and exact target: an explicit `\$arena` mention on Codex, the skill call on Claude Code\. For this entry, an explicit-only skill that the agent can invoke by explicit mention counts as installed\./);
+  assert.match(dialogue, /Without delegation, the coordinator applies the `architect` entry itself, design only, and `arena` reports `not run: unavailable` \(no delegation\)\./);
   assert.match(dialogue, /measures wall-clock time from launch to result; a run past its bound is `stopped: time bound` even when it returned a result\./);
   assert.match(dialogue, /When the confirmed tier is High and the draft reported `arena` as `not run: tier`, have the worker apply its entry again and revise the affected questions before asking them; once the preflight decisions are settled, a later tier rise runs no optional workflow on them\./);
   assert.match(dialogue, /In both drafts, ground each claim about current behavior in the traced path, such as `file:line` \(the `how` method\), and each claim about history in the recorded rationale, such as an ADR, PR, issue, or commit \(the `why` method\), and name the method each claim uses\./);
   assert.match(dialogue, /Neither method requires the `how` or `why` skill\./);
   assert.doesNotMatch(dialogue, /15 minutes|30 minutes/, "worker-dialogue.md restates registry bounds");
+
+  // The profile docs keep architect's own comparison rule and describe arena as its own entry.
+  for (const doc of ["skills-profiles.md", "skills-profiles.ja.md"]) {
+    const text = flat(await readText(path.join(repoRoot, "docs", doc)));
+    assert.doesNotMatch(text, /delivery's High-tier preflight runs it|preflight が実行する場合/, `${doc}: architect does not start arena`);
+  }
+  assert.match(flat(await readText(path.join(repoRoot, "docs", "skills-profiles.md"))),
+    /`architect` compares alternatives directly unless the user explicitly invokes `arena`\./);
+  assert.match(flat(await readText(path.join(repoRoot, "docs", "skills-profiles.md"))),
+    /runs `arena` after `architect`, as its own registry entry,/);
 
   // arena keeps Codex explicit-only and gains only the scoped delivery exception.
   const arenaRoot = path.join(localRoot, "arena");
