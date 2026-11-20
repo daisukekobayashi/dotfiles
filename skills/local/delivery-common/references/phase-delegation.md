@@ -147,9 +147,12 @@ path, and the attempt. On resume of any delegated phase other than cleanup:
    Delivery Completion's [Resume](completion.md#resume) before acting.
 
 A delegated cleanup, including its Caller preview, is never resumed. On a
-resume, before or after the first confirmation, the coordinator tells the
-cleanup agent, continued or fresh, that it is a resume; the agent removes
-nothing, may report which previewed or confirmed targets are gone and which
-remain, and returns `blocked`. The coordinator reports this to the user, and
-the cleanup is redone by the provider's cleanup skill run on its own, with its
-own target listing, confirmation, and checks.
+resume, before or after the first confirmation, the coordinator first records
+the resume in `state.md` with a new attempt, so the cleanup agent's check
+before each removal stops it, and only then tells the cleanup agent, continued
+or fresh, that it is a resume. The agent removes nothing and returns `blocked`,
+listing which previewed or confirmed targets are gone and which remain, or
+stating that it could not observe them. The coordinator reports this to the
+user, and the cleanup is redone by the provider's cleanup skill run on its own,
+with its own target listing, confirmation, and checks. An interrupted Caller
+preview counts as no preview: the coordinator presents the merge alone.

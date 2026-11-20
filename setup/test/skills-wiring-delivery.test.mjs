@@ -1006,7 +1006,14 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     /It resumes through the component skill's own resume and reconciles the logged external actions under Delivery Completion's \[Resume\]\(completion\.md#resume\) before acting\./,
     // A delegated cleanup is never resumed; the standalone cleanup skill redoes it with its own confirmation (user decision L2).
     /On resume of any delegated phase other than cleanup:/,
-    /A delegated cleanup, including its Caller preview, is never resumed\. On a resume, before or after the first confirmation, the coordinator tells the cleanup agent, continued or fresh, that it is a resume; the agent removes nothing, may report which previewed or confirmed targets are gone and which remain, and returns `blocked`\. The coordinator reports this to the user, and the cleanup is redone by the provider's cleanup skill run on its own, with its own target listing, confirmation, and checks\./,
+    /A delegated cleanup, including its Caller preview, is never resumed\./,
+    // The resume is recorded before any contact, so the D4 check stops an old agent still removing (D16).
+    /On a resume, before or after the first confirmation, the coordinator first records the resume in `state\.md` with a new attempt, so the cleanup agent's check before each removal stops it, and only then tells the cleanup agent, continued or fresh, that it is a resume\./,
+    // The observed state is required, not optional (D17).
+    /The agent removes nothing and returns `blocked`, listing which previewed or confirmed targets are gone and which remain, or stating that it could not observe them\./,
+    /the cleanup is redone by the provider's cleanup skill run on its own, with its own target listing, confirmation, and checks\./,
+    // An interrupted preview does not block the merge (D15).
+    /An interrupted Caller preview counts as no preview: the coordinator presents the merge alone\./,
     // No preview falls back to a merge-only confirmation, as the cleanup skills' Caller preview defines.
     /When the Caller preview returns no preview, such as on a non-zero status of its manifest command, the preview agent returns `complete` with a Verification line saying no preview and why\. The coordinator then presents the merge alone, and the cleanup keeps its own confirmation after the merge\./,
   ]) {
@@ -1019,7 +1026,7 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
   assert.match(commonRaw, /^description: .*delegates publication, hosted review, and cleanup calls to agents/m);
   const completion = flat(await read("delivery-common", "references", "completion.md"));
   assert.match(completion, /a delegated phase with its agent, report path, and attempt under \[Phase Delegation\]\(phase-delegation\.md#resume-a-delegated-phase\)/);
-  assert.doesNotMatch(home, /cleanup continues|builds a new manifest|reruns the cleanup skill/, "phase-delegation.md lets a resumed cleanup continue");
+  assert.doesNotMatch(home, /cleanup continues|builds a new manifest|reruns the cleanup skill|may report/, "phase-delegation.md lets a resumed cleanup continue");
   assert.match(completion, /A delegated phase resumes under \[Phase Delegation\]\(phase-delegation\.md#resume-a-delegated-phase\)\./);
   assert.match(completion, /Delegated phase agents write theirs under \[Phase Delegation\]\(phase-delegation\.md#report-path\)\./);
 
