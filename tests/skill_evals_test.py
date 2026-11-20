@@ -419,7 +419,7 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual(self.run_gh(env, ["repo", "view", "--json", "nameWithOwner,url,defaultBranchRef"]).returncode, 0)
 
         # The agent CLI is resolved before the fixed PATH applies, and only from trusted directories.
-        self.assertEqual(env["launch_argv"], [os.path.realpath(self.cli), "--disable-slash-commands"])
+        self.assertEqual(env["launch_argv"], [str(self.cli), "--disable-slash-commands"])
         for name, cli_path in (("missing", str(self.root / "empty-dir")),
                                ("in-tmpdir", str(self.fake_cli(tmpdir / "bin").parent)),
                                ("in-workspace", str(self.fake_cli(workspace / "cli").parent))):
@@ -427,6 +427,32 @@ class SkillEvaluationTests(unittest.TestCase):
                 STAGE.stage(run_json, str(self.root / f"stage-cli-{name}"), tmpdir, cli_path)
             self.assertFalse((self.root / f"stage-cli-{name}").exists())
         shutil.rmtree(workspace / "cli")
+        # A shim that dispatches on its own name, such as mise's node, keeps the path it was found at.
+        dispatcher = self.fake_cli(self.root / "mise-bin", "mise")
+        dispatcher.write_text('#!/bin/sh\ncase "$(basename "$0")" in fakeshim) echo shim;; *) exit 9;; esac\n')
+        shim = self.root / "mise-shims/fakeshim"
+        shim.parent.mkdir()
+        shim.symlink_to(dispatcher)
+        shim_launcher = self.fake_cli(self.root / "shim-launcher", shebang="#!/usr/bin/env fakeshim")
+        shim_path = os.pathsep.join([str(shim_launcher.parent), str(shim.parent)])
+        shim_launch = STAGE.stage(run_json, str(self.root / "stage-shim"), tmpdir, shim_path)
+        self.staged.append(self.root / "stage-shim")
+        self.assertEqual(shim_launch["launch_argv"][:2], [str(shim), str(shim_launcher)])
+        self.assertEqual(subprocess.run([shim_launch["launch_argv"][0]], capture_output=True, text=True,
+                                        timeout=30).stdout, "shim\n")
+        # The kept path and its target must both lie outside the writable roots.
+        writable_shim = tmpdir / "shims/fakeshim"
+        writable_shim.parent.mkdir()
+        writable_shim.symlink_to(dispatcher)
+        planted_target = self.fake_cli(tmpdir / "planted", "mise")
+        (self.root / "trusted-shims").mkdir()
+        (self.root / "trusted-shims/fakeshim").symlink_to(planted_target)
+        for name, directory in (("shim-in-tmpdir", writable_shim.parent),
+                                ("shim-target-in-tmpdir", self.root / "trusted-shims")):
+            with self.subTest(shim=name), self.assertRaises(ValueError):
+                STAGE.stage(run_json, str(self.root / f"stage-{name}"), tmpdir,
+                            os.pathsep.join([str(shim_launcher.parent), str(directory)]))
+            self.assertFalse((self.root / f"stage-{name}").exists())
         # An env-shebang launcher, such as npm's codex, would look its interpreter up on the fixed PATH.
         npm = self.root / "npm-bin"
         interpreter = self.fake_cli(npm, "fakeinterp")
@@ -434,7 +460,7 @@ class SkillEvaluationTests(unittest.TestCase):
         trusted = os.pathsep.join([str(launcher.parent), str(npm)])
         env_launch = STAGE.stage(run_json, str(self.root / "stage-env"), tmpdir, trusted)
         self.staged.append(self.root / "stage-env")
-        self.assertEqual(env_launch["launch_argv"], [os.path.realpath(interpreter), os.path.realpath(launcher),
+        self.assertEqual(env_launch["launch_argv"], [str(interpreter), str(launcher),
                                                      "--disable-slash-commands"])
         planted = self.fake_cli(tmpdir / "interp", "fakeinterp")
         for name, shebang, cli_path in (

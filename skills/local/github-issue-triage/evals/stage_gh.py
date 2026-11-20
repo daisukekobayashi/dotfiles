@@ -122,12 +122,19 @@ def read_regular(root, relative, max_bytes=MAX_BYTES):
 
 
 def resolve_outside(name, caller_path, untrusted):
+    """Return the absolute path where name was found on the caller's PATH.
+
+    The path is kept as found, not resolved, so a shim that dispatches on its
+    own name, such as a mise `node` link to the `mise` binary, still works.
+    Both that path and its resolved target must lie outside the untrusted roots.
+    """
     found = shutil.which(name, path=caller_path)
     if found is None:
         raise ValueError(f"cannot resolve {name} on the caller's PATH")
-    found = os.path.realpath(found)
-    if any(inside(found, root) for root in untrusted):
-        raise ValueError(f"{found} lies in a directory the candidate can write")
+    found = os.path.abspath(found)
+    for path in (found, os.path.realpath(found)):
+        if any(inside(path, root) for root in untrusted):
+            raise ValueError(f"{path} lies in a directory the candidate can write")
     return found
 
 
