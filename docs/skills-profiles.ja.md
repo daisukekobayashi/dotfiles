@@ -515,14 +515,29 @@ Claude Code では、その環境の skill 呼び出し方法を使います。
 
 delivery でのこれらの skill の使い方は
 [ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) で決めています。
-子 issue が実装されるまで、delivery skill は pstack の workflow を実行せず、
-下記の明示呼び出しの規則もそのまま適用されます。
+delivery は `delivery-common` の
+[Optional Workflows](../skills/local/delivery-common/references/optional-workflows.md)
+の registry に登録された pstack workflow だけを実行します。design preflight の
+草案では、interface・data shape・module boundary の one-way door に関する質問に
+`architect` を実行し、High tier ではそのうえで2案が残る質問に、`architect` とは
+別の registry entry として `arena` を実行します。`arena` の候補は設計スケッチです。
+delegation がない場合は、coordinator が `architect` を設計のみで自ら実行し、
+`arena` は実行しません。未インストールの場合や trigger・tier の条件を
+満たさない場合は not run として報告します。shared understanding と preflight の
+草案では、現状の挙動や経緯についての主張ごとに `how` または `why` の方法を
+明記します。これらの skill 自体は実行しません。ADR 0001 のその他の行は子 issue で
+実装予定です。
 
 `arena`・`interrogate`・`blast-radius`・`create-verification-skill`・
 `maintain-verification-skill`・`evaluate-skill`・`benchmark-checklist` は
 ユーザーによる明示起動に限定します。description と本文に加え、Codex には
 `policy.allow_implicit_invocation: false`、Claude Code には SKILL.md の
 frontmatter に `disable-model-invocation: true` を設定します。
+例外は `arena` の delivery step だけです。SKILL.md から
+`disable-model-invocation` を外し、Codex の設定は維持したうえで、description と
+本文冒頭のガードで、ユーザーが明示依頼した `github-issue-delivery` または
+`azure-devops-work-item-delivery` workflow の High tier の design preflight step
+としての起動も認めます。`change-*review` が delivery の phase を記述するのと同じ形です。
 Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出します。
 他の skill からの参照だけでは起動しません。`architect` は、ユーザーが
 `arena` を明示起動した場合を除き、自身で設計案を比較します。

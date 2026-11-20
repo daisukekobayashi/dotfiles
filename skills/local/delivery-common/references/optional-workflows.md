@@ -135,7 +135,9 @@ Each entry is one row. The issue that adds a workflow adds its row, with its
 own trigger, tier gate, and time bound, and states its phase text by linking
 this reference instead of restating the bounds.
 
+Runs as: who invokes the workflow and in what form; Result: what the run produces, where it goes, and what it may be used as.
+
 | Workflow | Phase | Trigger | Tier gate | Time bound | Key | Runs as | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-
-No workflow has an entry yet.
+| `architect` | Design preflight draft, under [Worker Dialogue](worker-dialogue.md#draft-and-ask) | A draft question that clears the preflight question bar and whose one-way door is an interface, data shape, or module boundary | All tiers | 15 minutes per invocation | Phase input: `decisions` with the qualifying questions, then `shared-understanding` | The worker, in its own context, for design only, or without delegation the coordinator itself, for design only; a question it would ask the user becomes a draft question | The compared shapes under each qualifying question in `preflight-draft.md`, as input to its recommendation only |
+| `arena` | Design preflight draft, after `architect`, under [Worker Dialogue](worker-dialogue.md#draft-and-ask) | After `architect` ran, a qualifying question still has two viable shapes | High | 30 minutes per invocation | Phase input: `decisions` with the still-open questions and `architect`'s compared shapes, then `shared-understanding` | The worker, invoking `arena` explicitly with the user's delivery request and exact target (an explicit `$arena` mention on Codex, the skill call on Claude Code), so this explicit-only skill counts as installed when the agent can invoke it by explicit mention; its isolated delegated candidates return design sketches only, with no file edits or worktrees; without delegation, `not run: unavailable` (no delegation) and no sequential comparison | The candidates, the judge's verdict, and the selected shape under each question in `preflight-draft.md`, as input to its recommendation only |

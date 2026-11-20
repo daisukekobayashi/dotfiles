@@ -50,10 +50,15 @@ const expected = [
   "encode-lessons-in-structure", "evaluate-skill", "explain-the-number", "how", "interrogate",
   "maintain-verification-skill", "prove-it-works", "why",
 ];
-const explicitOnly = new Set([
+// Codex keeps every workflow below explicit-only. Claude Code drops
+// disable-model-invocation for a workflow that delivery runs as its step,
+// which then guards that exception in its description and body.
+const codexExplicitOnly = new Set([
   "arena", "benchmark-checklist", "blast-radius", "create-verification-skill", "evaluate-skill",
   "interrogate", "maintain-verification-skill",
 ]);
+const deliveryStep = new Set(["arena"]);
+const claudeExplicitOnly = new Set([...codexExplicitOnly].filter((name) => !deliveryStep.has(name)));
 const metadata = JSON.parse(fs.readFileSync(path.join(root, ".agents/user/skills-profile.json")));
 assert.deepEqual(metadata.localSkills, expected);
 assert.deepEqual(metadata.external, []);
@@ -68,14 +73,18 @@ for (const agentDir of [".agents", ".claude"]) {
     const agentConfig = fs.readFileSync(path.join(installed, "agents/openai.yaml"), "utf8");
     assert.equal(
       /^disable-model-invocation: true$/m.test(frontmatter),
-      explicitOnly.has(name),
+      claudeExplicitOnly.has(name),
       `${agentDir}/${name}: Claude explicit-only policy`,
     );
     assert.equal(
       /^policy:\n  allow_implicit_invocation: false$/m.test(agentConfig),
-      explicitOnly.has(name),
+      codexExplicitOnly.has(name),
       `${agentDir}/${name}: Codex explicit-only policy`,
     );
+    if (deliveryStep.has(name)) {
+      assert.match(frontmatter, /^description: .*explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow/m);
+      assert.match(entry, /A caller must\s+forward that request and exact target/);
+    }
     for (const match of entry.matchAll(/\]\(([^)]+)\)/g)) {
       if (/^https?:/.test(match[1])) continue;
       assert.ok(fs.existsSync(path.resolve(installed, match[1])), match[1]);

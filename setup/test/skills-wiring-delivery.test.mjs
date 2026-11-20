@@ -907,10 +907,9 @@ test("optional workflows have one provider-neutral home that Missing Prerequisit
   }
   assert.match(section("Record and report"), /under `Optional workflows:` in its \[Worker summary\]\(report-handoff\.md#worker-summary\)/);
 
-  // The registry ships empty; each workflow's issue adds its own row.
+  // Each workflow's issue adds its own row; its own test pins that row.
   const registry = frameRaw.match(/\n## Registry\n[\s\S]*$/)?.[0] ?? "";
   assert.match(registry, /^\| Workflow \| Phase \| Trigger \| Tier gate \| Time bound \| Key \| Runs as \| Result \|$/m);
-  assert.equal(registry.match(/^\| (?!Workflow \||---)/gm), null, "registry has no entries yet");
 
   const completion = flat(await readText(path.join(commonDir, "references", "completion.md")));
   assert.match(completion, /An optional workflow that reaches its time bound or fails stops nothing; report it under \[Optional Workflows\]\(optional-workflows\.md#run-or-report\)\./);
@@ -1449,4 +1448,66 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("delivery preflight runs architect, then arena at High tier, as registered optional workflows", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const commonDir = path.join(localRoot, "delivery-common");
+  const frameRaw = await readText(path.join(commonDir, "references", "optional-workflows.md"));
+  const registry = frameRaw.match(/\n## Registry\n[\s\S]*$/)?.[0] ?? "";
+  const dialogue = flat(await readText(path.join(commonDir, "references", "worker-dialogue.md")));
+
+  // Column meanings are stated once, above the table, for every row.
+  assert.ok(registry.includes("Runs as: who invokes the workflow and in what form; Result: what the run produces, where it goes, and what it may be used as."));
+  const row = (name) => registry.match(new RegExp(`^\\| \`${name}\` \\|.*\\|$`, "m"))?.[0] ?? "";
+  const cells = (name) => row(name).split(" | ").map((cell) => cell.replace(/^\| |\s*\|$/g, ""));
+  const architect = cells("architect");
+  const arena = cells("arena");
+  assert.equal(architect.length, 8, "architect row has eight cells");
+  assert.equal(arena.length, 8, "arena row has eight cells");
+  assert.match(architect[1], /^Design preflight draft, under \[Worker Dialogue\]\(worker-dialogue\.md#draft-and-ask\)$/);
+  assert.match(architect[2], /clears the preflight question bar and whose one-way door is an interface, data shape, or module boundary/);
+  assert.equal(architect[3], "All tiers");
+  assert.equal(architect[4], "15 minutes per invocation");
+  assert.match(architect[5], /^Phase input: `decisions` with the qualifying questions, then `shared-understanding`$/);
+  assert.match(architect[6], /in its own context, for design only, or without delegation the coordinator itself, for design only/);
+  assert.match(architect[7], /as input to its recommendation only/);
+  assert.match(arena[1], /^Design preflight draft, after `architect`/);
+  assert.match(arena[2], /^After `architect` ran, a qualifying question still has two viable shapes$/);
+  assert.equal(arena[3], "High");
+  assert.equal(arena[4], "30 minutes per invocation");
+  assert.match(arena[5], /`architect`'s compared shapes, then `shared-understanding`/);
+  // arena stays explicit-only on Codex, so delivery names how it invokes it and when it counts as installed.
+  assert.match(arena[6], /^The worker, invoking `arena` explicitly with the user's delivery request and exact target \(an explicit `\$arena` mention on Codex, the skill call on Claude Code\), so this explicit-only skill counts as installed when the agent can invoke it by explicit mention;/);
+  assert.match(arena[6], /design sketches only, with no file edits or worktrees; without delegation, `not run: unavailable` \(no delegation\) and no sequential comparison/);
+  assert.match(arena[7], /as input to its recommendation only/);
+
+  // The phase text links the registry instead of restating its bounds.
+  assert.match(dialogue, /For the draft's questions about a one-way door in an interface, data shape, or module boundary, it applies the `architect` entry, then the `arena` entry, of the \[Optional Workflows\]\(optional-workflows\.md#registry\) registry/);
+  assert.match(dialogue, /It invokes `arena` explicitly, forwarding the user's delivery request and exact target: an explicit `\$arena` mention on Codex, the skill call on Claude Code\. For this entry, an explicit-only skill that the agent can invoke by explicit mention counts as installed\./);
+  assert.match(dialogue, /Without delegation, the coordinator applies the `architect` entry itself, design only, and `arena` reports `not run: unavailable` \(no delegation\)\./);
+  assert.match(dialogue, /measures wall-clock time from launch to result; a run past its bound is `stopped: time bound` even when it returned a result\./);
+  assert.match(dialogue, /When the confirmed tier is High and the draft reported `arena` as `not run: tier`, have the worker apply its entry again and revise the affected questions before asking them; once the preflight decisions are settled, a later tier rise runs no optional workflow on them\./);
+  assert.match(dialogue, /In both drafts, ground each claim about current behavior in the traced path, such as `file:line` \(the `how` method\), and each claim about history in the recorded rationale, such as an ADR, PR, issue, or commit \(the `why` method\), and name the method each claim uses\./);
+  assert.match(dialogue, /Neither method requires the `how` or `why` skill\./);
+  assert.doesNotMatch(dialogue, /15 minutes|30 minutes/, "worker-dialogue.md restates registry bounds");
+
+  // The profile docs keep architect's own comparison rule and describe arena as its own entry.
+  for (const doc of ["skills-profiles.md", "skills-profiles.ja.md"]) {
+    const text = flat(await readText(path.join(repoRoot, "docs", doc)));
+    assert.doesNotMatch(text, /delivery's High-tier preflight runs it|preflight が実行する場合/, `${doc}: architect does not start arena`);
+  }
+  assert.match(flat(await readText(path.join(repoRoot, "docs", "skills-profiles.md"))),
+    /`architect` compares alternatives directly unless the user explicitly invokes `arena`\./);
+  assert.match(flat(await readText(path.join(repoRoot, "docs", "skills-profiles.md"))),
+    /runs `arena` after `architect`, as its own registry entry,/);
+
+  // arena keeps Codex explicit-only and gains only the scoped delivery exception.
+  const arenaRoot = path.join(localRoot, "arena");
+  const arenaSkill = await readText(path.join(arenaRoot, "SKILL.md"));
+  const arenaFrontmatter = arenaSkill.match(/^---\n([\s\S]*?)\n---/)[1];
+  assert.match(await readText(path.join(arenaRoot, "agents", "openai.yaml")), /^policy:\n  allow_implicit_invocation: false$/m);
+  assert.doesNotMatch(arenaFrontmatter, /disable-model-invocation/);
+  assert.match(arenaFrontmatter, /^description: Use only when explicitly invoked with `\$arena` .*, or as the High-tier design preflight step of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items\.$/m);
+  assert.match(flat(arenaSkill), /Run only when the user explicitly invokes `arena`, such as `\$arena` in Codex or `\/arena` in Claude Code, or through the user's explicit request for the full `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items, as its High-tier design preflight step\. A caller must forward that request and exact target; a generic comparison request or a skill reference alone does not activate this workflow\./);
 });
