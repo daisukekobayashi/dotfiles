@@ -1,0 +1,82 @@
+{
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "tasklet",
+    "default_branch": "main",
+    "description": "A small command-line task tracker."
+  },
+  "issues": [
+    {
+      "number": 10,
+      "title": "Export: filter tasks with --since",
+      "state": "open",
+      "labels": [
+        "enhancement"
+      ],
+      "milestone": "export-v1",
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-03T09:00:00Z",
+      "updated_at": "2026-11-03T09:00:00Z",
+      "body": "## Summary\n\nLet `tasklet export --since 2026-01-01` export only tasks created on or after a date.\n\n## Acceptance Criteria\n\n- `--since <date>` limits exported rows to tasks created on or after the date.\n- An invalid date exits with status 2 and an error message.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/cli.py`\n- `tests/test_export.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 11,
+      "title": "Refactor storage handle",
+      "state": "open",
+      "labels": [
+        "refactor"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-04T09:00:00Z",
+      "updated_at": "2026-11-04T09:00:00Z",
+      "body": "## Summary\n\n`Store` owns both the task file and the output stream. Split the stream out into a separate writer interface that `terminal.py` and `export.py` take as an argument, so storage owns only the task file.\n\n## Acceptance Criteria\n\n- `Store` no longer holds an output stream.\n- `terminal` and `export` receive the writer as an argument.\n\n## Touched Areas\n\n- `tasklet/storage.py`\n- `tasklet/terminal.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 12,
+      "title": "Follow-up to #11: tidy terminal output",
+      "state": "open",
+      "labels": [
+        "polish"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-05T09:00:00Z",
+      "updated_at": "2026-11-05T09:00:00Z",
+      "body": "## Summary\n\n`tasklet export > tasks.csv` and `tasklet export` in CI crash with `RuntimeError: no terminal`, because `terminal.output_stream` requires a TTY on the storage handle's stream. Export to a file, the main use of the export core feature, does not work at all until this is fixed.\n\n## Acceptance Criteria\n\n- `tasklet export > tasks.csv` writes the CSV and exits 0.\n- `tasklet export` in a non-interactive shell writes the CSV to stdout.\n\n## Dependencies\n\nBlocked by #11: the fix needs the output stream split out of the storage handle.\n\n## Touched Areas\n\n- `tasklet/terminal.py`\n- `tasklet/export.py`\n",
+      "comments": [],
+      "blocked_by": [
+        11
+      ],
+      "sub_issues": []
+    },
+    {
+      "number": 13,
+      "title": "Docs: fix broken link in README",
+      "state": "open",
+      "labels": [
+        "documentation"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-06T09:00:00Z",
+      "updated_at": "2026-11-06T09:00:00Z",
+      "body": "## Summary\n\nThe README links to a CONTRIBUTING file that does not exist yet. Remove the link.\n\n## Acceptance Criteria\n\n- The README has no link to a missing file.\n\n## Touched Areas\n\n- `README.md`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    }
+  ],
+  "pull_requests": []
+}

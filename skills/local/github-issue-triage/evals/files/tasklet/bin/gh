@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""Offline, read-only stand-in for the gh commands that github-issue-triage documents.
+
+It answers only the command forms written in that skill's SKILL.md, from
+../.snapshot/issues.json relative to this file:
+
+  gh repo view --json nameWithOwner,url,defaultBranchRef
+  gh issue list --state open --limit 100 --json number,title,labels,milestone,assignees,updatedAt,createdAt,url
+  gh pr list --state open --limit 50 --json number,title,headRefName,baseRefName,labels,updatedAt,url
+  gh api --hostname <host> --paginate repos/<owner>/<repo>/issues/<number>/dependencies/blocked_by --jq '<documented>'
+  gh api --hostname <host> --paginate repos/<owner>/<repo>/issues/<number>/sub_issues --jq '<documented>'
+  gh issue view <number> --json number,state,body,comments --jq '<documented>'
+  gh pr view <number> --json files --jq '.files[].path'
+
+`gh issue` and `gh pr` calls may add `--repo <host>/<owner>/<repo>`. Flags may
+come in any order and as `--flag value` or `--flag=value`, and a `--json` field
+list may come in any order; the field set and the `--jq` expression must match
+exactly. The documented `--jq` expressions are evaluated here, without jq.
+Every other command, flag, field set, or expression, and an unknown issue or
+pull request, exits 1 with no stdout and a fixed message on stderr.
+
+Only `gh issue view` returns an issue's body and comments, so the issue that
+call names is its detail read. Each call appends one JSON line to the ledger
+named by GH_SNAPSHOT_LOG, or ../.snapshot/gh-calls.jsonl when that is unset:
+the arguments, the matched form or null, the exit status, the stdout and stderr
+byte counts, the detail-read issue or null, and this file's real path.
+"""
+
+import json
+import os
+import re
+import sys
+
+HERE = os.path.realpath(__file__)
+ROOT = os.path.dirname(os.path.dirname(HERE))
+DATA = os.path.join(ROOT, ".snapshot", "issues.json")
+LOG = os.environ.get("GH_SNAPSHOT_LOG") or os.path.join(ROOT, ".snapshot", "gh-calls.jsonl")
+REFUSED = "gh stand-in: refused\n"
+
+RELATION_JQ = '.[] | {repository: (.repository_url | sub("^.*/repos/"; "")), number, state}'
+VIEW_JQ = "{number, state, body, comments: [.comments[] | {author: .author.login, createdAt, body}]}"
+FILES_JQ = ".files[].path"
+
+# form -> (command words, positional pattern or None, required flags, boolean flags, takes --repo)
+FORMS = {
+    "repo view": (["repo", "view"], None, {"--json": "nameWithOwner,url,defaultBranchRef"}, (), False),
+    "issue list": (["issue", "list"], None, {
+        "--state": "open", "--limit": "100",
+        "--json": "number,title,labels,milestone,assignees,updatedAt,createdAt,url"}, (), True),
+    "pr list": (["pr", "list"], None, {
+        "--state": "open", "--limit": "50",
+        "--json": "number,title,headRefName,baseRefName,labels,updatedAt,url"}, (), True),
+    "api blocked_by": (["api"], r"repos/{owner}/{name}/issues/(\d+)/dependencies/blocked_by",
+                       {"--hostname": "{host}", "--jq": RELATION_JQ}, ("--paginate",), False),
+    "api sub_issues": (["api"], r"repos/{owner}/{name}/issues/(\d+)/sub_issues",
+                       {"--hostname": "{host}", "--jq": RELATION_JQ}, ("--paginate",), False),
+    "issue view": (["issue", "view"], r"(\d+)", {"--json": "number,state,body,comments", "--jq": VIEW_JQ}, (), True),
+    "pr view": (["pr", "view"], r"(\d+)", {"--json": "files", "--jq": FILES_JQ}, (), True),
+}
+
+
+class Refusal(Exception):
+    """A call outside the documented forms or the snapshot."""
+
+
+def compact(value, sort_keys=False):
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=sort_keys)
+
+
+def split_flags(tokens, values, booleans):
+    positional, options = [], {}
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token.startswith("-"):
+            name, equals, value = token.partition("=")
+            if name in booleans and not equals:
+                value = True
+            elif name in values:
+                if not equals:
+                    index += 1
+                    if index >= len(tokens):
+                        raise Refusal()
+                    value = tokens[index]
+            else:
+                raise Refusal()
+            if name in options:
+                raise Refusal()
+            options[name] = value
+        else:
+            positional.append(token)
+        index += 1
+    return positional, options
+
+
+def match(args, repo):
+    """Return (form, number) for a documented call, or raise Refusal."""
+    names = {"owner": re.escape(repo["owner"]), "name": re.escape(repo["name"]), "host": repo["host"]}
+    full_repo = f"{repo['host']}/{repo['owner']}/{repo['name']}"
+    for form, (words, pattern, required, booleans, takes_repo) in FORMS.items():
+        if args[:len(words)] != words:
+            continue
+        values = set(required) | ({"--repo"} if takes_repo else set())
+        positional, options = split_flags(args[len(words):], values, set(booleans))
+        if form.startswith("api ") and len(positional) == 1:
+            if not re.fullmatch(pattern.format(**names), positional[0]):
+                continue
+        if set(booleans) - set(options) or set(required) - set(options):
+            raise Refusal()
+        for name, expected in required.items():
+            expected = expected.format(**names) if name == "--hostname" else expected
+            if name == "--json":
+                fields = options[name].split(",")
+                if len(fields) != len(set(fields)) or set(fields) != set(expected.split(",")):
+                    raise Refusal()
+            elif options[name] != expected:
+                raise Refusal()
+        if "--repo" in options and options["--repo"] != full_repo:
+            raise Refusal()
+        if pattern is None:
+            if positional:
+                raise Refusal()
+            return form, None
+        if len(positional) != 1:
+            raise Refusal()
+        found = re.fullmatch(pattern.format(**names), positional[0])
+        if not found:
+            raise Refusal()
+        return form, int(found.group(1))
+    raise Refusal()
+
+
+def find(items, number):
+    for item in items:
+        if item["number"] == number:
+            return item
+    raise Refusal()
+
+
+def labels(names):
+    return [{"color": "ededed", "description": "", "id": f"LA_{name}", "name": name} for name in names]
+
+
+def answer(form, number, snapshot):
+    repo = snapshot["repository"]
+    url = f"https://{repo['host']}/{repo['owner']}/{repo['name']}"
+    issues = snapshot["issues"]
+    if form == "repo view":
+        return compact({"defaultBranchRef": {"name": repo["default_branch"]},
+                        "nameWithOwner": f"{repo['owner']}/{repo['name']}", "url": url}) + "\n"
+    if form == "issue list":
+        chosen = sorted((i for i in issues if i["state"] == "open"), key=lambda i: -i["number"])[:100]
+        return compact([{
+            "assignees": [{"login": login, "name": ""} for login in i.get("assignees", [])],
+            "createdAt": i["created_at"],
+            "labels": labels(i.get("labels", [])),
+            "milestone": {"description": "", "dueOn": None, "number": 1, "title": i["milestone"]}
+            if i.get("milestone") else None,
+            "number": i["number"],
+            "title": i["title"],
+            "updatedAt": i["updated_at"],
+            "url": f"{url}/issues/{i['number']}",
+        } for i in chosen], sort_keys=True) + "\n"
+    if form == "pr list":
+        return compact([{
+            "baseRefName": pr["base"], "headRefName": pr["head"], "labels": labels(pr.get("labels", [])),
+            "number": pr["number"], "title": pr["title"], "updatedAt": pr["updated_at"],
+            "url": f"{url}/pull/{pr['number']}",
+        } for pr in snapshot["pull_requests"][:50]], sort_keys=True) + "\n"
+    if form in ("api blocked_by", "api sub_issues"):
+        issue = find(issues, number)
+        related = issue.get("blocked_by" if form == "api blocked_by" else "sub_issues", [])
+        return "".join(compact({"repository": f"{repo['owner']}/{repo['name']}", "number": n,
+                                "state": find(issues, n)["state"]}) + "\n" for n in related)
+    if form == "issue view":
+        issue = find(issues, number)
+        return compact({
+            "number": issue["number"],
+            "state": issue["state"].upper(),
+            "body": issue["body"],
+            "comments": [{"author": c["author"], "createdAt": c["created_at"], "body": c["body"]}
+                         for c in issue.get("comments", [])],
+        }) + "\n"
+    pr = find(snapshot["pull_requests"], number)
+    return "".join(path + "\n" for path in pr.get("files", []))
+
+
+def main():
+    args = sys.argv[1:]
+    form, detail, out, err, status = None, None, "", REFUSED, 1
+    try:
+        with open(DATA) as handle:
+            snapshot = json.load(handle)
+        form, number = match(args, snapshot["repository"])
+        out, err, status = answer(form, number, snapshot), "", 0
+        detail = number if form == "issue view" else None
+    except (Refusal, OSError, ValueError, KeyError):
+        form, out, err, status = None, "", REFUSED, 1
+    out_bytes, err_bytes = out.encode(), err.encode()
+    entry = {"argv": args, "form": form, "exit": status, "stdout_bytes": len(out_bytes),
+             "stderr_bytes": len(err_bytes), "detail": detail, "exe": HERE}
+    try:
+        with open(LOG, "a") as handle:
+            handle.write(json.dumps(entry) + "\n")
+    except OSError:
+        sys.stderr.write(REFUSED)
+        return 3
+    sys.stdout.buffer.write(out_bytes)
+    sys.stderr.buffer.write(err_bytes)
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main())

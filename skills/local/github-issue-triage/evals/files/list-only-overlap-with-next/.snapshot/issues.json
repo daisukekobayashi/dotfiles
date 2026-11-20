@@ -1,0 +1,82 @@
+{
+  "repository": {
+    "host": "github.com",
+    "owner": "example",
+    "name": "tasklet",
+    "default_branch": "main",
+    "description": "A small command-line task tracker."
+  },
+  "issues": [
+    {
+      "number": 30,
+      "title": "Export: add --delimiter option",
+      "state": "open",
+      "labels": [
+        "enhancement"
+      ],
+      "milestone": "export-v1",
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-03T09:00:00Z",
+      "updated_at": "2026-11-03T09:00:00Z",
+      "body": "## Summary\n\nLet `tasklet export --delimiter ';'` write CSV with another field delimiter.\n\n## Acceptance Criteria\n\n- `--delimiter <char>` sets the CSV field delimiter.\n- A delimiter longer than one character exits with status 2.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/cli.py`\n- `tests/test_export.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 31,
+      "title": "Show a placeholder when the task list is empty",
+      "state": "open",
+      "labels": [
+        "polish"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-04T09:00:00Z",
+      "updated_at": "2026-11-04T09:00:00Z",
+      "body": "## Summary\n\n`tasklet list` prints nothing when there are no tasks. Print `No tasks.` instead.\n\n## Acceptance Criteria\n\n- `tasklet list` with no tasks prints `No tasks.`.\n\n## Touched Areas\n\n- `tasklet/terminal.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 32,
+      "title": "Refactor CSV writer helpers",
+      "state": "open",
+      "labels": [
+        "refactor"
+      ],
+      "milestone": null,
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-05T09:00:00Z",
+      "updated_at": "2026-11-05T09:00:00Z",
+      "body": "## Summary\n\nMove the CSV row building out of `export.py` into a new `csvutil.py`. No behavior change and no interface change.\n\n## Acceptance Criteria\n\n- `export.py` builds rows through `csvutil`.\n- The export output is byte-identical.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/csvutil.py`\n- `tests/test_export.py`\n",
+      "comments": [],
+      "blocked_by": [],
+      "sub_issues": []
+    },
+    {
+      "number": 33,
+      "title": "Export: remember the last delimiter",
+      "state": "open",
+      "labels": [
+        "enhancement"
+      ],
+      "milestone": "export-v1",
+      "assignees": [],
+      "author": "maintainer-a",
+      "created_at": "2026-10-06T09:00:00Z",
+      "updated_at": "2026-11-06T09:00:00Z",
+      "body": "## Summary\n\nStore the delimiter from the last `tasklet export --delimiter` run and reuse it.\n\n## Acceptance Criteria\n\n- A later `tasklet export` without `--delimiter` uses the stored delimiter.\n\n## Dependencies\n\nBlocked by #30.\n\n## Touched Areas\n\n- `tasklet/export.py`\n- `tasklet/storage.py`\n",
+      "comments": [],
+      "blocked_by": [
+        30
+      ],
+      "sub_issues": []
+    }
+  ],
+  "pull_requests": []
+}

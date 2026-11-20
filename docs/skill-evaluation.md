@@ -74,6 +74,53 @@ skill_eval`, both with the same overrides, and record the results. A revision
 runs only the new skill and compares it with the baseline with-skill runs of the
 same agent; rerun the old snapshot when the model or CLI version changed.
 
+The `github-issue-triage` suite checks that triage under the detail band, which
+reads issue text only where the recommendation depends on it, keeps the
+recommendation of a triage that reads every issue in full. Each of its four
+scenarios is an offline snapshot of list data, native relationships, and issue
+text: a dependent whose text changes its blocker's rank, a comment that alone
+supersedes an item, a list-only item whose touched areas overlap the next item,
+and a control in which no read changes a placement. Each scenario has a
+`default` case and a `full-read` case with the same files and expected answer;
+the full-read prompt names every open issue for a detail read. The fixture's
+`bin/gh` answers only the `gh` command forms that the skill's `SKILL.md`
+documents, from `.snapshot/issues.json`, with their exact `--json` field sets
+and `--jq` expressions, which it evaluates itself; it refuses everything else
+with exit 1, no stdout, and a fixed stderr line. Only the documented
+`gh issue view` form returns an issue's body and comments, so the call log
+records each call's arguments, stdout bytes, and that call's issue as its
+detail read. Before launch, `evals/stage_gh.py stage` copies the stand-in into
+a read-only directory outside every path the candidate can write and prints a
+fixed launch `PATH`, never inherited: the staged copy, then `/usr/bin`, `/bin`,
+`/usr/sbin`, and `/sbin`. Because the agent CLI is usually elsewhere, `stage`
+first resolves it to an absolute executable from the coordinator's `PATH`,
+along with the interpreter of a `#!/usr/bin/env <interpreter>` launcher,
+rejects one it cannot resolve or the candidate could write, and prints the
+launch arguments with those paths for both the pre-run checks and the launch. Inherited Claude hooks
+run outside the sandbox with the fixed `PATH`, and a pre-run check records
+that every hook executable resolves outside the writable roots or not at all. After the run and before cleanup,
+`stage_gh.py collect`, within one deadline, opens the call log without
+blocking or following links, accepts only a single-link regular file within a
+byte limit, validates each record, and copies it to the run's evidence
+directory. It derives each record's command form and issue from its arguments
+and exit status with the stand-in's own rules and rejects a record whose
+stored values disagree. A failed collection excludes the run, and each logged
+call is reconciled one to one with the transcript by arguments and exit
+status. The
+`execution` object otherwise uses the `change-review` policy for both agents
+and fixes the decision rule before any run: a run matches when its next issue,
+current wave, and next wave equal the case's `expected` answer, and a default
+run in the overlap scenario also must not pair the overlapping issue with the
+next issue as parallel work. The read scope comes from the reconciled calls'
+arguments, never from the report or output content: a default run that read
+every issue does not count as detail-band evidence, a default overlap run that
+read the overlapping issue does not count for the list-only guard, and a
+full-read run counts only when it read every open issue. Per case and agent,
+a counted default run that fails the rule is a detail-band regression only
+when a majority of the valid full-read runs match the expected answer;
+otherwise the case is inconclusive (suspected case defect). Each run records its next issue, both waves, its parallel groups,
+its detail reads, and its `gh` bytes; bytes are measured, not gated.
+
 `bats tests/setup_pstack_skills.bats tests/skill_evals.bats` checks both agent
 layouts and preparation behavior. Those checks do not establish real-model
 effectiveness. Native skill discovery/triggering is a separate check from the
