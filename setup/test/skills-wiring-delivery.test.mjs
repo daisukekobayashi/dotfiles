@@ -885,7 +885,8 @@ test("optional workflows have one provider-neutral home that Missing Prerequisit
   assert.match(section("Keys"), /Each part is one header line of space-separated ASCII fields ending with byte counts and a line feed, followed by exactly those bytes, so the file decodes back into its parts and no two inputs share a file/);
   assert.match(section("Keys"), /`decisions <byte count>` with the text of the qualifying decisions, then `shared-understanding <byte count>`/);
   assert.match(section("Keys"), /`diff <byte count>` with the output of `git diff --binary --no-ext-diff --no-textconv --no-color HEAD`/);
-  assert.match(section("Keys"), /`git ls-files -z --others --exclude-standard` lists, in byte order of its path: `file <git file mode> <path byte count> <content byte count>`, then the path's bytes, then the content's bytes\./);
+  // Only the task's own new files enter the input, so an unrelated scratch file never changes the key.
+  assert.match(section("Keys"), /one part for each of the task's new files, the untracked files that the work's worker report lists as changed in the task, that `git --literal-pathspecs ls-files -z --others --exclude-standard -- <those paths>` lists, in byte order of its path: `file <git file mode> <path byte count> <content byte count>`, then the path's bytes, then the content's bytes\. Any other untracked file in the worktree stays out of the input and never changes the key\./);
   assert.match(section("Keys"), /`100755` for an executable file, `100644` for any other regular file, and `120000` for a symbolic link, whose content is its target, so a mode change alone changes the key\./);
   assert.match(section("Accounting"), /belongs to that head's local review round under \[Local Review\]\(local-review\.md#repeat-and-advance\) and never adds a round/);
   assert.match(section("Accounting"), /A run keyed to a phase input belongs to no round and counts only against its entry's once-per-key bound\./);
