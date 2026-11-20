@@ -63,7 +63,7 @@ delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change
 | Shared understanding と preflight | 主張を追跡したコードと経緯に基づかせる | 調整して採用 | 草案は追跡した経路または記録された理由を引用します（`how` と `why` の方法）。preflight の草案にインターフェース、データの形、モジュール境界に関する後戻りしにくい決定があるとき、worker はその決定について `architect` を実行し、比較した形を示します。 | 引用と選択肢のルールはすでにあります。`architect` を後戻りしにくい決定に限ると、preflight がすでに絞り込んだ決定だけにコストが収まります。 |
 | Preflight（High tier） | 独立した候補を比較する | 採用 | その決定が `architect` の後も2つの有力な形を残しているとき、worker はその決定について `arena` を実行します。 | `arena` は隔離した複数の作成者を動かすため、手順がすでに重くなる tier で、後戻りしにくい未決の決定に限ります。 |
 | 実装の検証 | 代理ではなく実物を確かめる | 採用 | 各検証に、変更した経路を実行したのか代理の確認だけなのかを明記します。対象プロジェクトに変更した機能を扱う自身の `verify-<app>` skill があれば、worker はそれを実行します。`create-verification-skill` は自動では実行しません。 | 代理だけの確認が区別されずに報告されていました。プロジェクトの `verify-<app>` skill は対象の一部ですが、新たに生成するとタスク外のファイルが増えます。 |
-| skill と指示の変更 | 変更した指示を agent で実行する | 採用 | Medium と High tier で skill や `AGENTS.md` などの指示ファイルの文面を変えた delivery は、現在の agent で `evaluate-skill` を時間の上限つきで1回呼び出し、変更した skill ごとに既存の eval ケースを1つ実行します。指示ファイルだけの変更を含め、該当する eval ケースのない変更は未実行と報告し、Low tier は `not run: tier` と報告します。 | #239 で見えた穴を、1回の delivery が負担できるコストで埋めます。delivery ごとの `evaluate-skill` の完全な比較は高すぎます。 |
+| skill と指示の変更 | 変更した指示を agent で実行する | 採用 | Medium と High tier で skill や `AGENTS.md` などの指示ファイルの文面を変えた delivery は、現在の agent で `evaluate-skill` を時間の上限つきで1回呼び出し、delivery 用のスモークモードで実行します。変更した skill ごとに既存の eval ケースを1つ選び、変更後の指示でそれぞれ1回だけ実行し、ベースラインのセッションは作りません。`evaluate-skill` の通常のベースラインとの比較は delivery では行いません。指示ファイルだけの変更を含め、該当する eval ケースのない変更は未実行と報告し、Low tier は `not run: tier` と報告します。 | #239 で見えた穴を、1回の delivery が負担できるコストで埋めます。delivery ごとの `evaluate-skill` の完全な比較は高すぎます。 |
 | レビュー | 実行で裏付けた指摘 | 2つに分けて採用 | #245 で `change-adversarial-review` の指摘を実行で裏付けます。`change-review` と `change-security-review` は変えません。High tier では delivery が `blast-radius` も実行し、#245 の隔離、後片付け、証拠のルールを再利用します。 | 1つの隔離の設計を両方で使えます。High tier はすでにレビューを重くしています。 |
 | 性能の主張 | 数値を報告する前に説明する | 条件つきで採用 | 変更が高速化や性能低下の数値を主張するとき、本文のルールを適用し、#240 で取り込む計測の workflow を任意 workflow として実行します。 | トリガーが狭く、数値を主張しない変更では実行しません。 |
 | 完了 | 繰り返す誤りを構造で防ぐ | 調整して採用 | follow-up 候補の作成条件に4つ目を加えます。同じ種類の指摘がラウンドや delivery をまたいで2回以上起き、構造による防止策を提案しているものです。提案は、`encode-lessons-in-structure` がインストールされていればそれに沿って作り、なければ本文のルールに従います。`correct` は自動では実行しません。 | 現在の条件ではこうした候補は見送りが推奨されます。`correct` はタスクを超えてリポジトリを編集します。 |
@@ -82,8 +82,9 @@ delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change
 - 上限に達した実行は報告し、証拠としては数えない。
 - ユーザーが delivery の依頼で示した上限や無効化の指定を優先する。
 
-具体的な単位の決め方と数値は、ローカルレビューの予算の範囲内で、下記の基盤の
-issue が決めます。
+この共通の数え方は、フェーズの入力を単位とする具体的な決め方を含め、ローカル
+レビューの予算の範囲内で下記の基盤の issue が定めます。時間の上限などの数値は、
+各行の issue がそれぞれの workflow について決めます。
 
 ### プロバイダー間の同等性
 
