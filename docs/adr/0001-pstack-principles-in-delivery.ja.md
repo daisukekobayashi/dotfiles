@@ -38,18 +38,23 @@ delivery は原則を `delivery-common` のフェーズの記述に短いルー�
 pstack skill がなくても成り立つようにします。加えて、重い pstack workflow を
 **任意 workflow** とします。delivery はインストールされていてトリガー条件を満たすときに
 自動で実行し、そうでなければ `not run: not installed` または `not run: trigger not met`
-と報告してフェーズを続けます。任意 workflow は `architect`、`arena`、`blast-radius`、
-`evaluate-skill`、対象プロジェクト自身の `verify-<app>` skill です。
+と報告してフェーズを続けます。インストールされていても、必要なツール、実行環境、
+隔離した場所など実行の前提が使えない任意 workflow は `not run: unavailable` と報告し、
+この場合もフェーズを続けます。任意 workflow は `architect`、`arena`、`blast-radius`、
+`evaluate-skill`、対象プロジェクト自身の `verify-<app>` skill、#240 で取り込む計測の
+workflow です。
 
-これは Missing Prerequisites の唯一の例外です。必須の skill、レビュアー、ツールが
-ない場合は、引き続きそれを必要とするフェーズを止めます。
+これは Missing Prerequisites の唯一の例外です。必須の skill、レビュアー、チェック、
+ツールがない場合は、引き続きそれを必要とするフェーズを止めます。
 
 delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change-*review` を
 呼んでいるのと同じ方法で呼び出します。`SKILL.md` から `disable-model-invocation` を
 外し、Codex のメタデータは `allow_implicit_invocation: false` のまま残し、description
 に、ユーザーが明示的に依頼した `github-issue-delivery` または
 `azure-devops-work-item-delivery` の該当ステップとしても実行すると書き加えます。
-delivery の外では明示呼び出し専用のままです。
+各 skill の本文冒頭の「Run only ...」の制限にも、
+`change-*review` の本文と同じく、delivery に限った例外を加えます。実装する issue で
+両方をテストします。delivery の外では明示呼び出し専用のままです。
 
 ### フェーズの対応
 
@@ -58,21 +63,27 @@ delivery の外では明示呼び出し専用のままです。
 | Shared understanding と preflight | 主張を追跡したコードと経緯に基づかせる | 調整して採用 | 草案は追跡した経路または記録された理由を引用します（`how` と `why` の方法）。preflight の草案にインターフェース、データの形、モジュール境界に関する後戻りしにくい決定があるとき、worker はその決定について `architect` を実行し、比較した形を示します。 | 引用と選択肢のルールはすでにあります。`architect` を後戻りしにくい決定に限ると、preflight がすでに絞り込んだ決定だけにコストが収まります。 |
 | Preflight（High tier） | 独立した候補を比較する | 採用 | その決定が `architect` の後も2つの有力な形を残しているとき、worker はその決定について `arena` を実行します。 | `arena` は隔離した複数の作成者を動かすため、手順がすでに重くなる tier で、後戻りしにくい未決の決定に限ります。 |
 | 実装の検証 | 代理ではなく実物を確かめる | 採用 | 各検証に、変更した経路を実行したのか代理の確認だけなのかを明記します。対象プロジェクトに変更した機能を扱う自身の `verify-<app>` skill があれば、worker はそれを実行します。`create-verification-skill` は自動では実行しません。 | 代理だけの確認が区別されずに報告されていました。プロジェクトの `verify-<app>` skill は対象の一部ですが、新たに生成するとタスク外のファイルが増えます。 |
-| skill と指示の変更 | 変更した指示を agent で実行する | 採用 | Medium と High tier で skill や agent 向け指示の文面を変えた delivery は、変更した skill ごとに既存の eval ケースを1つ、`evaluate-skill` で現在の agent により1回、時間の上限つきで実行します。eval ケースのない skill は未実行と報告し、Low tier は `not run: tier` と報告します。 | #239 で見えた穴を、1回の delivery が負担できるコストで埋めます。delivery ごとの `evaluate-skill` の完全な比較は高すぎます。 |
+| skill と指示の変更 | 変更した指示を agent で実行する | 採用 | Medium と High tier で skill や `AGENTS.md` などの指示ファイルの文面を変えた delivery は、現在の agent で `evaluate-skill` を時間の上限つきで1回呼び出し、変更した skill ごとに既存の eval ケースを1つ実行します。指示ファイルだけの変更を含め、該当する eval ケースのない変更は未実行と報告し、Low tier は `not run: tier` と報告します。 | #239 で見えた穴を、1回の delivery が負担できるコストで埋めます。delivery ごとの `evaluate-skill` の完全な比較は高すぎます。 |
 | レビュー | 実行で裏付けた指摘 | 2つに分けて採用 | #245 で `change-adversarial-review` の指摘を実行で裏付けます。`change-review` と `change-security-review` は変えません。High tier では delivery が `blast-radius` も実行し、#245 の隔離、後片付け、証拠のルールを再利用します。 | 1つの隔離の設計を両方で使えます。High tier はすでにレビューを重くしています。 |
-| 性能の主張 | 数値を報告する前に説明する | 条件つきで採用 | 変更が高速化や性能低下の数値を主張するとき、本文のルールを適用し、#240 で取り込んだ後は `explain-the-number` と `benchmark-checklist` を任意 workflow として実行します。 | トリガーが狭く、数値を主張しない変更では実行しません。 |
-| 完了 | 繰り返す誤りを構造で防ぐ | 調整して採用 | follow-up 候補の作成条件に4つ目を加えます。同じ種類の指摘がラウンドや delivery をまたいで2回以上起き、構造による防止策を提案しているものです。提案は `encode-lessons-in-structure` に沿って作ります。`correct` は自動では実行しません。 | 現在の条件ではこうした候補は見送りが推奨されます。`correct` はタスクを超えてリポジトリを編集します。 |
+| 性能の主張 | 数値を報告する前に説明する | 条件つきで採用 | 変更が高速化や性能低下の数値を主張するとき、本文のルールを適用し、#240 で取り込む計測の workflow を任意 workflow として実行します。 | トリガーが狭く、数値を主張しない変更では実行しません。 |
+| 完了 | 繰り返す誤りを構造で防ぐ | 調整して採用 | follow-up 候補の作成条件に4つ目を加えます。同じ種類の指摘がラウンドや delivery をまたいで2回以上起き、構造による防止策を提案しているものです。提案は、`encode-lessons-in-structure` がインストールされていればそれに沿って作り、なければ本文のルールに従います。`correct` は自動では実行しません。 | 現在の条件ではこうした候補は見送りが推奨されます。`correct` はタスクを超えてリポジトリを編集します。 |
 
 ### コストの上限
 
-任意 workflow はすべて共通のルールに従い、具体的な数値は実装する各 issue で決めます。
+任意 workflow はすべて共通のルールに従います。
 
 - トリガー条件と tier の条件を明記する。
-- レビュー対象の head ごとに最大1回実行する。
+- レビュー対象の head ごとに最大1回呼び出す。1回の呼び出しで、時間の上限内に
+  複数の eval ケースや条件を満たす複数の決定を扱える。
+- preflight の草案や未コミットの修正の検証など、チェックポイントのコミット前の
+  実行は、レビュー対象の head ではなく、その delivery フェーズの入力を単位とする。
 - 1回の実行ごとに時間の上限を設ける。
 - 実行は既存のローカルレビューのラウンド上限の内側で数える。
 - 上限に達した実行は報告し、証拠としては数えない。
 - ユーザーが delivery の依頼で示した上限や無効化の指定を優先する。
+
+具体的な単位の決め方と数値は、ローカルレビューの予算の範囲内で、下記の基盤の
+issue が決めます。
 
 ### プロバイダー間の同等性
 
@@ -83,8 +94,9 @@ delivery の外では明示呼び出し専用のままです。
 ### 実装の順序
 
 まず基盤の issue で、任意 workflow の枠組み、Missing Prerequisites の例外、
-コストの上限を `delivery-common` に加えます。各行の issue はその上に作ります。
-`blast-radius` のステップは #245 も、性能のステップは #240 も待ちます。
+コストの上限を `delivery-common` に加えます。各行の issue はその上に作り、`architect`
+と `arena` の行は1つの preflight の issue にまとめます。`blast-radius` のステップは
+#245 も、性能のステップは #240 も待ちます。
 
 ## 検討した選択肢
 
