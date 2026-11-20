@@ -1,0 +1,3 @@
+interface:
+  display_name: "Explain the Number"
+  short_description: "Find what limits a measured number before trusting it"

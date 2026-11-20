@@ -1,0 +1,6 @@
+interface:
+  display_name: "Benchmark Checklist"
+  short_description: "Vet a performance measurement before reporting it"
+
+policy:
+  allow_implicit_invocation: false

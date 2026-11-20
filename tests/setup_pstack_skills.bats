@@ -25,7 +25,7 @@ teardown() {
   teardown_test_env
 }
 
-@test "pstack user profile installs all eleven local skills for both agents without external tools" {
+@test "pstack user profile installs all thirteen local skills for both agents without external tools" {
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
@@ -46,13 +46,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const [root, homeDir] = process.argv.slice(2);
 const expected = [
-  "architect", "arena", "blast-radius", "create-verification-skill",
-  "encode-lessons-in-structure", "evaluate-skill", "how", "interrogate", "maintain-verification-skill",
-  "prove-it-works", "why",
+  "architect", "arena", "benchmark-checklist", "blast-radius", "create-verification-skill",
+  "encode-lessons-in-structure", "evaluate-skill", "explain-the-number", "how", "interrogate",
+  "maintain-verification-skill", "prove-it-works", "why",
 ];
 const explicitOnly = new Set([
-  "arena", "blast-radius", "create-verification-skill", "evaluate-skill", "interrogate",
-  "maintain-verification-skill",
+  "arena", "benchmark-checklist", "blast-radius", "create-verification-skill", "evaluate-skill",
+  "interrogate", "maintain-verification-skill",
 ]);
 const metadata = JSON.parse(fs.readFileSync(path.join(root, ".agents/user/skills-profile.json")));
 assert.deepEqual(metadata.localSkills, expected);
@@ -111,8 +111,9 @@ JS
   [ "$(cat .claude/skills/teach/SKILL.md)" = "existing teach" ]
   [ "$(cat skills-lock.json)" = '{"existing":"lock"}' ]
   for agent_dir in .agents .claude; do
-    for skill in architect arena blast-radius create-verification-skill \
-      encode-lessons-in-structure evaluate-skill how interrogate maintain-verification-skill prove-it-works why; do
+    for skill in architect arena benchmark-checklist blast-radius create-verification-skill \
+      encode-lessons-in-structure evaluate-skill explain-the-number how interrogate \
+      maintain-verification-skill prove-it-works why; do
       [ -L "${agent_dir}/skills/${skill}" ]
       [ -f "${agent_dir}/skills/${skill}/SKILL.md" ]
     done
