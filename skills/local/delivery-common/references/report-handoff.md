@@ -56,7 +56,9 @@ block; a worker report uses the v1 delimiter and the worker summary:
 
 The full report is a review skill's unchanged `## Output` or a worker's full
 report. The summary part runs from the last delimiter line of the report's kind
-through the end line, since a reviewed diff may contain a delimiter. Write the
+through the end line, since a reviewed diff may contain a delimiter. End the
+file on the end line; the check ignores blank or whitespace-only lines after
+it, but fails any other text there as truncated. Write the
 file with the host's file-writing tool. A reviewer then returns only the report
 path and its completion; a worker returns only its summary.
 
