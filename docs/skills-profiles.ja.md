@@ -251,6 +251,10 @@ Azure DevOps 側を後回しにできるのは、Azure DevOps の API やポリ�
 します。片方だけがリンクを追加または削除すると
 `setup/test/skills-wiring-delivery.test.mjs` が失敗します。
 
+pstack の原則と任意の pstack workflow を共有 delivery ポリシーにどう組み込むかは
+[ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) に記録しています。
+上記の記述は現在の動作です。
+
 ### 共有スクリプト
 
 複数のワークフロースキルで繰り返す確認は、`skills/local/delivery-common/scripts/`
@@ -499,6 +503,11 @@ Lauren Tan の pstack を、この環境の作業範囲と承認ルールに合�
 `$evaluate-skill maintain-verification-skill`。
 Claude Code では、その環境の skill 呼び出し方法を使います。
 共通原則2つは直接参照するほか、各 workflow skill から必要に応じて読みます。
+
+delivery でのこれらの skill の使い方は
+[ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) で決めています。
+子 issue が実装されるまで、delivery skill は pstack の workflow を実行せず、
+下記の明示呼び出しの規則もそのまま適用されます。
 
 `arena`・`interrogate`・`blast-radius`・`create-verification-skill`・
 `maintain-verification-skill`・`evaluate-skill` は

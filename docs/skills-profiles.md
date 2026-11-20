@@ -264,6 +264,10 @@ Both provider delivery skills link the same `delivery-common` files;
 `setup/test/skills-wiring-delivery.test.mjs` fails when one provider adds or
 drops such a link.
 
+[ADR 0001](adr/0001-pstack-principles-in-delivery.md) records how pstack
+principles and optional pstack workflows are to enter the shared delivery
+policy; the text above describes current behavior.
+
 ### Shared Scripts
 
 Checks that several workflow skills repeat live once as scripts in
@@ -519,6 +523,11 @@ Example invocations: `$how trace this request`, `$why was this state persisted?`
 `$evaluate-skill maintain-verification-skill`. Claude Code exposes installed skills
 through its own invocation interface. The two principles can be consulted
 directly or by the workflow skills.
+
+How delivery uses these skills is decided in
+[ADR 0001](adr/0001-pstack-principles-in-delivery.md). Until its child issues
+land, delivery skills do not run pstack workflows, and the explicit-only rule
+below still applies.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
 `maintain-verification-skill`, and `evaluate-skill` require explicit user invocation. Their descriptions
