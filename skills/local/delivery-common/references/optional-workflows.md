@@ -44,9 +44,10 @@ reports `not run: unavailable` and names that policy.
 Every registry entry follows these bounds:
 
 - It states its trigger and its tier gate.
-- It is invoked at most once per key under [Keys](#keys). One invocation may
-  cover several eval cases or several qualifying decisions within its time
-  bound.
+- It is invoked at most once per key under [Keys](#keys): once for each pair
+  of its registry entry and key, so two entries on the same head or the same
+  phase input never suppress each other. One invocation may cover several
+  eval cases or several qualifying decisions within its time bound.
 - Each run has the time bound its entry sets and runs under
   [Foreground Checks](../SKILL.md#foreground-checks).
 - Its runs count inside the existing local review round limits under
@@ -64,8 +65,12 @@ verification of uncommitted fixes, is keyed to its delivery phase's input
 instead. Before the run, write the exact input the run is given to a file in
 the task's records directory: for a preflight run, the text of the qualifying
 decisions and the shared understanding result they rest on; for verification
-of uncommitted work, the output of `git diff --binary HEAD` followed by each
-untracked task file's path and content. The key is
+of uncommitted work, the output of `git diff --binary HEAD`, then each
+untracked task file in byte order of its path, written as one line
+`<git file mode> <byte count> <path>` followed by its bytes. The git file mode
+is `100755` for an executable file, `100644` for any other regular file, and
+`120000` for a symbolic link, whose bytes are its target, so a mode change
+alone changes the key. The key is
 `<phase>:<full HEAD SHA>:<git hash-object of that file>`. The workflow runs
 again only when its key changes, such as when an answer changes a qualifying
 decision.
@@ -76,23 +81,37 @@ A run on a reviewed head belongs to that head's local review round under
 [Local Review](local-review.md#repeat-and-advance) and never adds a round. A
 fix it prompts is verified, committed, and reviewed like any other fix, so the
 next round counts as usual. A run keyed to a phase input belongs to no round
-and counts only against its key's once-per-key bound.
+and counts only against its entry's once-per-key bound.
 
 ## Record and report
 
-Record each invocation in the task's `log.md` under Delivery Completion's
-[Progress record](completion.md#progress-record) as one entry,
-`[optional O<n>]`, with the target, workflow, phase, key, status, time bound,
-and report path. A later entry for the same key reuses its id, and the latest
-entry for an id is current. Before invoking an entry, including on resume,
-check the log for its key; a key with a recorded invocation is not invoked
-again. `state.md` carries one line with the count of optional runs.
+Record optional workflows in the task's `log.md` under Delivery Completion's
+[Progress record](completion.md#progress-record), one `[optional O<n>]` id for
+each pair of registry entry and key, with the target, workflow, phase, key,
+status, time bound, and report path. Every later entry for the same pair
+reuses its id, and the latest entry for an id is current; another entry or
+key never reuses it.
 
-A worker lists each registry entry that applied to its work, with its status,
-under `Optional workflows:` in its
+- A `not run` status is recorded as that pair's entry. It is not an
+  invocation, so the pair may still be invoked when the trigger, tier, or
+  installation changes on the same key.
+- Before invoking, append an intent entry with status `launching`, like the
+  intent entry Progress record sets for an external action, then dispatch the
+  run, then append its outcome: `ran`, `stopped: time bound`, or
+  `failed: <reason>`. An intent entry is the invocation that the once-per-key
+  bound counts.
+- Before invoking a pair, including on resume, read its latest entry. Invoke
+  only when it has none or its latest status is `not run`. A pair whose
+  latest entry is `launching` is never relaunched: when its report path holds
+  a completed result, record that result as its outcome; otherwise record
+  `failed: interrupted` and report it.
+
+`state.md` carries one line with the count of intent entries. A worker lists
+each registry entry that applied to its work, with its status, under
+`Optional workflows:` in its
 [Worker summary](report-handoff.md#worker-summary). The final report under
 Delivery Completion's [Report and complete](completion.md#report-and-complete)
-lists each entry's latest status per target.
+lists, per target, the status of each entry's latest `log.md` entry.
 
 ## Registry
 

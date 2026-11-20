@@ -871,7 +871,7 @@ test("optional workflows have one provider-neutral home that Missing Prerequisit
 
   for (const bound of [
     /It states its trigger and its tier gate\./,
-    /It is invoked at most once per key under \[Keys\]\(#keys\)\. One invocation may cover several eval cases or several qualifying decisions within its time bound\./,
+    /It is invoked at most once per key under \[Keys\]\(#keys\): once for each pair of its registry entry and key, so two entries on the same head or the same phase input never suppress each other\. One invocation may cover several eval cases or several qualifying decisions within its time bound\./,
     /Each run has the time bound its entry sets/,
     /Its runs count inside the existing local review round limits/,
     /A limit or opt-out the user gives in the delivery request takes precedence over the entry/,
@@ -880,9 +880,22 @@ test("optional workflows have one provider-neutral home that Missing Prerequisit
   }
   assert.match(section("Keys"), /A run on a committed snapshot is keyed to the reviewed head: its full SHA\./);
   assert.match(section("Keys"), /The key is `<phase>:<full HEAD SHA>:<git hash-object of that file>`\./);
+  // Untracked files enter the phase input with their mode, size, and bytes, so a chmod alone changes the key.
+  assert.match(section("Keys"), /each untracked task file in byte order of its path, written as one line `<git file mode> <byte count> <path>` followed by its bytes/);
+  assert.match(section("Keys"), /`100755` for an executable file, `100644` for any other regular file, and `120000` for a symbolic link, whose bytes are its target, so a mode change alone changes the key\./);
   assert.match(section("Accounting"), /belongs to that head's local review round under \[Local Review\]\(local-review\.md#repeat-and-advance\) and never adds a round/);
-  assert.match(section("Accounting"), /A run keyed to a phase input belongs to no round and counts only against its key's once-per-key bound\./);
-  assert.match(section("Record and report"), /`\[optional O<n>\]`, with the target, workflow, phase, key, status, time bound, and report path/);
+  assert.match(section("Accounting"), /A run keyed to a phase input belongs to no round and counts only against its entry's once-per-key bound\./);
+  // Each pair of registry entry and key has its own id, intent before dispatch, and a recorded not-run status.
+  for (const rule of [
+    /one `\[optional O<n>\]` id for each pair of registry entry and key, with the target, workflow, phase, key, status, time bound, and report path/,
+    /another entry or key never reuses it\./,
+    /A `not run` status is recorded as that pair's entry\. It is not an invocation/,
+    /Before invoking, append an intent entry with status `launching`, like the intent entry Progress record sets for an external action, then dispatch the run, then append its outcome/,
+    /A pair whose latest entry is `launching` is never relaunched: when its report path holds a completed result, record that result as its outcome; otherwise record `failed: interrupted` and report it\./,
+    /lists, per target, the status of each entry's latest `log\.md` entry\./,
+  ]) {
+    assert.match(section("Record and report"), rule);
+  }
   assert.match(section("Record and report"), /under `Optional workflows:` in its \[Worker summary\]\(report-handoff\.md#worker-summary\)/);
 
   // The registry ships empty; each workflow's issue adds its own row.
@@ -1134,6 +1147,9 @@ test("review and worker reports hand off through a file and a fixed summary", as
   }
   assert.match(section("Review block"), /The block is authoritative: the check validates it and never parses the\s+Output's headings or bullets/);
   assert.match(section("Worker summary"), /Worker reports stay on this v1 summary/);
+  // A new required label switches hard; in-flight deliveries finish or reissue their old reports.
+  assert.match(flat(section("Worker summary")), /When a change makes a new worker summary label required, such as `Optional workflows:`, the check keeps no branch for the old summary/);
+  assert.match(flat(section("Worker summary")), /either finishes the phases that read its earlier worker reports before its installed check updates, or reissues each such report it still needs at a new path, as the next attempt, with the label, and checks it before acting on it\. The merge confirmation of the change names the in-flight deliveries and the reports this affects\./);
   assert.match(section("Check a handoff"), /`--kind review --reviewer <skill> --show`/);
   assert.match(section("Check a handoff"), /rejects a review\s+report with a v1 summary/);
   assert.match(section("Report file"), /from the last delimiter line/);

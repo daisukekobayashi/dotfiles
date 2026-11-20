@@ -174,6 +174,16 @@ and required values and never matches it against the full report, so the gaps
 that moved reviews to a block, which came from matching a written summary
 against free-form Output, do not arise for workers.
 
+When a change makes a new worker summary label required, such as
+`Optional workflows:`, the check keeps no branch for the old summary: once the
+installed check requires the label, every worker report written without it
+fails, including the `--sha256` recheck before a report is reopened. A
+delivery in flight across that change either finishes the phases that read its
+earlier worker reports before its installed check updates, or reissues each
+such report it still needs at a new path, as the next attempt, with the label,
+and checks it before acting on it. The merge confirmation of the change names
+the in-flight deliveries and the reports this affects.
+
 ## Codex route
 
 The Codex companion runs `task` read-only and cannot write the file, so the
