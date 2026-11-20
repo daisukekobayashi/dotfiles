@@ -58,7 +58,9 @@ subset, name that subset and leave the rest explicitly unverified.
 
 - Establish the artifact/revision, readiness, and ownership before driving.
   After an unexpected failure, restore a known state or recheck readiness
-  before proceeding. A healthy process alone does not establish usable UI state.
+  before proceeding. Ready means usable, as the verification contract defines
+  it: a process answering or a health check passing while initialization still
+  runs is not ready.
 - Use an owned long-lived instance for a service when appropriate, or a fresh
   isolated invocation for a short-lived CLI. Respect shared instances and data.
 - Capture the action, expected and actual result, and retained evidence path for
@@ -102,5 +104,6 @@ authorization; this skill does not initiate them automatically.
 
 Adapted from Lauren Tan's [pstack maintain-verification-skill](https://github.com/cursor/plugins/blob/6714489fa233263f00e419f6cfc4759b07c81056/pstack/skills/maintain-verification-skill/SKILL.md).
 Local changes: shared Codex/Claude instructions, explicit invocation, canonical
-project ownership, bounded optional delegation, and incomplete-coverage outcomes.
+project ownership, bounded optional delegation, incomplete-coverage outcomes,
+and the usable-readiness definition shared with create-verification-skill.
 See [LICENSE](LICENSE).

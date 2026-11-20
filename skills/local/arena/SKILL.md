@@ -69,13 +69,16 @@ Evidence from an individual candidate does not validate the combined result.
 ## Deliver
 
 Return the selected artifact or design, comparison criteria, reasons for the
-choice, useful ideas adopted or rejected, candidate failures, and verification
-limits. Keep task-specific comparison state temporary; promote only requested
-durable decisions. Stop owned processes; retain evidence and honor approval
+choice, the independent judge's verdict or, when no usable verdict was
+obtained (judge skipped, failed, or timed out), that fact and why, useful ideas
+adopted or rejected, candidate failures, and verification limits. Keep
+task-specific comparison state temporary; promote only requested durable
+decisions. Stop owned processes; retain evidence and honor approval
 requirements before removing worktrees or branches.
 
 ## Source
 
-Adapted from Lauren Tan's [pstack arena](https://github.com/cursor/plugins/blob/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack/skills/arena/SKILL.md).
-Local changes: bounded fan-out, runtime capability detection, preserved approval
-boundaries, and explicit isolation/fallback behavior. See [LICENSE](LICENSE).
+Adapted from Lauren Tan's [pstack arena](https://github.com/cursor/plugins/blob/0b46ec399d55f2829e88822998f53b84944837d3/pstack/skills/arena/SKILL.md).
+Local changes: bounded fan-out, runtime capability detection in place of
+upstream model routing, preserved approval boundaries, and explicit
+isolation/fallback behavior. See [LICENSE](LICENSE).
