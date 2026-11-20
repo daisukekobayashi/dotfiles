@@ -129,7 +129,7 @@ Head that differs from the head the coordinator read fails the check.
 ## Resume a delegated phase
 
 While a phase is delegated, `state.md` names the phase, the agent, the report
-path, and the attempt. On resume:
+path, and the attempt. On resume of any delegated phase other than cleanup:
 
 1. Read the latest report that passes the check, if any. A `complete` report
    gives the result; a `question` report gives the prepared result to decide
@@ -146,10 +146,10 @@ path, and the attempt. On resume:
    skill's own resume and reconciles the logged external actions under
    Delivery Completion's [Resume](completion.md#resume) before acting.
 
-On resume, a cleanup agent, continued or fresh, first compares the actual
-state with the confirmed manifest. When any confirmed target is already gone,
-it removes nothing more and returns `blocked`, listing the targets gone and
-those remaining. The coordinator reports this to the user; the remaining
-targets are left to the provider's cleanup skill run on its own, with its own
-confirmation and checks. When nothing was removed yet, the cleanup continues
-with the confirmed manifest, and the skill's comparison decides.
+A delegated cleanup, including its Caller preview, is never resumed. On a
+resume, before or after the first confirmation, the coordinator tells the
+cleanup agent, continued or fresh, that it is a resume; the agent removes
+nothing, may report which previewed or confirmed targets are gone and which
+remain, and returns `blocked`. The coordinator reports this to the user, and
+the cleanup is redone by the provider's cleanup skill run on its own, with its
+own target listing, confirmation, and checks.

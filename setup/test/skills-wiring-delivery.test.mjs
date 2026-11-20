@@ -1004,8 +1004,9 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     /2\. Continue the recorded agent when the host can address it, with the answer when there is one\./,
     /3\. Otherwise, dispatch a fresh agent only when the host shows the recorded agent has ended; when it cannot show that, report the target `Blocked`\. Before dispatching, write the new agent and attempt to `state\.md`, so the old agent's check before acting stops it\./,
     /It resumes through the component skill's own resume and reconciles the logged external actions under Delivery Completion's \[Resume\]\(completion\.md#resume\) before acting\./,
-    // A partly done cleanup stops; the rest goes to the standalone cleanup skill with its own confirmation (user decision L1).
-    /On resume, a cleanup agent, continued or fresh, first compares the actual state with the confirmed manifest\. When any confirmed target is already gone, it removes nothing more and returns `blocked`, listing the targets gone and those remaining\. The coordinator reports this to the user; the remaining targets are left to the provider's cleanup skill run on its own, with its own confirmation and checks\. When nothing was removed yet, the cleanup continues with the confirmed manifest, and the skill's comparison decides\./,
+    // A delegated cleanup is never resumed; the standalone cleanup skill redoes it with its own confirmation (user decision L2).
+    /On resume of any delegated phase other than cleanup:/,
+    /A delegated cleanup, including its Caller preview, is never resumed\. On a resume, before or after the first confirmation, the coordinator tells the cleanup agent, continued or fresh, that it is a resume; the agent removes nothing, may report which previewed or confirmed targets are gone and which remain, and returns `blocked`\. The coordinator reports this to the user, and the cleanup is redone by the provider's cleanup skill run on its own, with its own target listing, confirmation, and checks\./,
     // No preview falls back to a merge-only confirmation, as the cleanup skills' Caller preview defines.
     /When the Caller preview returns no preview, such as on a non-zero status of its manifest command, the preview agent returns `complete` with a Verification line saying no preview and why\. The coordinator then presents the merge alone, and the cleanup keeps its own confirmation after the merge\./,
   ]) {
@@ -1018,6 +1019,7 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
   assert.match(commonRaw, /^description: .*delegates publication, hosted review, and cleanup calls to agents/m);
   const completion = flat(await read("delivery-common", "references", "completion.md"));
   assert.match(completion, /a delegated phase with its agent, report path, and attempt under \[Phase Delegation\]\(phase-delegation\.md#resume-a-delegated-phase\)/);
+  assert.doesNotMatch(home, /cleanup continues|builds a new manifest|reruns the cleanup skill/, "phase-delegation.md lets a resumed cleanup continue");
   assert.match(completion, /A delegated phase resumes under \[Phase Delegation\]\(phase-delegation\.md#resume-a-delegated-phase\)\./);
   assert.match(completion, /Delegated phase agents write theirs under \[Phase Delegation\]\(phase-delegation\.md#report-path\)\./);
 
