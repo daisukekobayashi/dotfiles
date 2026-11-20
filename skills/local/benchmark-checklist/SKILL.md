@@ -1,6 +1,6 @@
 ---
 name: benchmark-checklist
-description: Use only when the user explicitly invokes benchmark-checklist to vet a performance measurement (limiter, tuning, limits, errors, repeatability, relevance, and whether the work happened) before reporting or acting on it. Runs only the existing measurement and installed, unprivileged profilers; asks before other changes.
+description: Use only when the user explicitly invokes benchmark-checklist to vet a performance measurement (limiter, tuning, limits, errors, repeatability, relevance, and whether the work happened) before reporting or acting on it. Runs only the existing measurement of trusted code and installed, unprivileged profilers; asks before running unconfirmed code or making other changes.
 license: MIT
 disable-model-invocation: true
 ---
@@ -17,26 +17,45 @@ Use it when you produce a performance number: a change's before and after, a
 regression claim, a tuning harness, or a library or configuration choice.
 Answer each question with evidence from a run, not a guess about the code.
 
-For a quick ballpark the user asked for, one run is enough. Still check
-questions 4 and 7, and say that it is one run. Skip the rest unless that run
-looks wrong. A choice between options is never a ballpark.
+Pick the mode before you run:
+
+- **Full** (default): every question below is required.
+- **Ballpark**, only when the user asked for a quick ballpark: one run is
+  enough, and questions 4 and 7 are required. Label the result a one-run
+  estimate. Skip the other questions unless that run looks wrong. A choice
+  between options is never a ballpark.
+
+A check the mode requires and you did not run is a gap; see the verdict rule in
+the Report section.
 
 ## Scope of execution
 
-The invocation authorizes running the existing measurement and profilers that
-are already installed and need no elevated privileges, in the local workspace,
-as often as the questions below ask. Ask the user before:
+Before running, name the command and the revision of the code it runs.
+
+When that code is the user's own or otherwise trusted, such as the user's
+working tree or a reviewed branch, the invocation authorizes running the
+existing measurement and profilers that are already installed and need no
+elevated privileges, in the local workspace, as often as the questions below
+ask. When you cannot confirm the code is trusted, such as an unreviewed
+contributor branch or a downloaded script, get the user's specific
+authorization for that run, or report it as not run.
+
+Ask the user before:
 
 - editing the measurement script, such as adding an error or work count;
 - tuning a side's configuration, build, or data;
 - installing a tool, using `sudo`, or changing dependencies;
 - putting load on a shared, remote, or production system.
 
-When a step is not run, name it as a gap. A gap in questions 1, 2, 4, or 7
-makes the verdict inconclusive.
+A step not run, including one the user did not authorize, is a gap under the
+verdict rule in the Report section.
 
 ## Before you run anything
 
+- Write down the decision the number feeds, the result that would change it,
+  and the noise floor (from earlier runs, or a pilot run you do not report).
+  This is the first rule of explain-the-number, required here because an
+  explicit run does not load that principle.
 - Write down the claim you expect to make, in the words you would ship
   ("export is 30% faster at p50 on the 60k-row dataset"). The questions test
   that sentence.
@@ -94,13 +113,14 @@ makes the verdict inconclusive.
 ## Report
 
 - Lead with the verdict: faster, slower, no measurable difference, or
-  inconclusive.
+  inconclusive. In ballpark mode, label it a one-run estimate.
+- Verdict rule: any check the mode requires that was not run makes the verdict
+  inconclusive; name each gap. In full mode, the verdict is also inconclusive
+  when you claim a difference but cannot name the limiter, or when a side ran
+  untuned.
 - Give the number with its unit, the run count, the range, and the limiter.
   For example, "p50 41 ms -> 33 ms, median of 7 runs per side, range 32 to
   35 ms after, bound by JSON parsing on one core."
-- Call the verdict inconclusive when you claim a difference but cannot name
-  the limiter, when a side ran untuned, or when you could not check questions
-  4 and 7. Name the gap.
 - Keep a report or PR description to one primary number. Keep the runs, range,
   and limiter evidence in the task's existing notes or ignored temporary
   storage; do not create, commit, or publish an artifact the user did not ask
@@ -109,11 +129,13 @@ makes the verdict inconclusive.
 ## Source
 
 Adapted from Lauren Tan's [pstack benchmark-checklist](https://github.com/cursor/plugins/blob/0b46ec399d55f2829e88822998f53b84944837d3/pstack/skills/benchmark-checklist/SKILL.md).
-Local changes: explicit invocation; an execution scope that runs only the
-existing measurement and installed, unprivileged profilers and asks before
-script edits, tuning, installs, `sudo`, or shared and remote load; tools named
-as examples with platform equivalents; evidence kept in existing notes rather
-than new artifacts; and the upstream "Other perf material" section dropped,
+Local changes: explicit invocation; an execution scope that names the command
+and revision, runs only the existing measurement of trusted code and installed,
+unprivileged profilers, and asks before running unconfirmed code, script edits,
+tuning, installs, `sudo`, or shared and remote load; full and ballpark modes
+with one verdict rule; the decision and noise floor written before the first
+run; tools named as examples with platform equivalents; evidence kept in
+existing notes rather than new artifacts; and the upstream "Other perf material" section dropped,
 because its Perf issue and Hillclimb playbooks have no local equivalent. The
 principle stays a separate skill, [explain-the-number](../explain-the-number/SKILL.md).
 See [LICENSE](LICENSE).
