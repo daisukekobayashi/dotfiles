@@ -164,7 +164,8 @@ Keep a finding that no run can show, and give it the
 not run a command whose effects leave the disposable worktree, or any command
 when runs need approval: name the exact commands and report the finding
 `unproven: needs approval`. Restore dependencies with lifecycle scripts off
-under [Boundary](../delivery-common/references/repro-runs.md#boundary). A run that reaches its bound or
+under [Boundary](../delivery-common/references/repro-runs.md#boundary), and
+record the exact restoration command in the finding's `command` file. A run that reaches its bound or
 fails proves nothing.
 
 ### Finding Bar

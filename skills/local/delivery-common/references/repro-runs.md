@@ -56,7 +56,8 @@ Create one for the reviewer before it starts, and one for each parent rerun:
    mode-700 directory, which lies in the ignored records root under
    [Report Handoff](report-handoff.md#report-path); the path is the report path
    without its `.md` suffix plus `.repro` for the reviewer, or
-   `.rerun-<finding ID>` for a rerun. Without `--report`, create a new
+   `.rerun-<finding ID>` for a rerun, with the ID checked and quoted under
+   [Evidence](#evidence). Without `--report`, create a new
    directory with `mktemp -d` outside the repository, which is mode 700; the
    path is `<that directory>/wt`, and its evidence goes in
    `<that directory>/evidence`.
@@ -166,18 +167,25 @@ and `change-security-review`, write `not requested`.
 The reviewer writes each finding's repro files as regular files under
 `.repro/<finding ID>/` in its worktree, using the final finding IDs, with:
 
-- `command`: exactly two lines, the directory relative to the worktree root
-  (`.` for the root) and then the command as one line of POSIX `sh`, which runs
-  as the single argument of `sh -c` in that directory;
+- `command`: exactly three lines: the directory relative to the worktree
+  root (`.` for the root); the exact dependency restoration command as one line
+  of POSIX `sh`, which runs as the single argument of `sh -c` at the worktree
+  root, or `-` when the run restores nothing; and the proving command as one
+  line of POSIX `sh`, which runs as the single argument of `sh -c` in that
+  directory;
 - `exit-status` and `output`, the bounded excerpt.
 
 Its finding gives the same command, the output excerpt, and the output the
 intent requires.
 
 A finding ID must match the reviewer's form, `^ADV[0-9]+$` for
-`change-adversarial-review`, before it is used in a path or a command; the
-launcher skips and reports any `.repro/` entry or finding whose ID does not,
-with or without `--report`.
+`change-adversarial-review`, as a whole name before it is used in a path or a
+command. Test the whole name, never line by line, so a name with a newline or
+any other character fails, such as with
+`case "$id" in ADV|ADV*[!0-9]*) reject ;; ADV[0-9]*) accept ;; *) reject ;; esac`,
+and quote it, such as `"$id"`, wherever a command uses it. The launcher skips
+and reports any `.repro/` entry or finding whose ID does not match, with or
+without `--report`.
 
 Before removal, the launcher copies each `.repro/<finding ID>/` directory to
 `<report path without .md>.evidence/<finding ID>/`, or without `--report` to
@@ -194,24 +202,27 @@ with the findings.
 Before acting on a finding whose proof is `ran`, such as fixing it, recording a
 disposition, or treating `Do not ship` as a blocker, the parent:
 
-1. checks the finding ID under [Evidence](#evidence);
+1. checks the finding ID under [Evidence](#evidence); when it fails, stops,
+   runs nothing for the finding, reports it, and assesses it as unproven;
 2. displays the finding's retained `command` and every retained repro file, and
    reads them;
-3. checks that `command` has the two-line form above, that its directory and
+3. checks that `command` has the three-line form above, that its directory and
    every repro file path are relative, have no `..` component, and stay inside
    the worktree, and that nothing is a symbolic link;
-4. checks that the command and the repro files touch nothing outside the
-   worktree under [Boundary](#boundary), such as an absolute path outside it,
-   `~`, the network for a remote write, or a ref; when a check fails or is
-   unclear, it treats the finding as `unproven: needs approval` and handles it
-   under [Approved run](#approved-run) instead of running it;
+4. checks that the restoration command, the proving command, and the repro
+   files touch nothing outside the worktree under [Boundary](#boundary), such
+   as an absolute path outside it, `~`, the network for a remote write, a ref,
+   or a restoration that runs lifecycle scripts; when a check of step 3 or 4
+   fails or is unclear, it runs nothing and asks for approval under
+   [Approved run](#approved-run), showing the failed checks;
 5. creates a fresh disposable worktree at the reviewed head;
 6. copies the finding's retained repro files into it at their relative paths
    with `cp -RP`;
-7. restores dependencies as the reviewer's run did, lockfile-respecting with
-   lifecycle scripts off under [Boundary](#boundary), within the rerun's bound;
-8. runs the command's second line as the single argument of `sh -c` in the
-   recorded directory, under the environment, boundary, and bounds above;
+7. runs exactly the recorded restoration command, the second line of
+   `command`, unless it is `-`, within the rerun's bound;
+8. runs the proving command, the third line, as the single argument of `sh -c`
+   in the recorded directory, under the environment, boundary, and bounds
+   above;
 9. compares the exit status and output with the evidence: `reproduced`,
    `not reproduced`, `stopped: time bound`, or `failed: <reason>`;
 10. removes the worktree under [Remove](#remove).
@@ -223,12 +234,13 @@ retained command on the new head to confirm a fix, after the same checks.
 
 ### Approved run
 
-For a finding reported `unproven: needs approval`, the parent first runs steps
-1-4 on its command and repro files. It then asks the user, showing the exact
-command, the full body of every repro file, and any check that failed, and runs
-nothing until the user approves in the user's own message. After approval it
-runs steps 5-8 and 10 with the approved command, which may restore
-dependencies with their lifecycle scripts when the user approved that. This
+For a finding reported `unproven: needs approval`, or one that step 3 or 4
+sent here, the parent runs step 1 and stops when it fails. Otherwise it runs
+steps 2-4 as checks only and asks the user, showing the exact restoration and
+proving commands, the full body of every repro file, and every check that
+failed, and runs nothing until the user approves in the user's own message.
+After approval it runs steps 5-8 and 10 with exactly the commands shown; a
+restoration that runs lifecycle scripts runs only this way. This
 run is the first proving run, so there is no evidence to compare: its own
 output decides the proof, `ran` when it shows the failure, otherwise
 `unproven: <reason>`, `stopped: time bound`, or `failed: <reason>`.

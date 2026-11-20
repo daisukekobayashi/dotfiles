@@ -85,7 +85,10 @@ required reviewer does not depend on an optional pstack skill.
   excerpt are copied, never following a symbolic link, beside the report, or
   without a report into the launcher's `mktemp -d` directory, before the
   worktree is removed. The `command` file holds the directory relative to the
-  worktree root and one line of POSIX `sh`.
+  worktree root, the exact dependency restoration command, and the proving
+  command, each command one line of POSIX `sh`, so a rerun or an approved run
+  restores exactly what was inspected. Finding IDs are checked as whole names
+  and quoted in commands.
 - **Parent rerun.** The parent runs outside any sandbox, so before a rerun it
   displays and reads the command and every repro file, checks that every path
   is relative, has no `..`, and is no symbolic link, and treats anything that

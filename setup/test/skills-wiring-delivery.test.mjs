@@ -1621,19 +1621,25 @@ test("adversarial review proves findings with runs in disposable worktrees under
   assert.match(section("Disposable worktree"), /Resolve the parent directory to its real path with `pwd -P`/);
   assert.match(section("Disposable worktree"), /a `worktree` line of `git worktree list --porcelain` equals the recorded real path byte for byte/);
   assert.match(section("Disposable worktree"), /Keep the `mktemp -d` directory when it holds evidence and report its path; otherwise, such as after a parent rerun, remove it with `rmdir`/);
-  assert.match(section("Evidence"), /`command`: exactly two lines, the directory relative to the worktree root \(`\.` for the root\) and then the command as one line of POSIX `sh`/);
+  assert.match(section("Evidence"), /`command`: exactly three lines: the directory relative to the worktree root \(`\.` for the root\); the exact dependency restoration command as one line of POSIX `sh`, which runs as the single argument of `sh -c` at the worktree root, or `-` when the run restores nothing; and the proving command/);
   assert.match(section("Evidence"), /It never follows a symbolic link/);
   assert.match(section("Evidence"), /copies nothing for that finding, reports why, and assesses the finding as unproven\. Otherwise it copies with `cp -RP`/);
   assert.match(section("Parent rerun"), /displays the finding's retained `command` and every retained repro file, and reads them/);
   assert.match(section("Parent rerun"), /every repro file path are relative, have no `\.\.` component, and stay inside the worktree, and that nothing is a symbolic link/);
-  assert.match(section("Parent rerun"), /when a check fails or is unclear, it treats the finding as `unproven: needs approval` and handles it under \[Approved run\]/);
+  // Round 3 (#245): rerun and approved run use exactly the recorded, inspected restoration (D12),
+  // and a failed ID check stops while failed checks of steps 3-4 go to approval (D14).
+  assert.match(section("Parent rerun"), /checks the finding ID under \[Evidence\]\(#evidence\); when it fails, stops, runs nothing for the finding, reports it, and assesses it as unproven/);
+  assert.match(section("Parent rerun"), /checks that the restoration command, the proving command, and the repro files touch nothing outside the worktree/);
+  assert.match(section("Parent rerun"), /or a restoration that runs lifecycle scripts; when a check of step 3 or 4 fails or is unclear, it runs nothing and asks for approval under \[Approved run\]\(#approved-run\), showing the failed checks/);
+  assert.match(section("Parent rerun"), /runs exactly the recorded restoration command, the second line of `command`, unless it is `-`, within the rerun's bound/);
   // Round 2 (#245): approved runs pass the same checks (D6), reruns restore dependencies (D8),
   // an approved run is the first proof (D9), and finding IDs are checked before use (D11).
   assert.match(section("Parent rerun"), /checks the finding ID under \[Evidence\]\(#evidence\)/);
-  assert.match(section("Parent rerun"), /restores dependencies as the reviewer's run did, lockfile-respecting with lifecycle scripts off under \[Boundary\]\(#boundary\), within the rerun's bound/);
-  assert.match(section("Parent rerun"), /the parent first runs steps 1-4 on its command and repro files\. It then asks the user, showing the exact command, the full body of every repro file, and any check that failed, and runs nothing until the user approves in the user's own message/);
+  assert.match(section("Parent rerun"), /the parent runs step 1 and stops when it fails\. Otherwise it runs steps 2-4 as checks only and asks the user, showing the exact restoration and proving commands, the full body of every repro file, and every check that failed, and runs nothing until the user approves in the user's own message/);
+  assert.match(section("Parent rerun"), /After approval it runs steps 5-8 and 10 with exactly the commands shown; a restoration that runs lifecycle scripts runs only this way\./);
   assert.match(section("Parent rerun"), /This run is the first proving run, so there is no evidence to compare: its own output decides the proof/);
-  assert.match(section("Evidence"), /A finding ID must match the reviewer's form, `\^ADV\[0-9\]\+\$` for `change-adversarial-review`, before it is used in a path or a command; the launcher skips and reports any `\.repro\/` entry or finding whose ID does not, with or without `--report`/);
+  assert.match(section("Evidence"), /A finding ID must match the reviewer's form, `\^ADV\[0-9\]\+\$` for `change-adversarial-review`, as a whole name before it is used in a path or a command\. Test the whole name, never line by line/);
+  assert.match(section("Evidence"), /`case "\$id" in ADV\|ADV\*\[!0-9\]\*\) reject ;; ADV\[0-9\]\*\) accept ;; \*\) reject ;; esac`, and quote it, such as `"\$id"`, wherever a command uses it/);
   assert.match(section("Bounds"), /Each parent rerun: 10 minutes for restoring dependencies and running the command/);
   assert.match(section("Parent rerun"), /Before acting on a finding whose proof is `ran`/);
   assert.match(section("Parent rerun"), /A finding that is not reproduced is assessed as `unproven`/);
