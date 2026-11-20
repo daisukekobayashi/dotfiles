@@ -38,6 +38,9 @@ whether evidence exercises the changed behavior.
 Give every reviewer the same intent, scope, baseline, context pointers, criteria,
 and read-only restriction. Request concrete findings with a trigger, failure
 path, impact, source location, and uncertainty. Ask for coverage gaps as well.
+State the exclusion: leave out findings that rest only on style, naming,
+structure, or a risk that needs a future change to matter. A finding that cites
+a breach of a documented repository rule or a current failure stays in.
 Do not show the parent's suspected findings or another reviewer's answer.
 
 ## Obtain independent reviews
@@ -55,7 +58,9 @@ counting them as a clean verdict.
 
 ## Judge the findings
 
-Read each report and trace consequential findings back to the target.
+Read each report and trace consequential findings back to the target. Apply
+the brief's exclusion again and drop each finding it covers, counting the drops
+per reviewer with their reasons.
 Deduplicate by failure mechanism. Agreement increases attention, not truth:
 one well-supported finding can outweigh a consensus with no evidence.
 Investigate disagreements and distinguish unsupported speculation from
@@ -67,12 +72,15 @@ that could mutate state, mark that verification pending. The user can explicitly
 invoke [blast-radius](../blast-radius/SKILL.md) for scoped experiments.
 
 Return the target, verdict, material findings, reviewer/model coverage,
-disagreements that matter, and residual risk. A clean review means no supported
-material finding in the covered scope, not proof that the change is safe.
+disagreements that matter, residual risk, and a Dropped report giving, per
+reviewer, the count of findings you dropped under the exclusion and why. A
+clean review means no supported material finding in the covered scope, not
+proof that the change is safe.
 After an upstream writer changes the target, reassess review applicability.
 
 ## Source
 
-Adapted from Lauren Tan's [pstack interrogate](https://github.com/cursor/plugins/blob/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack/skills/interrogate/SKILL.md).
+Adapted from Lauren Tan's [pstack interrogate](https://github.com/cursor/plugins/blob/0b46ec399d55f2829e88822998f53b84944837d3/pstack/skills/interrogate/SKILL.md).
 Local changes: reuse existing review criteria, evidence over voting, strict
-read-only behavior, bounded reviewers, and honest fallback coverage. See [LICENSE](LICENSE).
+read-only behavior in place of upstream's run-to-prove adversaries in worktrees,
+bounded reviewers, and honest fallback coverage. See [LICENSE](LICENSE).

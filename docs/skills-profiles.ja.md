@@ -542,8 +542,11 @@ draft とし、検証済み範囲は実際に通した経路に限定します�
 準備用の補助スクリプトもスキル内に同梱します。両エージェントで共通の課題と
 判定基準を使い、環境の準備や設定検証だけで実モデルでの成功とはしません。
 
-最初の9スキルが参照した上流リビジョンは
-[`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack)。
+`arena`・`interrogate`・`create-verification-skill` は上流リビジョン
+[`0b46ec399d55f2829e88822998f53b84944837d3`](https://github.com/cursor/plugins/tree/0b46ec399d55f2829e88822998f53b84944837d3/pstack) に追従しています。
+最初の9スキルのうち残り6つは
+[`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack) を参照し、
+`0b46ec3` までの上流の変更は照合したうえで取り込んでいません。
 各 skill に出典リンク・ローカルでの調整理由・Lauren Tan の MIT license を含めます。
 保守・評価スキルは自身の本文に参照した上流リビジョンを記載します。
 `evaluate-skill` は上流の Eval playbook を独立したローカルスキルにしたもので、

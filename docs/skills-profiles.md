@@ -566,8 +566,11 @@ execution, grading, and synthesis, with its preparation helper bundled inside
 the skill. It uses independent fixtures and common criteria for both agents. Preparing fixtures or
 validating metadata does not establish that either model followed the workflow.
 
-The original nine adaptations use upstream revision
-[`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack).
+`arena`, `interrogate`, and `create-verification-skill` follow upstream revision
+[`0b46ec399d55f2829e88822998f53b84944837d3`](https://github.com/cursor/plugins/tree/0b46ec399d55f2829e88822998f53b84944837d3/pstack).
+The other six of the original nine adaptations use upstream revision
+[`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack);
+their upstream changes through `0b46ec3` were compared and not adopted.
 Each skill includes its source link, local adaptation rationale, and Lauren Tan's
 MIT license. The upstream `principle-prove-it-works` and
 `principle-encode-lessons-in-structure` names are shortened locally.

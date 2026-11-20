@@ -23,7 +23,8 @@ tests before choosing commands. Use available execution-context-first and
 runtime-isolation skills. Identify:
 
 - the user-facing surface and one important behavior to verify;
-- the documented build/start/stop entry points and readiness signal;
+- the documented build/start/stop entry points and the signal that the app is
+  usable;
 - existing drivers, fixtures, selectors, and observable results;
 - authentication and dependencies needed, without reading secret values;
 - ownership of processes, ports, data directories, and external side effects.
@@ -74,12 +75,19 @@ never successfully executed is a draft. Report exactly which behavior ran and
 which feature-map entries remain unverified; one successful path does not
 certify the whole application.
 
+When the run used a stand-in for the real target, such as a container in place
+of a fresh VM or a local stack in place of a remote one, list every setup step
+the stand-in provided that the target will not. Those steps stay unverified
+until a run on the real target covers them.
+
 If execution needs missing access, tools, or extra approval, complete the safe
 authoring work and report the draft status and concrete remaining step.
 Do not invent screenshots, outputs, or a successful run.
 
 ## Source
 
-Adapted from Lauren Tan's [pstack create-verification-skill](https://github.com/cursor/plugins/blob/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack/skills/create-verification-skill/SKILL.md).
+Adapted from Lauren Tan's [pstack create-verification-skill](https://github.com/cursor/plugins/blob/0b46ec399d55f2829e88822998f53b84944837d3/pstack/skills/create-verification-skill/SKILL.md).
 Local changes: Codex/Claude project locations, existing wrapper reuse, protection
-against global symlink writes, and explicit draft/coverage states. See [LICENSE](LICENSE).
+against global symlink writes, and explicit draft/coverage states. Failed seed
+preconditions are recorded under each feature's consequential limitations
+rather than upstream's `Gotchas` heading. See [LICENSE](LICENSE).

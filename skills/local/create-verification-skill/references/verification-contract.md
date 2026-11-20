@@ -6,8 +6,12 @@ observed project facts. It is a content guide, not a template to leave unfinishe
 ## Launch and readiness
 
 Name the supported wrapper, working directory, build prerequisites, runtime
-arguments, and observable readiness condition. For short-lived CLIs and
-libraries, document invocation rather than inventing a persistent server.
+arguments, and observable readiness condition. Ready means usable: for an app
+with a data directory, migrations, or seed data, launch reaches a usable state
+from an empty data directory, including migrations and seed data. A process
+answering or a health check passing while initialization still runs is not
+ready. For short-lived CLIs and libraries, document invocation rather than
+inventing a persistent server.
 
 Give each run its own temporary data/output directory and, when relevant, a free
 port or supported dynamic-port setting. Track the process actually started.
@@ -55,6 +59,11 @@ Keep a small index linking each feature to its procedure. Each procedure names:
 - the entry point from the user's perspective;
 - the exact driving steps and observable acceptance result;
 - required fixtures, alternate paths, and consequential limitations.
+
+When the seed data lacks a precondition that a feature's path needs, that path
+reports a failure and the feature's consequential limitations record the
+missing precondition. Keep the path and its expected result intact; a failing
+path stays failing until the precondition exists.
 
 Start with the important behaviors established from the repository. Run at
 least one through the generated instructions and label the remaining coverage
