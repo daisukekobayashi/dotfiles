@@ -98,8 +98,8 @@ evidence, applying these defaults:
   [Parent rerun](repro-runs.md#parent-rerun) and record the result with its
   disposition. Assess a finding that is not reproduced, or whose proof is not
   `ran`, as unproven from its traced failure path; its severity and tag stay
-  hints as for any finding. Ask the user about each `unproven: needs approval`
-  command. Treat a `Do not ship` verdict as a blocker only after the rerun
+  hints as for any finding. Handle each `unproven: needs approval` finding
+  under Repro Runs' [Approved run](repro-runs.md#approved-run). Treat a `Do not ship` verdict as a blocker only after the rerun
   reproduces its finding or your trace confirms it.
 - **Minor:** Record and defer by default. Every fix creates a new snapshot and
   another review round; fix a minor finding only when it is a trivial, local

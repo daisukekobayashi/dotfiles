@@ -44,8 +44,10 @@ reviewer が optional な pstack skill に依存しないためです。
   誘導するテキストの作者も同じです。実行が自動になるのは、delivery 自身の worker
   head か、呼び出したユーザー自身のローカルの変更だけです。外部の pull request や
   他者のブランチやコミットなど、それ以外の head では reviewer は何も実行せず、
-  正確なコマンドを `unproven: needs approval` として報告し、parent はユーザー自身の
-  メッセージで承認された後にだけそれを実行します。skill の description には、
+  正確なコマンドを `unproven: needs approval` として報告し、parent はコマンドと
+  すべての再現ファイルの全文を示し、再実行と同じパスとシンボリックリンクの確認を
+  行ったうえで、ユーザー自身のメッセージで承認された後にだけそれを実行します。
+  出所は launcher が決めて両ルートに渡し、reviewer が自分で決めることはありません。skill の description には、
   レビュー対象のコードを実行することを明記します。
 - **境界。** 影響が使い捨て worktree の中にとどまるコマンドは自動で実行します。
   lifecycle script を無効にした（`--ignore-scripts`）lockfile に従う依存関係の
@@ -79,7 +81,9 @@ reviewer が optional な pstack skill に依存しないためです。
 - **parent の再実行。** parent は sandbox の外で実行するため、再実行の前に
   コマンドとすべての再現ファイルを表示して読み、すべてのパスが相対で `..` を含まず
   シンボリックリンクでないことを確かめ、worktree の外に触れるものは
-  `unproven: needs approval` として扱います。
+  `unproven: needs approval` として扱います。依存関係は reviewer の実行と同じ
+  方法で復元し、finding の ID はパスやコマンドに使う前に reviewer の形式と
+  照合します。
 - **パス。** git は worktree を実パスで一覧するため、使い捨て worktree のパスは
   親ディレクトリの実パスから組み立てます。macOS の `mktemp -d` は
   `/private/var/...` に対して `/var/...` を返します。review block には

@@ -48,7 +48,8 @@ that worktree but not its `.git` or the reviewed worktree. With the
 host's file-writing tool, not a shell command, write the prompt to a temporary
 file outside both worktrees so no caller text enters a shell string.
 Start it with `Use $change-adversarial-review`, followed by the arguments, the
-target with the reviewed worktree's path, focus, and caller context. Pass the file's
+target with the reviewed worktree's path, focus, caller context, and your
+provenance decision, whether runs are automatic. Pass the file's
 absolute path with `--prompt-file`, and delete the file after the run:
 
 ```text

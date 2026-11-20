@@ -49,7 +49,10 @@ required reviewer does not depend on an optional pstack skill.
   invoking user's own local changes. For any other head, such as an external
   pull request or someone else's branch or commit, the reviewer runs nothing,
   reports the exact commands as `unproven: needs approval`, and the parent runs
-  them only after the user approves them in the user's own message. The skill's
+  them only after the user approves them in the user's own message, having
+  shown the command and the full body of every repro file and run the same
+  path and symlink checks as a rerun. The launcher decides provenance and
+  passes it to both routes; the reviewer never decides it. The skill's
   description states that it executes the reviewed code.
 - **Boundary.** Commands whose effects stay inside the disposable worktree run
   automatically, including lockfile-respecting dependency restoration with
@@ -86,7 +89,10 @@ required reviewer does not depend on an optional pstack skill.
 - **Parent rerun.** The parent runs outside any sandbox, so before a rerun it
   displays and reads the command and every repro file, checks that every path
   is relative, has no `..`, and is no symbolic link, and treats anything that
-  touches the outside of the worktree as `unproven: needs approval`.
+  touches the outside of the worktree as `unproven: needs approval`. It
+  restores dependencies the same way as the reviewer's run, and checks every
+  finding ID against the reviewer's form before using it in a path or
+  command.
 - **Paths.** Disposable worktree paths are built from the real path of their
   parent directory, since git lists worktrees by real path; macOS's
   `mktemp -d` returns `/var/...` for `/private/var/...`. The
