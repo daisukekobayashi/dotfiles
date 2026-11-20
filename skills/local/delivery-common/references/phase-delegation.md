@@ -61,7 +61,8 @@ the component skill's unchanged final report or output. Its Completion is:
 
 - `complete` when the call finished;
 - `question` before any action that its forwarded approvals do not cover, and
-  for the preview, which asks for the combined confirmation;
+  for a preview that returns targets, which asks for the combined
+  confirmation;
 - `blocked` with the blocker and the last state it checked.
 
 The summary's labels carry what the next step needs:
@@ -76,6 +77,11 @@ The summary's labels carry what the next step needs:
   push remote candidates, or the cleanup targets as the manifest command
   printed them with the manifest path.
 - Blockers: the blockers and the component's open items.
+
+When the Caller preview returns no preview, such as on a non-zero status of
+its manifest command, the preview agent returns `complete` with a Verification
+line saying no preview and why. The coordinator then presents the merge alone,
+and the cleanup keeps its own confirmation after the merge.
 
 The coordinator opens the full report only for a named field: the hosted
 cycle's Final Report `Not applied` items, which it records as the provider
@@ -140,7 +146,10 @@ path, and the attempt. On resume:
    skill's own resume and reconciles the logged external actions under
    Delivery Completion's [Resume](completion.md#resume) before acting.
 
-A fresh cleanup agent reruns the cleanup skill with the confirmed manifest
-path. The skill's comparison decides: when any target changed, including one
-already removed, it removes nothing and returns the remaining targets as a
-`question` for a new confirmation.
+A resumed cleanup never acts on the earlier confirmation alone. The fresh
+cleanup agent compares the actual state with the confirmed manifest and reports
+each target already gone, such as a removed worktree or branch, as done. It
+then runs the cleanup skill from its start on what remains, which builds a new
+manifest at the agent's own assigned path, and returns those targets as a
+`question` for a new confirmation. The skill's comparison against that newly
+confirmed manifest still runs before any removal.

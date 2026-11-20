@@ -981,7 +981,7 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     /The brief carries the user's actual request, the existing approvals, the exact target/,
     /Include \[Foreground Checks\]\(\.\.\/SKILL\.md#foreground-checks\)/,
     /appends the intent and outcome entries of each external action it takes to the task's `log\.md` under Delivery Completion's \[Progress record\]\(completion\.md#progress-record\), and never writes `state\.md`\./,
-    /`question` before any action that its forwarded approvals do not cover, and for the preview, which asks for the combined confirmation;/,
+    /`question` before any action that its forwarded approvals do not cover, and for a preview that returns targets, which asks for the combined confirmation;/,
     // The v1 summary carries each phase result in fixed labels; the checker stays unchanged.
     /- Target: the worktree, branch, and task, and the PR's URL and ID once a PR exists\./,
     /- Verification: one line each for the component skill's status, such as the cycle's status or the publish result, and for a hosted round the published head and the head the hosted review covered\./,
@@ -1004,7 +1004,10 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     /2\. Continue the recorded agent when the host can address it, with the answer when there is one\./,
     /3\. Otherwise, dispatch a fresh agent only when the host shows the recorded agent has ended; when it cannot show that, report the target `Blocked`\. Before dispatching, write the new agent and attempt to `state\.md`, so the old agent's check before acting stops it\./,
     /It resumes through the component skill's own resume and reconciles the logged external actions under Delivery Completion's \[Resume\]\(completion\.md#resume\) before acting\./,
-    /A fresh cleanup agent reruns the cleanup skill with the confirmed manifest path\. The skill's comparison decides: when any target changed, including one already removed, it removes nothing and returns the remaining targets as a `question` for a new confirmation\./,
+    // A partly done cleanup re-confirms only what remains; the old manifest no longer matches a removed worktree.
+    /A resumed cleanup never acts on the earlier confirmation alone\. The fresh cleanup agent compares the actual state with the confirmed manifest and reports each target already gone, such as a removed worktree or branch, as done\. It then runs the cleanup skill from its start on what remains, which builds a new manifest at the agent's own assigned path, and returns those targets as a `question` for a new confirmation\. The skill's comparison against that newly confirmed manifest still runs before any removal\./,
+    // No preview falls back to a merge-only confirmation, as the cleanup skills' Caller preview defines.
+    /When the Caller preview returns no preview, such as on a non-zero status of its manifest command, the preview agent returns `complete` with a Verification line saying no preview and why\. The coordinator then presents the merge alone, and the cleanup keeps its own confirmation after the merge\./,
   ]) {
     assert.match(home, rule, `phase-delegation.md: ${rule}`);
   }
