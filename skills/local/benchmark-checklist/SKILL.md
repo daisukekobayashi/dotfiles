@@ -52,10 +52,12 @@ verdict rule in the Report section.
 
 ## Before you run anything
 
-- Write down the decision the number feeds, the result that would change it,
-  and the noise floor (from earlier runs, or a pilot run you do not report).
-  This is the first rule of explain-the-number, required here because an
-  explicit run does not load that principle.
+- Before any run, including a trial run, write down the decision the number
+  feeds, the result that would change it, and the noise floor. Take the floor
+  from earlier recorded runs; without them, write it as a stated estimate,
+  which question 5's measured spread then checks. This is the first rule of
+  explain-the-number, required here because an explicit run does not load
+  that principle.
 - Write down the claim you expect to make, in the words you would ship
   ("export is 30% faster at p50 on the 60k-row dataset"). The questions test
   that sentence.
@@ -98,8 +100,9 @@ verdict rule in the Report section.
 5. **Does it reproduce?** Run each side at least 5 times, alternating (A, B,
    A, B, and so on) so warmup, lazy initialization, caches, and drift favor
    neither. Report the median and range. A gap smaller than the run-to-run
-   variation is no measurable difference. When the call is close, use a
-   rank-sum test or the harness's own statistics.
+   variation is no measurable difference. Compare the measured spread with
+   the noise floor you wrote down. When the call is close, use a rank-sum test
+   or the harness's own statistics.
 6. **Does it matter?** Next to any micro result, measure the end-to-end path a
    user waits on, with realistic data sizes and concurrency, and report the
    micro result as a share of the whole. A helper that takes 1% of a request
@@ -116,8 +119,9 @@ verdict rule in the Report section.
   inconclusive. In ballpark mode, label it a one-run estimate.
 - Verdict rule: any check the mode requires that was not run makes the verdict
   inconclusive; name each gap. In full mode, the verdict is also inconclusive
-  when you claim a difference but cannot name the limiter, or when a side ran
-  untuned.
+  when the measured spread is larger than the written noise floor or than the
+  effect, when you claim a difference but cannot name the limiter, or when a
+  side ran untuned.
 - Give the number with its unit, the run count, the range, and the limiter.
   For example, "p50 41 ms -> 33 ms, median of 7 runs per side, range 32 to
   35 ms after, bound by JSON parsing on one core."
@@ -133,9 +137,10 @@ Local changes: explicit invocation; an execution scope that names the command
 and revision, runs only the existing measurement of trusted code and installed,
 unprivileged profilers, and asks before running unconfirmed code, script edits,
 tuning, installs, `sudo`, or shared and remote load; full and ballpark modes
-with one verdict rule; the decision and noise floor written before the first
-run; tools named as examples with platform equivalents; evidence kept in
-existing notes rather than new artifacts; and the upstream "Other perf material" section dropped,
-because its Perf issue and Hillclimb playbooks have no local equivalent. The
-principle stays a separate skill, [explain-the-number](../explain-the-number/SKILL.md).
+with one verdict rule; the decision and noise floor written before any run,
+with an estimated floor checked against the measured spread; tools named as
+examples with platform equivalents; evidence kept in existing notes rather than
+new artifacts; and the upstream "Other perf material" section dropped, because
+its Perf issue and Hillclimb playbooks have no local equivalent. The principle
+stays a separate skill, [explain-the-number](../explain-the-number/SKILL.md).
 See [LICENSE](LICENSE).
