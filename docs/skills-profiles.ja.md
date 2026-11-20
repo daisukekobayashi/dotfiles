@@ -215,7 +215,13 @@ Completion（進捗記録、再開、公開前とマージ確認時に示す dec
 スキル、reviewer、ツールが欠けているとき、それを必要とするフェーズを対象の task
 について止めてブロッカーとして報告し、インストール、代替、省略はしないことを1か所で
 定めます。両方のプロバイダー別 delivery スキルとローカルレビュー手順はこれにリンク
-します。その Phase Delegation の reference は、実装後のコンポーネントスキルの
+します。その Optional Workflows の reference は、その唯一の例外を1か所で定めます。
+optional workflow はインストールされていてトリガーが成り立つときに実行し、それ以外は
+理由を添えて `not run` と報告してフェーズを続けます。共通の上限（トリガーと tier
+の条件、各 workflow はレビューした head またはフェーズの入力ごとに1回まで、時間の上限、ローカル
+レビューのラウンド上限の内側で数える、ユーザーの上限や opt-out を優先する）に従い、
+registry に各 workflow を載せ、各 worker summary は `Optional workflows:` に
+その状態を書きます。その Phase Delegation の reference は、実装後のコンポーネントスキルの
 呼び出し（公開、hosted レビューのサイクル、cleanup の事前確認、cleanup）を
 コーディネーターがエージェントに渡し、ユーザーとの対話、指摘の評価、マージは自身で
 持つことを1か所で定めます。両方のプロバイダー別 delivery スキルはこれにリンク

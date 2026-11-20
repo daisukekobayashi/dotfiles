@@ -835,6 +835,7 @@ test("a missing prerequisite has one home that delivery links", async () => {
   assert.match(home, /stops the phase that needs it for the affected targets\./);
   assert.match(home, /Report it as a blocker, naming what is missing and, for a skill, the profile that installs it, such as `base,github`\. Never install it, substitute another skill or an informal check for it, or skip the phase\./);
   assert.match(home, /Independent work that does not depend on it continues under Delivery Completion's \[Bounds\]\(references\/completion\.md#bounds\)\./);
+  assert.match(home, /The only exception is an optional workflow: one that is not installed, not triggered, or unavailable is reported as not run and the phase continues, under \[Optional Workflows\]\(references\/optional-workflows\.md\)\./);
   assert.match(commonRaw, /^description: .*stops at a bound or a missing prerequisite/m);
 
   const localReview = flat(await readText(path.join(localRoot, "delivery-common", "references", "local-review.md")));
@@ -844,6 +845,86 @@ test("a missing prerequisite has one home that delivery links", async () => {
     assert.ok(skill.includes("[Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites)"), `${delivery}: links Missing Prerequisites`);
     assert.doesNotMatch(skill, /silently installing|rather than installing|skipping (a )?required phases?/, `${delivery} restates the missing-prerequisite rule`);
   }
+});
+
+test("optional workflows have one provider-neutral home that Missing Prerequisites excepts", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const commonDir = path.join(localRoot, "delivery-common");
+  const commonRaw = await readText(path.join(commonDir, "SKILL.md"));
+  const frameRaw = await readText(path.join(commonDir, "references", "optional-workflows.md"));
+  const frame = flat(frameRaw);
+  const rawSection = (name) => frameRaw.match(new RegExp(`\\n## ${name}\\n[\\s\\S]*?(?=\\n## |$)`))?.[0] ?? "";
+  const section = (name) => flat(rawSection(name));
+
+  assert.match(commonRaw, /^description: .*runs or reports an optional workflow/m);
+  assert.ok(flat(commonRaw).includes("Use [Optional Workflows](references/optional-workflows.md) whenever a phase reaches an optional workflow"));
+  assert.match(frame, /This frame is the only exception to \[Missing Prerequisites\]\(\.\.\/SKILL\.md#missing-prerequisites\): a missing required skill, reviewer, check, or tool still stops the phase that needs it\./);
+
+  // The closed status set: every status continues the phase, and only `ran` is evidence.
+  const statuses = [...rawSection("Run or report").matchAll(/^- `([^`]+)`/gm)].map(([, status]) => status);
+  assert.deepEqual(statuses, ["ran", "not run: not installed", "not run: trigger not met", "not run: tier",
+    "not run: unavailable", "not run: opted out", "stopped: time bound", "failed: <reason>"]);
+  assert.match(section("Run or report"), /give the entry exactly one status and continue the phase whatever the status/);
+  assert.match(section("Run or report"), /Only a `ran` result counts as evidence\. A run that reaches its bound or fails is reported and never counted as evidence/);
+  assert.match(section("Installed"), /A skill is installed when it is listed in the current host's available skills/);
+  assert.match(section("Installed"), /An installed skill whose invocation policy excludes delivery reports `not run: unavailable`/);
+
+  for (const bound of [
+    /It states its trigger and its tier gate\./,
+    /It is invoked at most once per key under \[Keys\]\(#keys\): once for each pair of its registry entry and key, so two entries on the same head or the same phase input never suppress each other\. One invocation may cover several eval cases or several qualifying decisions within its time bound\./,
+    /Each run has the time bound its entry sets/,
+    /Its runs count inside the existing local review round limits/,
+    /A limit or opt-out the user gives in the delivery request takes precedence over the entry/,
+  ]) {
+    assert.match(section("Shared bounds"), bound);
+  }
+  assert.match(section("Keys"), /A run on a committed snapshot is keyed to the reviewed head: its full SHA\./);
+  assert.match(section("Keys"), /The key is `<phase>:<full HEAD SHA>:<git hash-object of that file>`\./);
+  // Untracked files enter the phase input with their mode, size, and bytes, so a chmod alone changes the key.
+  // The phase input is a sequence of length-prefixed parts, so it decodes back and no two inputs share a file.
+  assert.match(section("Keys"), /Each part is one header line of space-separated ASCII fields ending with byte counts and a line feed, followed by exactly those bytes, so the file decodes back into its parts and no two inputs share a file/);
+  assert.match(section("Keys"), /`decisions <byte count>` with the text of the qualifying decisions, then `shared-understanding <byte count>`/);
+  assert.match(section("Keys"), /`diff <byte count>` with the output of `git diff --binary --no-ext-diff --no-textconv --no-color HEAD`/);
+  // Only the task's own new files enter the input, so an unrelated scratch file never changes the key.
+  assert.match(section("Keys"), /one part for each of the task's new files, the untracked files that the work's worker report lists as changed in the task, in byte order of its path: `file <git file mode> <path byte count> <content byte count>`, then the path's bytes, then the content's bytes\./);
+  // An empty list selects nothing, and a listed directory never expands to its descendants.
+  assert.match(section("Keys"), /When the report lists no such path, add no file part and run no selector\. Otherwise take each entry that `git --literal-pathspecs ls-files -z --others --exclude-standard -- <those paths>` lists and keep it only when its path equals a listed path byte for byte, so a listed directory adds none of its descendants\. Any other untracked file in the worktree stays out of the input and never changes the key\./);
+  assert.match(section("Keys"), /`100755` for an executable file, `100644` for any other regular file, and `120000` for a symbolic link, whose content is its target, so a mode change alone changes the key\./);
+  assert.match(section("Accounting"), /belongs to that head's local review round under \[Local Review\]\(local-review\.md#repeat-and-advance\) and never adds a round/);
+  assert.match(section("Accounting"), /A run keyed to a phase input belongs to no round and counts only against its entry's once-per-key bound\./);
+  // Each pair of registry entry and key has its own id, intent before dispatch, and a recorded not-run status.
+  for (const rule of [
+    /one `\[optional O<n>\]` id for each pair of registry entry and key, with the target, workflow, phase, key, status, time bound, and report path/,
+    /another entry or key never reuses it\./,
+    /Before invoking, append an intent entry with status `launching`, like the intent entry Progress record sets for an external action, then dispatch the run, then append its outcome/,
+    // An intent consumes the allowance for good; only a not-run before any intent leaves it open.
+    /An intent entry consumes the pair's once-per-key allowance whatever entries follow it: a pair with an intent entry is never invoked again on that key, and no `not run` entry is recorded for it after its intent\./,
+    /A `not run` status recorded before any intent entry does not consume the pair/,
+    /On resume, before evaluating any trigger, installation, or tier, reconcile each pair whose intent entry has no outcome entry after it; never relaunch it\. When its report path holds a completed result, record that result as its outcome; otherwise record `failed: interrupted` and report it\./,
+    /lists, per target, the status of each entry's latest `log\.md` entry\./,
+  ]) {
+    assert.match(section("Record and report"), rule);
+  }
+  assert.match(section("Record and report"), /under `Optional workflows:` in its \[Worker summary\]\(report-handoff\.md#worker-summary\)/);
+
+  // The registry ships empty; each workflow's issue adds its own row.
+  const registry = frameRaw.match(/\n## Registry\n[\s\S]*$/)?.[0] ?? "";
+  assert.match(registry, /^\| Workflow \| Phase \| Trigger \| Tier gate \| Time bound \| Key \| Runs as \| Result \|$/m);
+  assert.equal(registry.match(/^\| (?!Workflow \||---)/gm), null, "registry has no entries yet");
+
+  const completion = flat(await readText(path.join(commonDir, "references", "completion.md")));
+  assert.match(completion, /An optional workflow that reaches its time bound or fails stops nothing; report it under \[Optional Workflows\]\(optional-workflows\.md#run-or-report\)\./);
+  assert.match(completion, /each optional workflow's latest status under \[Optional Workflows\]\(optional-workflows\.md#record-and-report\)/);
+
+  // Provider parity: the provider skills link delivery-common and never restate the frame.
+  for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
+    const skill = await readText(path.join(localRoot, delivery, "SKILL.md"));
+    assert.doesNotMatch(skill, /not run: (not installed|trigger not met|unavailable)|optional workflow/i, `${delivery} restates the optional-workflow frame`);
+  }
+
+  const layering = flat((await readText(path.join(repoRoot, "docs", "skills-profiles.md"))).match(/\n### Delivery Policy Layering\n[\s\S]*?(?=\n### )/)?.[0]);
+  assert.match(layering, /Its Optional Workflows reference states once the only exception/);
+  assert.match(flat(await readText(path.join(repoRoot, "docs", "skills-profiles.ja.md"))), /その Optional Workflows の reference は、その唯一の例外を1か所で定めます。/);
 });
 
 test("foreground checks have one home that workers and reviewers reach", async () => {
@@ -898,6 +979,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     "Risk Tier": "risk-tier.md",
     "Local Review": "local-review.md",
     "Phase Delegation": "phase-delegation.md",
+    "Optional Workflows": "optional-workflows.md",
   };
   const map = common.match(/^## Phase sections\n[\s\S]*?(?=^## )/m)?.[0];
   assert.ok(map, "delivery-common/SKILL.md defines Phase sections");
@@ -914,7 +996,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(row("Merge"), /Risk Tier: [^;]*Recommend human review/);
   for (const [, phase, cell] of rows) {
     for (const group of cell.split("; ")) {
-      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review|Phase Delegation)(?: \([^)]+\))?: (.+)$/);
+      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review|Phase Delegation|Optional Workflows)(?: \([^)]+\))?: (.+)$/);
       if (!match) continue;
       const [, name, list] = match;
       if (list === "all") continue;
@@ -1074,13 +1156,16 @@ test("review and worker reports hand off through a file and a fixed summary", as
   }
   assert.match(section("Review block"), /The block is authoritative: the check validates it and never parses the\s+Output's headings or bullets/);
   assert.match(section("Worker summary"), /Worker reports stay on this v1 summary/);
+  // A new required label switches hard; in-flight deliveries finish or reissue their old reports.
+  assert.match(flat(section("Worker summary")), /When a change makes a new worker summary label required, such as `Optional workflows:`, the check keeps no branch for the old summary/);
+  assert.match(flat(section("Worker summary")), /either finishes the phases that read its earlier worker reports before its installed check updates, or reissues each such report it still needs at a new path, as the next attempt, with the label, and checks it before acting on it\. The merge confirmation of the change names the in-flight deliveries and the reports this affects\./);
   assert.match(section("Check a handoff"), /`--kind review --reviewer <skill> --show`/);
   assert.match(section("Check a handoff"), /rejects a review\s+report with a v1 summary/);
   assert.match(section("Report file"), /from the last delimiter line/);
   for (const field of ["Base", "Head", "Round", "Reviewer", "Completion", "Verdict", "Findings", "Deferred candidates", "Confirmed fixes", "Unverified coverage", "Report"]) {
     assert.match(section("Review summary"), new RegExp(`^- ${field}:`, "m"), `review summary: ${field}`);
   }
-  for (const field of ["Base", "Head", "Completion", "Files changed", "Verification", "Questions", "Defaults chosen", "Blockers", "Report"]) {
+  for (const field of ["Base", "Head", "Completion", "Files changed", "Verification", "Optional workflows", "Questions", "Defaults chosen", "Blockers", "Report"]) {
     assert.match(section("Worker summary"), new RegExp(`^- ${field}:`, "m"), `worker summary: ${field}`);
   }
   assert.match(section("Codex route"), /\(umask 077; set -C; node "<plugin-root>\/scripts\/codex-companion\.mjs" task \\\n  --fresh --cwd <worktree> --prompt-file <prompt-file> > <report> 2> <report>\.log\) &&\n  node <check-report-handoff\.mjs> --kind review/);
@@ -1343,7 +1428,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     const worker = (overrides = {}) => (file) => ["Full worker report.", "<!-- report-summary v1 -->",
       ...Object.entries({ Target: "wt", Base: base, Head: head, Round: "1", Completion: "question", Tier: "None",
         Overview: "None", "Files changed": "a.md; outside touched areas: None", Verification: "\n  npm test -> pass",
-        Questions: "None", "Defaults chosen": "None", Blockers: "None", "Follow-ups": "None", Report: file, ...overrides })
+        "Optional workflows": "None", Questions: "None", "Defaults chosen": "None", Blockers: "None", "Follow-ups": "None", Report: file, ...overrides })
         .filter(([, v]) => v !== undefined).map(([k, v]) => (v.startsWith("\n") ? `- ${k}:${v}` : `- ${k}: ${v}`)),
       "<!-- end-report-summary -->"];
     const runWorker = (file, extra = []) => spawnSync(process.execPath, [script, "--kind", "worker", "--base", base,
@@ -1352,6 +1437,9 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.equal(runWorker(await write("worker-trailing-blank", (f) => [...worker()(f), "", "  "])).status, 0);
     assert.match(runWorker(await write("worker-bad", worker({ Completion: "incomplete" }))).stderr, /Completion is not complete, question, or blocked/);
     assert.match(runWorker(await write("worker-nofollow", worker({ "Follow-ups": undefined }))).stderr, /missing Follow-ups/);
+    assert.match(runWorker(await write("worker-noopt", worker({ "Optional workflows": undefined }))).stderr, /missing Optional workflows/);
+    assert.match(runWorker(await write("worker-blankopt", worker({ "Optional workflows": "" }))).stderr, /empty Optional workflows/);
+    assert.equal(runWorker(await write("worker-opt", worker({ "Optional workflows": "\n  evaluate-skill: not run: not installed" }))).status, 0);
     assert.match(runWorker(await write("worker-su", worker()), ["--draft", "su"]).stderr, /no Overview/);
     assert.equal(runWorker(await write("worker-su-ok", worker({ Overview: "\n  Change X (issue)" })), ["--draft", "su"]).status, 0);
     assert.match(runWorker(await write("worker-pf", worker()), ["--draft", "preflight"]).stderr, /no Tier/);

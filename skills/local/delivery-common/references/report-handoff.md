@@ -148,6 +148,7 @@ The check derives the review summary from the block and prints it with
 - Overview: <for a shared understanding draft, the one-sentence change, the before/after case, and the in and out of scope, each with its source; otherwise None>
 - Files changed: <in touched areas>; outside touched areas: <files or None>
 - Verification: <command -> result, one per line>
+- Optional workflows: <workflow: status, one per line, or None>
 - Questions:
   - <ID> <question>: <options>; recommended: <option>, because <reason> (<sources>)
 - Defaults chosen: <each default, or None>
@@ -160,6 +161,9 @@ The check derives the review summary from the block and prints it with
 A draft's summary lists each decision to read back and each undecided point or
 question under Questions with its options, recommendation, and sources. A
 shared understanding draft requires Overview, and a preflight draft Tier.
+Optional workflows lists each registry entry of
+[Optional Workflows](optional-workflows.md#record-and-report) that applied to
+the work with its status, or `None` when none applied.
 
 Write each summary label once, exactly as shown, and the values in the
 report's language. Indent list items and continuation lines under their label.
@@ -169,6 +173,16 @@ Worker reports stay on this v1 summary: the check only validates its labels
 and required values and never matches it against the full report, so the gaps
 that moved reviews to a block, which came from matching a written summary
 against free-form Output, do not arise for workers.
+
+When a change makes a new worker summary label required, such as
+`Optional workflows:`, the check keeps no branch for the old summary: once the
+installed check requires the label, every worker report written without it
+fails, including the `--sha256` recheck before a report is reopened. A
+delivery in flight across that change either finishes the phases that read its
+earlier worker reports before its installed check updates, or reissues each
+such report it still needs at a new path, as the next attempt, with the label,
+and checks it before acting on it. The merge confirmation of the change names
+the in-flight deliveries and the reports this affects.
 
 ## Codex route
 

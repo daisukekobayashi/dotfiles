@@ -228,7 +228,14 @@ review request, and delivery skills of both providers link it, and each keeps
 its own approval model. Its Missing Prerequisites section states once that a
 missing skill, reviewer, or tool stops the phase that needs it for the affected
 targets and is reported as a blocker, never installed, substituted, or skipped;
-both provider delivery skills and Local Review link it. Its Phase Delegation
+both provider delivery skills and Local Review link it. Its Optional Workflows
+reference states once the only exception: an optional workflow runs when it is
+installed and its trigger holds, and is otherwise reported as `not run` with
+its reason while the phase continues, under shared bounds (a trigger and tier
+gate, at most one invocation of each workflow per reviewed head or phase
+input, a time bound, counted inside the local review round limits, and a user
+limit or opt-out first); its registry lists each workflow, and each worker summary reports their
+statuses under `Optional workflows:`. Its Phase Delegation
 reference states once how the coordinator hands every component-skill call
 after implementation (publication, the hosted review cycle, the cleanup
 preview, and cleanup) to an agent while it keeps the user dialogue, finding
