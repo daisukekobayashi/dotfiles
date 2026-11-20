@@ -104,7 +104,8 @@ remote head confirmation is the check under Delivery Completion's
 and the coordinator reads that head itself before checking the worker's report.
 Pass the earlier local and hosted dispositions from the progress record as
 paths. When Prepare has findings, the worker returns them, and the coordinator
-assesses them with Local Review's Assess findings before the worker continues.
+assesses them with Local Review's Assess findings before the worker publishes
+only the settled dispositions.
 
 The cycle's Final Report is in the worker's full report; open it for the Not
 applied items.

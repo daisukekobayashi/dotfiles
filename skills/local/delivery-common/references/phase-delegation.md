@@ -18,12 +18,15 @@ and the final task state checks. No agent asks the user a question.
 - Publication in a workflow without a hosted review cycle, the cleanup Caller
   preview, and the cleanup: a fresh subagent for each call. The preview agent
   ends once it returns the targets and the manifest path. After the merge, a
-  fresh cleanup agent receives that manifest path and the user's combined
-  confirmation quoted verbatim, and the cleanup skill's own comparison decides
-  whether they still match.
+  fresh cleanup agent receives that manifest path, its hash, and the user's
+  combined confirmation quoted verbatim. It checks that the file still has that
+  hash, runs the cleanup skill with that file as the confirmed manifest, and
+  the skill's comparison decides whether the targets still match.
 
-Never dispatch an agent for a target while another delegated agent for it is
-outstanding.
+One agent acts on a target at a time. Never dispatch an agent for a target
+while another delegated agent for it is outstanding. Before each external
+action and each removal, the agent checks that `state.md` still names its
+agent and attempt, and stops without acting when it does not.
 
 Delegation is required when the host can dispatch subagents. Without it,
 report the limitation; the coordinator then runs the component skill itself,
@@ -34,9 +37,12 @@ the section of the current step.
 
 The brief carries the user's actual request, the existing approvals, the exact
 target (task, branch, worktree, and the PR and head when known), the component
-skill and the call it makes, the records directory, the report path under
+skill and the call it makes, the agent's name and attempt as `state.md` records
+them, the records directory, the report path under
 [Report path](#report-path), and earlier dispositions and other material as
-paths to existing material. Include
+paths to existing material. For the preview and the cleanup, it also assigns
+the manifest path: the report path with `.manifest.json` in place of `.md`,
+which the cleanup skill creates as a new file. Include
 [Foreground Checks](../SKILL.md#foreground-checks): a wait for a hosted review
 polls in foreground commands with a time bound, and reaching the component
 skill's waiting bound is a blocker.
@@ -54,24 +60,49 @@ The agent ends each turn with a report under
 the component skill's unchanged final report or output. Its Completion is:
 
 - `complete` when the call finished;
-- `question` before any action that its forwarded approvals do not cover,
-  with the prepared result under Questions, such as the cleanup targets and
-  their manifest path or the push remote candidates;
+- `question` before any action that its forwarded approvals do not cover, and
+  for the preview, which asks for the combined confirmation;
 - `blocked` with the blocker and the last state it checked.
+
+The summary's labels carry what the next step needs:
+
+- Target: the worktree, branch, and task, and the PR's URL and ID once a PR
+  exists.
+- Head: the head the phase ended on, under [Report path](#report-path).
+- Verification: one line each for the component skill's status, such as the
+  cycle's status or the publish result, and for a hosted round the published
+  head and the head the hosted review covered.
+- Questions: the prepared result to decide on: the prepared dispositions, the
+  push remote candidates, or the cleanup targets as the manifest command
+  printed them with the manifest path.
+- Blockers: the blockers and the component's open items.
+
+The coordinator opens the full report only for a named field: the hosted
+cycle's Final Report `Not applied` items, which it records as the provider
+delivery skill says. For the preview and the cleanup, it presents the targets
+from the manifest file at the assigned path, not from the summary, and records
+the file's SHA-256 with the report.
 
 In the hosted review cycle, when Prepare finds anything in the latest review,
 the worker stops after Prepare, before any review-fix commit, push, reply, or
 resolution, and returns `question` with the prepared dispositions. The
 coordinator assesses them under Local Review's
-[Assess findings](local-review.md#assess-findings), asks the user what needs a
-user decision, and sends the settled dispositions; the worker then continues
-the cycle from its review-fix publication through Writeback and the final
-state check. A review without findings runs through.
+[Assess findings](local-review.md#assess-findings) and sends the settled
+dispositions. Before the cycle's review-fix publication, the worker makes the
+worktree match them: it removes the edits of every fix not settled as
+`applied`, makes any change they add, and reruns the smallest relevant
+verification when a file changed after Prepare's verification. It then
+commits, pushes, replies, and resolves only as the settled dispositions say,
+through Writeback and the final state check, and returns `blocked` when the
+worktree cannot be matched without touching other changes. A review without
+findings runs through.
 
-For a `question`, the coordinator asks the user, then continues the same agent
-with the user's reply quoted verbatim as the approval for that action alone.
-The component skill's own checks, such as the cleanup comparison, still run
-before the agent acts.
+For a `question`, the coordinator asks the user only what needs the user's
+decision or an approval not already forwarded; it answers the rest from its own
+assessment. It continues the same agent with the answer, quoting the user's
+reply verbatim as the approval for that action alone. The preview's answer
+goes to the cleanup agent after the merge instead. The component skill's own
+checks, such as the cleanup comparison, still run before the agent acts.
 
 ## Report path
 
@@ -83,17 +114,33 @@ Delivery Completion's [Progress record](completion.md#progress-record) layout:
 
 The summary's Head is the head the phase ended on. Before
 [Check a handoff](report-handoff.md#check-a-handoff), the coordinator reads that
-head itself and passes it as `--head`: the PR's current remote source head once
-a PR exists, the worktree's `HEAD` before that, and the merged PR head for the
-preview and the cleanup. Pass `h<n>` or the phase as `--round`. A Head that
-differs from the head the coordinator read fails the check.
+head itself and passes it as `--head`: the worktree's `HEAD` before a PR
+exists; the PR's current remote source head after that, which for the preview
+is the head to be merged that the Caller preview checks; and for the cleanup
+the source head of the merged PR. Pass `h<n>` or the phase as `--round`. A
+Head that differs from the head the coordinator read fails the check.
 
 ## Resume a delegated phase
 
 While a phase is delegated, `state.md` names the phase, the agent, the report
-path, and the attempt. On resume, act on the recorded report when it exists and
-passes the check. Otherwise continue the recorded agent when the host can
-address it. Only when it cannot, dispatch a fresh agent for the next attempt
-with the records; that agent resumes through the component skill's own resume
-and reconciles the logged external actions under Delivery Completion's
-[Resume](completion.md#resume).
+path, and the attempt. On resume:
+
+1. Read the latest report that passes the check, if any. A `complete` report
+   gives the result; a `question` report gives the prepared result to decide
+   on. Recorded assessments carry forward; ask the user again for an approval
+   that the records show but this context did not receive, since a progress
+   record is not authorization.
+2. Continue the recorded agent when the host can address it, with the answer
+   when there is one.
+3. Otherwise, dispatch a fresh agent only when the host shows the recorded
+   agent has ended; when it cannot show that, report the target `Blocked`.
+   Before dispatching, write the new agent and attempt to `state.md`, so the
+   old agent's check before acting stops it. Give the fresh agent the records,
+   the latest report path, and the answer. It resumes through the component
+   skill's own resume and reconciles the logged external actions under
+   Delivery Completion's [Resume](completion.md#resume) before acting.
+
+A fresh cleanup agent reruns the cleanup skill with the confirmed manifest
+path. The skill's comparison decides: when any target changed, including one
+already removed, it removes nothing and returns the remaining targets as a
+`question` for a new confirmation.

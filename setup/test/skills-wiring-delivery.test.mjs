@@ -975,20 +975,36 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     /No agent asks the user a question\./,
     // The worker keeps its context for hosted fixes; cleanup never runs from the agent whose worktree it removes.
     /The hosted review cycle, on every call: the target's worker, continued through the host's mechanism for messaging an existing agent\./,
-    /Publication in a workflow without a hosted review cycle, the cleanup Caller preview, and the cleanup: a fresh subagent for each call\. The preview agent ends once it returns the targets and the manifest path\. After the merge, a fresh cleanup agent receives that manifest path and the user's combined confirmation quoted verbatim, and the cleanup skill's own comparison decides whether they still match\./,
-    /Never dispatch an agent for a target while another delegated agent for it is outstanding\./,
+    /Publication in a workflow without a hosted review cycle, the cleanup Caller preview, and the cleanup: a fresh subagent for each call\. The preview agent ends once it returns the targets and the manifest path\. After the merge, a fresh cleanup agent receives that manifest path, its hash, and the user's combined confirmation quoted verbatim\. It checks that the file still has that hash, runs the cleanup skill with that file as the confirmed manifest, and the skill's comparison decides whether the targets still match\./,
+    /One agent acts on a target at a time\. Never dispatch an agent for a target while another delegated agent for it is outstanding\. Before each external action and each removal, the agent checks that `state\.md` still names its agent and attempt, and stops without acting when it does not\./,
     /Delegation is required when the host can dispatch subagents\. Without it, report the limitation; the coordinator then runs the component skill itself/,
     /The brief carries the user's actual request, the existing approvals, the exact target/,
     /Include \[Foreground Checks\]\(\.\.\/SKILL\.md#foreground-checks\)/,
     /appends the intent and outcome entries of each external action it takes to the task's `log\.md` under Delivery Completion's \[Progress record\]\(completion\.md#progress-record\), and never writes `state\.md`\./,
-    /`question` before any action that its forwarded approvals do not cover, with the prepared result under Questions/,
+    /`question` before any action that its forwarded approvals do not cover, and for the preview, which asks for the combined confirmation;/,
+    // The v1 summary carries each phase result in fixed labels; the checker stays unchanged.
+    /- Target: the worktree, branch, and task, and the PR's URL and ID once a PR exists\./,
+    /- Verification: one line each for the component skill's status, such as the cycle's status or the publish result, and for a hosted round the published head and the head the hosted review covered\./,
+    /- Questions: the prepared result to decide on: the prepared dispositions, the push remote candidates, or the cleanup targets as the manifest command printed them with the manifest path\./,
+    /The coordinator opens the full report only for a named field: the hosted cycle's Final Report `Not applied` items/,
+    // What the user confirms is the manifest the cleanup later compares against.
+    /For the preview and the cleanup, it presents the targets from the manifest file at the assigned path, not from the summary, and records the file's SHA-256 with the report\./,
+    /assigns the manifest path: the report path with `\.manifest\.json` in place of `\.md`, which the cleanup skill creates as a new file\./,
     // Hosted findings are assessed by the coordinator, at the pause the cycle already has before Writeback.
     /when Prepare finds anything in the latest review, the worker stops after Prepare, before any review-fix commit, push, reply, or resolution, and returns `question` with the prepared dispositions\. The coordinator assesses them under Local Review's \[Assess findings\]\(local-review\.md#assess-findings\)/,
-    /continues the same agent with the user's reply quoted verbatim as the approval for that action alone\. The component skill's own checks, such as the cleanup comparison, still run before the agent acts\./,
+    // Only settled dispositions reach the PR: rejected fixes are removed before publication.
+    /Before the cycle's review-fix publication, the worker makes the worktree match them: it removes the edits of every fix not settled as `applied`, makes any change they add, and reruns the smallest relevant verification when a file changed after Prepare's verification\. It then commits, pushes, replies, and resolves only as the settled dispositions say/,
+    // Assessment alone does not wait on the user.
+    /For a `question`, the coordinator asks the user only what needs the user's decision or an approval not already forwarded; it answers the rest from its own assessment\. It continues the same agent with the answer, quoting the user's reply verbatim as the approval for that action alone\. The preview's answer goes to the cleanup agent after the merge instead\. The component skill's own checks, such as the cleanup comparison, still run before the agent acts\./,
     /`<base12>-<start12>\/rh<n>-hosted-a<attempt>\.md` for hosted round `n`, and `<base12>-<start12>\/r<phase>-phase-a<attempt>\.md` for `publish`, `preview`, or `cleanup`/,
     // The checked Head is the head the coordinator reads from the provider, not the agent's claim.
-    /the coordinator reads that head itself and passes it as `--head`: the PR's current remote source head once a PR exists, the worktree's `HEAD` before that, and the merged PR head for the preview and the cleanup\./,
-    /On resume, act on the recorded report when it exists and passes the check\. Otherwise continue the recorded agent when the host can address it\. Only when it cannot, dispatch a fresh agent for the next attempt with the records; that agent resumes through the component skill's own resume/,
+    /the coordinator reads that head itself and passes it as `--head`: the worktree's `HEAD` before a PR exists; the PR's current remote source head after that, which for the preview is the head to be merged that the Caller preview checks; and for the cleanup the source head of the merged PR\./,
+    // A valid question report does not pin the phase to a lost agent, and a replaced agent cannot act again.
+    /A `complete` report gives the result; a `question` report gives the prepared result to decide on\. Recorded assessments carry forward; ask the user again for an approval that the records show but this context did not receive, since a progress record is not authorization\./,
+    /2\. Continue the recorded agent when the host can address it, with the answer when there is one\./,
+    /3\. Otherwise, dispatch a fresh agent only when the host shows the recorded agent has ended; when it cannot show that, report the target `Blocked`\. Before dispatching, write the new agent and attempt to `state\.md`, so the old agent's check before acting stops it\./,
+    /It resumes through the component skill's own resume and reconciles the logged external actions under Delivery Completion's \[Resume\]\(completion\.md#resume\) before acting\./,
+    /A fresh cleanup agent reruns the cleanup skill with the confirmed manifest path\. The skill's comparison decides: when any target changed, including one already removed, it removes nothing and returns the remaining targets as a `question` for a new confirmation\./,
   ]) {
     assert.match(home, rule, `phase-delegation.md: ${rule}`);
   }
@@ -1005,7 +1021,7 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
   const phases = {
     "github-issue-delivery": [
       /Delegate `github-pr-codex-review-cycle` for the exact issue branch\/worktree to the issue's worker under \[Phase Delegation\]/,
-      /When Prepare has findings, the worker returns them, and the coordinator assesses them with Local Review's Assess findings before the worker continues\./,
+      /When Prepare has findings, the worker returns them, and the coordinator assesses them with Local Review's Assess findings before the worker publishes only the settled dispositions\./,
       /have a fresh agent use `github-worktree-cleanup`'s caller preview for the cleanup targets under Phase Delegation\./,
       /Delegate `github-worktree-cleanup` for this issue's branch and worktree to a fresh agent under Phase Delegation\./,
     ],
