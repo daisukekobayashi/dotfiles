@@ -23,15 +23,17 @@ workflow supplies each task's key, and the task's files live in
   action, risk tier at that head and the heaviest tier recorded, local review
   round count, PR and published head, pending user decisions in one line each,
   blockers, the counts of open finding dispositions, self-closures, and
-  follow-up candidates, and a delegated phase with its agent, report path, and
-  attempt under [Phase Delegation](phase-delegation.md#resume-a-delegated-phase),
+  follow-up candidates, the count of optional runs, and a delegated phase
+  with its agent, report path, and attempt under [Phase Delegation](phase-delegation.md#resume-a-delegated-phase),
   plus the calling workflow's additions.
 - `log.md`, the append-only progress record: task scope, the shared
   understanding result, accepted design decisions, risk tier with its reasons
   and head, verification, the local review record under
   [Local Review](local-review.md), PR and published head, finding
   dispositions, the self-closure list under Local Review, follow-up candidates,
-  the decision summary, and blockers. Begin each entry with its type and a
+  optional workflow runs under
+  [Optional Workflows](optional-workflows.md#record-and-report), the decision
+  summary, and blockers. Begin each entry with its type and a
   stable id, such as `[disposition D3]`; an entry that changes an item reuses
   its id, and the latest entry for an id is current. For an external action
   inside a phase, such as posting a review request, append an intent entry
@@ -157,7 +159,9 @@ merge commit before cleanup; a queued or scheduled merge remains pending.
 Advance as soon as the completion criteria are met. If progress repeatedly
 stalls, a review times out, a required check fails, or a material human
 decision is needed, preserve progress and report the next action, plus the
-calling workflow's additions.
+calling workflow's additions. An optional workflow that reaches its time bound
+or fails stops nothing; report it under
+[Optional Workflows](optional-workflows.md#run-or-report).
 
 Keep the user informed while waiting. Stop further publication targets after a
 publication failure; independent local work may continue when it does not
@@ -168,10 +172,12 @@ as such rather than as a successful completion.
 
 Report each task separately with task and PR links, branch and worktree or
 their confirmed removal, verification and limitations, reviewed and published
-head and review rounds, policy and merge state, task state, and the exact
-pending decision or action. Use the states `In progress`, `Waiting for user`,
-`Waiting for review/CI`, `Blocked`, `Merged; cleanup pending`, and `Complete`,
-plus the calling workflow's additions.
+head and review rounds, each optional workflow's latest status under
+[Optional Workflows](optional-workflows.md#record-and-report), policy and merge
+state, task state, and the exact pending decision or action. Use the states
+`In progress`, `Waiting for user`, `Waiting for review/CI`, `Blocked`,
+`Merged; cleanup pending`, and `Complete`, plus the calling workflow's
+additions.
 
 Mark `Complete` only after acceptance criteria, current verification and
 reviews, actual merge, task closure, and confirmed local cleanup have all been

@@ -148,6 +148,7 @@ The check derives the review summary from the block and prints it with
 - Overview: <for a shared understanding draft, the one-sentence change, the before/after case, and the in and out of scope, each with its source; otherwise None>
 - Files changed: <in touched areas>; outside touched areas: <files or None>
 - Verification: <command -> result, one per line>
+- Optional workflows: <workflow: status, one per line, or None>
 - Questions:
   - <ID> <question>: <options>; recommended: <option>, because <reason> (<sources>)
 - Defaults chosen: <each default, or None>
@@ -160,6 +161,9 @@ The check derives the review summary from the block and prints it with
 A draft's summary lists each decision to read back and each undecided point or
 question under Questions with its options, recommendation, and sources. A
 shared understanding draft requires Overview, and a preflight draft Tier.
+Optional workflows lists each registry entry of
+[Optional Workflows](optional-workflows.md#record-and-report) that applied to
+the work with its status, or `None` when none applied.
 
 Write each summary label once, exactly as shown, and the values in the
 report's language. Indent list items and continuation lines under their label.

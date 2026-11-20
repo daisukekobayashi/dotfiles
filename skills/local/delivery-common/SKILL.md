@@ -1,6 +1,6 @@
 ---
 name: delivery-common
-description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, delegates publication, hosted review, and cleanup calls to agents, stops at a bound or a missing prerequisite, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
+description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, delegates publication, hosted review, and cleanup calls to agents, stops at a bound or a missing prerequisite, runs or reports an optional workflow, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
 ---
 
 # Delivery Common
@@ -21,7 +21,10 @@ escalation, advancement, and round limits. Use
 [Delivery Completion](references/completion.md) for the progress record,
 resume, the decision summary shown before publication and at merge, the
 published-head check and advance after publication, the merge confirmation,
-bounds, the final report and `Complete` rule, and follow-up candidates. Apply
+bounds, the final report and `Complete` rule, and follow-up candidates. Use
+[Optional Workflows](references/optional-workflows.md) whenever a phase reaches
+an optional workflow: when it runs, how it is reported as not run, and its
+shared bounds. Apply
 [Missing Prerequisites](#missing-prerequisites) whenever a phase lacks what it
 needs, and [Foreground Checks](#foreground-checks) to every delegated worker
 and reviewer and to each result they return. The coordinator reads these
@@ -46,13 +49,13 @@ Completion's Bounds whenever a phase stops or stalls.
 | Phase | Sections |
 | --- | --- |
 | Prepare and dispatch | Worker Dialogue: Assign the worker; Delivery Completion: Progress record |
-| Shared understanding and preflight | Worker Dialogue: Draft and ask, Worker defaults; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Tier procedure |
-| Implementation | Worker Dialogue: Preflight and implementation, Worker defaults |
-| Local reviews and focused follow-up | Local Review: all; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Select the security review, Tier procedure |
+| Shared understanding and preflight | Worker Dialogue: Draft and ask, Worker defaults; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Tier procedure; Optional Workflows: all |
+| Implementation | Worker Dialogue: Preflight and implementation, Worker defaults; Optional Workflows: all |
+| Local reviews and focused follow-up | Local Review: all; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Select the security review, Tier procedure; Optional Workflows: all |
 | Publication | Phase Delegation: all; Delivery Completion: Decision summary, Before publication, After publication; Local Review (when assessing hosted findings): Triage classes, Assess findings, Repeat and advance; Risk Tier: Select the security review, Tier procedure, Recommend human review |
 | Merge | Phase Delegation: Choose the agent, Brief the agent, Return to the coordinator, Report path; Delivery Completion: Decision summary, After publication, Merge confirmation; Risk Tier: Recommend human review |
-| Report and cleanup | Phase Delegation: all; Delivery Completion: Merge confirmation, Report and complete, Follow-up candidates |
-| Resume, including after context compaction | Delivery Completion: Progress record, Resume, Merge confirmation; Phase Delegation: Resume a delegated phase; Risk Tier: Select the security review; then the sections of the phase the task's state file names |
+| Report and cleanup | Phase Delegation: all; Delivery Completion: Merge confirmation, Report and complete, Follow-up candidates; Optional Workflows: Run or report, Record and report |
+| Resume, including after context compaction | Delivery Completion: Progress record, Resume, Merge confirmation; Phase Delegation: Resume a delegated phase; Risk Tier: Select the security review; Optional Workflows: Record and report; then the sections of the phase the task's state file names |
 
 ## Delegated Authorization
 
@@ -76,8 +79,11 @@ Report it as a blocker, naming what is missing and, for a skill, the profile
 that installs it, such as `base,github`. Never install it, substitute another
 skill or an informal check for it, or skip the phase. Independent work that
 does not depend on it continues under Delivery Completion's
-[Bounds](references/completion.md#bounds). The delivery skills of both
-providers and [Local Review](references/local-review.md) link this section
+[Bounds](references/completion.md#bounds). The only exception is an optional
+workflow: one that is not installed, not triggered, or unavailable is reported
+as not run and the phase continues, under
+[Optional Workflows](references/optional-workflows.md). The delivery skills of
+both providers and [Local Review](references/local-review.md) link this section
 instead of restating it.
 
 ## Foreground Checks

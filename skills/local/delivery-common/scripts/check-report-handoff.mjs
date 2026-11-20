@@ -106,7 +106,7 @@ const FINDING_KEYS = ["id", "severity", "tag", "location", "title"];
 const CANDIDATE_KEYS = ["id", "location", "title"];
 
 const WORKER_LABELS = ["Target", "Base", "Head", "Round", "Completion", "Tier", "Overview", "Files changed",
-  "Verification", "Questions", "Defaults chosen", "Blockers", "Follow-ups", "Report"];
+  "Verification", "Optional workflows", "Questions", "Defaults chosen", "Blockers", "Follow-ups", "Report"];
 
 // One non-empty line: no control characters, so a rendered value cannot add a summary
 // line, and no lone surrogate, which would print as U+FFFD and make distinct values equal.
