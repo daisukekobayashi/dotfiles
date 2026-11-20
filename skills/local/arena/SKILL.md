@@ -69,8 +69,9 @@ Evidence from an individual candidate does not validate the combined result.
 ## Deliver
 
 Return the selected artifact or design, comparison criteria, reasons for the
-choice, the independent judge's verdict or that no judge ran and why, useful
-ideas adopted or rejected, candidate failures, and verification limits. Keep
+choice, the independent judge's verdict or, when no usable verdict was
+obtained (judge skipped, failed, or timed out), that fact and why, useful ideas
+adopted or rejected, candidate failures, and verification limits. Keep
 task-specific comparison state temporary; promote only requested durable
 decisions. Stop owned processes; retain evidence and honor approval
 requirements before removing worktrees or branches.

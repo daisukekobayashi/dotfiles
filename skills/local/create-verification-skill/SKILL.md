@@ -70,6 +70,11 @@ Follow the generated procedure once: readiness check, owned launch if needed,
 one mapped user path, assertions, evidence capture, and cleanup. After cleanup,
 confirm that the evidence survives. Do cleanup after failed attempts as well.
 
+For an app with a data directory, migrations, or seed data, run the generated
+launch from an empty data directory and reach the usable state before claiming
+startup verified. When only an existing instance can be driven, report
+cold-start readiness as unverified.
+
 Use [prove-it-works](../prove-it-works/SKILL.md). A generated procedure that was
 never successfully executed is a draft. Report exactly which behavior ran and
 which feature-map entries remain unverified; one successful path does not
@@ -77,8 +82,10 @@ certify the whole application.
 
 When the run used a stand-in for the real target, such as a container in place
 of a fresh VM or a local stack in place of a remote one, list every setup step
-the stand-in provided that the target will not. Those steps stay unverified
-until a run on the real target covers them.
+the stand-in provided that the target will not. Record those steps as
+unverified in the generated skill, beside its launch procedure, and in the
+creation report. They stay unverified until a run on the real target covers
+them.
 
 If execution needs missing access, tools, or extra approval, complete the safe
 authoring work and report the draft status and concrete remaining step.

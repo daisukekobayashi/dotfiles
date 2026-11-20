@@ -38,9 +38,12 @@ whether evidence exercises the changed behavior.
 Give every reviewer the same intent, scope, baseline, context pointers, criteria,
 and read-only restriction. Request concrete findings with a trigger, failure
 path, impact, source location, and uncertainty. Ask for coverage gaps as well.
-State the exclusion: leave out findings that rest only on style, naming,
-structure, or a risk that needs a future change to matter. A finding that cites
-a breach of a documented repository rule or a current failure stays in.
+State the exclusion: leave out findings that rest only on style, naming, or
+structure preference, or on a risk that matters only after an additional
+hypothetical change outside the target. Keep a supported violation of the
+reviewed requirements or specification, a failure that follows from the
+reviewed change or design itself, a breach of a documented repository rule,
+and a current failure.
 Do not show the parent's suspected findings or another reviewer's answer.
 
 ## Obtain independent reviews
@@ -59,8 +62,9 @@ counting them as a clean verdict.
 ## Judge the findings
 
 Read each report and trace consequential findings back to the target. Apply
-the brief's exclusion again and drop each finding it covers, counting the drops
-per reviewer with their reasons.
+the brief's exclusion again: drop each finding that rests only on preference or
+on a hypothetical change outside the target, keep each finding the exclusion
+keeps, and count the drops per reviewer with their reasons.
 Deduplicate by failure mechanism. Agreement increases attention, not truth:
 one well-supported finding can outweigh a consensus with no evidence.
 Investigate disagreements and distinguish unsupported speculation from
