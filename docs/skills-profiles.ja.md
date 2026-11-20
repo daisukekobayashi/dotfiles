@@ -477,7 +477,7 @@ Superpowers は `base` に含めません。`writing-great-skills` は上流で�
 
 ### `pstack`
 
-Lauren Tan の pstack を、この環境の作業範囲と承認ルールに合わせた11個の local skill。
+Lauren Tan の pstack を、この環境の作業範囲と承認ルールに合わせた13個の local skill。
 `base`・`github` から独立した profile で、外部パッケージ、プラグインの hook、
 モデル設定、既定の自動ルーティングは追加しません。既存の `tdd`・`teach` は維持します。
 
@@ -492,17 +492,20 @@ Lauren Tan の pstack を、この環境の作業範囲と承認ルールに合�
 | `create-verification-skill` | プロジェクト固有の検証手順と feature map を作り、その手順を実行確認する。 |
 | `maintain-verification-skill` | 既存の検証手順をソースと実動作に照合して保守し、製品の契約を保つ。 |
 | `evaluate-skill` | 両エージェントで、スキルの候補実行・条件名を伏せた採点・結果の整理を進める。 |
+| `benchmark-checklist` | 明示起動で、性能測定値の律速要因・チューニング・限界・エラー・再現性・影響度・処理の実行有無を確かめる。 |
 | `prove-it-works` | 完了の主張と観測した挙動を対応させる共通原則。 |
 | `encode-lessons-in-structure` | 根拠のある再発パターンを、型・テスト・既存の検査などで防ぐ共通原則。 |
+| `explain-the-number` | 測定値を信頼する前に、律速要因と他に測っている可能性のあるものを確かめる共通原則。 |
 
 呼び出し例は `$how この処理の経路を説明して`、`$why この状態を永続化した理由は？`、
 `$architect このインターフェースを設計して`、`$arena この案を比較して`、
 `$interrogate この変更をレビューして`、`$blast-radius このスキーマ変更を検証して`、
 `$create-verification-skill このCLIの検証手順を作って`、
 `$maintain-verification-skill このアプリの検証手順を更新して`、
-`$evaluate-skill maintain-verification-skill`。
+`$evaluate-skill maintain-verification-skill`、
+`$benchmark-checklist この高速化を検証して`。
 Claude Code では、その環境の skill 呼び出し方法を使います。
-共通原則2つは直接参照するほか、各 workflow skill から必要に応じて読みます。
+共通原則3つは直接参照するほか、各 workflow skill から必要に応じて読みます。
 
 delivery でのこれらの skill の使い方は
 [ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) で決めています。
@@ -510,7 +513,7 @@ delivery でのこれらの skill の使い方は
 下記の明示呼び出しの規則もそのまま適用されます。
 
 `arena`・`interrogate`・`blast-radius`・`create-verification-skill`・
-`maintain-verification-skill`・`evaluate-skill` は
+`maintain-verification-skill`・`evaluate-skill`・`benchmark-checklist` は
 ユーザーによる明示起動に限定します。description と本文に加え、Codex には
 `policy.allow_implicit_invocation: false`、Claude Code には SKILL.md の
 frontmatter に `disable-model-invocation: true` を設定します。
@@ -519,7 +522,7 @@ Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出しま
 `arena` を明示起動した場合を除き、自身で設計案を比較します。
 
 `how`・`why`・`architect` はタスクの description に従って選択できます。
-共通原則2つは、必要な場面や他の workflow から参照します。
+共通原則3つは、必要な場面や他の workflow から参照します。
 登録されている全 skill を毎回実行する構成ではありません。
 候補・レビューの並列実行は条件と上限を設け、利用できない場合は独立性の限界を明示します。
 
@@ -555,7 +558,8 @@ draft とし、検証済み範囲は実際に通した経路に限定します�
 準備用の補助スクリプトもスキル内に同梱します。両エージェントで共通の課題と
 判定基準を使い、環境の準備や設定検証だけで実モデルでの成功とはしません。
 
-`arena`・`interrogate`・`create-verification-skill` は上流リビジョン
+`arena`・`interrogate`・`create-verification-skill`・`benchmark-checklist`・
+`explain-the-number` は上流リビジョン
 [`0b46ec399d55f2829e88822998f53b84944837d3`](https://github.com/cursor/plugins/tree/0b46ec399d55f2829e88822998f53b84944837d3/pstack) に追従しています。
 最初の9スキルのうち残り6つは
 [`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack) を参照し、
@@ -564,8 +568,10 @@ draft とし、検証済み範囲は実際に通した経路に限定します�
 保守・評価スキルは自身の本文に参照した上流リビジョンを記載します。
 `evaluate-skill` は上流の Eval playbook を独立したローカルスキルにしたもので、
 上流に同名の独立スキルがあるという意味ではありません。
-上流の `principle-prove-it-works` と `principle-encode-lessons-in-structure` は、
-ローカルでは接頭辞を省略しています。自動同期するプラグイン fork ではなく、
+上流の `principle-prove-it-works`・`principle-encode-lessons-in-structure`・
+`principle-explain-the-number` は、ローカルでは接頭辞を省略しています。
+`explain-the-number` は `benchmark-checklist` をユーザーが起動する workflow として
+示すだけで、自身では実行しません。自動同期するプラグイン fork ではなく、
 上流の変更とローカルの契約を照合して更新する構成です。
 
 ### `github`
