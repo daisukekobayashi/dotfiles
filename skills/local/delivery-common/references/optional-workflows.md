@@ -74,12 +74,14 @@ parts and no two inputs share a file:
 - for verification of uncommitted work, `diff <byte count>` with the output
   of `git diff --binary --no-ext-diff --no-textconv --no-color HEAD`, then one
   part for each of the task's new files, the untracked files that the work's
-  worker report lists as changed in the task, that
-  `git --literal-pathspecs ls-files -z --others --exclude-standard -- <those paths>`
-  lists, in byte order of its path:
+  worker report lists as changed in the task, in byte order of its path:
   `file <git file mode> <path byte count> <content byte count>`, then the
-  path's bytes, then the content's bytes. Any other untracked file in the
-  worktree stays out of the input and never changes the key.
+  path's bytes, then the content's bytes. When the report lists no such
+  path, add no file part and run no selector. Otherwise take each entry that
+  `git --literal-pathspecs ls-files -z --others --exclude-standard -- <those paths>`
+  lists and keep it only when its path equals a listed path byte for byte, so
+  a listed directory adds none of its descendants. Any other untracked file
+  in the worktree stays out of the input and never changes the key.
 
 The git file mode is `100755` for an executable file, `100644` for any other
 regular file, and `120000` for a symbolic link, whose content is its target,
