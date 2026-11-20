@@ -1,9 +1,12 @@
 # Report Handoff
 
 A delegated reviewer or worker writes its full report to a file and returns
-only a fixed summary. A reply enters the caller's context whole, so a caller
-that receives many reports, such as a delivery coordinator, decides from the
-summaries and opens a report only for the finding it needs to verify.
+only a short reply: a reviewer the report path and its completion, a worker a
+fixed summary. A reply enters the caller's context whole, so a caller that
+receives many reports, such as a delivery coordinator, decides from summaries
+and opens a report only for the finding it needs to verify. A review summary
+is never written by the reviewer: the check derives it from the report's
+machine-readable review block.
 
 ## Report path
 
@@ -41,53 +44,94 @@ they return their output as before.
 
 ## Report file
 
-The file holds the full report, then the delimiter line, then the summary,
-ending with the end line:
+The file holds the full report, then a delimiter line, then the summary part,
+ending with the end line. A review report uses the v2 delimiter and a review
+block; a worker report uses the v1 delimiter and the worker summary:
 
 ```text
+<!-- report-summary v2 -->
 <!-- report-summary v1 -->
 <!-- end-report-summary -->
 ```
 
 The full report is a review skill's unchanged `## Output` or a worker's full
-report. The summary runs from the last delimiter line through the end line,
-since a reviewed diff may contain the delimiter. Write the file with the host's
-file-writing tool, then return only the summary.
+report. The summary part runs from the last delimiter line of the report's kind
+through the end line, since a reviewed diff may contain a delimiter. Write the
+file with the host's file-writing tool. A reviewer then returns only the report
+path and its completion; a worker returns only its summary.
 
-Write each summary label once, exactly as shown below, and the values in the
-report's language. Indent list items and continuation lines under their label.
-List every item; never drop one for its severity, tag, or class, and write
-`None` for an empty list.
+## Review block
+
+After the v2 delimiter, a review writes one fenced `json` block and the end
+line, with nothing else between them:
+
+````markdown
+<!-- report-summary v2 -->
+```json
+{
+  "target": "<worktree, branch, task>",
+  "base": "<full base SHA>",
+  "head": "<full reviewed head SHA>",
+  "round": "<round>",
+  "reviewer": "<skill>",
+  "route": "<route, such as Codex companion task>",
+  "completion": "complete | partial | failed",
+  "verdict": "<verdict from the Output>",
+  "findings": [
+    {"id": "<ID>", "severity": "<original severity>", "tag": "introduced | worsened | pre-existing",
+     "location": "<location>", "title": "<title>"}
+  ],
+  "deferredCandidates": [
+    {"id": "<ID>", "location": "<location>", "title": "<title>"}
+  ],
+  "confirmedFixes": ["<earlier finding ID or title confirmed fixed>"],
+  "unverifiedCoverage": ["<what the review could not check>"],
+  "report": "<report path>"
+}
+```
+<!-- end-report-summary -->
+````
+
+Every key is required, no other key is allowed, and no key repeats in any
+object. Every value is a string or an array; write `[]` for an empty list, and
+each string as one non-empty line in the report's language, except the verdict, severity, tag, and completion, which
+take the Output's English values. `round` is the round as the caller passes it,
+as a string. List every finding of the Output in Output order, numbered from 1
+as `CR<n>`, `ADV<n>`, or `SEC<n>` by reviewer, with the original severity the
+reviewer's Output allows; keep pre-existing, Low, and minor findings. Give
+each its full-report location and title, and give no two findings the same
+location and title. `change-security-review` lists every deferred candidate as
+`SECD<n>`; the other reviewers write `[]`. A review that could not complete
+writes `partial` or `failed`, which the check does not pass.
+
+The block is authoritative: the check validates it and never parses the
+Output's headings or bullets, so a finding that the Output describes but the
+block omits does not reach the caller. Heuristic parsing of the free-form
+Output did not converge (#213), so this residual risk is accepted; open the
+full report for any finding you act on, and treat an Output that disagrees with
+its block as a defect of that review.
 
 ## Review summary
 
+The check derives the review summary from the block and prints it with
+`--show`; the caller decides from that output alone:
+
 ```markdown
-<!-- report-summary v1 -->
-- Target: <worktree, branch, task>
-- Base: <full base SHA>
-- Head: <full reviewed head SHA>
+- Target: <target>
+- Base: <base>
+- Head: <head>
 - Round: <round>
-- Reviewer: <skill>, <route>
-- Completion: complete | partial | failed
-- Verdict: <verdict from the Output>
+- Reviewer: <reviewer>, <route>
+- Completion: <completion>
+- Verdict: <verdict>
 - Findings:
-  - <ID> [<original severity>] <tag> - <location> - <title>
+  - <ID> [<severity>] <tag> - <location> - <title>
 - Deferred candidates:
   - <ID> - <location> - <title>
-- Confirmed fixes: <earlier finding IDs or titles confirmed fixed, or None>
-- Unverified coverage: <what the review could not check, or None>
-- Report: <report path>
-<!-- end-report-summary -->
+- Confirmed fixes: <each, or None>
+- Unverified coverage: <each, or None>
+- Report: <report>
 ```
-
-Number findings in Output order as `CR<n>`, `ADV<n>`, or `SEC<n>` by reviewer,
-and `change-security-review` deferred candidates as `SECD<n>`. Give each item
-the location and title of its full-report item. The check compares the Verdict
-and the number of findings per severity and tag, and of deferred candidates,
-with the full report; it does not verify which finding each item is, so open
-the full report for any finding you act on. Keep
-pre-existing, Low, and minor findings and every deferred candidate. A review
-that could not complete reports `partial` or `failed`.
 
 ## Worker summary
 
@@ -115,12 +159,22 @@ A draft's summary lists each decision to read back and each undecided point or
 question under Questions with its options, recommendation, and sources. A
 shared understanding draft requires Overview, and a preflight draft Tier.
 
+Write each summary label once, exactly as shown, and the values in the
+report's language. Indent list items and continuation lines under their label.
+List every item, and write `None` for an empty list.
+
+Worker reports stay on this v1 summary: the check only validates its labels
+and required values and never matches it against the full report, so the gaps
+that moved reviews to a block, which came from matching a written summary
+against free-form Output, do not arise for workers.
+
 ## Codex route
 
 The Codex companion runs `task` read-only and cannot write the file, so the
 caller writes it. Leave `--report` out of the prompt and ask instead for a final
-message of the unchanged Output, then the [Review summary](#review-summary)
-with `Report:` set to the path, writing no file. Redirect the output to the
+message of the unchanged Output, then the v2 delimiter, the
+[Review block](#review-block) with `report` set to the path, and the end line,
+writing no file. Redirect the output to the
 report path and the progress to a log beside it:
 
 ```text
@@ -133,17 +187,21 @@ report path and the progress to a log beside it:
 `umask 077` creates both files readable only by the current user, and `set -C`
 makes the redirections fail rather than overwrite an existing file; never
 append under `set -C`. The check below runs in the same command, so the
-summary shown comes from the bytes it verified; return that summary. A
-non-zero exit is a failed run or an invalid report.
+summary shown comes from the bytes it verified. A reviewer that ran the command
+for its caller returns only the report path and `complete`, or `failed` with
+the reason; the caller's own check gives the summary. A non-zero exit is a
+failed run or an invalid report.
 
 ## Check a handoff
 
-Before acting on a summary, the caller runs
+Before acting on a report, the caller runs
 [`check-report-handoff.mjs`](../scripts/check-report-handoff.mjs), resolved
 from this reference's directory, with the expected base and head SHAs and
-round, and `--kind review --reviewer <skill>` or `--kind worker`, adding
+round, and `--kind review --reviewer <skill> --show` or `--kind worker`, adding
 `--draft su` or `--draft preflight` for a draft; its header gives the usage,
-checks, and exit codes. Record its `valid sha256=<hex> bytes=<size>` line with
+checks, and exit codes. For a review, the summary it prints is the only review
+summary; decide from it, not from the reviewer's reply. It rejects a review
+report with a v1 summary. Record its `valid sha256=<hex> bytes=<size>` line with
 the report in the progress record, and before reopening the report later, run
 the check again with `--sha256 <hex>`.
 
