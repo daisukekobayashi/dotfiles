@@ -228,7 +228,11 @@ review request, and delivery skills of both providers link it, and each keeps
 its own approval model. Its Missing Prerequisites section states once that a
 missing skill, reviewer, or tool stops the phase that needs it for the affected
 targets and is reported as a blocker, never installed, substituted, or skipped;
-both provider delivery skills and Local Review link it. The shared text is
+both provider delivery skills and Local Review link it. Its Phase Delegation
+reference states once how the coordinator hands every component-skill call
+after implementation (publication, the hosted review cycle, the cleanup
+preview, and cleanup) to an agent while it keeps the user dialogue, finding
+assessment, and merge; both provider delivery skills link it. The shared text is
 provider-neutral: it names the task and task closure, and marks where the
 calling workflow adds its own items. Each provider skill lists only those
 additions next to its link, such as the hosted review outcome on GitHub or the

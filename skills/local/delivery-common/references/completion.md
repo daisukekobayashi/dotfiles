@@ -22,8 +22,10 @@ workflow supplies each task's key, and the task's files live in
   worktree, branch, base ref and SHA, recorded head, current phase and next
   action, risk tier at that head and the heaviest tier recorded, local review
   round count, PR and published head, pending user decisions in one line each,
-  blockers, and the counts of open finding dispositions, self-closures, and
-  follow-up candidates, plus the calling workflow's additions.
+  blockers, the counts of open finding dispositions, self-closures, and
+  follow-up candidates, and a delegated phase with its agent, report path, and
+  attempt under [Phase Delegation](phase-delegation.md#resume-a-delegated-phase),
+  plus the calling workflow's additions.
 - `log.md`, the append-only progress record: task scope, the shared
   understanding result, accepted design decisions, risk tier with its reasons
   and head, verification, the local review record under
@@ -45,7 +47,8 @@ workflow supplies each task's key, and the task's files live in
   the first 12 characters of the base and head SHAs, the review round (`h<n>`
   for a hosted round), the reviewer skill, `hosted`, or `worker`, and the
   attempt counted from 1. Local reviewers and workers write them under
-  [Report Handoff](report-handoff.md).
+  [Report Handoff](report-handoff.md). Delegated phase agents write theirs
+  under [Phase Delegation](phase-delegation.md#report-path).
 
 Report the resume path. Keep durable definitions and decisions in the
 repository's normal docs.
@@ -71,8 +74,9 @@ resumes completion checks rather than publication. A recorded shared
 understanding result and settled preflight decisions carry forward, except an
 `unresolved (goal unsettled)` result: discard it and the target's drafts, and
 have the worker run `shared-understanding` again from step 1 on the current
-task. A progress record is evidence, not authorization. Apply the calling
-workflow's additions.
+task. A delegated phase resumes under
+[Phase Delegation](phase-delegation.md#resume-a-delegated-phase). A progress
+record is evidence, not authorization. Apply the calling workflow's additions.
 
 ## Decision summary
 
