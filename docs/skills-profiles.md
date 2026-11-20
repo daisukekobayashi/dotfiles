@@ -137,8 +137,18 @@ numbers, for example `/github-issue-delivery 12 36` in Claude Code or
 Both hosts use the `change-review` and `change-adversarial-review` skills and
 run each in a fresh subagent of the current host, reporting the reduced
 independence. Another tool, such as Codex through the installed Codex plugin's
-read-only `task` runtime on Claude Code, runs them only when the user explicitly
-names it.
+`task` runtime on Claude Code, runs them only when the user explicitly
+names it. `change-review` runs read-only. `change-adversarial-review` backs each
+finding with a run against the real code where a run is possible: the
+coordinator creates a detached worktree at the reviewed head beside the review
+report, the reviewer runs repros only there (Codex with `--write` and that
+worktree as `--cwd`), and the coordinator copies the evidence, removes the
+worktree without confirmation, and reruns each proving command in a fresh one
+before acting on the finding. Commands whose effects would leave the worktree
+wait for the user's approval, and each finding reports its proof status, so a
+finding no run can show stays `unproven` instead of being dropped.
+`delivery-common`'s `repro-runs.md` holds these rules and their bounds, and
+[ADR 0002](adr/0002-run-to-prove-isolation.md) records why.
 An explicit full delivery request selects the delegated preflight, local review,
 and PR-cycle phases; automatic discovery alone does not authorize them.
 Each issue's worker reads the issue and code and drafts the shared understanding

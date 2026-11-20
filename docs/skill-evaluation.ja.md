@@ -41,7 +41,9 @@ Claude Code: /evaluate-skill maintain-verification-skill
 | 3 | 一部機能の利用条件が欠ける | 試した経路と不足条件を示し、全体を検証済みとしない。 |
 
 `change-adversarial-review` の課題は、実際の delivery のレビューで見つかった欠陥と、
-欠陥のない対照から作っています。実行方法は `evals.json` の `execution` に記録します。
+欠陥のない対照から作っています。フィクスチャには git の履歴がないため、skill は
+そこで使い捨て worktree を作らず、finding を `unproven: no checkout` と報告します。
+ケースが確かめるのは finding で、再現の実行ではありません。実行方法は `evals.json` の `execution` に記録します。
 Claude と Codex の両方で、ケースと条件ごとに3回(各30分まで)実行し、
 両条件に同じコマンド権限を与えます。Claude 側は `claude-opus-5-5`(effort high)で実行し、
 Codex 側は後述の `change-review` の Codex 側と同じ方針で実行します。Claude 側では実行前に、`claude-settings.json` 以外の Claude 設定が

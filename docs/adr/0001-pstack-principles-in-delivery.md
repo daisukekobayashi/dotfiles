@@ -6,9 +6,11 @@ status: accepted
 
 [日本語](0001-pstack-principles-in-delivery.ja.md)
 
-Implementation is pending in the child issues of
-[#246](https://github.com/daisukekobayashi/dotfiles/issues/246) and in
-[#245](https://github.com/daisukekobayashi/dotfiles/issues/245). Until they
+[#245](https://github.com/daisukekobayashi/dotfiles/issues/245) implemented
+the run-to-prove part of the Review row, recorded in
+[ADR 0002](0002-run-to-prove-isolation.md). The rest of the implementation is
+pending in the child issues of
+[#246](https://github.com/daisukekobayashi/dotfiles/issues/246). Until they
 land, this record describes the chosen design, not current delivery behavior;
 [Skills Profile Design](../skills-profiles.md) describes current behavior.
 

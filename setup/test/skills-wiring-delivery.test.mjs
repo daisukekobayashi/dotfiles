@@ -192,23 +192,37 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(targetSection(changeReview), /merge-base/);
   assert.match(targetSection(changeReview), /git diff --cached/);
   assert.match(targetSection(changeReview), /Issue Context/);
-  assert.equal(runnerSection(changeReview).replaceAll("change-review", "NAME"),
-    runnerSection(adversarial).replaceAll("change-adversarial-review", "NAME"));
   for (const [skill, name] of [[changeReview, "change-review"], [adversarial, "change-adversarial-review"]]) {
     assert.match(runnerSection(skill), /By default, run this review in one fresh subagent of the current host/);
     assert.match(runnerSection(skill), /only when the user explicitly names it/);
     assert.match(runnerSection(skill), /do\s+not fall back/);
-    assert.match(runnerSection(skill), /codex-companion\.mjs" task --fresh --cwd/);
-    assert.match(runnerSection(skill), /no `--write`/);
-    assert.match(runnerSection(skill), /--cwd <worktree> \\\n  --prompt-file <prompt-file>\n```/);
     assert.match(runnerSection(skill), /host's file-writing tool, not a shell command/);
-    assert.match(runnerSection(skill), /outside the target worktree/);
     assert.match(runnerSection(skill), new RegExp(`Start it with \`Use \\$${name}\``));
     assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
     assert.match(runnerSection(skill), /Run one Codex run at a time per target worktree/);
     assert.match(runnerSection(skill), /several review skills for one worktree\s+together, wait for any other run in progress, then run them in parallel as one\s+set instead: follow that section once before the first run starts and once\s+after every run ends/);
     assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Brokers Started by a Codex Review"/);
   }
+  // The normal and security reviewers stay read-only on the reviewed worktree.
+  assert.match(runnerSection(changeReview), /codex-companion\.mjs" task --fresh --cwd/);
+  assert.match(runnerSection(changeReview), /no `--write`/);
+  assert.match(runnerSection(changeReview), /--cwd <worktree> \\\n  --prompt-file <prompt-file>\n```/);
+  assert.match(runnerSection(changeReview), /outside the target worktree/);
+  // #245: the adversarial reviewer runs repros in a disposable worktree its launcher creates and removes,
+  // and its Codex route writes only there.
+  const adversarialRunner = flat(runnerSection(adversarial));
+  assert.match(runnerSection(adversarial), /task --fresh --write \\\n  --cwd <disposable worktree> --prompt-file <prompt-file>\n```/);
+  assert.doesNotMatch(runnerSection(adversarial), /no `--write`/);
+  assert.match(adversarialRunner, /so the Codex sandbox can write that worktree but not its `\.git` or the reviewed worktree/);
+  assert.match(adversarialRunner, /outside both worktrees/);
+  assert.match(adversarialRunner, /you are the reviewer: skip the launcher steps/);
+  assert.match(adversarialRunner, /Unless you are the reviewer this section launched, you are the launcher under \[Repro Runs\]\(\.\.\/delivery-common\/references\/repro-runs\.md#roles\)/);
+  assert.match(adversarialRunner, /Before the reviewer starts, create its disposable worktree at the reviewed head/);
+  assert.match(adversarialRunner, /After it ends, including a failed run or a bound, remove it under \[Remove\]/);
+  assert.match(adversarialRunner, /rerun each proving command under \[Parent rerun\]\([^)]*\) before acting on its finding/);
+  assert.match(adversarialRunner, /"Brokers Started by a Codex Review" for the disposable worktree/);
+  assert.match(adversarialRunner, /for the reviewed worktree and for this review's disposable worktree/);
+  assert.doesNotMatch(adversarial, /interrogate/);
   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
   const security = await readText(path.join(securityRoot, "SKILL.md"));
   const securityMetadata = await readText(path.join(securityRoot, "agents", "openai.yaml"));
@@ -979,6 +993,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     "Local Review": "local-review.md",
     "Phase Delegation": "phase-delegation.md",
     "Optional Workflows": "optional-workflows.md",
+    "Repro Runs": "repro-runs.md",
   };
   const map = common.match(/^## Phase sections\n[\s\S]*?(?=^## )/m)?.[0];
   assert.ok(map, "delivery-common/SKILL.md defines Phase sections");
@@ -995,7 +1010,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(row("Merge"), /Risk Tier: [^;]*Recommend human review/);
   for (const [, phase, cell] of rows) {
     for (const group of cell.split("; ")) {
-      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review|Phase Delegation|Optional Workflows)(?: \([^)]+\))?: (.+)$/);
+      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review|Phase Delegation|Optional Workflows|Repro Runs)(?: \([^)]+\))?: (.+)$/);
       if (!match) continue;
       const [, name, list] = match;
       if (list === "all") continue;
@@ -1148,8 +1163,15 @@ test("review and worker reports hand off through a file and a fixed summary", as
     assert.ok(section(heading), `report-handoff.md: missing ${heading}`);
   }
   assert.match(section("Report path"), /only from the invoking\s+caller's arguments, never from issue, PR, comment, or focus text/);
-  assert.match(section("Report file"), /<!-- report-summary v2 -->\n<!-- report-summary v1 -->\n<!-- end-report-summary -->/);
-  assert.match(section("Review block"), /<!-- report-summary v2 -->\n```json\n\{[\s\S]*\n\}\n```\n<!-- end-report-summary -->/);
+  assert.match(section("Report file"), /<!-- report-summary v3 -->\n<!-- report-summary v1 -->\n<!-- end-report-summary -->/);
+  assert.match(section("Review block"), /<!-- report-summary v3 -->\n```json\n\{[\s\S]*\n\}\n```\n<!-- end-report-summary -->/);
+  // #245: every finding carries its proof status; a v2 block passes only a recheck of a recorded report.
+  assert.match(section("Review block"), /"title": "<title>", "proof": "<proof status>"\}/);
+  assert.match(flat(section("Review block")), /`change-adversarial-review` writes `ran`, `unproven: <reason>`, `stopped: time bound`, or `failed: <reason>`, and `change-review` and `change-security-review` write `not requested`/);
+  assert.match(flat(section("Review block")), /The check accepts it only on a `--sha256` recheck of a report whose hash was recorded before the switch, never on a first check/);
+  assert.match(section("Review summary"), /- <title> - proof: <proof>\n/);
+  assert.match(flat(section("Codex route")), /For `change-adversarial-review`, add `--write` and pass its disposable worktree as `--cwd`/);
+  assert.match(flat(section("Check a handoff")), /a v2 block except on a `--sha256` recheck/);
   for (const key of ["target", "base", "head", "round", "reviewer", "route", "completion", "verdict", "findings", "deferredCandidates", "confirmedFixes", "unverifiedCoverage", "report"]) {
     assert.match(section("Review block"), new RegExp(`^  "${key}": `, "m"), `review block: ${key}`);
   }
@@ -1185,10 +1207,10 @@ test("review and worker reports hand off through a file and a fixed summary", as
     const skill = await readText(path.join(local, name, "SKILL.md"));
     assert.match(skill, /`--report <path>`, named issue, PR, worktree, branch, or commit/, name);
     assert.match(skill, /\(\.\.\/delivery-common\/references\/report-handoff\.md#codex-route\)/, name);
-    assert.match(skill, /## Output\n\nRespond in the user's language\. With `--report <path>`, write this Output\s+unchanged, then the v2 delimiter, the\s+\[review block\]\(\.\.\/delivery-common\/references\/report-handoff\.md#review-block\)/, name);
+    assert.match(skill, /## Output\n\nRespond in the user's language\. With `--report <path>`, write this Output\s+unchanged, then the v3 delimiter, the\s+\[review block\]\(\.\.\/delivery-common\/references\/report-handoff\.md#review-block\)/, name);
     assert.doesNotMatch(skill, /return only the summary/, name);
     assert.equal(flat(skill).match(/return only the report path and its completion/g)?.length, 2, name);
-    assert.match(skill, /The one exception is\s+writing the `--report` file/, name);
+    assert.match(skill, /The (?:one exception is|exceptions are)\s+writing the `--report` file/, name);
   }
 
   const localReview = await readText(path.join(references, "local-review.md"));
@@ -1229,7 +1251,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     "**Threat Model**", "- inferred", "", "**Review Target**", "- wt", "",
     "**Coverage and Residual Risk**", "- quoted <!-- report-summary v2 -->",
   ];
-  const finding = (id, location, title, severity = "Medium", tag = "introduced") => ({ id, severity, tag, location, title });
+  const finding = (id, location, title, severity = "Medium", tag = "introduced", proof = "not requested") => ({ id, severity, tag, location, title, proof });
   const reviewBlock = (file, overrides = {}) => ({
     target: "wt, branch, #1", base, head, round: "1", reviewer: "change-security-review",
     route: "Codex companion task", completion: "complete", verdict: "Needs attention",
@@ -1249,7 +1271,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
   };
   const run = (file, extra = [], reviewer = "change-security-review") => spawnSync(process.execPath, [script, "--kind", "review",
     "--reviewer", reviewer, "--base", base, "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
-  const report = (block, body = reviewBody) => (file) => [...body, "<!-- report-summary v2 -->", ...fenced(block(file)), "<!-- end-report-summary -->"];
+  const report = (block, body = reviewBody, delimiter = "<!-- report-summary v3 -->") => (file) => [...body, delimiter, ...fenced(block(file)), "<!-- end-report-summary -->"];
   try {
     assert.equal(spawnSync(process.execPath, [script], { encoding: "utf8" }).status, 2);
     const good = await write("good", report((f) => reviewBlock(f)));
@@ -1258,7 +1280,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.equal(ok.stdout.replace(/^valid sha256=[0-9a-f]{64} bytes=\d+\n/, ""), [
       "- Target: wt, branch, #1", `- Base: ${base}`, `- Head: ${head}`, "- Round: 1",
       "- Reviewer: change-security-review, Codex companion task", "- Completion: complete", "- Verdict: Needs attention",
-      "- Findings:", "  - SEC1 [Medium] introduced - a.js:1 - A finding",
+      "- Findings:", "  - SEC1 [Medium] introduced - a.js:1 - A finding - proof: not requested",
       "- Deferred candidates:", "  - SECD1 - b.js:2 - A candidate",
       "- Confirmed fixes: None", "- Unverified coverage: None", `- Report: ${good}`, ""].join("\n"));
     const hash = /sha256=([0-9a-f]{64})/.exec(ok.stdout)[1];
@@ -1303,16 +1325,23 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       "lone surrogate target": [report((f) => reviewBlock(f, { target: "wt\uD800" })), /target is not one non-empty line/],
       "lone surrogate coverage": [report((f) => reviewBlock(f, { unverifiedCoverage: ["\uDC00"] })), /unverifiedCoverage\[0\] is not one non-empty line/],
       // JSON.parse keeps the last of repeated members, which would hide the earlier findings or a mismatched head.
-      "repeated findings": [(f) => [...reviewBody, "<!-- report-summary v2 -->", ...fenced(reviewBlock(f)).slice(0, -2),
+      "repeated findings": [(f) => [...reviewBody, "<!-- report-summary v3 -->", ...fenced(reviewBlock(f)).slice(0, -2),
         "  ,\"findings\": []", "}", "```", "<!-- end-report-summary -->"], /review block repeats member "findings"/],
-      "repeated head": [(f) => [...reviewBody, "<!-- report-summary v2 -->", "```json",
+      "repeated head": [(f) => [...reviewBody, "<!-- report-summary v3 -->", "```json",
         `{"head": "${"c".repeat(40)}", ${JSON.stringify(reviewBlock(f)).slice(1)}`, "```", "<!-- end-report-summary -->"], /review block repeats member "head"/],
-      "repeated finding member": [(f) => [...reviewBody, "<!-- report-summary v2 -->", "```json",
+      "repeated finding member": [(f) => [...reviewBody, "<!-- report-summary v3 -->", "```json",
         JSON.stringify(reviewBlock(f)).replace('"title":"A finding"', '"title":"Other","title":"A finding"'), "```", "<!-- end-report-summary -->"],
         /review block repeats member "title"/],
-      "invalid json": [(f) => [...reviewBody, "<!-- report-summary v2 -->", "```json", "{\"target\": ", "```", "<!-- end-report-summary -->"], /not valid JSON/],
-      "unfenced json": [(f) => [...reviewBody, "<!-- report-summary v2 -->", JSON.stringify(reviewBlock(f)), "<!-- end-report-summary -->"], /not one fenced json block/],
+      "invalid json": [(f) => [...reviewBody, "<!-- report-summary v3 -->", "```json", "{\"target\": ", "```", "<!-- end-report-summary -->"], /not valid JSON/],
+      "unfenced json": [(f) => [...reviewBody, "<!-- report-summary v3 -->", JSON.stringify(reviewBlock(f)), "<!-- end-report-summary -->"], /not one fenced json block/],
       "text after block": [(f) => [...report((g) => reviewBlock(g))(f).slice(0, -1), "extra", "<!-- end-report-summary -->"], /not one fenced json block/],
+      // #245: a finding without its proof status, or with one its reviewer does not allow, is invalid.
+      "missing proof": [report((f) => reviewBlock(f, { findings: [(({ proof, ...rest }) => rest)(finding("SEC1", "a.js:1", "A"))] })), /findings\[0\] lacks proof/],
+      "security proof ran": [report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A", "Medium", "introduced", "ran")] })),
+        /findings\[0\]\.proof is not one of not requested/],
+      // #245: a new review written as v2 omits proof, so a v2 block passes only a --sha256 recheck.
+      "v2 first check": [report((f) => reviewBlock(f, { findings: [(({ proof, ...rest }) => rest)(finding("SEC1", "a.js:1", "A"))] }), reviewBody,
+        "<!-- report-summary v2 -->"), /review block is v2; .* v2 is accepted only on a --sha256 recheck/],
       "v1 summary": [(f) => [...reviewBody, "<!-- report-summary v1 -->", "- Target: wt", "<!-- end-report-summary -->"], /review summary is v1/],
       truncated: [(f) => report((g) => reviewBlock(g))(f).slice(0, -1), /truncated/],
       "no summary": [() => reviewBody, /no summary/],
@@ -1372,11 +1401,27 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     const two = run(await write("two-findings", report((f) => reviewBlock(f, {
       findings: [finding("SEC1", "a.js:1", "First"), finding("SEC2", "c.js:3", "Second")] }))), ["--show"]);
     assert.equal(two.status, 0, two.stderr);
-    assert.match(two.stdout, /\n- Findings:\n  - SEC1 \[Medium\] introduced - a\.js:1 - First\n  - SEC2 \[Medium\] introduced - c\.js:3 - Second\n/);
+    assert.match(two.stdout, /\n- Findings:\n  - SEC1 \[Medium\] introduced - a\.js:1 - First - proof: not requested\n  - SEC2 \[Medium\] introduced - c\.js:3 - Second - proof: not requested\n/);
+    // A quoted v3 delimiter in the Output is content too.
+    assert.equal(run(await write("quoted-v3-delimiter", report((f) => reviewBlock(f), ["<!-- report-summary v3 -->", "not a block", ...reviewBody]))).status, 0);
+
+    // #245: a v2 report recorded before v3 still passes its --sha256 recheck, with the v2 summary; a v2 block
+    // with a proof key, or a v2 recheck with the wrong hash, does not.
+    const legacyBlock = (f) => reviewBlock(f, { findings: [(({ proof, ...rest }) => rest)(finding("SEC1", "a.js:1", "A finding"))] });
+    const legacy = await write("legacy-v2", report(legacyBlock, reviewBody, "<!-- report-summary v2 -->"));
+    const legacyHash = createHash("sha256").update(await readFile(legacy)).digest("hex");
+    const legacyCheck = run(legacy, ["--sha256", legacyHash, "--show"]);
+    assert.equal(legacyCheck.status, 0, legacyCheck.stderr);
+    assert.match(legacyCheck.stdout, /\n  - SEC1 \[Medium\] introduced - a\.js:1 - A finding\n/);
+    assert.match(run(legacy, ["--sha256", "0".repeat(64)]).stderr, /invalid: report changed/);
+    const legacyProof = await write("legacy-v2-proof", report((f) => reviewBlock(f), reviewBody, "<!-- report-summary v2 -->"));
+    assert.match(run(legacyProof, ["--sha256", createHash("sha256").update(await readFile(legacyProof)).digest("hex")]).stderr,
+      /findings\[0\] has unknown key "proof"/);
 
     // Severity, verdict, and deferred candidates follow the reviewer.
     const forReviewer = (reviewer, prefix, overrides) => report((f) => reviewBlock(f, {
-      reviewer, deferredCandidates: [], findings: [finding(`${prefix}1`, "a.js:1", "A", "High")], ...overrides }));
+      reviewer, deferredCandidates: [], findings: [finding(`${prefix}1`, "a.js:1", "A", "High", "introduced",
+        prefix === "ADV" ? "ran" : "not requested")], ...overrides }));
     const changeReview = await write("change-review", forReviewer("change-review", "CR", { verdict: "Request changes" }));
     assert.equal(run(changeReview, [], "change-review").status, 0);
     assert.match(run(await write("cr-critical", forReviewer("change-review", "CR", { verdict: "Comment",
@@ -1386,7 +1431,23 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.match(run(await write("cr-verdict", forReviewer("change-review", "CR", { verdict: "Block" })), [], "change-review").stderr, /verdict is not one of/);
     assert.equal(run(await write("adv", forReviewer("change-adversarial-review", "ADV", { verdict: "Do not ship" })), [], "change-adversarial-review").status, 0);
     assert.match(run(await write("adv-low", forReviewer("change-adversarial-review", "ADV", { verdict: "Needs attention",
-      findings: [finding("ADV1", "a.js:1", "A", "Low")] })), [], "change-adversarial-review").stderr, /severity is not one of High, Medium/);
+      findings: [finding("ADV1", "a.js:1", "A", "Low", "introduced", "ran")] })), [], "change-adversarial-review").stderr, /severity is not one of High, Medium/);
+    // #245: the adversarial reviewer gives each finding a repro proof status, never `not requested`.
+    for (const [name, proof] of [["adv-unproven", "unproven: needs approval: docker compose up"], ["adv-stopped", "stopped: time bound"],
+      ["adv-failed", "failed: npm ci exited 1"]]) {
+      const result = run(await write(name, forReviewer("change-adversarial-review", "ADV", { verdict: "Needs attention",
+        findings: [finding("ADV1", "a.js:1", "A", "High", "introduced", proof)] })), ["--show"], "change-adversarial-review");
+      assert.equal(result.status, 0, `${name}: ${result.stderr}`);
+      assert.ok(result.stdout.includes(`  - ADV1 [High] introduced - a.js:1 - A - proof: ${proof}\n`), name);
+    }
+    for (const [name, proof] of [["adv-not-requested", "not requested"], ["adv-unproven-empty", "unproven: "], ["adv-stopped-other", "stopped: early"],
+      ["adv-proven", "proven"]]) {
+      assert.match(run(await write(name, forReviewer("change-adversarial-review", "ADV", { verdict: "Needs attention",
+        findings: [finding("ADV1", "a.js:1", "A", "High", "introduced", proof)] })), [], "change-adversarial-review").stderr,
+        /findings\[0\]\.proof is not one of ran, unproven: <reason>, stopped: time bound, failed: <reason>/, name);
+    }
+    assert.match(run(await write("cr-ran", forReviewer("change-review", "CR", { verdict: "Comment",
+      findings: [finding("CR1", "a.js:1", "A", "High", "introduced", "ran")] })), [], "change-review").stderr, /findings\[0\]\.proof is not one of not requested/);
     assert.equal(run(await write("no-findings", report((f) => reviewBlock(f, { verdict: "No material security finding", findings: [], deferredCandidates: [] }))), ["--show"]).stdout
       .includes("- Findings: None\n- Deferred candidates: None\n"), true);
     assert.equal(spawnSync(process.execPath, [script, "--kind", "review", "--reviewer", "__proto__", "--base", base, "--head", head,
@@ -1510,4 +1571,68 @@ test("delivery preflight runs architect, then arena at High tier, as registered 
   assert.doesNotMatch(arenaFrontmatter, /disable-model-invocation/);
   assert.match(arenaFrontmatter, /^description: Use only when explicitly invoked with `\$arena` .*, or as the High-tier design preflight step of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items\.$/m);
   assert.match(flat(arenaSkill), /Run only when the user explicitly invokes `arena`, such as `\$arena` in Codex or `\/arena` in Claude Code, or through the user's explicit request for the full `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items, as its High-tier design preflight step\. A caller must forward that request and exact target; a generic comparison request or a skill reference alone does not activate this workflow\./);
+});
+
+test("adversarial review proves findings with runs in disposable worktrees under Repro Runs", async () => {
+  // #245: run-to-prove isolation, boundary, bounds, evidence, and parent rerun, shared with blast-radius (#253).
+  const local = path.join(repoRoot, "skills", "local");
+  const references = path.join(local, "delivery-common", "references");
+  const repro = await readText(path.join(references, "repro-runs.md"));
+  const section = (heading) => flat(repro.match(new RegExp(`\\n## ${heading}\\n[\\s\\S]*?(?=\\n## |$)`))?.[0]);
+  for (const heading of ["Roles", "Disposable worktree", "Boundary", "Bounds", "Proof", "Evidence", "Parent rerun"]) {
+    assert.ok(section(heading), `repro-runs.md: missing ${heading}`);
+  }
+  assert.match(section("Roles"), /Only the launcher creates and removes disposable worktrees/);
+  assert.match(section("Roles"), /It never runs `git worktree` or any command that writes refs/);
+  assert.match(section("Disposable worktree"), /`git -C <reviewed worktree> worktree add --detach <path> <reviewed head SHA>`/);
+  assert.match(section("Disposable worktree"), /Never create a branch/);
+  assert.match(section("Disposable worktree"), /report every finding `unproven: no checkout`/);
+  assert.match(section("Disposable worktree"), /`TMPDIR=<path>\/\.repro\/tmp` and package-manager caches under `<path>\/\.repro\/cache`/);
+  assert.match(section("Disposable worktree"), /whether it completed, failed, or reached a bound/);
+  assert.match(section("Disposable worktree"), /The user's request for the review authorizes the launcher to remove, without confirmation, only a disposable worktree it created for that run\. Every other removal keeps its confirmation\./);
+  assert.match(section("Disposable worktree"), /When the recorded path is not listed, remove nothing and report it/);
+  assert.match(section("Boundary"), /runs a command automatically only when its effects stay inside the disposable worktree/);
+  assert.match(section("Boundary"), /Lockfile-respecting dependency restoration into it/);
+  assert.match(section("Boundary"), /names the exact command and reports the finding `unproven: needs approval`/);
+  assert.match(section("Boundary"), /runs it only after the user approves it/);
+  assert.match(section("Boundary"), /The boundary is kept by instruction\./);
+  assert.match(section("Boundary"), /Every review states this residual scope in its Coverage and Residual Risk/);
+  for (const bound of [/Each proving command: 10 minutes\./, /All repro runs of one review: 30 minutes, including creating the disposable worktree and restoring dependencies\./,
+    /One retry per finding/, /At most 5 findings proven by a run per review; report later findings `unproven: cap reached`/,
+    /Each parent rerun: 10 minutes per command, outside the review's total\./, /at most 50 lines and 8 KB/]) {
+    assert.match(section("Bounds"), bound);
+  }
+  assert.match(section("Bounds"), /\[Shared bounds\]\(optional-workflows\.md#shared-bounds\)/);
+  assert.match(section("Bounds"), /not an optional workflow, and have no registry entry/);
+  assert.match(section("Bounds"), /is `stopped: time bound` and is never proof/);
+  assert.match(section("Proof"), /Only `ran` counts as proof\. Reviewers that do not run repros, `change-review` and `change-security-review`, write `not requested`\./);
+  assert.match(section("Evidence"), /`<report path without \.md>\.evidence\/<finding ID>\/`, creating the evidence directory with `mkdir -m 700`/);
+  assert.match(section("Parent rerun"), /Before acting on a finding whose proof is `ran`/);
+  assert.match(section("Parent rerun"), /A finding that is not reproduced is assessed as `unproven`/);
+  assert.doesNotMatch(repro, /interrogate/);
+
+  const adversarial = await readText(path.join(local, "change-adversarial-review", "SKILL.md"));
+  const prove = flat(adversarial.match(/\n### Prove\n[\s\S]*?(?=\n### )/)?.[0]);
+  assert.ok(prove, "change-adversarial-review: missing Prove");
+  assert.match(prove, /Back each finding with a run against the real code where a run is possible/);
+  assert.match(prove, /Keep a finding that no run can show, and give it the \[Proof\]\([^)]*\) status `unproven: <reason>`/);
+  assert.match(prove, /report the finding `unproven: needs approval`/);
+  const output = flat(adversarial.match(/\n## Output\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.match(output, /- proof <ran\|unproven: reason\|stopped: time bound\|failed: reason>/);
+  assert.match(output, /Use `Do not ship` only for a defensible introduced or worsened blocker that a run proves, or, when no run can show it, whose failure path you trace end to end/);
+  assert.match(flat(adversarial), /This is a review-only workflow: it never edits the reviewed worktree/);
+
+  const localReview = flat(await readText(path.join(references, "local-review.md")));
+  assert.match(localReview, /The coordinator is its launcher and parent/);
+  assert.match(localReview, /Rerun each `ran` finding under Repro Runs' \[Parent rerun\]\(repro-runs\.md#parent-rerun\) and record the result with its disposition/);
+  assert.match(localReview, /Treat a `Do not ship` verdict as a blocker only after the rerun reproduces its finding or your trace confirms it/);
+  assert.match(localReview, /Keep every review skill execution read-only on the reviewed worktree/);
+
+  const interrogate = flat(await readText(path.join(local, "interrogate", "SKILL.md")));
+  assert.match(interrogate, /Leave out the adversarial review's requirement to back findings with runs; this workflow stays read-only\./);
+  assert.match(interrogate, /Findings backed by runs in disposable worktrees come from `change-adversarial-review`/);
+
+  for (const adr of ["0002-run-to-prove-isolation.md", "0002-run-to-prove-isolation.ja.md"]) {
+    assert.ok(existsSync(path.join(repoRoot, "docs", "adr", adr)), adr);
+  }
 });

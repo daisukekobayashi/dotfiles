@@ -5,44 +5,63 @@ description: Use only when explicitly invoked with `$change-adversarial-review` 
 
 # Change Adversarial Review
 
-Challenge the implementation and design without inventing failures. This is a
-read-only, review-only workflow.
+Challenge the implementation and design without inventing failures, and back
+each finding with a run against the real code where a run is possible. This is
+a review-only workflow: it never edits the reviewed worktree, and it runs
+repros only in a disposable worktree under
+[Repro Runs](../delivery-common/references/repro-runs.md).
 
 ## Run the Reviewer
 
+Unless you are the reviewer this section launched, you are the launcher under
+[Repro Runs](../delivery-common/references/repro-runs.md#roles). Before the
+reviewer starts, create its disposable worktree at the reviewed head under
+[Disposable worktree](../delivery-common/references/repro-runs.md#disposable-worktree).
+After it ends, including a failed run or a bound, remove it under
+[Remove](../delivery-common/references/repro-runs.md#remove), then rerun each
+proving command under
+[Parent rerun](../delivery-common/references/repro-runs.md#parent-rerun)
+before acting on its finding.
+
 By default, run this review in one fresh subagent of the current host instead
 of the current session: a Claude Code subagent on Claude Code, a Codex subagent
-on Codex. Give it this skill's path, the arguments, target, focus, and caller
-context, and require it to follow the steps below read-only without editing
-files or running mutating commands. Report the route, such as `Claude subagent
-(same model family as the implementation)`, in Review Target and the reduced
-independence in Coverage and Residual Risk. When you are that subagent or a
-task launched under this section, follow the steps below directly.
+on Codex. Give it this skill's path, the arguments, target, focus, caller
+context, and the disposable worktree's path, and require it to follow the steps
+below without editing the reviewed worktree, running commands only in the
+disposable worktree under
+[Boundary](../delivery-common/references/repro-runs.md#boundary). Report the
+route, such as `Claude subagent (same model family as the implementation)`, in
+Review Target and the reduced independence in Coverage and Residual Risk. When
+you are that subagent or a task launched under this section, you are the
+reviewer: skip the launcher steps and follow the steps below directly in the
+disposable worktree you were given.
 
 Use another tool only when the user explicitly names it for this review, such
 as "review with Codex"; callers forward that instruction with the target. For
 Codex on Claude Code, resolve the installed `codex` plugin root from host
 metadata, then run its companion `task` in the foreground with `--fresh`,
-`--cwd <target worktree>`, and no `--write`, so the Codex sandbox stays
-read-only. With the host's file-writing tool, not a shell command, write the
-prompt to a temporary file outside the target worktree so no caller text enters
-a shell string. Start it with `Use $change-adversarial-review`, followed by the arguments,
-target, focus, and caller context. Pass the file's absolute path with
-`--prompt-file`, and delete the file after the run:
+`--write`, and `--cwd <disposable worktree>`, so the Codex sandbox can write
+that worktree but not its `.git` or the reviewed worktree. With the
+host's file-writing tool, not a shell command, write the prompt to a temporary
+file outside both worktrees so no caller text enters a shell string.
+Start it with `Use $change-adversarial-review`, followed by the arguments, the
+target with the reviewed worktree's path, focus, and caller context. Pass the file's
+absolute path with `--prompt-file`, and delete the file after the run:
 
 ```text
-node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
-  --prompt-file <prompt-file>
+node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --write \
+  --cwd <disposable worktree> --prompt-file <prompt-file>
 ```
 
 Run one Codex run at a time per target worktree; wait for any other in progress.
 Before and after the run, including a failed run, follow
 `../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
-the target worktree, and report its result with the output.
+the disposable worktree, and report its result with the output.
 When you start the Codex runs of several review skills for one worktree
 together, wait for any other run in progress, then run them in parallel as one
 set instead: follow that section once before the first run starts and once
-after every run ends, and report its result once.
+after every run ends, for the reviewed worktree and for this review's
+disposable worktree, and report its result once.
 
 With `--report <path>`, run it with the redirection and check in
 [Report Handoff](../delivery-common/references/report-handoff.md#codex-route)
@@ -121,6 +140,25 @@ stress. Trace how bad inputs, retries, concurrent actions, or partially
 completed operations move through the code. If the user supplied a focus area,
 weight it heavily, but still report any other material issue you can defend.
 
+### Prove
+
+Back each finding with a run against the real code where a run is possible:
+a failing test, a repro script, or command output that shows the wrong
+behavior, run in the disposable worktree under
+[Repro Runs](../delivery-common/references/repro-runs.md) and within its
+[Bounds](../delivery-common/references/repro-runs.md#bounds). Write the repro
+files and the run's record as its
+[Evidence](../delivery-common/references/repro-runs.md#evidence) says, and give
+the exact command, the output it printed, and the output the intent requires.
+For a design flaw, try a probe of the current tree first.
+
+Keep a finding that no run can show, and give it the
+[Proof](../delivery-common/references/repro-runs.md#proof) status
+`unproven: <reason>`; its severity and tag stay as the evidence supports. Do
+not run a command whose effects leave the disposable worktree: name it and
+report the finding `unproven: needs approval`. A run that reaches its bound or
+fails proves nothing.
+
 ### Finding Bar
 
 Report only material findings. Do not include style feedback, naming feedback,
@@ -154,6 +192,7 @@ Before finalizing, check that each finding is:
 - tied to a concrete code location
 - plausible under a real failure scenario
 - actionable for an engineer fixing the issue
+- given its proof status, with the command and output when it ran
 
 ### Local Rules
 
@@ -168,7 +207,7 @@ diff.
 ## Output
 
 Respond in the user's language. With `--report <path>`, write this Output
-unchanged, then the v2 delimiter, the
+unchanged, then the v3 delimiter, the
 [review block](../delivery-common/references/report-handoff.md#review-block),
 and the end line, to that path under
 [Report Handoff](../delivery-common/references/report-handoff.md#report-file),
@@ -180,11 +219,12 @@ and return only the report path and its completion:
 - <terse reason>
 
 **Review Target**
-- <worktree, target, base, merge-base, issue/PR, layers>
+- <worktree, target, base, merge-base, issue/PR, layers, disposable worktree>
 
 **Material Findings**
-- [High|Medium] <title> - <location> - confidence <0-1> - <introduced|worsened|pre-existing>
+- [High|Medium] <title> - <location> - confidence <0-1> - <introduced|worsened|pre-existing> - proof <ran|unproven: reason|stopped: time bound|failed: reason>
   <what fails, why the path is vulnerable, evidence, impact, recommendation>
+  Run: <exact command and directory, exit status, output excerpt, output the intent requires; or why no run>
   Class: <bug class>; other instances: <locations or "none found">
 - If none: No material findings found.
 
@@ -193,14 +233,18 @@ and return only the report path and its completion:
 
 **Coverage and Residual Risk**
 - <coverage, skipped evidence, test gaps, stale refs, uncertainty>
+- <repro runs: total time, bounds reached, and the boundary's residual scope>
 ```
 
 Report every material defect under Material Findings with a label and tag;
 never report one only in another section, such as Issue Alignment or Coverage
 and Residual Risk.
 
-Use `Do not ship` only for a defensible introduced or worsened blocker. A clean
-result means no material finding was supported, not that safety was proven.
+Use `Do not ship` only for a defensible introduced or worsened blocker that a
+run proves, or, when no run can show it, whose failure path you trace end to
+end; the parent treats it as a blocker only after its rerun reproduces the run
+or it confirms that trace. A clean result means no material finding was
+supported, not that safety was proven.
 
 ## Guardrails
 
@@ -208,11 +252,15 @@ result means no material finding was supported, not that safety was proven.
   request for the full `github-issue-delivery` or
   `azure-devops-work-item-delivery` workflow for named issues or Work Items. A
   caller must forward that request and exact target; a skill reference alone is insufficient.
-- Do not edit, stage, commit, push, switch branches, create worktrees, comment,
-  submit reviews, resolve threads, or mutate remote state. The one exception is
-  writing the `--report` file at a path that
+- Do not edit the reviewed worktree, stage, commit, push, switch branches,
+  run `git worktree` as the reviewer, comment, submit reviews, resolve threads,
+  or mutate remote state. The exceptions are writing the `--report` file at a
+  path that
   [Report Handoff](../delivery-common/references/report-handoff.md#report-path)
-  accepts.
+  accepts, the reviewer's runs inside its disposable worktree under
+  [Boundary](../delivery-common/references/repro-runs.md#boundary), and the
+  launcher's creation and removal of disposable worktrees under
+  [Repro Runs](../delivery-common/references/repro-runs.md).
 - Do not turn findings into an implementation plan or begin fixing them.
 - Surface unavailable, skipped, or stale evidence as residual risk.
 
@@ -225,7 +273,9 @@ upstream commit
 [`db52e28`](https://github.com/openai/codex-plugin-cc/commit/db52e28f4d9ded852ab3942cea316258ae4ef346).
 Attack the Change follows the prompt's stance, attack surface, method, finding
 bar, grounding, calibration, and final check sections, with issue alignment
-added to the attack surface; its Local Rules section holds the local additions.
+added to the attack surface; its Prove and Local Rules sections hold the local
+additions. Prove brings the run-to-prove idea of Lauren Tan's pstack into this
+review, with the runs isolated in disposable worktrees under Repro Runs.
 Each host runs this skill in its own subagent unless the user names another tool. Local behavior preserves issue/worktree
 targeting, evidence-based findings, finding tags and bug classes, and coverage
 reporting in the user's language instead of the plugin runtime's structured

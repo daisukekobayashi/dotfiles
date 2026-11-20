@@ -45,11 +45,11 @@ they return their output as before.
 ## Report file
 
 The file holds the full report, then a delimiter line, then the summary part,
-ending with the end line. A review report uses the v2 delimiter and a review
+ending with the end line. A review report uses the v3 delimiter and a review
 block; a worker report uses the v1 delimiter and the worker summary:
 
 ```text
-<!-- report-summary v2 -->
+<!-- report-summary v3 -->
 <!-- report-summary v1 -->
 <!-- end-report-summary -->
 ```
@@ -64,11 +64,11 @@ path and its completion; a worker returns only its summary.
 
 ## Review block
 
-After the v2 delimiter, a review writes one fenced `json` block and the end
+After the v3 delimiter, a review writes one fenced `json` block and the end
 line, with nothing else between them:
 
 ````markdown
-<!-- report-summary v2 -->
+<!-- report-summary v3 -->
 ```json
 {
   "target": "<worktree, branch, task>",
@@ -81,7 +81,7 @@ line, with nothing else between them:
   "verdict": "<verdict from the Output>",
   "findings": [
     {"id": "<ID>", "severity": "<original severity>", "tag": "introduced | worsened | pre-existing",
-     "location": "<location>", "title": "<title>"}
+     "location": "<location>", "title": "<title>", "proof": "<proof status>"}
   ],
   "deferredCandidates": [
     {"id": "<ID>", "location": "<location>", "title": "<title>"}
@@ -106,6 +106,17 @@ location and title. `change-security-review` lists every deferred candidate as
 `SECD<n>`; the other reviewers write `[]`. A review that could not complete
 writes `partial` or `failed`, which the check does not pass.
 
+Each finding's `proof` is its status under
+[Repro Runs](repro-runs.md#proof): `change-adversarial-review` writes `ran`,
+`unproven: <reason>`, `stopped: time bound`, or `failed: <reason>`, and
+`change-review` and `change-security-review` write `not requested`.
+
+The v2 block, which has no `proof`, predates this rule. The check accepts it
+only on a `--sha256` recheck of a report whose hash was recorded before the
+switch, never on a first check, so a new review cannot omit `proof`. A review
+written as v2 after the switch fails its first check and is retried under
+[Check a handoff](#check-a-handoff).
+
 The block is authoritative: the check validates it and never parses the
 Output's headings or bullets, so a finding that the Output describes but the
 block omits does not reach the caller. Heuristic parsing of the free-form
@@ -127,7 +138,7 @@ The check derives the review summary from the block and prints it with
 - Completion: <completion>
 - Verdict: <verdict>
 - Findings:
-  - <ID> [<severity>] <tag> - <location> - <title>
+  - <ID> [<severity>] <tag> - <location> - <title> - proof: <proof>
 - Deferred candidates:
   - <ID> - <location> - <title>
 - Confirmed fixes: <each, or None>
@@ -188,7 +199,7 @@ the in-flight deliveries and the reports this affects.
 
 The Codex companion runs `task` read-only and cannot write the file, so the
 caller writes it. Leave `--report` out of the prompt and ask instead for a final
-message of the unchanged Output, then the v2 delimiter, the
+message of the unchanged Output, then the v3 delimiter, the
 [Review block](#review-block) with `report` set to the path, and the end line,
 writing no file. Redirect the output to the
 report path and the progress to a log beside it:
@@ -206,7 +217,10 @@ append under `set -C`. The check below runs in the same command, so the
 summary shown comes from the bytes it verified. A reviewer that ran the command
 for its caller returns only the report path and `complete`, or `failed` with
 the reason; the caller's own check gives the summary. A non-zero exit is a
-failed run or an invalid report.
+failed run or an invalid report. For `change-adversarial-review`, add
+`--write` and pass its disposable worktree as `--cwd`, as its Run the Reviewer
+says; its launcher, outside the sandbox, copies the run's evidence under
+[Repro Runs](repro-runs.md#evidence).
 
 ## Check a handoff
 
@@ -217,9 +231,10 @@ round, and `--kind review --reviewer <skill> --show` or `--kind worker`, adding
 `--draft su` or `--draft preflight` for a draft; its header gives the usage,
 checks, and exit codes. For a review, the summary it prints is the only review
 summary; decide from it, not from the reviewer's reply. It rejects a review
-report with a v1 summary. Record its `valid sha256=<hex> bytes=<size>` line with
-the report in the progress record, and before reopening the report later, run
-the check again with `--sha256 <hex>`.
+report with a v1 summary, and a v2 block except on a `--sha256` recheck.
+Record its `valid sha256=<hex> bytes=<size>` line with the report in the
+progress record, and before reopening the report later, run the check again
+with `--sha256 <hex>`.
 
 Exit status 3, any other non-zero status, or a failed Codex run is not a pass.
 Retry once as the next attempt; a second failure is a missing prerequisite

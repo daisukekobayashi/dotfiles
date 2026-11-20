@@ -31,7 +31,8 @@ Do not claim old findings cover a later revision.
 Read the review criteria in available `change-review` and `change-adversarial-review`
 skills as references. Reuse their supported defect and failure-path criteria
 without invoking those explicit-only workflows or duplicating their operation
-steps. If unavailable, use this minimal lens: correctness and regressions,
+steps. Leave out the adversarial review's requirement to back findings with
+runs; this workflow stays read-only. If unavailable, use this minimal lens: correctness and regressions,
 trust/data boundaries, lifecycle and partial failure, compatibility, and
 whether evidence exercises the changed behavior.
 
@@ -74,6 +75,8 @@ Classify material findings as Act on / Consider / Dismissed, with the evidence
 and reason. A proposed fix stays a recommendation. If a claim needs execution
 that could mutate state, mark that verification pending. The user can explicitly
 invoke [blast-radius](../blast-radius/SKILL.md) for scoped experiments.
+Findings backed by runs in disposable worktrees come from
+`change-adversarial-review`, the delivery's adversarial reviewer.
 
 Return the target, verdict, material findings, reviewer/model coverage,
 disagreements that matter, residual risk, and a Dropped report giving, per
@@ -87,4 +90,5 @@ After an upstream writer changes the target, reassess review applicability.
 Adapted from Lauren Tan's [pstack interrogate](https://github.com/cursor/plugins/blob/0b46ec399d55f2829e88822998f53b84944837d3/pstack/skills/interrogate/SKILL.md).
 Local changes: reuse existing review criteria, evidence over voting, strict
 read-only behavior in place of upstream's run-to-prove adversaries in worktrees,
+which `change-adversarial-review` carries instead,
 bounded reviewers, and honest fallback coverage. See [LICENSE](LICENSE).

@@ -13,7 +13,10 @@ call after implementation: publication, the hosted review cycle, the cleanup
 preview, and cleanup. Use
 [Local Review](references/local-review.md) when a delivery workflow
 reaches its local reviews or selects focused follow-up, and apply its Assess
-findings to local and hosted findings. Use [Risk Tier](references/risk-tier.md)
+findings to local and hosted findings. Use
+[Repro Runs](references/repro-runs.md) when a review backs its findings with
+runs: the disposable worktree, its boundary and bounds, the evidence, and the
+parent's rerun. Use [Risk Tier](references/risk-tier.md)
 to set the tier before preflight and on each reviewed head, and to select the
 tier's review procedure, including the security reviewer and the recommended
 human review. Local Review also sets local review
@@ -51,7 +54,7 @@ Completion's Bounds whenever a phase stops or stalls.
 | Prepare and dispatch | Worker Dialogue: Assign the worker; Delivery Completion: Progress record |
 | Shared understanding and preflight | Worker Dialogue: Draft and ask, Worker defaults; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Tier procedure; Optional Workflows: all |
 | Implementation | Worker Dialogue: Preflight and implementation, Worker defaults; Optional Workflows: all |
-| Local reviews and focused follow-up | Local Review: all; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Select the security review, Tier procedure; Optional Workflows: all |
+| Local reviews and focused follow-up | Local Review: all; Repro Runs: all; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Select the security review, Tier procedure; Optional Workflows: all |
 | Publication | Phase Delegation: all; Delivery Completion: Decision summary, Before publication, After publication; Local Review (when assessing hosted findings): Triage classes, Assess findings, Repeat and advance; Risk Tier: Select the security review, Tier procedure, Recommend human review |
 | Merge | Phase Delegation: Choose the agent, Brief the agent, Return to the coordinator, Report path; Delivery Completion: Decision summary, After publication, Merge confirmation; Risk Tier: Recommend human review |
 | Report and cleanup | Phase Delegation: all; Delivery Completion: Merge confirmation, Report and complete, Follow-up candidates; Optional Workflows: Run or report, Record and report |

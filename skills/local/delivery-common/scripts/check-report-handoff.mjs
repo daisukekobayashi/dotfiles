@@ -11,9 +11,11 @@
 // with the line `<!-- end-report-summary -->`, as references/report-handoff.md
 // defines; blank or whitespace-only lines after the end line are ignored. The
 // summary part is the text from the last delimiter line:
-// - a review report uses `<!-- report-summary v2 -->` and a fenced json review
+// - a review report uses `<!-- report-summary v3 -->` and a fenced json review
 //   block; the check derives the review summary from the block and never reads
-//   the full report's headings or bullets;
+//   the full report's headings or bullets. A v2 block, which has no finding
+//   `proof`, is accepted only on a --sha256 recheck of a report recorded before
+//   v3, never on a first check;
 // - a worker report uses `<!-- report-summary v1 -->` and the worker summary.
 // This script checks that:
 // - the report is an absolute path of [A-Za-z0-9/._-], or on Windows a
@@ -27,7 +29,11 @@
 //   with no member repeated in any object, and exactly the block's keys, each
 //   of its type, and every string is valid UTF-8 text; base, head, round,
 //   report, and reviewer equal the arguments; completion is complete; the
-//   verdict and each finding's severity are allowed for the reviewer; finding
+//   verdict and each finding's severity are allowed for the reviewer; a v3
+//   finding's proof is `not requested` for change-review and
+//   change-security-review, and `ran`, `unproven: <reason>`,
+//   `stopped: time bound`, or `failed: <reason>` for
+//   change-adversarial-review; finding
 //   IDs run <prefix>1..n in order, as SECD1..n for change-security-review's
 //   deferred candidates, which other reviewers leave empty; every string is
 //   one non-empty line without control characters; and no two findings, or
@@ -57,7 +63,8 @@ import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 const WORKER_DELIMITER = "<!-- report-summary v1 -->";
-const REVIEW_DELIMITER = "<!-- report-summary v2 -->";
+const REVIEW_DELIMITER = "<!-- report-summary v3 -->";
+const LEGACY_REVIEW_DELIMITER = "<!-- report-summary v2 -->";
 const END = "<!-- end-report-summary -->";
 const POSIX_PATH = /^\/[A-Za-z0-9/._-]+$/;
 const WIN32_PATH = /^[A-Za-z]:\\[A-Za-z0-9\\._-]+$/;
@@ -85,24 +92,31 @@ const REVIEWERS = {
     prefix: "CR",
     verdicts: ["Request changes", "Comment", "Approve"],
     severities: ["High", "Medium", "Low"],
+    proof: /^not requested$/,
+    proofs: "not requested",
   },
   "change-adversarial-review": {
     prefix: "ADV",
     verdicts: ["Do not ship", "Needs attention", "No material blocker found"],
     severities: ["High", "Medium"],
+    proof: /^(?:ran|unproven: \S.*|stopped: time bound|failed: \S.*)$/,
+    proofs: "ran, unproven: <reason>, stopped: time bound, failed: <reason>",
   },
   "change-security-review": {
     prefix: "SEC",
     verdicts: ["Block", "Needs attention", "No material security finding"],
     severities: ["Critical", "High", "Medium", "Low"],
     deferred: "SECD",
+    proof: /^not requested$/,
+    proofs: "not requested",
   },
 };
 const TAGS = ["introduced", "worsened", "pre-existing"];
 const COMPLETIONS = ["complete", "partial", "failed"];
 const BLOCK_KEYS = ["target", "base", "head", "round", "reviewer", "route", "completion", "verdict",
   "findings", "deferredCandidates", "confirmedFixes", "unverifiedCoverage", "report"];
-const FINDING_KEYS = ["id", "severity", "tag", "location", "title"];
+const FINDING_KEYS = ["id", "severity", "tag", "location", "title", "proof"];
+const LEGACY_FINDING_KEYS = ["id", "severity", "tag", "location", "title"];
 const CANDIDATE_KEYS = ["id", "location", "title"];
 
 const WORKER_LABELS = ["Target", "Base", "Head", "Round", "Completion", "Tier", "Overview", "Files changed",
@@ -174,7 +188,7 @@ function repeatedMember(text) {
 }
 
 // Validates the review block against the arguments and returns the summary derived from it.
-function reviewSummary(part, args) {
+function reviewSummary(part, args, legacy) {
   const reviewer = REVIEWERS[args.reviewer];
   if (part[0] !== "```json" || part.length < 2 || part.at(-1) !== "```") invalid("review block is not one fenced json block");
   const text = part.slice(1, -1).join("\n");
@@ -196,9 +210,10 @@ function reviewSummary(part, args) {
   if (!COMPLETIONS.includes(block.completion)) invalid(`completion is not one of ${COMPLETIONS.join(", ")}`);
   if (block.completion !== "complete") invalid("completion is not complete");
   if (!reviewer.verdicts.includes(block.verdict)) invalid(`verdict is not one of ${reviewer.verdicts.join(", ")}`);
-  const findings = checkItems(block.findings, FINDING_KEYS, reviewer.prefix, "findings", (item, at) => {
+  const findings = checkItems(block.findings, legacy ? LEGACY_FINDING_KEYS : FINDING_KEYS, reviewer.prefix, "findings", (item, at) => {
     if (!reviewer.severities.includes(item.severity)) invalid(`${at}.severity is not one of ${reviewer.severities.join(", ")}`);
     if (!TAGS.includes(item.tag)) invalid(`${at}.tag is not one of ${TAGS.join(", ")}`);
+    if (!legacy && !reviewer.proof.test(item.proof)) invalid(`${at}.proof is not one of ${reviewer.proofs}`);
   });
   if (!reviewer.deferred && Array.isArray(block.deferredCandidates) && block.deferredCandidates.length) {
     invalid(`deferredCandidates must be empty for ${args.reviewer}`);
@@ -218,7 +233,8 @@ function reviewSummary(part, args) {
     `- Reviewer: ${block.reviewer}, ${block.route}`,
     `- Completion: ${block.completion}`,
     `- Verdict: ${block.verdict}`,
-    ...list("Findings", findings.map((f) => `${f.id} [${f.severity}] ${f.tag} - ${f.location} - ${f.title}`)),
+    ...list("Findings", findings.map((f) => `${f.id} [${f.severity}] ${f.tag} - ${f.location} - ${f.title}`
+      + (legacy ? "" : ` - proof: ${f.proof}`))),
     ...list("Deferred candidates", candidates.map((c) => `${c.id} - ${c.location} - ${c.title}`)),
     ...list("Confirmed fixes", block.confirmedFixes),
     ...list("Unverified coverage", block.unverifiedCoverage),
@@ -316,20 +332,24 @@ function main() {
   // Blank lines after the end line do not mean a cut-off report; hash and size still cover them.
   while (lines.length && lines.at(-1).trim() === "") lines.pop();
   if (lines.length === 0) invalid("empty file");
-  const delimiter = args.kind === "review" ? REVIEW_DELIMITER : WORKER_DELIMITER;
-  const start = lines.lastIndexOf(delimiter);
+  const delimiters = args.kind === "review" ? [REVIEW_DELIMITER, LEGACY_REVIEW_DELIMITER] : [WORKER_DELIMITER];
+  const start = lines.findLastIndex((line) => delimiters.includes(line));
   if (start < 0) {
     if (args.kind === "review" && lines.includes(WORKER_DELIMITER)) invalid(`review summary is v1; a review report ends with ${REVIEW_DELIMITER} and a review block`);
     invalid("no summary");
   }
   if (lines.at(-1) !== END) invalid("truncated");
+  const legacy = lines[start] === LEGACY_REVIEW_DELIMITER;
+  if (legacy && args.sha256 === undefined) {
+    invalid(`review block is v2; a new review report ends with ${REVIEW_DELIMITER} and a block with finding proof, and v2 is accepted only on a --sha256 recheck`);
+  }
   const body = lines.slice(0, start);
   const part = lines.slice(start + 1, -1);
   if (!body.some((line) => line.trim())) invalid("no full report");
 
   let summary;
   if (args.kind === "review") {
-    summary = reviewSummary(part, args);
+    summary = reviewSummary(part, args, legacy);
   } else {
     checkWorkerSummary(part, args);
     summary = [WORKER_DELIMITER, ...part, END];
