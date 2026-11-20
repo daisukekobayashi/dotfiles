@@ -63,14 +63,24 @@ A run on a committed snapshot is keyed to the reviewed head: its full SHA.
 A run before a checkpoint commit, such as for a preflight draft or the
 verification of uncommitted fixes, is keyed to its delivery phase's input
 instead. Before the run, write the exact input the run is given to a file in
-the task's records directory: for a preflight run, the text of the qualifying
-decisions and the shared understanding result they rest on; for verification
-of uncommitted work, the output of `git diff --binary HEAD`, then each
-untracked task file in byte order of its path, written as one line
-`<git file mode> <byte count> <path>` followed by its bytes. The git file mode
-is `100755` for an executable file, `100644` for any other regular file, and
-`120000` for a symbolic link, whose bytes are its target, so a mode change
-alone changes the key. The key is
+the task's records directory as a sequence of parts in a fixed order. Each
+part is one header line of space-separated ASCII fields ending with byte
+counts and a line feed, followed by exactly those bytes, so the file decodes back into its
+parts and no two inputs share a file:
+
+- for a preflight run, `decisions <byte count>` with the text of the
+  qualifying decisions, then `shared-understanding <byte count>` with the
+  shared understanding result they rest on;
+- for verification of uncommitted work, `diff <byte count>` with the output
+  of `git diff --binary --no-ext-diff --no-textconv --no-color HEAD`, then one
+  part for each untracked file that
+  `git ls-files -z --others --exclude-standard` lists, in byte order of its
+  path: `file <git file mode> <path byte count> <content byte count>`, then
+  the path's bytes, then the content's bytes.
+
+The git file mode is `100755` for an executable file, `100644` for any other
+regular file, and `120000` for a symbolic link, whose content is its target,
+so a mode change alone changes the key. The key is
 `<phase>:<full HEAD SHA>:<git hash-object of that file>`. The workflow runs
 again only when its key changes, such as when an answer changes a qualifying
 decision.
@@ -92,19 +102,20 @@ status, time bound, and report path. Every later entry for the same pair
 reuses its id, and the latest entry for an id is current; another entry or
 key never reuses it.
 
-- A `not run` status is recorded as that pair's entry. It is not an
-  invocation, so the pair may still be invoked when the trigger, tier, or
-  installation changes on the same key.
 - Before invoking, append an intent entry with status `launching`, like the
   intent entry Progress record sets for an external action, then dispatch the
   run, then append its outcome: `ran`, `stopped: time bound`, or
-  `failed: <reason>`. An intent entry is the invocation that the once-per-key
-  bound counts.
-- Before invoking a pair, including on resume, read its latest entry. Invoke
-  only when it has none or its latest status is `not run`. A pair whose
-  latest entry is `launching` is never relaunched: when its report path holds
-  a completed result, record that result as its outcome; otherwise record
-  `failed: interrupted` and report it.
+  `failed: <reason>`.
+- An intent entry consumes the pair's once-per-key allowance whatever entries
+  follow it: a pair with an intent entry is never invoked again on that key,
+  and no `not run` entry is recorded for it after its intent.
+- A `not run` status recorded before any intent entry does not consume the
+  pair, so it may still be invoked when the trigger, tier, or installation
+  changes on the same key.
+- On resume, before evaluating any trigger, installation, or tier, reconcile
+  each pair whose intent entry has no outcome entry after it; never relaunch
+  it. When its report path holds a completed result, record that result as
+  its outcome; otherwise record `failed: interrupted` and report it.
 
 `state.md` carries one line with the count of intent entries. A worker lists
 each registry entry that applied to its work, with its status, under

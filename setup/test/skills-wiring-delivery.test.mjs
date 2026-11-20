@@ -881,17 +881,23 @@ test("optional workflows have one provider-neutral home that Missing Prerequisit
   assert.match(section("Keys"), /A run on a committed snapshot is keyed to the reviewed head: its full SHA\./);
   assert.match(section("Keys"), /The key is `<phase>:<full HEAD SHA>:<git hash-object of that file>`\./);
   // Untracked files enter the phase input with their mode, size, and bytes, so a chmod alone changes the key.
-  assert.match(section("Keys"), /each untracked task file in byte order of its path, written as one line `<git file mode> <byte count> <path>` followed by its bytes/);
-  assert.match(section("Keys"), /`100755` for an executable file, `100644` for any other regular file, and `120000` for a symbolic link, whose bytes are its target, so a mode change alone changes the key\./);
+  // The phase input is a sequence of length-prefixed parts, so it decodes back and no two inputs share a file.
+  assert.match(section("Keys"), /Each part is one header line of space-separated ASCII fields ending with byte counts and a line feed, followed by exactly those bytes, so the file decodes back into its parts and no two inputs share a file/);
+  assert.match(section("Keys"), /`decisions <byte count>` with the text of the qualifying decisions, then `shared-understanding <byte count>`/);
+  assert.match(section("Keys"), /`diff <byte count>` with the output of `git diff --binary --no-ext-diff --no-textconv --no-color HEAD`/);
+  assert.match(section("Keys"), /`git ls-files -z --others --exclude-standard` lists, in byte order of its path: `file <git file mode> <path byte count> <content byte count>`, then the path's bytes, then the content's bytes\./);
+  assert.match(section("Keys"), /`100755` for an executable file, `100644` for any other regular file, and `120000` for a symbolic link, whose content is its target, so a mode change alone changes the key\./);
   assert.match(section("Accounting"), /belongs to that head's local review round under \[Local Review\]\(local-review\.md#repeat-and-advance\) and never adds a round/);
   assert.match(section("Accounting"), /A run keyed to a phase input belongs to no round and counts only against its entry's once-per-key bound\./);
   // Each pair of registry entry and key has its own id, intent before dispatch, and a recorded not-run status.
   for (const rule of [
     /one `\[optional O<n>\]` id for each pair of registry entry and key, with the target, workflow, phase, key, status, time bound, and report path/,
     /another entry or key never reuses it\./,
-    /A `not run` status is recorded as that pair's entry\. It is not an invocation/,
     /Before invoking, append an intent entry with status `launching`, like the intent entry Progress record sets for an external action, then dispatch the run, then append its outcome/,
-    /A pair whose latest entry is `launching` is never relaunched: when its report path holds a completed result, record that result as its outcome; otherwise record `failed: interrupted` and report it\./,
+    // An intent consumes the allowance for good; only a not-run before any intent leaves it open.
+    /An intent entry consumes the pair's once-per-key allowance whatever entries follow it: a pair with an intent entry is never invoked again on that key, and no `not run` entry is recorded for it after its intent\./,
+    /A `not run` status recorded before any intent entry does not consume the pair/,
+    /On resume, before evaluating any trigger, installation, or tier, reconcile each pair whose intent entry has no outcome entry after it; never relaunch it\. When its report path holds a completed result, record that result as its outcome; otherwise record `failed: interrupted` and report it\./,
     /lists, per target, the status of each entry's latest `log\.md` entry\./,
   ]) {
     assert.match(section("Record and report"), rule);
