@@ -17,8 +17,11 @@ Codex:       $github-issue-delivery 12 36 56 60
 ## Scope and Authorization
 
 Use the current repository and explicitly requested issues. Read each
-component skill when its phase starts; after context compaction, reread only
-the section of the current step. Read delivery-common's references by its
+component skill that this workflow runs itself when its phase starts; after
+context compaction, reread only the section of the current step. Delegate each
+component-skill call after implementation under
+[Phase Delegation](../delivery-common/references/phase-delegation.md) instead
+of reading that skill. Read delivery-common's references by its
 [Phase sections](../delivery-common/SKILL.md#phase-sections). Call the
 component skills under
 [Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
@@ -91,13 +94,21 @@ full review, Assess findings, and Repeat and advance.
 
 Coordinate publication and show the decision summary under Delivery
 Completion's Before publication.
-Use `github-pr-codex-review-cycle` for the exact issue branch/worktree. Honor its
+Delegate `github-pr-codex-review-cycle` for the exact issue branch/worktree to
+the issue's worker under
+[Phase Delegation](../delivery-common/references/phase-delegation.md). Honor its
 publication approval model, actual-review completion criteria, Prepare -> publish
 -> confirm remote head -> Writeback ordering, and stop-on-failure behavior; its
 remote head confirmation is the check under Delivery Completion's
-[After publication](../delivery-common/references/completion.md#after-publication).
-Pass the earlier local and hosted dispositions from the progress record, and
-have its follow-up assess hosted findings with Local Review's Assess findings.
+[After publication](../delivery-common/references/completion.md#after-publication),
+and the coordinator reads that head itself before checking the worker's report.
+Pass the earlier local and hosted dispositions from the progress record as
+paths. When Prepare has findings, the worker returns them, and the coordinator
+assesses them with Local Review's Assess findings before the worker publishes
+only the settled dispositions.
+
+The cycle's Final Report is in the worker's full report; open it for the Not
+applied items.
 
 After the cycle returns, record its Final Report's Not applied items in the
 progress record and add their self-closures to the list under Local Review's
@@ -127,16 +138,17 @@ and remaining thread dispositions clearly close them.
 
 Check and present the merge under Delivery Completion's Merge confirmation,
 adding the hosted review outcome and its remaining review threads. When it
-combines the confirmations, use `github-worktree-cleanup`'s caller preview for
-the cleanup targets. After approval, merge through the available GitHub tool or
-CLI.
+combines the confirmations, have a fresh agent use `github-worktree-cleanup`'s
+caller preview for the cleanup targets under Phase Delegation. After approval,
+merge through the available GitHub tool or CLI.
 
 ### 5. Confirm cleanup and verify completion
 
-Use `github-worktree-cleanup` for this issue's branch and worktree. Pass the
-verified merge evidence. Let it inspect runtime resources, show exact
-targets including any remote branch it proposes, obtain confirmation, and
-perform its safety checks. Pass a combined confirmation only as Delivery
+Delegate `github-worktree-cleanup` for this issue's branch and worktree to a
+fresh agent under Phase Delegation. Pass the verified merge evidence. Let it
+inspect runtime resources, return the exact targets including any remote branch
+it proposes for the coordinator to confirm with the user, and perform its
+safety checks. Pass a combined confirmation only as Delivery
 Completion's Merge confirmation allows; otherwise a merge confirmation alone
 does not approve cleanup. Preserve a dirty, busy, or otherwise unsafe
 worktree and report the blocker.

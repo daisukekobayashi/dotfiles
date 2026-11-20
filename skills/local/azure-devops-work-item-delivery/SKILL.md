@@ -22,9 +22,12 @@ resolving the target. Azure Boards with GitHub repositories and Azure DevOps
 Server need a different workflow; report that boundary rather than choosing an
 Azure Repos target for them.
 
-Read each component skill when its phase starts; after context compaction,
-reread only the section of the current step. Read delivery-common's references
-by its [Phase sections](../delivery-common/SKILL.md#phase-sections).
+Read each component skill that this workflow runs itself when its phase starts;
+after context compaction, reread only the section of the current step. Delegate
+each component-skill call after implementation under
+[Phase Delegation](../delivery-common/references/phase-delegation.md) instead
+of reading that skill. Read delivery-common's references by its
+[Phase sections](../delivery-common/SKILL.md#phase-sections).
 Call the component skills under
 [Delegated Authorization](../delivery-common/SKILL.md#delegated-authorization);
 the exact target is the Work Item, branch, and worktree. An explicit full
@@ -92,12 +95,14 @@ full review, Assess findings, and Repeat and advance.
 
 Coordinate publication and show the decision summary under Delivery
 Completion's Before publication.
-Use `azure-devops-pr-publish` and honor its stop-on-failure behavior. Supply
-known Work Item IDs, completion scope, and the user's state-transition intent.
+Delegate `azure-devops-pr-publish` to a fresh agent under Phase Delegation and
+honor its stop-on-failure behavior. Supply known Work Item IDs, completion
+scope, and the user's state-transition intent.
 
 Verify the returned PR's repository, source/target refs, and Work Item links.
-Read the current remote source ref and compare its commit with the local
-reviewed HEAD under Delivery Completion's
+Read the current remote source ref yourself, before checking the agent's
+report, and compare its commit with the local reviewed HEAD under Delivery
+Completion's
 [After publication](../delivery-common/references/completion.md#after-publication),
 and advance under it, adding that the PR has the intended Work Item links.
 
@@ -109,16 +114,18 @@ and mergeability. Keep source-HEAD concurrency limits explicit.
 
 Check and present the merge under Delivery Completion's Merge confirmation,
 adding the required policies and the proposed state-transition scope. When it
-combines the confirmations, use `azure-devops-worktree-cleanup`'s caller preview
-for the cleanup targets. Complete the PR as that reference describes.
+combines the confirmations, have a fresh agent use
+`azure-devops-worktree-cleanup`'s caller preview for the cleanup targets under
+Phase Delegation. Complete the PR as that reference describes.
 
 ### 5. Confirm cleanup and verify completion
 
-After verifying actual PR completion and the merged source/merge commit, use
-`azure-devops-worktree-cleanup` for the exact item branch/worktree. Pass merge
-evidence and let it inspect runtimes, show exact resources including any remote
-branch it proposes, obtain separate confirmation unless Delivery Completion's
-Merge confirmation combined it, and perform its safety checks.
+After verifying actual PR completion and the merged source/merge commit,
+delegate `azure-devops-worktree-cleanup` for the exact item branch/worktree to a
+fresh agent under Phase Delegation. Pass merge evidence and let it inspect
+runtimes, return the exact resources including any remote branch it proposes
+for the coordinator to confirm with the user, separately unless Delivery
+Completion's Merge confirmation combined it, and perform its safety checks.
 Preserve dirty, busy, or otherwise unsafe resources and report the blocker.
 
 Verify that confirmed local targets are gone. Read the Work Item's actual state

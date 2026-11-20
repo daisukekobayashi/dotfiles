@@ -371,7 +371,7 @@ test("delivery workers draft the understanding and preflight for the coordinator
   const common = await read("delivery-common", "SKILL.md");
 
   assert.match(dialogue, /the target's worker reads the task and code and drafts, and the coordinator holds every dialogue with the user\. No subagent asks the user a question\./);
-  assert.match(dialogue, /including when the delivery has a single target\. The same worker drafts the shared understanding, drafts the preflight, and implements, keeping its context\./);
+  assert.match(dialogue, /including when the delivery has a single target\. The same worker drafts the shared understanding, drafts the preflight, implements, and later runs the hosted review cycle under \[Phase Delegation\]\(phase-delegation\.md\), keeping its context\./);
   assert.match(dialogue, /Without delegation, report the limitation and process targets one at a time\. The coordinator runs `shared-understanding` and `design-preflight-with-docs` itself and asks the user directly/);
   const order = ["runs `shared-understanding` in draft mode", "The coordinator verifies the draft", "Continue only with a status of `confirmed`, `corrected`, or `skipped`", "runs `design-preflight-with-docs` in draft mode", "The coordinator verifies the preflight draft", "implements on the settled decisions"]
     .map((step) => dialogue.indexOf(step));
@@ -896,6 +896,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     "Delivery Completion": "completion.md",
     "Risk Tier": "risk-tier.md",
     "Local Review": "local-review.md",
+    "Phase Delegation": "phase-delegation.md",
   };
   const map = common.match(/^## Phase sections\n[\s\S]*?(?=^## )/m)?.[0];
   assert.ok(map, "delivery-common/SKILL.md defines Phase sections");
@@ -912,7 +913,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(row("Merge"), /Risk Tier: [^;]*Recommend human review/);
   for (const [, phase, cell] of rows) {
     for (const group of cell.split("; ")) {
-      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review)(?: \([^)]+\))?: (.+)$/);
+      const match = group.match(/^(Worker Dialogue|Delivery Completion|Risk Tier|Local Review|Phase Delegation)(?: \([^)]+\))?: (.+)$/);
       if (!match) continue;
       const [, name, list] = match;
       if (list === "all") continue;
@@ -941,7 +942,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     assert.match(completion, rule, `completion.md: ${rule}`);
   }
 
-  const readRule = "Read each component skill when its phase starts; after context compaction, reread only the section of the current step. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
+  const readRule = "Read each component skill that this workflow runs itself when its phase starts; after context compaction, reread only the section of the current step. Delegate each component-skill call after implementation under [Phase Delegation](../delivery-common/references/phase-delegation.md) instead of reading that skill. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
   const providers = {
     "github-issue-delivery": [/task key `issue-<number>`/, /log each review trigger post as an external action whose intent records the IDs of the trigger comments already on the PR, and the login and the `Date` response header that `gh api --hostname <host> --include user` returns right before the post, as the posting account and the baseline for comment `created_at`/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
     // Omitting --expand still sends expand=all, which the service rejects together with fields.
@@ -957,6 +958,102 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(start, /Resolve the current repo and its host from local git context/);
   assert.match(start, /Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <host>\/<owner>\/<repo> --json number,title,body,state,url`/);
   assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once from the organization resolved in step 1 with `az boards work-item show --id <id> --org <org-url> --expand all`/);
+});
+
+test("delivery delegates component-skill phases under one Phase Delegation home", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = (...parts) => readText(path.join(localRoot, ...parts));
+  const raw = await read("delivery-common", "references", "phase-delegation.md");
+  const home = flat(raw);
+  const headings = raw.match(/^## .+$/gm).map((h) => h.slice(3));
+  assert.deepEqual(headings, ["Choose the agent", "Brief the agent", "Return to the coordinator", "Report path", "Resume a delegated phase"]);
+
+  for (const rule of [
+    // Every post-implementation component call is delegated, and the coordinator keeps the user dialogue.
+    /the coordinator hands every component-skill call of the calling workflow to an agent instead of reading that skill: publication, the hosted review cycle and each later hosted round, the cleanup Caller preview, and the cleanup\./,
+    /under \[Delegated Authorization\]\(\.\.\/SKILL\.md#delegated-authorization\), so the skill behaves as it does on its own\./,
+    /No agent asks the user a question\./,
+    // The worker keeps its context for hosted fixes; cleanup never runs from the agent whose worktree it removes.
+    /The hosted review cycle, on every call: the target's worker, continued through the host's mechanism for messaging an existing agent\./,
+    /Publication in a workflow without a hosted review cycle, the cleanup Caller preview, and the cleanup: a fresh subagent for each call\. The preview agent ends once it returns the targets and the manifest path\. After the merge, a fresh cleanup agent receives that manifest path, its hash, and the user's combined confirmation quoted verbatim\. It checks that the file still has that hash, runs the cleanup skill with that file as the confirmed manifest, and the skill's comparison decides whether the targets still match\./,
+    /One agent acts on a target at a time\. Never dispatch an agent for a target while another delegated agent for it is outstanding\. Before each external action and each removal, the agent checks that `state\.md` still names its agent and attempt, and stops without acting when it does not\./,
+    /Delegation is required when the host can dispatch subagents\. Without it, report the limitation; the coordinator then runs the component skill itself/,
+    /The brief carries the user's actual request, the existing approvals, the exact target/,
+    /Include \[Foreground Checks\]\(\.\.\/SKILL\.md#foreground-checks\)/,
+    /appends the intent and outcome entries of each external action it takes to the task's `log\.md` under Delivery Completion's \[Progress record\]\(completion\.md#progress-record\), and never writes `state\.md`\./,
+    /`question` before any action that its forwarded approvals do not cover, and for a preview that returns targets, which asks for the combined confirmation;/,
+    // The v1 summary carries each phase result in fixed labels; the checker stays unchanged.
+    /- Target: the worktree, branch, and task, and the PR's URL and ID once a PR exists\./,
+    /- Verification: one line each for the component skill's status, such as the cycle's status or the publish result, and for a hosted round the published head and the head the hosted review covered\./,
+    /- Questions: the prepared result to decide on: the prepared dispositions, the push remote candidates, or the cleanup targets as the manifest command printed them with the manifest path\./,
+    /The coordinator opens the full report only for a named field: the hosted cycle's Final Report `Not applied` items/,
+    // What the user confirms is the manifest the cleanup later compares against.
+    /For the preview and the cleanup, it presents the targets from the manifest file at the assigned path, not from the summary, and records the file's SHA-256 with the report\./,
+    /assigns the manifest path: the report path with `\.manifest\.json` in place of `\.md`, which the cleanup skill creates as a new file\./,
+    // Hosted findings are assessed by the coordinator, at the pause the cycle already has before Writeback.
+    /when Prepare finds anything in the latest review, the worker stops after Prepare, before any review-fix commit, push, reply, or resolution, and returns `question` with the prepared dispositions\. The coordinator assesses them under Local Review's \[Assess findings\]\(local-review\.md#assess-findings\)/,
+    // Only settled dispositions reach the PR: rejected fixes are removed before publication.
+    /Before the cycle's review-fix publication, the worker makes the worktree match them: it removes the edits of every fix not settled as `applied`, makes any change they add, and reruns the smallest relevant verification when a file changed after Prepare's verification\. It then commits, pushes, replies, and resolves only as the settled dispositions say/,
+    // Assessment alone does not wait on the user.
+    /For a `question`, the coordinator asks the user only what needs the user's decision or an approval not already forwarded; it answers the rest from its own assessment\. It continues the same agent with the answer, quoting the user's reply verbatim as the approval for that action alone\. The preview's answer goes to the cleanup agent after the merge instead\. The component skill's own checks, such as the cleanup comparison, still run before the agent acts\./,
+    /`<base12>-<start12>\/rh<n>-hosted-a<attempt>\.md` for hosted round `n`, and `<base12>-<start12>\/r<phase>-phase-a<attempt>\.md` for `publish`, `preview`, or `cleanup`/,
+    // The checked Head is the head the coordinator reads from the provider, not the agent's claim.
+    /the coordinator reads that head itself and passes it as `--head`: the worktree's `HEAD` before a PR exists; the PR's current remote source head after that, which for the preview is the head to be merged that the Caller preview checks; and for the cleanup the source head of the merged PR\./,
+    // A valid question report does not pin the phase to a lost agent, and a replaced agent cannot act again.
+    /A `complete` report gives the result; a `question` report gives the prepared result to decide on\. Recorded assessments carry forward; ask the user again for an approval that the records show but this context did not receive, since a progress record is not authorization\./,
+    /2\. Continue the recorded agent when the host can address it, with the answer when there is one\./,
+    /3\. Otherwise, dispatch a fresh agent only when the host shows the recorded agent has ended; when it cannot show that, report the target `Blocked`\. Before dispatching, write the new agent and attempt to `state\.md`, so the old agent's check before acting stops it\./,
+    /It resumes through the component skill's own resume and reconciles the logged external actions under Delivery Completion's \[Resume\]\(completion\.md#resume\) before acting\./,
+    // A delegated cleanup is never resumed; the standalone cleanup skill redoes it with its own confirmation (user decision L2).
+    /On resume of any delegated phase other than cleanup:/,
+    /A delegated cleanup, including its Caller preview, is never resumed\./,
+    // The resume is recorded before any contact, so the D4 check stops an old agent still removing (D16).
+    /On a resume, before or after the first confirmation, the coordinator first records the resume in `state\.md` with a new attempt, so the cleanup agent's check before each removal stops it, and only then tells the cleanup agent, continued or fresh, that it is a resume\./,
+    // The observed state is required, not optional (D17).
+    /The agent removes nothing and returns `blocked`, listing which previewed or confirmed targets are gone and which remain, or stating that it could not observe them\./,
+    /the cleanup is redone by the provider's cleanup skill run on its own, with its own target listing, confirmation, and checks\./,
+    // An interrupted preview does not block the merge (D15).
+    /An interrupted Caller preview counts as no preview: the coordinator presents the merge alone\./,
+    // No preview falls back to a merge-only confirmation, as the cleanup skills' Caller preview defines.
+    /When the Caller preview returns no preview, such as on a non-zero status of its manifest command, the preview agent returns `complete` with a Verification line saying no preview and why\. The coordinator then presents the merge alone, and the cleanup keeps its own confirmation after the merge\./,
+  ]) {
+    assert.match(home, rule, `phase-delegation.md: ${rule}`);
+  }
+
+  const commonRaw = await read("delivery-common", "SKILL.md");
+  const common = flat(commonRaw);
+  assert.ok(common.includes("Use [Phase Delegation](references/phase-delegation.md) for every component-skill call after implementation"), "delivery-common links Phase Delegation");
+  assert.match(commonRaw, /^description: .*delegates publication, hosted review, and cleanup calls to agents/m);
+  const completion = flat(await read("delivery-common", "references", "completion.md"));
+  assert.match(completion, /a delegated phase with its agent, report path, and attempt under \[Phase Delegation\]\(phase-delegation\.md#resume-a-delegated-phase\)/);
+  assert.doesNotMatch(home, /cleanup continues|builds a new manifest|reruns the cleanup skill|may report/, "phase-delegation.md lets a resumed cleanup continue");
+  assert.match(completion, /A delegated phase resumes under \[Phase Delegation\]\(phase-delegation\.md#resume-a-delegated-phase\)\./);
+  assert.match(completion, /Delegated phase agents write theirs under \[Phase Delegation\]\(phase-delegation\.md#report-path\)\./);
+
+  const phases = {
+    "github-issue-delivery": [
+      /Delegate `github-pr-codex-review-cycle` for the exact issue branch\/worktree to the issue's worker under \[Phase Delegation\]/,
+      /When Prepare has findings, the worker returns them, and the coordinator assesses them with Local Review's Assess findings before the worker publishes only the settled dispositions\./,
+      /have a fresh agent use `github-worktree-cleanup`'s caller preview for the cleanup targets under Phase Delegation\./,
+      /Delegate `github-worktree-cleanup` for this issue's branch and worktree to a fresh agent under Phase Delegation\./,
+    ],
+    "azure-devops-work-item-delivery": [
+      /Delegate `azure-devops-pr-publish` to a fresh agent under Phase Delegation/,
+      /Read the current remote source ref yourself, before checking the agent's report/,
+      /have a fresh agent use `azure-devops-worktree-cleanup`'s caller preview for the cleanup targets under Phase Delegation\./,
+      /delegate `azure-devops-worktree-cleanup` for the exact item branch\/worktree to a fresh agent under Phase Delegation\./,
+    ],
+  };
+  for (const [delivery, rules] of Object.entries(phases)) {
+    const skill = flat(await read(delivery, "SKILL.md"));
+    for (const rule of rules) assert.match(skill, rule, `${delivery}: ${rule}`);
+    assert.doesNotMatch(skill, /(?:^|[.;] )Use `(github-pr-codex-review-cycle|azure-devops-pr-publish|github-worktree-cleanup|azure-devops-worktree-cleanup)`|, use `(github-worktree-cleanup|azure-devops-worktree-cleanup)` for/, `${delivery} runs a component skill inline`);
+  }
+
+  // Component skills stay as they are on their own; delegation lives only in the delivery layer.
+  for (const component of ["github-pr-codex-review-cycle", "github-pr-publish", "github-pr-create", "github-pr-review-request", "github-worktree-cleanup", "azure-devops-pr-publish", "azure-devops-pr-create", "azure-devops-worktree-cleanup", "worktree-runtime-cleanup"]) {
+    assert.doesNotMatch(await read(component, "SKILL.md"), /phase-delegation|Phase Delegation/, `${component} mentions Phase Delegation`);
+  }
 });
 
 test("review and worker reports hand off through a file and a fixed summary", async () => {

@@ -1,6 +1,6 @@
 ---
 name: delivery-common
-description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, stops at a bound or a missing prerequisite, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
+description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, delegates publication, hosted review, and cleanup calls to agents, stops at a bound or a missing prerequisite, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
 ---
 
 # Delivery Common
@@ -8,6 +8,9 @@ description: Shared worker dialogue, local review procedure, risk tier, and comp
 Use [Worker Dialogue](references/worker-dialogue.md) for worker dispatch through
 the start skill and for each target's shared understanding, design preflight,
 and implementation: workers draft, and the coordinator asks the user. Use
+[Phase Delegation](references/phase-delegation.md) for every component-skill
+call after implementation: publication, the hosted review cycle, the cleanup
+preview, and cleanup. Use
 [Local Review](references/local-review.md) when a delivery workflow
 reaches its local reviews or selects focused follow-up, and apply its Assess
 findings to local and hosted findings. Use [Risk Tier](references/risk-tier.md)
@@ -46,10 +49,10 @@ Completion's Bounds whenever a phase stops or stalls.
 | Shared understanding and preflight | Worker Dialogue: Draft and ask, Worker defaults; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Tier procedure |
 | Implementation | Worker Dialogue: Preflight and implementation, Worker defaults |
 | Local reviews and focused follow-up | Local Review: all; Risk Tier: Set and update the tier, Rate the dimensions, Assign the tier, Sensitive paths, Select the security review, Tier procedure |
-| Publication | Delivery Completion: Decision summary, Before publication, After publication; Local Review (when assessing hosted findings): Triage classes, Assess findings, Repeat and advance; Risk Tier: Select the security review, Tier procedure, Recommend human review |
-| Merge | Delivery Completion: Decision summary, After publication, Merge confirmation; Risk Tier: Recommend human review |
-| Report and cleanup | Delivery Completion: Merge confirmation, Report and complete, Follow-up candidates |
-| Resume, including after context compaction | Delivery Completion: Progress record, Resume, Merge confirmation; Risk Tier: Select the security review; then the sections of the phase the task's state file names |
+| Publication | Phase Delegation: all; Delivery Completion: Decision summary, Before publication, After publication; Local Review (when assessing hosted findings): Triage classes, Assess findings, Repeat and advance; Risk Tier: Select the security review, Tier procedure, Recommend human review |
+| Merge | Phase Delegation: Choose the agent, Brief the agent, Return to the coordinator, Report path; Delivery Completion: Decision summary, After publication, Merge confirmation; Risk Tier: Recommend human review |
+| Report and cleanup | Phase Delegation: all; Delivery Completion: Merge confirmation, Report and complete, Follow-up candidates |
+| Resume, including after context compaction | Delivery Completion: Progress record, Resume, Merge confirmation; Phase Delegation: Resume a delegated phase; Risk Tier: Select the security review; then the sections of the phase the task's state file names |
 
 ## Delegated Authorization
 
