@@ -9,7 +9,8 @@
 //
 // A report is the full report, a delimiter line, and a summary part, ending
 // with the line `<!-- end-report-summary -->`, as references/report-handoff.md
-// defines. The summary part is the text from the last delimiter line:
+// defines; blank or whitespace-only lines after the end line are ignored. The
+// summary part is the text from the last delimiter line:
 // - a review report uses `<!-- report-summary v2 -->` and a fenced json review
 //   block; the check derives the review summary from the block and never reads
 //   the full report's headings or bullets;
@@ -312,7 +313,8 @@ function main() {
     invalid("report is not valid UTF-8");
   }
   const lines = text.replace(/\r$/gm, "").split("\n");
-  if (lines.at(-1) === "") lines.pop();
+  // Blank lines after the end line do not mean a cut-off report; hash and size still cover them.
+  while (lines.length && lines.at(-1).trim() === "") lines.pop();
   if (lines.length === 0) invalid("empty file");
   const delimiter = args.kind === "review" ? REVIEW_DELIMITER : WORKER_DELIMITER;
   const start = lines.lastIndexOf(delimiter);

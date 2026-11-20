@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -1239,6 +1240,29 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
       assert.match(result.stderr, reason, name);
     }
 
+    // #258: blank or whitespace-only lines after the end line are ignored, and the hash and size
+    // still describe the file as written; any other text there, or on the end line itself, is truncated.
+    const tail = async (name, suffix) => {
+      const file = await write(name, report((f) => reviewBlock(f)));
+      await writeFile(file, (await readFile(file, "utf8")) + suffix);
+      return file;
+    };
+    for (const [name, suffix] of [["blank-lines", "\n\n"], ["crlf-blank-lines", "\r\n\r\n"], ["whitespace-line", "  \t \n"]]) {
+      const file = await tail(`tail-${name}`, suffix);
+      const bytes = await readFile(file);
+      const result = run(file);
+      assert.equal(result.status, 0, `${name}: ${result.stderr}`);
+      assert.equal(result.stdout, `valid sha256=${createHash("sha256").update(bytes).digest("hex")} bytes=${bytes.length}\n`, name);
+    }
+    for (const [name, suffix] of [["text", "\nextra\n"], ["text-after-blank", "\n\nextra\n"]]) {
+      const result = run(await tail(`tail-${name}`, suffix));
+      assert.equal(result.status, 3, name);
+      assert.match(result.stderr, /invalid: truncated/, name);
+    }
+    const endSpaces = run(await write("tail-end-line-spaces", (f) => [...report((g) => reviewBlock(g))(f).slice(0, -1), "<!-- end-report-summary -->  "]));
+    assert.equal(endSpaces.status, 3);
+    assert.match(endSpaces.stderr, /invalid: truncated/);
+
     // A paired surrogate is one valid character.
     assert.equal(run(await write("surrogate-pair", report((f) => reviewBlock(f, { findings: [finding("SEC1", "a.js:1", "A \u{1F600}")] })))).status, 0);
     // Invalid UTF-8 fails closed instead of being replaced with U+FFFD before validation.
@@ -1325,6 +1349,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     const runWorker = (file, extra = []) => spawnSync(process.execPath, [script, "--kind", "worker", "--base", base,
       "--head", head, "--round", "1", "--report", file, ...extra], { encoding: "utf8" });
     assert.equal(runWorker(await write("worker", worker())).status, 0);
+    assert.equal(runWorker(await write("worker-trailing-blank", (f) => [...worker()(f), "", "  "])).status, 0);
     assert.match(runWorker(await write("worker-bad", worker({ Completion: "incomplete" }))).stderr, /Completion is not complete, question, or blocked/);
     assert.match(runWorker(await write("worker-nofollow", worker({ "Follow-ups": undefined }))).stderr, /missing Follow-ups/);
     assert.match(runWorker(await write("worker-su", worker()), ["--draft", "su"]).stderr, /no Overview/);
