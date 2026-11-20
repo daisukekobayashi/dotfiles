@@ -146,10 +146,10 @@ path, and the attempt. On resume:
    skill's own resume and reconciles the logged external actions under
    Delivery Completion's [Resume](completion.md#resume) before acting.
 
-A resumed cleanup never acts on the earlier confirmation alone. The fresh
-cleanup agent compares the actual state with the confirmed manifest and reports
-each target already gone, such as a removed worktree or branch, as done. It
-then runs the cleanup skill from its start on what remains, which builds a new
-manifest at the agent's own assigned path, and returns those targets as a
-`question` for a new confirmation. The skill's comparison against that newly
-confirmed manifest still runs before any removal.
+On resume, a cleanup agent, continued or fresh, first compares the actual
+state with the confirmed manifest. When any confirmed target is already gone,
+it removes nothing more and returns `blocked`, listing the targets gone and
+those remaining. The coordinator reports this to the user; the remaining
+targets are left to the provider's cleanup skill run on its own, with its own
+confirmation and checks. When nothing was removed yet, the cleanup continues
+with the confirmed manifest, and the skill's comparison decides.
