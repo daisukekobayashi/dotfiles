@@ -57,7 +57,14 @@ For each target, in this order:
    `design-preflight-with-docs` in draft mode with the shared understanding
    result in the mode the tier's [Tier procedure](risk-tier.md#tier-procedure)
    selects, writes its draft to `preflight-draft.md`, and returns its summary
-   with the tier and its ratings.
+   with the tier and its ratings. For the draft's questions about a one-way
+   door in an interface, data shape, or module boundary, it applies the
+   `architect` entry, then the `arena` entry, of the
+   [Optional Workflows](optional-workflows.md#registry) registry, and shows
+   each run's result under its question. It passes each entry's time bound to
+   the skill as its budget and measures wall-clock time from launch to result;
+   a run past its bound is `stopped: time bound` even when it returned a
+   result.
 5. The coordinator verifies the preflight draft the same way. For a Low
    tentative tier, apply Risk Tier's
    [Low check](risk-tier.md#set-and-update-the-tier) before asking. When the
@@ -65,11 +72,20 @@ For each target, in this order:
    selects a different preflight mode than the draft used, have the worker
    redraft in that mode before asking; for a confirmed Low tier, apply its
    Design preflight row. Then ask the draft's questions under the preflight's
-   question budget. When an answer changes a dependent question, have the
-   worker revise that question before asking it. Send the settled decisions to
-   the worker.
+   question budget. When the confirmed tier is High and the draft reported
+   `arena` as `not run: tier`, have the worker apply its entry again and revise
+   the affected questions before asking them; once the preflight decisions are
+   settled, a later tier rise runs no optional workflow on them. When an answer
+   changes a dependent question, have the worker revise that question before
+   asking it. Send the settled decisions to the worker.
 6. The worker writes the preflight's durable documentation and implements on the
    settled decisions.
+
+In both drafts, ground each claim about current behavior in the traced path,
+such as `file:line` (the `how` method), and each claim about history in the
+recorded rationale, such as an ADR, PR, issue, or commit (the `why` method),
+and name the method each claim uses. Label a claim with neither as
+interpretation. Neither method requires the `how` or `why` skill.
 
 With several targets, workers draft in parallel. The coordinator holds one
 target's dialogue at a time, finishing its open questions before starting the

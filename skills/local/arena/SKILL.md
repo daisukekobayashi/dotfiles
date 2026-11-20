@@ -1,15 +1,17 @@
 ---
 name: arena
-description: Use only when the user explicitly invokes arena to compare independent solutions to the same design or implementation problem, then synthesize and verify a result.
+description: Use only when explicitly invoked with `$arena` to compare independent solutions to the same design or implementation problem, then synthesize and verify a result, or as the High-tier design preflight step of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items.
 license: MIT
-disable-model-invocation: true
 ---
 
 # Arena
 
 Run only when the user explicitly invokes `arena`, such as `$arena` in Codex
-or `/arena` in Claude Code. A generic comparison request or a reference from
-another skill does not activate this workflow.
+or `/arena` in Claude Code, or through the user's explicit request for the full
+`github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named
+issues or Work Items, as its High-tier design preflight step. A caller must
+forward that request and exact target; a generic comparison request or a skill
+reference alone does not activate this workflow.
 
 Compare alternatives to one problem. Different slices of a task are ordinary
 delegation, not an arena.

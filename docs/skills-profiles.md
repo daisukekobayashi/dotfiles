@@ -535,18 +535,33 @@ through its own invocation interface. The three principles can be consulted
 directly or by the workflow skills.
 
 How delivery uses these skills is decided in
-[ADR 0001](adr/0001-pstack-principles-in-delivery.md). Until its child issues
-land, delivery skills do not run pstack workflows, and the explicit-only rule
-below still applies.
+[ADR 0001](adr/0001-pstack-principles-in-delivery.md). Delivery runs a pstack
+workflow only through its entry in the `delivery-common`
+[Optional Workflows](../skills/local/delivery-common/references/optional-workflows.md)
+registry. The design preflight draft runs `architect` on a question about a
+one-way door in an interface, data shape, or module boundary, and at High tier
+runs `arena` on such a question that still has two viable shapes, with design
+sketches as its candidates. Each is reported as not run when it is not
+installed or its trigger or tier does not hold. Shared understanding and
+preflight drafts name the `how` or `why` method behind each claim about
+current behavior or history, without running those skills. Other ADR 0001
+rows are pending in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
 `maintain-verification-skill`, `evaluate-skill`, and `benchmark-checklist` require explicit user invocation. Their descriptions
 and instructions enforce this
 boundary, with `policy.allow_implicit_invocation: false` for Codex and
 `disable-model-invocation: true` in SKILL.md frontmatter for Claude Code.
+The one exception is `arena`'s delivery step: its SKILL.md drops
+`disable-model-invocation`, keeps the Codex policy, and its description and
+body guard also allow it as the High-tier design preflight step of an
+explicitly user-requested `github-issue-delivery` or
+`azure-devops-work-item-delivery` workflow, as the `change-*review` skills
+state their delivery phases.
 Use `$skill-name` in Codex or `/skill-name` in Claude Code. References from
 another skill do not activate these workflows; `architect` compares alternatives
-directly unless the user explicitly invokes `arena`.
+directly unless the user explicitly invokes `arena` or a delivery's High-tier
+preflight runs it.
 
 `how`, `why`, and `architect` remain discoverable by their task descriptions.
 The three principles can be consulted when relevant or by another workflow.
