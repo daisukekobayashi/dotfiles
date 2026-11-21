@@ -32,8 +32,6 @@ matches and no `add` entry matches is a `REVIEW.md` failure.
 - exclude `skills/**/evals/**` from agent instruction files
 - exclude `skills/**/LICENSE` from agent instruction files
 - exclude `setup/test/**` from install, setup, and bootstrap scripts
-- exclude `setup/skills-export.js` from install, setup, and bootstrap scripts
-- exclude `setup/src/skills-export.ts` from install, setup, and bootstrap scripts
 - exclude `setup/tsconfig.json` from install, setup, and bootstrap scripts
 - add `skills/local/delivery-common/SKILL.md`
 - add `skills/local/delivery-common/references/completion.md`

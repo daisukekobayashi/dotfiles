@@ -331,6 +331,8 @@ test("change review skills are explicit-only and share target selection", async 
     "setup/links.sh",
     "setup/packages.ps1",
     "setup/src/skills.ts",
+    "setup/skills-export.js",
+    "setup/src/skills-export.ts",
     "setup/src/codex.ts",
     "setup/src/claude.ts",
     "setup/package-lock.json",
