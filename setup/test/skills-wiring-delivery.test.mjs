@@ -12,17 +12,15 @@ import {
 } from "./skills-helpers.mjs";
 
 const flat = (text) => text?.replace(/\s+/g, " ");
-// A gitignore-style glob from the repository root, as Risk Tier's sensitive path entries use.
-const gitignoreGlob = (pattern) => {
-  const body = pattern.replace(/^\//, "").replace(/\/$/, "");
-  const source = body.replace(/\*\*\/|\/\*\*$|\*\*|\*|\?|[.+^${}()|[\]\\]/g, (token) => ({
-    "**/": "(?:.*/)?",
-    "/**": "/.*",
-    "**": ".*",
-    "*": "[^/]*",
-    "?": "[^/]",
-  })[token] ?? `\\${token}`);
-  return new RegExp(`^${body.includes("/") ? "" : "(?:.*/)?"}${source}(?:/.*)?$`);
+// The tracked files that a gitignore-style pattern from the repository root
+// matches, decided by git's own matcher as Risk Tier's sensitive path entries use.
+const trackedMatches = (pattern) => {
+  const result = spawnSync("git", ["--no-optional-locks", "ls-files", "-z", "--cached", "--ignored", `--exclude=${pattern}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return new Set(result.stdout.split("\0").filter(Boolean));
 };
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
@@ -290,8 +288,6 @@ test("change review skills are explicit-only and share target selection", async 
   const defaultLabels = [...sensitiveSection.matchAll(/^- ([^:\n]+)/gm)].map((m) => m[1].trim().toLowerCase());
   assert.ok(defaultLabels.includes("install, setup, and bootstrap scripts"), "risk-tier.md: missing setup default");
   assert.ok(defaultLabels.includes("agent instruction files"), "risk-tier.md: missing agent instruction files default");
-  const tracked = spawnSync("git", ["ls-files", "-z"], { cwd: repoRoot, encoding: "utf8" }).stdout.split("\0").filter(Boolean);
-  assert.ok(tracked.length > 0, "git ls-files listed no files");
   const entries = { add: [], exclude: [] };
   for (const line of agents.split("\n").filter((l) => l.startsWith("- "))) {
     const entry = line.match(/^- (?:add `([^`]+)`|exclude `([^`]+)` from ([^`]+))$/);
@@ -301,18 +297,20 @@ test("change review skills are explicit-only and share target selection", async 
       assert.ok(defaultLabels.includes(label.trim().toLowerCase()), `AGENTS.md: unknown default ${label}`);
     }
     const pattern = added ?? excluded;
-    const glob = gitignoreGlob(pattern);
+    const matched = trackedMatches(pattern);
     // A stale pattern, such as one left behind by a rename, silently drops a file from the sensitive set.
-    assert.ok(tracked.some((file) => glob.test(file)), `AGENTS.md: ${pattern} matches no tracked file`);
-    entries[added ? "add" : "exclude"].push(glob);
+    assert.ok(matched.size > 0, `AGENTS.md: ${pattern} matches no tracked file`);
+    entries[added ? "add" : "exclude"].push(matched);
   }
-  const added = (file) => entries.add.some((glob) => glob.test(file));
-  const excluded = (file) => entries.exclude.some((glob) => glob.test(file));
+  const added = (file) => entries.add.some((matched) => matched.has(file));
+  const excluded = (file) => entries.exclude.some((matched) => matched.has(file));
   for (const file of [
     "skills/local/delivery-common/SKILL.md",
     "skills/local/delivery-common/references/completion.md",
     "skills/local/delivery-common/references/phase-delegation.md",
+    "skills/local/delivery-common/references/report-handoff.md",
     "skills/local/delivery-common/references/risk-tier.md",
+    "skills/local/change-review/SKILL.md",
     "skills/local/change-security-review/SKILL.md",
     "skills/local/github-issue-delivery/SKILL.md",
     "skills/local/azure-devops-work-item-delivery/SKILL.md",

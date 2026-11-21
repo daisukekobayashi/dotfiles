@@ -190,7 +190,8 @@ and the tier and security review selection) and the setup code that installs
 agent configuration or fetches or executes remote content. Its root
 `SECURITY.md` names public readers as an attacker and personal information as
 assets, and its root `REVIEW.md` makes public exposure of that information, or
-a new authority rule in an unlisted file, a material defect.
+a new authority rule in a file that an `exclude` entry matches and no `add`
+entry matches, a material defect.
 The shared `delivery-common` risk tier (Low, Medium, High) is set from the change rather than its author, and
 scales the review effort through one per-tier table: the preflight depth, the
 local reviewers and round limits, the hosted review rounds, whether the merge and

@@ -25,8 +25,8 @@ Only files that grant, limit, or gate agent authority (approval for commit,
 push, merge, cleanup, or remote writes; read-only limits; code execution;
 permission, allowlist, or hook rules; the tier and security review selection)
 and setup code that installs agent configuration or fetches or executes remote
-content stay sensitive. A new authority rule in a file not covered here is a
-`REVIEW.md` failure.
+content stay sensitive. A new authority rule in a file that an `exclude` entry
+matches and no `add` entry matches is a `REVIEW.md` failure.
 
 - exclude `skills/**/*.md` from agent instruction files
 - exclude `skills/**/evals/**` from agent instruction files
@@ -39,8 +39,10 @@ content stay sensitive. A new authority rule in a file not covered here is a
 - add `skills/local/delivery-common/references/completion.md`
 - add `skills/local/delivery-common/references/local-review.md`
 - add `skills/local/delivery-common/references/phase-delegation.md`
+- add `skills/local/delivery-common/references/report-handoff.md`
 - add `skills/local/delivery-common/references/repro-runs.md`
 - add `skills/local/delivery-common/references/risk-tier.md`
+- add `skills/local/change-review/SKILL.md`
 - add `skills/local/change-adversarial-review/SKILL.md`
 - add `skills/local/change-security-review/SKILL.md`
 - add `skills/local/*-delivery/SKILL.md`

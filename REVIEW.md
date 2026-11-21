@@ -5,17 +5,23 @@ This policy applies to `change-review` and `change-adversarial-review`.
 
 ## What failure looks like
 
-- **Public exposure:** a diff that introduces an instance of an asset category
-  listed in `SECURITY.md` into any tracked file is a material defect, in code,
-  comments, documentation, tests, fixtures, eval files, and records alike. An
-  existing value that the diff only moves is `pre-existing`.
-- **Unlisted authority rule:** a diff that adds or weakens a rule that grants,
-  limits, or gates agent authority in a skill file that no entry of the root
-  `AGENTS.md` `## Delivery sensitive paths` section covers is a material
-  defect, unless the same diff adds the entry. Authority rules are approval
-  for commit, push, merge, cleanup, or remote writes; read-only limits; code
-  execution; permission, allowlist, or hook rules; and the tier and security
-  review selection.
+- **Public exposure:** a change that introduces an instance of an asset
+  category listed in `SECURITY.md` into any tracked file is a material defect,
+  in code, comments, documentation, tests, fixtures, eval files, and records
+  alike. Check every commit that would be published, the branch's commits since
+  the recorded base, not only the net diff. The finding closes only when none
+  of those commits contains the value; a later commit that removes it does not
+  close it. Closing it needs the branch history rewritten before publication,
+  which needs the owner's explicit approval. An existing value that the change
+  only moves is `pre-existing`.
+- **Unlisted authority rule:** a change that adds or weakens a rule that
+  grants, limits, or gates agent authority in a skill file that is not
+  sensitive under the root `AGENTS.md` at the recorded base, because an
+  `exclude` entry matches the file and no `add` entry matches it, is a
+  material defect, unless the same change adds an `add` entry that matches
+  the file. Authority rules are approval for commit, push, merge, cleanup, or
+  remote writes; read-only limits; code execution; permission, allowlist, or
+  hook rules; and the tier and security review selection.
 
 ## Focus areas
 
