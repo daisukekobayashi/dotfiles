@@ -1900,3 +1900,134 @@ done
     }
   });
 }
+
+async function writeLocalProfile(fixture, name, local) {
+  await writeFile(
+    path.join(fixture.dotfiles, "skills", "profiles", `${name}.json`),
+    JSON.stringify({ description: `${name} test profile`, local }, null, 2) + "\n",
+  );
+}
+
+async function linkOutsideSkill(fixture, name) {
+  const outside = path.join(fixture.root, "outside-skill");
+  await mkdir(outside, { recursive: true });
+  await writeFile(path.join(outside, "SKILL.md"), `---\nname: ${name}\ndescription: Outside skill\n---\n`);
+  await symlink(outside, path.join(fixture.dotfiles, "skills", "local", name));
+}
+
+for (const [label, prepare, pattern] of [
+  ["outside skills/local", (fixture) => linkOutsideSkill(fixture, "linked"), /skills\/local\/linked is a symbolic link/],
+  ["inside skills/local", (fixture) => symlink("local-one", path.join(fixture.dotfiles, "skills", "local", "linked")), /skills\/local\/linked is a symbolic link/],
+  ["nowhere (dangling)", (fixture) => symlink("missing-skill", path.join(fixture.dotfiles, "skills", "local", "linked")), /skills\/local\/linked is a symbolic link/],
+]) {
+  test(`profile validate rejects a local skill root linked to ${label}`, posixOnly, async () => {
+    const fixture = await createFixture();
+    try {
+      await prepare(fixture);
+      await writeLocalProfile(fixture, "linked", ["linked"]);
+
+      const result = runSkills(["profile", "validate", "--profile", "linked"], fixture);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, pattern);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}
+
+test("profile validate rejects a linked skills/local directory", posixOnly, async () => {
+  const fixture = await createFixture();
+  try {
+    const local = path.join(fixture.dotfiles, "skills", "local");
+    const moved = path.join(fixture.root, "outside-local");
+    await rename(local, moved);
+    await symlink(moved, local);
+
+    const result = runSkills(["profile", "validate", "--profile", "base"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skills\/local is a symbolic link; setup reads only real files in the dotfiles repository/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("profile validate rejects a linked skills directory", posixOnly, async () => {
+  const fixture = await createFixture();
+  try {
+    const skills = path.join(fixture.dotfiles, "skills");
+    const moved = path.join(fixture.root, "outside-skills");
+    await rename(skills, moved);
+    await symlink(moved, skills);
+
+    const result = runSkills(["profile", "validate", "--profile", "base"], fixture);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skills is a symbolic link/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("profile validate accepts a dotfiles checkout reached through a link", posixOnly, async () => {
+  const fixture = await createFixture();
+  try {
+    const linkedRoot = path.join(fixture.root, "linked-dotfiles");
+    await symlink(fixture.dotfiles, linkedRoot);
+
+    const result = runSkills(["profile", "validate", "--profile", "base"], {
+      ...fixture,
+      env: { ...fixture.env, SETUP_DOTFILES_ROOT: linkedRoot },
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+for (const [label, prepare] of [
+  ["outside skills/local", (fixture) => linkOutsideSkill(fixture, "linked")],
+  ["inside skills/local", (fixture) => symlink("local-one", path.join(fixture.dotfiles, "skills", "local", "linked"))],
+]) {
+  test(`user install rejects a local skill root linked to ${label} before any change`, posixOnly, async () => {
+    const fixture = await createFixture();
+    try {
+      await prepare(fixture);
+      await writeLocalProfile(fixture, "linked", ["local-one", "linked"]);
+
+      const result = runSkills(["--scope", "user", "--profile", "linked"], fixture);
+
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /skills\/local\/linked is a symbolic link/);
+      assert.equal(existsSync(fixture.log), false);
+      assert.equal(existsSync(path.join(fixture.dotfiles, ".agents")), false);
+      assert.equal(existsSync(path.join(fixture.home, ".agents", "skills")), false);
+      assert.equal(existsSync(path.join(fixture.home, ".claude", "skills")), false);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  for (const copy of [false, true]) {
+    test(`project install${copy ? " --copy" : ""} rejects a local skill root linked to ${label} before any change`, posixOnly, async () => {
+      const fixture = await createFixture();
+      try {
+        await prepare(fixture);
+        await writeLocalProfile(fixture, "linked", ["local-one", "linked"]);
+        const before = (await readdir(fixture.project)).sort();
+
+        const args = ["--scope", "project", "--profile", "linked", "--agent", "codex", "--agent", "claude-code"];
+        const result = runSkills(copy ? [...args, "--copy"] : args, fixture, { cwd: fixture.project });
+
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /skills\/local\/linked is a symbolic link/);
+        assert.equal(existsSync(fixture.log), false);
+        assert.deepEqual((await readdir(fixture.project)).sort(), before);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+}

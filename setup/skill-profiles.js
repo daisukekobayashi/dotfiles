@@ -6,6 +6,8 @@ exports.parseAgent = parseAgent;
 exports.parseAgents = parseAgents;
 exports.readJson = readJson;
 exports.isPathComponentName = isPathComponentName;
+exports.isInsideOrSame = isInsideOrSame;
+exports.requireSourcePath = requireSourcePath;
 exports.listProfiles = listProfiles;
 exports.resolveProfiles = resolveProfiles;
 const fs = require("node:fs");
@@ -78,6 +80,38 @@ function getObjectProperty(value, key) {
 // must be one plain component: no separators, no leading dot, no "..".
 function isPathComponentName(name) {
     return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
+}
+// Judges ".." by path component, so a child named "..share" stays inside.
+function isInsideOrSame(candidate, root) {
+    const relative = path.relative(root, candidate);
+    return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+// Source paths below the checkout root must be real directories or files,
+// never links, and resolve inside the checkout, so a link cannot bring other
+// files into an install, a validated profile, or a bundle. Checked before
+// anything under them is read. The root itself may be reached through a link.
+function requireSourcePath(dotfilesRoot, relative, kind) {
+    const parts = relative.split("/");
+    let current = dotfilesRoot;
+    for (const [index, part] of parts.entries()) {
+        current = path.join(current, part);
+        const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+        const shown = parts.slice(0, index + 1).join("/");
+        if (!stat) {
+            fail(`${shown} not found in the dotfiles repository`);
+        }
+        if (stat.isSymbolicLink()) {
+            fail(`${shown} is a symbolic link; setup reads only real files in the dotfiles repository`);
+        }
+        const wantDirectory = index < parts.length - 1 || kind === "directory";
+        if (wantDirectory ? !stat.isDirectory() : !stat.isFile()) {
+            fail(`${shown} is not a ${wantDirectory ? "directory" : "file"}`);
+        }
+    }
+    if (!isInsideOrSame(fs.realpathSync(current), fs.realpathSync(dotfilesRoot))) {
+        fail(`${relative} resolves outside the dotfiles repository`);
+    }
+    return current;
 }
 function requireUnreservedSkillName(name) {
     if ((0, skill_names_1.isReservedSkillName)(name)) {
@@ -169,10 +203,13 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope, beforeR
                 fail(`${filePath}: local must contain skill names`);
             }
             requireLocalSkillName(skillName);
-            const skillPath = path.join(localDir, skillName);
-            if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
+            // A link at skills, skills/local, or the skill root fails, wherever it
+            // points and even when dangling, like export; a missing entry is unknown.
+            requireSourcePath(dotfilesRoot, "skills/local", "directory");
+            if (!fs.lstatSync(path.join(localDir, skillName), { throwIfNoEntry: false })) {
                 fail(`unknown local skill ${skillName}`);
             }
+            requireSourcePath(dotfilesRoot, `skills/local/${skillName}`, "directory");
             localSkills.add(skillName);
         }
         loaded.add(name);

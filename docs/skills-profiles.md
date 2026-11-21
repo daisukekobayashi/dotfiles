@@ -499,6 +499,7 @@ Rules:
 - Duplicate skills are ignored.
 - Cyclic includes are errors.
 - Missing profiles, missing local skills, and malformed external entries are errors.
+- A selected local skill must be a real directory: `skills/`, `skills/local/`, and `skills/local/<name>` must not be symbolic links, wherever they point and even when dangling, and the skill must resolve inside the dotfiles checkout. See [Local Skills](#local-skills).
 - Domain profiles should generally stay independent. Compose `base` explicitly, or use a dedicated aggregate profile such as `workbench`.
 
 ## Initial Profiles
@@ -882,7 +883,7 @@ The bundle is built only from `skills/local/<name>/`, `skills/profiles/`, and `a
 
 Every exported skill, selected or added as a dependency, must have a regular file named exactly `SKILL.md` at its root. Every file name in a skill must be valid UTF-8. Each selected local skill is copied as a whole directory, including `scripts/` and `references/`, with its executable bits. The top-level `evals/` directory is skipped: it holds development fixtures for this repository. A symbolic link inside a selected skill, or a selected skill directory that is itself a symbolic link, fails the export.
 
-Every read stays inside the dotfiles checkout. Before reading anything under them, export requires `ai-rules/`, `skills/local/`, `skills/profiles/`, each selected skill directory, each profile file (including every `includes` entry), and each rule file to be real directories or files, not symbolic links, that resolve inside the checkout. A profile that fails to parse is reported by name and position only, never by its contents. Profile names, `includes` entries, and local skill names must each be one path component (`[A-Za-z0-9][A-Za-z0-9._-]*`), which install and validation also enforce.
+Every read stays inside the dotfiles checkout. Before reading anything under them, export requires `ai-rules/`, `skills/local/`, `skills/profiles/`, each selected skill directory, each profile file (including every `includes` entry), and each rule file to be real directories or files, not symbolic links, that resolve inside the checkout. A profile that fails to parse is reported by name and position only, never by its contents. Profile names, `includes` entries, and local skill names must each be one path component (`[A-Za-z0-9][A-Za-z0-9._-]*`), and `skills/local/` and each selected skill directory must not be symbolic links; install and validation also enforce both rules.
 
 The rules files are composed in Node with the same output as `ai-rules/scripts/compose-rules.sh <agent>` without `--with-metadata`, including any UTF-8 byte order mark (an override holding only a byte order mark counts as content, as with the script's `grep`), so `setup.ps1` can export without Bash. `ai-rules/base/global.md` is shared as is.
 
@@ -975,6 +976,8 @@ In project scope, the installs run in sequence in one private directory. When an
 ## Local Skills
 
 Local skills live under `skills/local/<name>` and are dotfiles-owned.
+
+Each selected local skill is a real directory in the checkout. When `skills/`, `skills/local/`, or `skills/local/<name>` is a symbolic link, even one pointing to another skill in `skills/local/` or a dangling one, `profile validate` and every install (user scope, project scope, and `--copy`) fail with `<path> is a symbolic link; setup reads only real files in the dotfiles repository` before any external install or any change to the user view or the project. The skill must also resolve inside the dotfiles checkout; the checkout itself may be reached through a link, such as `~/.dotfiles` linking to another directory. To develop a skill elsewhere, copy it into `skills/local/<name>` instead of linking it. Export enforces the same rule. Links inside a skill directory are not checked by install or validation.
 
 Project scope should symlink local skills into selected agent project skill directories:
 
