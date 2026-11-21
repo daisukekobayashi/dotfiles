@@ -714,7 +714,12 @@ test("Codex review runs stop only the process trees they started", async () => {
   assert.match(trees, /node <this skill>\/scripts\/stop-run-processes\.mjs record <worktree> "\$dir\/record\.json"/);
   assert.match(trees, /node <this skill>\/scripts\/stop-run-processes\.mjs stop <worktree> "\$dir\/record\.json"/);
   assert.match(trees, /After the run, whether it succeeded or failed/);
-  assert.match(trees, /absent from the record by PID and start time, `list-processes\.sh` lists it with reason `cwd under target` and a cwd without a backslash, its cwd is outside every worktree registered below the target, it has no tty, and its parent is pid 1 or another process the run started/);
+  assert.match(trees, /absent from the record by PID and start time, every lookup gives it the same start time, `list-processes\.sh` lists it with reason `cwd under target` and an exact cwd at or below the target \(no backslash, no ` \(deleted\)` suffix\), its cwd is outside every worktree registered below the target, it has no tty, and its parent is pid 1 or another process the run started/);
+  // #262 round 1: the record stays where a Codex run cannot write, other work stays out of the target, and no argv is reported.
+  assert.match(trees, /in a directory only you can access, outside the worktree, `\/tmp`, and `\$TMPDIR`, which a Codex `workspace-write` run can write, so the run cannot edit the record/);
+  assert.match(trees, /The script refuses a record in a writable root or in a directory others can access \(exit 2\)\./);
+  assert.match(trees, /While the run lasts, keep other work out of the target worktree\. The script reads ownership from the parent chain when it stops, so a process another session starts in the target during the run counts as started by the run once its parent has exited, and is stopped\./);
+  assert.match(trees, /its rows carry no command lines/);
   assert.match(trees, /A `--cwd` argument alone, a process that existed before the run, and one under a parent that did or under a new parent outside the target never count/);
   assert.match(trees, /never sends SIGKILL/);
   assert.match(trees, /Leftovers do not change the review result/);

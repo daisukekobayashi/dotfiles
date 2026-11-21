@@ -17,7 +17,10 @@ setup() {
   outside="$(mkdir -p "${BATS_TEST_TMPDIR}/outside" && cd "${BATS_TEST_TMPDIR}/outside" && pwd -P)"
   git -C "${target}" init -q
   git -C "${target}" commit -q --allow-empty -m init
-  record="${outside}/record.json"
+  # The record lives in a private directory outside /tmp and $TMPDIR, which a
+  # Codex run can write, and outside the bats temporary directory below them.
+  recdir="$(mktemp -d /var/tmp/stop-run-processes-test.XXXXXX)"
+  record="${recdir}/record.json"
   groups=()
 }
 
@@ -27,6 +30,8 @@ teardown() {
   for group in "${groups[@]}"; do
     kill -KILL -- "-${group}" 2>/dev/null || true
   done
+  [[ "${recdir:-}" == /var/tmp/stop-run-processes-test.* ]] && rm -rf -- "${recdir}"
+  true
 }
 
 # Starts "$2..." with cwd $1 the way the companion starts a broker: detached,
@@ -115,6 +120,9 @@ row_for() {
   gone "${root}"
   gone "${child}"
   [ "$(cat "${BATS_TEST_TMPDIR}/log")" = term ]
+  # Rows carry no command line: six columns, and no argument text.
+  [ -z "$(printf '%s\n' "${output}" | awk -F '\t' '$1 != "teardown" && NF != 6')" ]
+  [[ "${output}" != *"sleep 300"* ]]
 }
 
 @test "stop-run-processes leaves a process that existed before the run" {
@@ -249,12 +257,21 @@ EOF
   alive "${started}"
 }
 
-@test "stop-run-processes writes a private record outside the target and checks it" {
+@test "stop-run-processes writes a private record outside the target, /tmp, and TMPDIR" {
   run node "${script}"
   [ "${status}" -eq 2 ]
   run node "${script}" record "${target}" "${target}/record.json"
   [ "${status}" -eq 2 ]
   [ ! -e "${target}/record.json" ]
+  # The bats temporary directory lies under /tmp or $TMPDIR.
+  run --separate-stderr node "${script}" record "${target}" "${outside}/record.json"
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"outside the target, /tmp, and \$TMPDIR"* ]]
+  [ ! -e "${outside}/record.json" ]
+  mkdir -m 755 "${recdir}/shared"
+  run --separate-stderr node "${script}" record "${target}" "${recdir}/shared/record.json"
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"mode 700"* ]]
   run node "${script}" record "${target}" "${record}"
   [ "${status}" -eq 0 ]
   [ "$(node -e 'console.log((require("node:fs").statSync(process.argv[1]).mode & 0o777).toString(8))' "${record}")" = 600 ]
@@ -262,15 +279,120 @@ EOF
   [ "${status}" -eq 1 ]
   run node "${script}" record "${target}" "${record}"
   [ "${status}" -eq 2 ]
-  ln -s "${record}" "${outside}/link.json"
-  run node "${script}" record "${target}" "${outside}/link.json"
+  ln -s "${record}" "${recdir}/link.json"
+  run node "${script}" record "${target}" "${recdir}/link.json"
   [ "${status}" -eq 2 ]
 
   run --separate-stderr node "${script}" stop "${outside}" "${record}" --wait 1
   [ "${status}" -eq 1 ]
   [[ "${stderr}" == *"names another target"* ]]
-  run --separate-stderr node "${script}" stop "${target}" "${outside}/link.json" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${recdir}/link.json" --wait 1
   [ "${status}" -eq 1 ]
   run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 99
   [ "${status}" -eq 2 ]
+}
+
+# Writes JSON $1 as a private record file at ${record}.
+write_record() {
+  (umask 077 && printf '%s\n' "$1" >"${record}")
+}
+
+@test "stop-run-processes signals nothing for a malformed or foreign record" {
+  local one started bad
+  one="$(LC_ALL=C ps -p 1 -o lstart= | sed 's/^ *//; s/ *$//; s/  */ /g')"
+  start_detached "${target}" sleep 300
+  started="${started_pid}"
+  for bad in \
+    "{\"version\":1,\"target\":\"${target}\",\"processes\":[]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"processes\":[[1,\"${one}\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"processes\":[[\"2\",\"${one}\"]]}" \
+    "{\"version\":2,\"target\":\"${target}\",\"processes\":[[\"1\",\"${one}\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"processes\":[[\"1\",\"Thu Jan 1 00:00:00 1970\"]]}" \
+    "[]"; do
+    rm -f "${record}"
+    write_record "${bad}"
+    run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+    [ "${status}" -eq 1 ] || { echo "record ${bad}: status ${status}: ${output} ${stderr}"; return 1; }
+    [ -z "${output}" ]
+    alive "${started}"
+  done
+  # A well-formed record in a file others can read is refused too.
+  rm -f "${record}"
+  write_record "{\"version\":1,\"target\":\"${target}\",\"processes\":[[\"1\",\"${one}\"]]}"
+  chmod 644 "${record}"
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"mode 600"* ]]
+  alive "${started}"
+}
+
+@test "stop-run-processes leaves a cwd with a deleted suffix outside the target" {
+  local sibling="${target} (deleted)"
+  mkdir -p "${sibling}"
+  run node "${script}" record "${target}" "${record}"
+  [ "${status}" -eq 0 ]
+  start_detached "${sibling}" sleep 300
+  local outsider="${started_pid}"
+
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${outsider}" | cut -f1,6)" = "$(printf 'left\tcwd deleted')" ]
+  alive "${outsider}"
+}
+
+@test "stop-run-processes signals no process whose start times differ between lookups" {
+  local real bin="${BATS_TEST_TMPDIR}/bin" started
+  run node "${script}" record "${target}" "${record}"
+  [ "${status}" -eq 0 ]
+  start_detached "${target}" sleep 300
+  started="${started_pid}"
+  # The listing reads the start time after the cwd; another start time there
+  # is a PID reused between the two reads.
+  real="$(command -v ps)"
+  mkdir -p "${bin}"
+  cat >"${bin}/ps" <<EOF
+#!/usr/bin/env bash
+if [[ "\$*" == "-o lstart= -p ${started}" ]]; then
+  echo "Thu Jan  1 00:00:00 1970"
+  exit 0
+fi
+exec "${real}" "\$@"
+EOF
+  chmod +x "${bin}/ps"
+
+  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${started}" | cut -f1,6)" = "$(printf 'unverified\tstart time differs between lookups')" ]
+  alive "${started}"
+}
+
+@test "stop-run-processes bounds its lookups while waiting by the time left" {
+  local p real bin="${BATS_TEST_TMPDIR}/bin" root began
+  p="$(payload)"
+  run node "${script}" record "${target}" "${record}"
+  [ "${status}" -eq 0 ]
+  start_detached "${target}" "${p}" "${BATS_TEST_TMPDIR}/log" "${BATS_TEST_TMPDIR}/ready"
+  root="${started_pid}"
+  wait_for_file "${BATS_TEST_TMPDIR}/ready"
+  # A process table read that hangs after the two before any signal.
+  real="$(command -v ps)"
+  mkdir -p "${bin}"
+  cat >"${bin}/ps" <<EOF
+#!/usr/bin/env bash
+if [[ "\$1" == -A ]]; then
+  n=\$((\$(cat "${BATS_TEST_TMPDIR}/tables" 2>/dev/null || echo 0) + 1))
+  echo "\${n}" >"${BATS_TEST_TMPDIR}/tables"
+  if ((n > 2)); then sleep 60; fi
+fi
+exec "${real}" "\$@"
+EOF
+  chmod +x "${bin}/ps"
+
+  began="${SECONDS}"
+  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${root}" | cut -f1,6)" = "$(printf 'unverified\tps failed while waiting')" ]
+  # Without the bound the hung read would last 60 seconds.
+  [ "$((SECONDS - began))" -lt 50 ]
+  alive "${root}"
 }

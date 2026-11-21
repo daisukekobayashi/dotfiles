@@ -44,14 +44,22 @@ link.
 
 - **Record and stop.** Before the run, or before a set of runs started together
   for one worktree, `record` writes every process's PID and start time to a new
-  mode-0600 file outside the target. After the run, `stop` lists the target
-  with `list-processes.sh` and takes a new process table.
+  mode-0600 file. After the run, `stop` lists the target with
+  `list-processes.sh` between two process tables.
+- **A record the run cannot edit.** The record decides what existed before the
+  run, so it lives in a directory only the user can access, outside the
+  target, `/tmp`, and `$TMPDIR`, which a Codex `workspace-write` run can write;
+  the script refuses any other place. `stop` also refuses a record that is
+  empty, malformed, for another target, or whose pid 1 start time differs from
+  the current one, and signals nothing then.
 - **Ownership.** A process is one the run started only when it is absent from
-  the record by PID and start time, is listed with reason `cwd under target`
-  and a cwd without a backslash, lies outside every worktree registered below
-  the target, has no tty, and has pid 1 or 0, or another process the run
-  started, as its parent. Ownership comes from timing and location, never from
-  process names.
+  the record by PID and start time, both tables and the listing give it the
+  same start time (so its cwd and start time belong to one process), it is
+  listed with reason `cwd under target` and an exact cwd at or below the
+  target (normalized, with no backslash and no ` (deleted)` suffix), it lies
+  outside every worktree registered below the target, it has no tty, and it
+  has pid 1 or 0, or another process the run started, as its parent.
+  Ownership comes from timing and location, never from process names.
 - **Ancestry over the whole table.** A process under a parent that existed
   before the run, wherever that parent's cwd is, or under a new parent outside
   the target, is reported `left` and never signaled. Only pid 1 and 0 end the
@@ -62,10 +70,17 @@ link.
   process still running with the same start time, even reparented. Never
   SIGKILL, and never a process outside the started trees. Stops need no
   confirmation, since the run owns what it started.
-- **Failure.** When `list-processes.sh`, `ps`, or git cannot run, or the record
-  is unusable, the script exits 1 and signals nothing; the teardown is
-  reported unverified and left to worktree cleanup. Leftovers never change the
-  review result.
+- **Failure.** When `list-processes.sh`, `ps`, or git cannot run or runs past
+  its time bound, or the record is unusable, the script exits 1 and signals
+  nothing; the teardown is reported unverified and left to worktree cleanup.
+  Leftovers never change the review result. The report carries no command
+  lines, which may hold another session's secrets.
+- **Operating assumption.** Ownership is read from the parent chain at `stop`;
+  the chain of a process whose parent has exited is lost. While a review run
+  lasts, no other work runs in the target worktree. A process another session
+  starts there during the run counts as started by the run once its parent
+  has exited, and is stopped. The user accepted this risk in #262 rather than
+  tracking lineage during the run.
 
 ## Considered Options
 
@@ -92,8 +107,9 @@ link.
 - On a host where orphans are reparented to a pre-existing subreaper rather
   than pid 1, the run's leftovers are reported `left` and reach worktree
   cleanup, as before.
-- A process another session starts in the target during the run is stopped
-  only when its whole parent chain was also started during the run under the
-  target, such as a detached daemon that session launched there.
+- A process another session starts in the target during the run is left
+  while its parent lives; once that parent exits, such as a background command
+  whose shell ended or a detached daemon, it is stopped. Callers keep other
+  work out of the target during a review run.
 - Worktree cleanup (`github-worktree-cleanup`, `azure-devops-worktree-cleanup`)
   keeps its own confirmed stop; it may adopt the script later.
