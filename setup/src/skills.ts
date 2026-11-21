@@ -230,8 +230,7 @@ function writeMetadata(plan: SkillsPlan, outputFile: string): void {
 }
 
 function validateProfiles(dotfilesRoot: string, profilesCsv: string): void {
-  const profileDir = path.join(dotfilesRoot, "skills", "profiles");
-  const requestedProfiles = profilesCsv ? csv(profilesCsv) : listProfiles(profileDir);
+  const requestedProfiles = profilesCsv ? csv(profilesCsv) : listProfiles(dotfilesRoot);
   resolveProfiles(dotfilesRoot, requestedProfiles, ["codex"], "validate");
   console.log(`Profiles valid: ${requestedProfiles.join(",")}`);
 }

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type Agent, type ExternalSkillSource, csv, fail, isPathComponentName, parseAgents, resolveProfiles } from "./skill-profiles";
+import { type Agent, type ExternalSkillSource, csv, fail, isInsideOrSame, isPathComponentName, parseAgents, requireSourcePath, resolveProfiles } from "./skill-profiles";
 
 // Writes a self-contained bundle of profile-selected local skills, the local
 // skills they link to, a record of external skills, and composed agent rules.
@@ -119,12 +119,6 @@ function toPosix(relative: string): string {
   return relative.split(path.sep).join("/");
 }
 
-// Judges ".." by path component, so a child named "..share" stays inside.
-function isInsideOrSame(candidate: string, root: string): boolean {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-}
-
 // Resolves --out as the filesystem does: the longest existing prefix, as
 // written, is resolved by the operating system (links before ".."), and the
 // missing rest is appended. Path syntax is the platform's own, so a POSIX
@@ -187,33 +181,6 @@ function requireOutsideCheckout(out: string, dotfilesRoot: string): void {
       break;
     }
   }
-}
-
-// Source paths below the checkout root must be real directories or files,
-// never links, and resolve inside the checkout, so a link cannot bring other
-// files into a bundle. Checked before anything under them is read.
-function requireSourcePath(dotfilesRoot: string, relative: string, kind: "directory" | "file"): string {
-  const parts = relative.split("/");
-  let current = dotfilesRoot;
-  for (const [index, part] of parts.entries()) {
-    current = path.join(current, part);
-    const stat = fs.lstatSync(current, { throwIfNoEntry: false });
-    const shown = parts.slice(0, index + 1).join("/");
-    if (!stat) {
-      fail(`${shown} not found in the dotfiles repository`);
-    }
-    if (stat.isSymbolicLink()) {
-      fail(`${shown} is a symbolic link; export reads only real files in the dotfiles repository`);
-    }
-    const wantDirectory = index < parts.length - 1 || kind === "directory";
-    if (wantDirectory ? !stat.isDirectory() : !stat.isFile()) {
-      fail(`${shown} is not a ${wantDirectory ? "directory" : "file"}`);
-    }
-  }
-  if (!isInsideOrSame(fs.realpathSync(current), fs.realpathSync(dotfilesRoot))) {
-    fail(`${relative} resolves outside the dotfiles repository`);
-  }
-  return current;
 }
 
 // Reads text that must be strict UTF-8 without NUL; anything else, such as

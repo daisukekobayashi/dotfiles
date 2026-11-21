@@ -86,11 +86,6 @@ function parseExportArgs(argv) {
 function toPosix(relative) {
     return relative.split(path.sep).join("/");
 }
-// Judges ".." by path component, so a child named "..share" stays inside.
-function isInsideOrSame(candidate, root) {
-    const relative = path.relative(root, candidate);
-    return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
-}
 // Resolves --out as the filesystem does: the longest existing prefix, as
 // written, is resolved by the operating system (links before ".."), and the
 // missing rest is appended. Path syntax is the platform's own, so a POSIX
@@ -152,32 +147,6 @@ function requireOutsideCheckout(out, dotfilesRoot) {
             break;
         }
     }
-}
-// Source paths below the checkout root must be real directories or files,
-// never links, and resolve inside the checkout, so a link cannot bring other
-// files into a bundle. Checked before anything under them is read.
-function requireSourcePath(dotfilesRoot, relative, kind) {
-    const parts = relative.split("/");
-    let current = dotfilesRoot;
-    for (const [index, part] of parts.entries()) {
-        current = path.join(current, part);
-        const stat = fs.lstatSync(current, { throwIfNoEntry: false });
-        const shown = parts.slice(0, index + 1).join("/");
-        if (!stat) {
-            (0, skill_profiles_1.fail)(`${shown} not found in the dotfiles repository`);
-        }
-        if (stat.isSymbolicLink()) {
-            (0, skill_profiles_1.fail)(`${shown} is a symbolic link; export reads only real files in the dotfiles repository`);
-        }
-        const wantDirectory = index < parts.length - 1 || kind === "directory";
-        if (wantDirectory ? !stat.isDirectory() : !stat.isFile()) {
-            (0, skill_profiles_1.fail)(`${shown} is not a ${wantDirectory ? "directory" : "file"}`);
-        }
-    }
-    if (!isInsideOrSame(fs.realpathSync(current), fs.realpathSync(dotfilesRoot))) {
-        (0, skill_profiles_1.fail)(`${relative} resolves outside the dotfiles repository`);
-    }
-    return current;
 }
 // Reads text that must be strict UTF-8 without NUL; anything else, such as
 // UTF-16 or binary data, fails the export rather than going unscanned.
@@ -304,7 +273,7 @@ function requireSkillRoot(sources, name) {
     if (!fs.lstatSync(path.join(sources.localDir, name), { throwIfNoEntry: false })) {
         (0, skill_profiles_1.fail)(`unknown local skill ${name}`);
     }
-    const skillDir = requireSourcePath(sources.root, `skills/local/${name}`, "directory");
+    const skillDir = (0, skill_profiles_1.requireSourcePath)(sources.root, `skills/local/${name}`, "directory");
     // The entry must be named exactly SKILL.md, not another case of it.
     if (!fs.readdirSync(skillDir).includes("SKILL.md") || !fs.lstatSync(path.join(skillDir, "SKILL.md")).isFile()) {
         (0, skill_profiles_1.fail)(`local skill ${name} has no SKILL.md file`);
@@ -319,7 +288,7 @@ function skillDependencies(sources, skillDir, skillName) {
         const file = path.join(skillDir, relative);
         for (const reference of parseReferences(readText(file, `skills/${skillName}/${toPosix(relative)}`))) {
             const resolved = resolveReference(path.dirname(file), reference);
-            if (resolved && isInsideOrSame(resolved, sources.localDir) && resolved !== sources.localDir) {
+            if (resolved && (0, skill_profiles_1.isInsideOrSame)(resolved, sources.localDir) && resolved !== sources.localDir) {
                 const target = path.relative(sources.localDir, resolved).split(path.sep)[0] ?? "";
                 if (target !== skillName && (0, skill_profiles_1.isPathComponentName)(target) && fs.statSync(path.join(sources.localDir, target)).isDirectory()) {
                     dependencies.add(target);
@@ -401,7 +370,7 @@ function shellArg(value) {
 // so setup.ps1 can export without Bash.
 function composeRules(dotfilesRoot, overrideName) {
     // A byte order mark stays, as compose-rules.sh copies bytes unchanged.
-    const read = (relative) => decodeText(fs.readFileSync(requireSourcePath(dotfilesRoot, relative, "file")), relative, true);
+    const read = (relative) => decodeText(fs.readFileSync((0, skill_profiles_1.requireSourcePath)(dotfilesRoot, relative, "file")), relative, true);
     const docs = [read("ai-rules/base/global.md")];
     const overrideRelative = `ai-rules/agents/${overrideName}`;
     if (fs.lstatSync(path.join(dotfilesRoot, overrideRelative), { throwIfNoEntry: false })) {
@@ -865,14 +834,14 @@ function runExport(options, context, markers) {
     const say = (message) => console.log(markers.redact(message));
     const out = physicalPath(options.out);
     requireOutsideCheckout(out, context.dotfilesRoot);
-    const sources = { root: context.dotfilesRoot, localDir: requireSourcePath(context.dotfilesRoot, "skills/local", "directory") };
-    requireSourcePath(context.dotfilesRoot, "skills/profiles", "directory");
+    const sources = { root: context.dotfilesRoot, localDir: (0, skill_profiles_1.requireSourcePath)(context.dotfilesRoot, "skills/local", "directory") };
+    (0, skill_profiles_1.requireSourcePath)(context.dotfilesRoot, "skills/profiles", "directory");
     const plan = (0, skill_profiles_1.resolveProfiles)(context.dotfilesRoot, options.profiles, options.agents, "export", (_file, name) => {
         if (!(0, skill_profiles_1.isPathComponentName)(name)) {
             (0, skill_profiles_1.fail)(`Invalid profile name: ${name}`);
         }
         if (fs.lstatSync(path.join(context.dotfilesRoot, "skills", "profiles", `${name}.json`), { throwIfNoEntry: false })) {
-            requireSourcePath(context.dotfilesRoot, `skills/profiles/${name}.json`, "file");
+            (0, skill_profiles_1.requireSourcePath)(context.dotfilesRoot, `skills/profiles/${name}.json`, "file");
         }
     });
     requireSafeExternal(plan.external);
@@ -1006,7 +975,7 @@ function checkLinks(staging, contents) {
         const file = path.join(staging, ...relative.split("/"));
         for (const reference of parseReferences(decodeText(bytes, relative))) {
             const resolved = resolveReference(path.dirname(file), reference);
-            if (!resolved || !isInsideOrSame(resolved, skillsRoot)) {
+            if (!resolved || !(0, skill_profiles_1.isInsideOrSame)(resolved, skillsRoot)) {
                 unresolved.push(`${relative} -> ${reference}`);
             }
         }

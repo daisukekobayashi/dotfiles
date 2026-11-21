@@ -102,6 +102,40 @@ export function isPathComponentName(name: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
 }
 
+// Judges ".." by path component, so a child named "..share" stays inside.
+export function isInsideOrSame(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+// Source paths below the checkout root must be real directories or files,
+// never links, and resolve inside the checkout, so a link cannot bring other
+// files into an install, a validated profile, or a bundle. Checked before
+// anything under them is read. The root itself may be reached through a link.
+export function requireSourcePath(dotfilesRoot: string, relative: string, kind: "directory" | "file"): string {
+  const parts = relative.split("/");
+  let current = dotfilesRoot;
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+    const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+    const shown = parts.slice(0, index + 1).join("/");
+    if (!stat) {
+      fail(`${shown} not found in the dotfiles repository`);
+    }
+    if (stat.isSymbolicLink()) {
+      fail(`${shown} is a symbolic link; setup reads only real files in the dotfiles repository`);
+    }
+    const wantDirectory = index < parts.length - 1 || kind === "directory";
+    if (wantDirectory ? !stat.isDirectory() : !stat.isFile()) {
+      fail(`${shown} is not a ${wantDirectory ? "directory" : "file"}`);
+    }
+  }
+  if (!isInsideOrSame(fs.realpathSync(current), fs.realpathSync(dotfilesRoot))) {
+    fail(`${relative} resolves outside the dotfiles repository`);
+  }
+  return current;
+}
+
 function requireUnreservedSkillName(name: string): void {
   if (isReservedSkillName(name)) {
     fail(`Invalid or reserved skill name: ${name}`);
@@ -119,8 +153,17 @@ function profilePath(profileDir: string, name: string): string {
   return path.join(profileDir, `${name}.json`);
 }
 
-export function listProfiles(profileDir: string): string[] {
+// Before a profile or the profile directory is reported missing, a link at
+// skills or skills/profiles, such as a dangling one, is named instead. This
+// only changes the diagnostic: an existing profile is read as before.
+function requireNoLinkedProfileDir(dotfilesRoot: string): void {
+  requireSourcePath(dotfilesRoot, "skills/profiles", "directory");
+}
+
+export function listProfiles(dotfilesRoot: string): string[] {
+  const profileDir = path.join(dotfilesRoot, "skills", "profiles");
   if (!fs.existsSync(profileDir)) {
+    requireNoLinkedProfileDir(dotfilesRoot);
     fail(`skills profiles directory not found: ${profileDir}`);
   }
   return fs
@@ -159,6 +202,7 @@ export function resolveProfiles(
 
     const filePath = profilePath(profileDir, name);
     if (!fs.existsSync(filePath)) {
+      requireNoLinkedProfileDir(dotfilesRoot);
       fail(`unknown profile ${name}`);
     }
 
@@ -207,9 +251,18 @@ export function resolveProfiles(
         fail(`${filePath}: local must contain skill names`);
       }
       requireLocalSkillName(skillName);
-      const skillPath = path.join(localDir, skillName);
-      if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
+      // A link at skills, skills/local, or the skill root fails, wherever it
+      // points and even when dangling; a missing entry is unknown. Export
+      // checks skills/local itself and applies the same check after
+      // --exclude, only to the skills it keeps and their dependencies.
+      if (scope !== "export") {
+        requireSourcePath(dotfilesRoot, "skills/local", "directory");
+      }
+      if (!fs.lstatSync(path.join(localDir, skillName), { throwIfNoEntry: false })) {
         fail(`unknown local skill ${skillName}`);
+      }
+      if (scope !== "export") {
+        requireSourcePath(dotfilesRoot, `skills/local/${skillName}`, "directory");
       }
       localSkills.add(skillName);
     }

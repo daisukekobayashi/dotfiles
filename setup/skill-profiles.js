@@ -6,6 +6,8 @@ exports.parseAgent = parseAgent;
 exports.parseAgents = parseAgents;
 exports.readJson = readJson;
 exports.isPathComponentName = isPathComponentName;
+exports.isInsideOrSame = isInsideOrSame;
+exports.requireSourcePath = requireSourcePath;
 exports.listProfiles = listProfiles;
 exports.resolveProfiles = resolveProfiles;
 const fs = require("node:fs");
@@ -79,6 +81,38 @@ function getObjectProperty(value, key) {
 function isPathComponentName(name) {
     return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
 }
+// Judges ".." by path component, so a child named "..share" stays inside.
+function isInsideOrSame(candidate, root) {
+    const relative = path.relative(root, candidate);
+    return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+// Source paths below the checkout root must be real directories or files,
+// never links, and resolve inside the checkout, so a link cannot bring other
+// files into an install, a validated profile, or a bundle. Checked before
+// anything under them is read. The root itself may be reached through a link.
+function requireSourcePath(dotfilesRoot, relative, kind) {
+    const parts = relative.split("/");
+    let current = dotfilesRoot;
+    for (const [index, part] of parts.entries()) {
+        current = path.join(current, part);
+        const stat = fs.lstatSync(current, { throwIfNoEntry: false });
+        const shown = parts.slice(0, index + 1).join("/");
+        if (!stat) {
+            fail(`${shown} not found in the dotfiles repository`);
+        }
+        if (stat.isSymbolicLink()) {
+            fail(`${shown} is a symbolic link; setup reads only real files in the dotfiles repository`);
+        }
+        const wantDirectory = index < parts.length - 1 || kind === "directory";
+        if (wantDirectory ? !stat.isDirectory() : !stat.isFile()) {
+            fail(`${shown} is not a ${wantDirectory ? "directory" : "file"}`);
+        }
+    }
+    if (!isInsideOrSame(fs.realpathSync(current), fs.realpathSync(dotfilesRoot))) {
+        fail(`${relative} resolves outside the dotfiles repository`);
+    }
+    return current;
+}
 function requireUnreservedSkillName(name) {
     if ((0, skill_names_1.isReservedSkillName)(name)) {
         fail(`Invalid or reserved skill name: ${name}`);
@@ -93,8 +127,16 @@ function requireLocalSkillName(name) {
 function profilePath(profileDir, name) {
     return path.join(profileDir, `${name}.json`);
 }
-function listProfiles(profileDir) {
+// Before a profile or the profile directory is reported missing, a link at
+// skills or skills/profiles, such as a dangling one, is named instead. This
+// only changes the diagnostic: an existing profile is read as before.
+function requireNoLinkedProfileDir(dotfilesRoot) {
+    requireSourcePath(dotfilesRoot, "skills/profiles", "directory");
+}
+function listProfiles(dotfilesRoot) {
+    const profileDir = path.join(dotfilesRoot, "skills", "profiles");
     if (!fs.existsSync(profileDir)) {
+        requireNoLinkedProfileDir(dotfilesRoot);
         fail(`skills profiles directory not found: ${profileDir}`);
     }
     return fs
@@ -124,6 +166,7 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope, beforeR
         }
         const filePath = profilePath(profileDir, name);
         if (!fs.existsSync(filePath)) {
+            requireNoLinkedProfileDir(dotfilesRoot);
             fail(`unknown profile ${name}`);
         }
         beforeRead?.(filePath, name);
@@ -169,9 +212,18 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope, beforeR
                 fail(`${filePath}: local must contain skill names`);
             }
             requireLocalSkillName(skillName);
-            const skillPath = path.join(localDir, skillName);
-            if (!fs.existsSync(skillPath) || !fs.statSync(skillPath).isDirectory()) {
+            // A link at skills, skills/local, or the skill root fails, wherever it
+            // points and even when dangling; a missing entry is unknown. Export
+            // checks skills/local itself and applies the same check after
+            // --exclude, only to the skills it keeps and their dependencies.
+            if (scope !== "export") {
+                requireSourcePath(dotfilesRoot, "skills/local", "directory");
+            }
+            if (!fs.lstatSync(path.join(localDir, skillName), { throwIfNoEntry: false })) {
                 fail(`unknown local skill ${skillName}`);
+            }
+            if (scope !== "export") {
+                requireSourcePath(dotfilesRoot, `skills/local/${skillName}`, "directory");
             }
             localSkills.add(skillName);
         }

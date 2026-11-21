@@ -473,6 +473,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - 重複 skill は無視する。
 - 循環 include はエラーにする。
 - 存在しない profile、存在しない local skill、不正な external entry はエラーにする。
+- 選択した local skill は実際のディレクトリでなければならない。`skills/`、`skills/local/`、`skills/local/<name>` は、リンク先がどこでも、リンク切れでも、シンボリックリンクであってはならず、skill は dotfiles のチェックアウト内に解決されなければならない。[Local Skills](#local-skills) を参照。
 - domain profile は原則として独立させる。`base` が必要な場合は明示的に組み合わせるか、`workbench` のような集約 profile を使う。
 
 ## 初期 Profile
@@ -847,7 +848,7 @@ Profile add/remove の補助コマンドは初期実装の対象外にします�
 
 選択した skill も依存として追加した skill も、ルートに名前がちょうど `SKILL.md` の通常のファイルを持つ必要があります。skill 内のファイル名はすべて正しい UTF-8 でなければなりません。選択した local skill は `scripts/` や `references/` を含むディレクトリ全体を、実行ビットを保ったままコピーします。最上位の `evals/` はこのリポジトリ用の開発フィクスチャなのでコピーしません。選択した skill の中にシンボリックリンクがある場合や、選択した skill のディレクトリ自体がシンボリックリンクの場合、export は失敗します。
 
-読み取りはすべて dotfiles のチェックアウト内に限ります。Export は中身を読む前に、`ai-rules/`、`skills/local/`、`skills/profiles/`、選択した各 skill ディレクトリ、各 profile ファイル (`includes` で読むものを含む)、各ルールファイルが、シンボリックリンクではない実際のディレクトリまたはファイルで、チェックアウト内に解決されることを確認します。パースに失敗した profile は名前と位置だけを報告し、内容は表示しません。Profile 名、`includes` の各要素、local skill 名はそれぞれ 1 つのパス要素 (`[A-Za-z0-9][A-Za-z0-9._-]*`) でなければなりません。この制約はインストールと検証でも同じです。
+読み取りはすべて dotfiles のチェックアウト内に限ります。Export は中身を読む前に、`ai-rules/`、`skills/local/`、`skills/profiles/`、選択した各 skill ディレクトリ、各 profile ファイル (`includes` で読むものを含む)、各ルールファイルが、シンボリックリンクではない実際のディレクトリまたはファイルで、チェックアウト内に解決されることを確認します。パースに失敗した profile は名前と位置だけを報告し、内容は表示しません。Profile 名、`includes` の各要素、local skill 名はそれぞれ 1 つのパス要素 (`[A-Za-z0-9][A-Za-z0-9._-]*`) でなければならず、`skills/local/` と選択した各 skill ディレクトリはシンボリックリンクであってはなりません。この 2 つの制約はインストールと検証でも同じです。
 
 ルールファイルは Node で組み立て、`ai-rules/scripts/compose-rules.sh <agent>` を `--with-metadata` なしで実行した結果と同じ内容 (UTF-8 のバイトオーダーマークも含む。スクリプトの `grep` と同じく、バイトオーダーマークだけの上書きファイルも内容ありとして扱う) にします。これにより `setup.ps1` からも Bash なしで export できます。`ai-rules/base/global.md` はそのまま共有します。
 
@@ -940,6 +941,8 @@ project scope では、各インストールを1つのプライベートディ�
 ## Local Skills
 
 Local skill は `skills/local/<name>` に置き、dotfiles が正本です。
+
+選択した各 local skill はチェックアウト内の実際のディレクトリです。`skills/`、`skills/local/`、`skills/local/<name>` がシンボリックリンクの場合は、`skills/local/` 内の別の skill を指すものやリンク切れのものでも、`profile validate` とすべてのインストール (user scope、project scope、`--copy`) が、external のインストールや user view と project への変更の前に `<path> is a symbolic link; setup reads only real files in the dotfiles repository` で失敗します。Skill は dotfiles のチェックアウト内に解決される必要もあります。チェックアウト自体へは、`~/.dotfiles` から別のディレクトリへのリンクのように、リンク経由で到達してもかまいません。別の場所で skill を開発する場合は、リンクせずに `skills/local/<name>` へコピーします。Export も、`--exclude` の後に残る skill とその依存先に同じ規則を適用します。`--exclude` で外したリンクの skill では export は失敗しません。Skill ディレクトリ内のリンクは、インストールと検証では確認しません。
 
 Project scope では、選択した agent の project skill ディレクトリに local skill を symlink します。
 
