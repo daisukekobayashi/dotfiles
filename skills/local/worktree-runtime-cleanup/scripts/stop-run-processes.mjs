@@ -51,8 +51,8 @@
 //   0  stop: every started process exited, or the run started none; record:
 //      written
 //   1  could not run, and nothing was signaled: list-processes.sh, ps, or git
-//      failed or wrote to stderr, or the record is unreadable or names another
-//      target. The teardown is unverified.
+//      failed, wrote to stderr, or ran past 120 seconds, or the record is
+//      unreadable or names another target. The teardown is unverified.
 //   2  usage error: an unknown subcommand or option, a target that is not a
 //      directory, or a record path that exists or lies inside the target
 //   3  stop: a started process is still running or unverified
@@ -89,11 +89,14 @@ const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 
 const under = (dir, root) => dir === root || dir.startsWith(root.endsWith("/") ? root : `${root}/`);
 
-// Runs a lookup and returns its stdout; a non-zero exit or any stderr means
-// it cannot run, as in check-cleanup-targets.mjs.
+// Runs a lookup and returns its stdout; a non-zero exit, any stderr, or a
+// lookup still running after LOOKUP_TIMEOUT_MS means it cannot run, as in
+// check-cleanup-targets.mjs.
+const LOOKUP_TIMEOUT_MS = 120_000;
 const run = (label, command, args) => {
-  const result = spawnSync(command, args, { encoding: "utf8", env, maxBuffer: 64 * 1024 * 1024 });
+  const result = spawnSync(command, args, { encoding: "utf8", env, maxBuffer: 64 * 1024 * 1024, timeout: LOOKUP_TIMEOUT_MS });
   const stderr = (result.stderr ?? "").trim();
+  if (result.error?.code === "ETIMEDOUT") throw new Unavailable(`${label} did not finish within ${LOOKUP_TIMEOUT_MS / 1000} seconds`);
   if (result.status !== 0 || stderr !== "") {
     const reason = (stderr || result.error?.message || "").split("\n")[0];
     throw new Unavailable(`${label} ${result.status === 0 ? "reported an error" : `exited ${result.status ?? result.signal}`}${reason ? `: ${reason}` : ""}`);
@@ -218,7 +221,7 @@ const nestedWorktrees = (target) => {
 // The start time of one process now: a string, "" when it is gone, or null
 // when it cannot be read.
 const startOf = (pid) => {
-  const result = spawnSync("ps", ["-p", pid, "-o", "lstart="], { encoding: "utf8", env });
+  const result = spawnSync("ps", ["-p", pid, "-o", "lstart="], { encoding: "utf8", env, timeout: 10_000 });
   const started = normalize(result.stdout ?? "");
   if (result.status === 0 && started !== "") return started;
   try {
