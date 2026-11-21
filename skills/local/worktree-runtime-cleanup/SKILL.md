@@ -13,8 +13,8 @@ verification evidence.
 Worktree cleanup skills (`github-worktree-cleanup`,
 `azure-devops-worktree-cleanup`, `beads-merge-cleanup`) read this file and run
 it for the worktree they are about to remove. Review skills that run Codex
-follow only [Brokers Started by a Codex Review](#brokers-started-by-a-codex-review),
-so a broker found at cleanup is a leak to report.
+follow only [Process Trees Started by a Codex Review](#process-trees-started-by-a-codex-review),
+so a broker or sandboxed command tree found at cleanup is a leak to report.
 
 A confirmation a cleanup skill obtained from its Caller preview covers only the
 runtime resources listed there with the same identifiers: processes by PID,
@@ -72,50 +72,53 @@ cleanup session, so discover them from process state.
    alone does not establish cleanup. Report remaining processes and unverified
    ownership explicitly.
 
-## Brokers Started by a Codex Review
+## Process Trees Started by a Codex Review
 
 `change-review`, `change-adversarial-review`, and `change-security-review`
 follow this section around each Codex companion run for a target worktree. The
-run owns the brokers it starts, so stopping them needs no confirmation; the stop
-covers only the processes recorded below and sends only SIGTERM. Runs started
-together for one worktree as a set count as one run: record the first list
-before any starts and the second after all end.
+run owns the process trees it starts under the target: the companion's
+`app-server-broker.mjs` with its `codex app-server`, and the sandboxed commands
+Codex runs, such as `codex-linux-sandbox -> node -> git hash-object --stdin`,
+which can outlive the run, blocked on input, after their parent exits.
+Stopping them needs no confirmation. `scripts/stop-run-processes.mjs` in this
+skill's directory decides which processes the run started, sends them only
+SIGTERM, and signals nothing else; its header states the rules. Runs started
+together for one worktree as a set count as one run: record before any starts
+and stop after all end.
 
-1. Before the run, record `scripts/list-processes.sh <worktree>` in this
-   skill's directory. Take both lists under the same locale, because `started`
-   follows it. Save each full list outside the worktree, check its exit status,
-   and only then read it with `LC_ALL=C` tools.
-2. After the run, whether it succeeded or failed, list again. A process running
-   `app-server-broker.mjs` is a broker this run started only when it is absent
-   from the first list, by PID and start time, and its `cwd` column in the
-   second list equals exactly the target worktree root. The companion starts
-   the broker with its cwd set to the `--cwd` path, so the untruncated `cwd`
-   column carries that path. The `command` column is cut to 200 bytes and
-   never establishes ownership. A missing, unreadable, or ` (deleted)` cwd is
-   not an exact match, nor is a `cwd` column containing a backslash: the script
-   escapes control bytes and backslashes in the path, and a `cwd ambiguous`
-   row always carries one. The list also matches paths below the target, such
-   as a nested worktree; prefix matching never establishes ownership here. Report
-   any other listed broker,
-   whether pre-existing or under the target without equaling it, and leave it
-   running. If the run started none, report that and stop here.
-3. Record each started broker's tree from the second list: the broker and every
-   listed process descending from it by `ppid`, with PID and start time.
-4. Immediately before signaling, recheck each broker's PID and start time; if
-   they no longer match, leave it and report it as unverified. Send SIGTERM to
-   each broker.
-5. Re-list for up to about 10 seconds until the recorded processes exit. Send
-   SIGTERM once to each recorded process still running whose PID and start time
-   match, even if it was reparented. Never signal a process outside the recorded
-   tree, and never use SIGKILL.
-6. Report the stopped brokers, any broker left running, and recorded processes
-   still running. Leftovers do not change the review result; cleanup under
-   [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
+1. Before the run, record the process table in a new directory outside the
+   worktree:
+
+   ```text
+   dir="$(mktemp -d)" &&
+     node <this skill>/scripts/stop-run-processes.mjs record <worktree> "$dir/record.json"
+   ```
+
+   A non-zero exit leaves no usable record: run the review, report the
+   teardown as unverified, and skip step 2.
+2. After the run, whether it succeeded or failed, run
+   `node <this skill>/scripts/stop-run-processes.mjs stop <worktree> "$dir/record.json"`,
+   then remove `$dir`. A process is one the run started only when it is absent
+   from the record by PID and start time, `list-processes.sh` lists it with
+   reason `cwd under target` and a cwd without a backslash, its cwd is outside
+   every worktree registered below the target, it has no tty, and its parent is
+   pid 1 or another process the run started. A `--cwd` argument alone, a
+   process that existed before the run, and one under a parent that did or
+   under a new parent outside the target never count: the script reports them
+   as `left` and leaves them running. It sends SIGTERM to the top of each
+   started tree after rechecking its PID and start time, waits about 10
+   seconds, sends SIGTERM once more to each started process still running
+   whose PID and start time match, even if reparented, and never sends SIGKILL.
+3. Report its output with the review. Exit 0 means every started process
+   exited, or the run started none; exit 3 means a started process is still
+   running or unverified. Leftovers do not change the review result; cleanup
+   under [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
    handles them before the worktree is removed.
 
-When `list-processes.sh` cannot run or exits non-zero, such as without bash,
-`/proc`, or a working `lsof`, its listing is unavailable, never empty: report
-the teardown as unverified and leave it to cleanup.
+Exit 1 means the teardown could not run and signaled nothing, such as when
+`list-processes.sh` cannot run without bash, `/proc`, or a working `lsof`, or
+when `ps` or git fails: its listing is unavailable, never empty. Report the
+teardown as unverified and leave it to cleanup.
 
 ## Compose Stacks
 
