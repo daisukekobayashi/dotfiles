@@ -1,7 +1,7 @@
 # Codex・Claude Codeでのスキル評価
 
 `evaluate-skill` を呼ぶと、エージェントが課題の選定、分離した環境での候補実行、
-採点、結果の整理まで進めます。`pstack` profile に含まれ、Codex・Claude Codeで
+採点、結果の整理まで進めます。`base` profile に含まれ、Codex・Claude Codeで
 同じ本文を使います。
 
 ```text
