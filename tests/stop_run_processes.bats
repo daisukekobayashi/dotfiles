@@ -17,13 +17,9 @@ setup() {
   outside="$(mkdir -p "${BATS_TEST_TMPDIR}/outside" && cd "${BATS_TEST_TMPDIR}/outside" && pwd -P)"
   git -C "${target}" init -q
   git -C "${target}" commit -q --allow-empty -m init
-  # The record lives in a private directory outside /tmp and $TMPDIR, which a
-  # Codex run can write, and outside the bats temporary directory below them.
-  recdir="$(mktemp -d /var/tmp/stop-run-processes-test.XXXXXX)"
+  recdir="${BATS_TEST_TMPDIR}/records"
+  mkdir -m 700 "${recdir}"
   record="${recdir}/record.json"
-  # An empty Codex home, so the user's configuration never changes a result.
-  export CODEX_HOME="${BATS_TEST_TMPDIR}/codex-home"
-  mkdir -p "${CODEX_HOME}"
   groups=()
 }
 
@@ -33,8 +29,15 @@ teardown() {
   for group in "${groups[@]}"; do
     kill -KILL -- "-${group}" 2>/dev/null || true
   done
-  [[ "${recdir:-}" == /var/tmp/stop-run-processes-test.* ]] && rm -rf -- "${recdir}"
-  true
+}
+
+# Runs record for ${target} into ${record} with the script $1 (default
+# ${script}) and sets sum to the SHA-256 it printed.
+record_now() {
+  run --separate-stderr node "${1:-${script}}" record "${target}" "${record}"
+  [ "${status}" -eq 0 ] || { echo "record: status ${status}: ${stderr}"; return 1; }
+  [[ "${output}" =~ ^sha256\ ([0-9a-f]{64})$ ]] || { echo "record printed: ${output}"; return 1; }
+  sum="${BASH_REMATCH[1]}"
 }
 
 # Starts "$2..." with cwd $1 the way the companion starts a broker: detached,
@@ -107,15 +110,14 @@ row_for() {
 @test "stop-run-processes stops a tree the run started, including an orphaned child" {
   local p root child
   p="$(payload)"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   mkdir -p "${target}/sub"
   start_detached "${target}/sub" "${p}" "${BATS_TEST_TMPDIR}/log" "${BATS_TEST_TMPDIR}/ready" "${BATS_TEST_TMPDIR}/child"
   root="${started_pid}"
   wait_for_file "${BATS_TEST_TMPDIR}/ready"
   child="$(cat "${BATS_TEST_TMPDIR}/child")"
 
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 2
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 2
   [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${root}" | cut -f1)" = stopped ]
   [ "$(row_for "${child}" | cut -f1)" = stopped-retry ]
@@ -131,10 +133,9 @@ row_for() {
 @test "stop-run-processes leaves a process that existed before the run" {
   start_detached "${target}" sleep 300
   local pre="${started_pid}"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
 
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 0 ]
   [ "$(row_for "${pre}" | cut -f1,6)" = "$(printf 'left\texisted before the run')" ]
   [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tnone')" ]
@@ -155,8 +156,7 @@ EOF
   # Another session's shell: it existed before the run and its cwd is outside.
   start_detached "${outside}" "${spawner}" "${BATS_TEST_TMPDIR}/go" "${target}" "${BATS_TEST_TMPDIR}/child1"
   pre="${started_pid}"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   touch "${BATS_TEST_TMPDIR}/go"
   wait_for_file "${BATS_TEST_TMPDIR}/child1"
   child1="$(cat "${BATS_TEST_TMPDIR}/child1")"
@@ -166,7 +166,7 @@ EOF
   wait_for_file "${BATS_TEST_TMPDIR}/child2"
   child2="$(cat "${BATS_TEST_TMPDIR}/child2")"
 
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${child1}" | cut -f1,6)" = "$(printf 'left\tparent %s existed before the run' "${pre}")" ]
   [ "$(row_for "${child2}" | cut -f1,6)" = "$(printf 'left\tparent %s is a new process outside the target' "${new}")" ]
@@ -179,14 +179,13 @@ EOF
 @test "stop-run-processes leaves a nested worktree process and reports an ambiguous cwd unverified" {
   git -C "${target}" worktree add -q --detach "${target}/nested"
   mkdir -p "${target}/a\\b"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   start_detached "${target}/nested" sleep 300
   local nested="${started_pid}"
   start_detached "${target}/a\\b" sleep 300
   local ambiguous="${started_pid}"
 
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${nested}" | cut -f1,6)" = "$(printf 'left\tin nested worktree %s' "${target}/nested")" ]
   [ "$(row_for "${ambiguous}" | cut -f1,6)" = "$(printf 'unverified\tcwd ambiguous')" ]
@@ -198,8 +197,7 @@ EOF
 @test "stop-run-processes signals no process whose start time changed" {
   local p real bin="${BATS_TEST_TMPDIR}/bin" root
   p="$(payload)"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   start_detached "${target}" "${p}" "${BATS_TEST_TMPDIR}/log" "${BATS_TEST_TMPDIR}/ready"
   root="${started_pid}"
   wait_for_file "${BATS_TEST_TMPDIR}/ready"
@@ -217,7 +215,7 @@ exec "${real}" "\$@"
 EOF
   chmod +x "${bin}/ps"
 
-  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${root}" | cut -f1,6)" = "$(printf 'unverified\tstart time changed')" ]
   [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
@@ -228,13 +226,12 @@ EOF
 @test "stop-run-processes sends SIGTERM twice at most and never SIGKILL" {
   local p root
   p="$(payload)"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   start_detached "${target}" "${p}" "${BATS_TEST_TMPDIR}/log" "${BATS_TEST_TMPDIR}/ready"
   root="${started_pid}"
   wait_for_file "${BATS_TEST_TMPDIR}/ready"
 
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${root}" | cut -f1)" = running ]
   sleep 0.5
@@ -249,35 +246,29 @@ EOF
   mkdir -p "${copy}"
   cp -R "$(repo_root)/skills/local/worktree-runtime-cleanup/scripts" "${copy}/"
   printf '#!/usr/bin/env bash\necho "lsof failed" >&2\nexit 1\n' >"${copy}/scripts/list-processes.sh"
-  run node "${copy}/scripts/stop-run-processes.mjs" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now "${copy}/scripts/stop-run-processes.mjs"
   start_detached "${target}" sleep 300
   local started="${started_pid}"
 
-  run --separate-stderr node "${copy}/scripts/stop-run-processes.mjs" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${copy}/scripts/stop-run-processes.mjs" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 1 ]
   [ -z "${output}" ]
   [[ "${stderr}" == *"list-processes.sh exited 1: lsof failed; the teardown is unverified and nothing was signaled"* ]]
   alive "${started}"
 }
 
-@test "stop-run-processes writes a private record outside the target, /tmp, and TMPDIR" {
+@test "stop-run-processes writes a private record outside the target and prints its SHA-256" {
   run node "${script}"
   [ "${status}" -eq 2 ]
   run node "${script}" record "${target}" "${target}/record.json"
   [ "${status}" -eq 2 ]
   [ ! -e "${target}/record.json" ]
-  # The bats temporary directory lies under /tmp or $TMPDIR.
-  run --separate-stderr node "${script}" record "${target}" "${outside}/record.json"
-  [ "${status}" -eq 2 ]
-  [[ "${stderr}" == *"outside the target, /tmp, \$TMPDIR, and every root a Codex run can write"* ]]
-  [ ! -e "${outside}/record.json" ]
   mkdir -m 755 "${recdir}/shared"
   run --separate-stderr node "${script}" record "${target}" "${recdir}/shared/record.json"
   [ "${status}" -eq 2 ]
   [[ "${stderr}" == *"mode 700"* ]]
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
+  [ "${sum}" = "$(node -e 'console.log(require("node:crypto").createHash("sha256").update(require("node:fs").readFileSync(process.argv[1])).digest("hex"))' "${record}")" ]
   [ "$(node -e 'console.log((require("node:fs").statSync(process.argv[1]).mode & 0o777).toString(8))' "${record}")" = 600 ]
   run grep -q sleep "${record}"
   [ "${status}" -eq 1 ]
@@ -287,18 +278,20 @@ EOF
   run node "${script}" record "${target}" "${recdir}/link.json"
   [ "${status}" -eq 2 ]
 
-  run --separate-stderr node "${script}" stop "${outside}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${outside}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 1 ]
   [[ "${stderr}" == *"names another target"* ]]
-  run --separate-stderr node "${script}" stop "${target}" "${recdir}/link.json" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${recdir}/link.json" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 1 ]
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 99
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 99
   [ "${status}" -eq 2 ]
 }
 
-# Writes JSON $1 as a private record file at ${record}.
+# Writes JSON $1 as a private record file at ${record} and sets sum to its
+# SHA-256, as a caller would keep it.
 write_record() {
   (umask 077 && printf '%s\n' "$1" >"${record}")
+  sum="$(node -e 'console.log(require("node:crypto").createHash("sha256").update(require("node:fs").readFileSync(process.argv[1])).digest("hex"))' "${record}")"
 }
 
 # The start time of pid $1 as the record holds it.
@@ -327,7 +320,7 @@ lstart_of() {
     "[]"; do
     rm -f "${record}"
     write_record "${bad}"
-    run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+    run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
     [ "${status}" -eq 1 ] || { echo "record ${bad}: status ${status}: ${output} ${stderr}"; return 1; }
     [ -z "${output}" ]
     alive "${started}"
@@ -336,25 +329,24 @@ lstart_of() {
   rm -f "${record}"
   write_record "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[${good}]}"
   chmod 644 "${record}"
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 1 ]
   [[ "${stderr}" == *"mode 600"* ]]
   alive "${started}"
   # The same record, private, is accepted.
   chmod 600 "${record}"
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
 }
 
 @test "stop-run-processes reports a cwd with a deleted suffix unverified and never signals it" {
   local sibling="${target} (deleted)"
   mkdir -p "${sibling}"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   start_detached "${sibling}" sleep 300
   local outsider="${started_pid}"
 
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${outsider}" | cut -f1,6)" = "$(printf 'unverified\tcwd deleted')" ]
   [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
@@ -365,8 +357,7 @@ lstart_of() {
   local copy="${BATS_TEST_TMPDIR}/skill" orphan started
   mkdir -p "${copy}"
   cp -R "$(repo_root)/skills/local/worktree-runtime-cleanup/scripts" "${copy}/"
-  run node "${copy}/scripts/stop-run-processes.mjs" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now "${copy}/scripts/stop-run-processes.mjs"
   # The run's orphan, whose cwd under the target was removed: Linux lists it
   # with a " (deleted)" suffix, which this listing reproduces.
   start_detached "${target}" sleep 300
@@ -375,77 +366,80 @@ lstart_of() {
   printf '#!/usr/bin/env bash\nprintf "%%s\\t1\\t?\\t%%s\\t%%s\\tcwd under target\\tsleep 300\\n" %q %q %q\n' \
     "${orphan}" "${started}" "${target}/gone (deleted)" >"${copy}/scripts/list-processes.sh"
 
-  run --separate-stderr node "${copy}/scripts/stop-run-processes.mjs" stop "${target}" "${record}" --wait 1
+  run --separate-stderr node "${copy}/scripts/stop-run-processes.mjs" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${orphan}" | cut -f1,5,6)" = "$(printf 'unverified\t%s\tcwd deleted' "${target}/gone (deleted)")" ]
   [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
   alive "${orphan}"
 }
 
-@test "stop-run-processes keeps the record outside the configured Codex writable roots" {
-  local outer
-  outer="$(dirname "${recdir}")"
-  # A comment and other keys do not count.
-  printf '# writable_roots = ["/"]\n[sandbox_workspace_write]\nnetwork_access = true\n' >"${CODEX_HOME}/config.toml"
-  run --separate-stderr node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ] || { echo "status ${status}: ${stderr}"; return 1; }
-
-  # A root in the user configuration, in a profile, or in the target's project
-  # configuration covers the record: record refuses, stop signals nothing.
+@test "stop-run-processes signals nothing for a record that differs from its SHA-256" {
   start_detached "${target}" sleep 300
   local started="${started_pid}"
-  for config in \
-    "[sandbox_workspace_write]
-writable_roots = [\"${recdir}\"]" \
-    "profile = \"p\"
-[profiles.p.sandbox_workspace_write]
-writable_roots = [
-  '/nonexistent', # a comment
-  '${outer}',
-]"; do
-    printf '%s\n' "${config}" >"${CODEX_HOME}/config.toml"
-    run --separate-stderr node "${script}" record "${target}" "${recdir}/second.json"
-    [ "${status}" -eq 2 ] || { echo "config ${config}: status ${status}: ${stderr}"; return 1; }
-    [[ "${stderr}" == *"every root a Codex run can write"* ]]
-    run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
-    [ "${status}" -eq 1 ] || { echo "config ${config}: status ${status}: ${output} ${stderr}"; return 1; }
-    [ -z "${output}" ]
-  done
-  : >"${CODEX_HOME}/config.toml"
-  mkdir -p "${target}/.codex"
-  printf 'sandbox_workspace_write = { writable_roots = ["%s"] }\n' "${recdir}" >"${target}/.codex/config.toml"
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
-  [ "${status}" -eq 1 ]
-  rm -r "${target}/.codex"
+  record_now
+  # A run that could write the record drops the pre-existing processes it
+  # wants stopped; the file keeps its mode and format.
+  node -e '
+    const fs = require("node:fs");
+    const r = JSON.parse(fs.readFileSync(process.argv[1]));
+    r.processes = r.processes.filter(([pid]) => pid === "1" || pid === r.recorder);
+    fs.writeFileSync(process.argv[1], JSON.stringify(r) + "\n");
+  ' "${record}"
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
+  [ "${status}" -eq 1 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"does not match --sha256"* ]]
+  alive "${started}"
 
-  # A policy that cannot be read leaves the teardown unverified.
-  for config in 'writable_roots = "/"' 'writable_roots = ["relative"]' 'writable_roots = [1]' 'notify = ["/x/writable_roots"]'; do
-    printf '[sandbox_workspace_write]\n%s\n' "${config}" >"${CODEX_HOME}/config.toml"
-    run --separate-stderr node "${script}" record "${target}" "${recdir}/third.json"
-    [ "${status}" -eq 1 ] || { echo "config ${config}: status ${status}: ${stderr}"; return 1; }
-    [[ "${stderr}" == *"cannot establish the Codex sandbox writable roots"* ]]
-    run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
-    [ "${status}" -eq 1 ]
-  done
-  : >"${CODEX_HOME}/config.toml"
-  chmod 000 "${CODEX_HOME}/config.toml"
+  # Without --sha256, or with a malformed one, stop is a usage error.
   run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
-  chmod 600 "${CODEX_HOME}/config.toml"
-  [ "${status}" -eq 1 ]
-  [[ "${stderr}" == *"cannot read the Codex configuration"* ]]
-
-  # Another worktree of the set, given with --writable, counts too.
-  run --separate-stderr node "${script}" stop "${target}" "${record}" --writable "${outer}" --wait 1
-  [ "${status}" -eq 1 ]
-  run --separate-stderr node "${script}" record "${target}" "${recdir}/fourth.json" --writable "${recdir}"
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"needs --sha256"* ]]
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum^^}" --wait 1
+  [ "${status}" -eq 2 ]
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 2 ]
   alive "${started}"
 }
 
+@test "stop-run-processes keeps one record and SHA-256 per worktree of a set" {
+  local second="${BATS_TEST_TMPDIR}/second" record2="${recdir}/second.json" sum1 sum2 one two
+  git -C "${target}" worktree add -q --detach "${second}"
+  second="$(cd "${second}" && pwd -P)"
+  record_now
+  sum1="${sum}"
+  run --separate-stderr node "${script}" record "${second}" "${record2}"
+  [ "${status}" -eq 0 ]
+  sum2="${output#sha256 }"
+  start_detached "${target}" sleep 300
+  one="${started_pid}"
+  start_detached "${second}" sleep 300
+  two="${started_pid}"
+
+  # A record never passes with the other worktree's SHA-256.
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum2}" --wait 1
+  [ "${status}" -eq 1 ]
+  run --separate-stderr node "${script}" stop "${second}" "${record}" --sha256 "${sum1}" --wait 1
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"names another target"* ]]
+  alive "${one}"
+  alive "${two}"
+
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum1}" --wait 2
+  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${one}" | cut -f1)" = stopped ]
+  [ -z "$(row_for "${two}")" ]
+  alive "${two}"
+  run --separate-stderr node "${script}" stop "${second}" "${record2}" --sha256 "${sum2}" --wait 2
+  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${two}" | cut -f1)" = stopped ]
+  gone "${one}"
+  gone "${two}"
+}
+
 @test "stop-run-processes signals no process whose start times differ between lookups" {
   local real bin="${BATS_TEST_TMPDIR}/bin" started
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   start_detached "${target}" sleep 300
   started="${started_pid}"
   # The listing reads the start time after the cwd; another start time there
@@ -462,7 +456,7 @@ exec "${real}" "\$@"
 EOF
   chmod +x "${bin}/ps"
 
-  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${started}" | cut -f1,6)" = "$(printf 'unverified\tstart time differs between lookups')" ]
   alive "${started}"
@@ -471,8 +465,7 @@ EOF
 @test "stop-run-processes bounds its lookups while waiting by the time left" {
   local p real bin="${BATS_TEST_TMPDIR}/bin" root began
   p="$(payload)"
-  run node "${script}" record "${target}" "${record}"
-  [ "${status}" -eq 0 ]
+  record_now
   start_detached "${target}" "${p}" "${BATS_TEST_TMPDIR}/log" "${BATS_TEST_TMPDIR}/ready"
   root="${started_pid}"
   wait_for_file "${BATS_TEST_TMPDIR}/ready"
@@ -491,7 +484,7 @@ EOF
   chmod +x "${bin}/ps"
 
   began="${SECONDS}"
-  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  PATH="${bin}:${PATH}" run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
   [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${root}" | cut -f1,6)" = "$(printf 'unverified\tps failed while waiting')" ]
   # Without the bound the hung read would last 60 seconds.

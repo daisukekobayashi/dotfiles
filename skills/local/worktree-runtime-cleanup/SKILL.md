@@ -91,30 +91,27 @@ reads ownership from the parent chain when it stops, so a process another
 session starts in the target during the run counts as started by the run once
 its parent has exited, and is stopped.
 
-1. Before the run, record the process table in a directory only you can
-   access, outside every root a Codex `workspace-write` run of the set can
-   write, so no run can edit the record: the worktree, each other worktree a
-   run of the set gets as `--cwd`, `/tmp`, `$TMPDIR`, and the
-   `writable_roots` of the Codex configuration. In delivery, use a new
-   `mkdir -m 700` directory in the task's records directory; otherwise create
-   one with
-   `mkdir -p "$HOME/.cache" && dir="$(mktemp -d "$HOME/.cache/review-teardown.XXXXXX")"`.
+1. Before the run, record the process table in a new `mktemp -d` directory
+   outside the worktree, and keep the SHA-256 that `record` prints in your own
+   context, such as its command output or your progress record outside the
+   worktree, never only in a file beside the record:
 
    ```text
-   node <this skill>/scripts/stop-run-processes.mjs record <worktree> "$dir/record.json"
+   dir="$(mktemp -d)" &&
+     node <this skill>/scripts/stop-run-processes.mjs record <worktree> "$dir/record.json"
    ```
 
-   When the runs of a set use different `--cwd` worktrees, such as the
-   adversarial review's reviewed and disposable worktrees, keep one record per
-   worktree and add `--writable <other worktree>` for each other one to both
-   calls. The script checks the place itself, reading the Codex configuration
-   files its header lists: it refuses a record in a writable root or in a
-   directory others can access (exit 2), and exits 1 when it cannot establish
-   the writable roots. A non-zero exit leaves no usable record: run the
-   review, report the teardown as unverified, and skip step 2.
+   It prints one line, `sha256 <hex>`. A Codex run may be able to write the
+   record's directory; the hash, not the location, is what makes an edited
+   record refuse to stop anything. When the runs of a set use different
+   `--cwd` worktrees, such as the adversarial review's reviewed and disposable
+   worktrees, keep one record and its hash per worktree. A non-zero exit leaves
+   no usable record: run the review, report the teardown as unverified, and
+   skip step 2.
 2. After the run, whether it succeeded or failed, run
-   `node <this skill>/scripts/stop-run-processes.mjs stop <worktree> "$dir/record.json"`
-   with the same `--writable` options, then remove `$dir`. A process is one the
+   `node <this skill>/scripts/stop-run-processes.mjs stop <worktree> "$dir/record.json" --sha256 <hex>`
+   with the hash `record` printed for that worktree, then remove `$dir`. A
+   record whose SHA-256 differs stops nothing (exit 1). A process is one the
    run started only when it is absent from the record by PID and start time,
    every lookup gives it the same start time, `list-processes.sh` lists it with
    reason `cwd under target` and an exact cwd at or below the target (no
@@ -139,9 +136,9 @@ its parent has exited, and is stopped.
 
 Exit 1 means the teardown could not run and signaled nothing, such as when
 `list-processes.sh` cannot run without bash, `/proc`, or a working `lsof`, when
-`ps` or git fails, when the Codex writable roots cannot be established, or when
-the record is unusable: its listing is unavailable, never empty. Report the
-teardown as unverified and leave it to cleanup.
+`ps` or git fails, or when the record is unusable or differs from its SHA-256:
+its listing is unavailable, never empty. Report the teardown as unverified and
+leave it to cleanup.
 
 ## Compose Stacks
 

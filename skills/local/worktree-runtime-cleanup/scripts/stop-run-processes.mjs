@@ -3,37 +3,33 @@
 // together, started under its target worktree.
 //
 // Usage:
-//   node stop-run-processes.mjs record <target> <record-file> [--writable <dir>]...
-//   node stop-run-processes.mjs stop <target> <record-file> [--writable <dir>]... [--wait <seconds>]
+//   node stop-run-processes.mjs record <target> <record-file>
+//   node stop-run-processes.mjs stop <target> <record-file> --sha256 <hex> [--wait <seconds>]
 //
 // The record file
-//   The record decides which processes existed before the run, so a Codex run
-//   must not be able to edit it. Its directory must be owned by the current
-//   user with no group or other access (mode 700), and must lie outside every
-//   root a Codex `workspace-write` run of the set can write: the target, each
-//   other worktree a run of the set gets as --cwd (pass each with
-//   --writable), `/tmp`, `$TMPDIR` (with `os.tmpdir()`), and every
-//   `writable_roots` entry in the Codex configuration files that apply:
-//   `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`),
-//   `/etc/codex/config.toml`, `/etc/codex/managed_config.toml`, and
-//   `.codex/config.toml` in the target and each directory above it, in any
-//   table or profile. A configuration file that exists but cannot be read, or
-//   a `writable_roots` value that is not an array of absolute paths in plain
-//   strings, leaves the policy unknown: both subcommands exit 1. `record`
-//   creates the file exclusively, without following a symbolic link, with
-//   mode 0600; `stop` accepts only such a regular file in such a directory.
+//   The record decides which processes existed before the run, so a run must
+//   not be able to change it unnoticed. `record` prints the SHA-256 of what it
+//   wrote as one line, "sha256 <64 lowercase hex digits>"; the caller keeps
+//   that value in its own context, never only in a file a run could write, and
+//   passes it to `stop` with --sha256. `stop` reads the file once and refuses
+//   it unless its SHA-256 equals that value, so a record a Codex run edited,
+//   wherever it lives, signals nothing. The record must lie outside the target
+//   in a directory owned by the current user with no group or other access
+//   (mode 700); `record` creates it exclusively, without following a symbolic
+//   link, with mode 0600, and `stop` accepts only a regular file opened
+//   without following a symbolic link.
 //
 // record
 //   Before the run, writes the target's real path, its own PID, and every
-//   process's PID and start time, from one `ps` read, to <record-file>. It
-//   holds no command lines.
+//   process's PID and start time, from one `ps` read, to <record-file>, and
+//   prints its SHA-256. It holds no command lines.
 //
 // stop
-//   After the run, whether it succeeded or failed, reads and checks the record
-//   (its format; PIDs and start times exactly as ps prints them under
-//   LC_ALL=C, such as "Sat Nov 21 16:21:27 2026"; entries for pid 1, with the
-//   start time it has now, and for the process that wrote it; and the target),
-//   lists the worktrees
+//   After the run, whether it succeeded or failed, reads the record once and
+//   checks it: its SHA-256 against --sha256; its format, with PIDs and start
+//   times exactly as ps prints them under LC_ALL=C, such as "Sat Nov 21
+//   16:21:27 2026"; entries for pid 1, with the start time it has now, and for
+//   the process that wrote it; and the target. It then lists the worktrees
 //   registered below the target, takes a process table, lists the target with
 //   list-processes.sh beside this script, and takes a second table. A process
 //   is one the run started only when all of these hold:
@@ -52,8 +48,8 @@
 //   such as a cwd with a " (deleted)" suffix or an ambiguous one, may be the
 //   run's: it is reported "unverified" and never signaled, and counts as a
 //   leftover. Any other listed process is reported "left" with the reason and
-//   never signaled: one that existed before the run, one under a parent that did
-//   (such as another session's shell, wherever its cwd is), and one under a
+//   never signaled: one that existed before the run, one under a parent that
+//   did (such as another session's shell, wherever its cwd is), and one under a
 //   new parent outside the target. Ownership is read from the parent chain at
 //   stop: a process another session starts in the target during the run
 //   whose parent has exited counts as started by the run, so the callers keep
@@ -87,17 +83,19 @@
 //   0  stop: every started process exited, or the run started none; record:
 //      written
 //   1  could not run, and nothing was signaled: list-processes.sh, ps, or git
-//      failed, wrote to stderr, or ran past 120 seconds, the Codex sandbox
-//      policy is unknown, or the record is unusable (place, mode, format, or
-//      contents) or names another target. The teardown is unverified.
-//   2  usage error: an unknown subcommand or option, a target that is not a
-//      directory, or for record a path that exists or a directory that is not
-//      a private one outside every root a Codex run of the set can write
+//      failed, wrote to stderr, or ran past 120 seconds, or the record is
+//      unusable (its SHA-256 differs from --sha256, or its place, type,
+//      format, or contents) or names another target. The teardown is
+//      unverified.
+//   2  usage error: an unknown subcommand or option, stop without a
+//      well-formed --sha256, a target that is not a directory, or for record
+//      a path that exists, lies inside the target, or is in a directory that
+//      is not private
 //   3  stop: a started process is still running or unverified
 // Leftovers never change a review's result; worktree cleanup handles them.
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, statSync, writeSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -110,8 +108,8 @@ const listScript = path.join(here, "list-processes.sh");
 const env = { ...process.env, LC_ALL: "C" };
 
 const USAGE = [
-  "usage: stop-run-processes.mjs record <target> <record-file> [--writable <dir>]...",
-  "       stop-run-processes.mjs stop <target> <record-file> [--writable <dir>]... [--wait <seconds>]",
+  "usage: stop-run-processes.mjs record <target> <record-file>",
+  "       stop-run-processes.mjs stop <target> <record-file> --sha256 <hex> [--wait <seconds>]",
 ].join("\n");
 
 class Usage extends Error {}
@@ -222,111 +220,9 @@ const realOrSelf = (dir) => {
   }
 };
 
-// Reads the writable_roots arrays of one Codex configuration file: every
-// `writable_roots = [...]` in it, in any table or profile, counts. Returns
-// [] for a missing file; throws Unavailable for a file it cannot read or a
-// value it cannot parse, since the sandbox policy is then unknown.
-const configRoots = (file) => {
-  let text;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
-    throw new Unavailable(`cannot read the Codex configuration ${file}: ${error.code ?? error.message}`);
-  }
-  const unknown = (why) => new Unavailable(`cannot establish the Codex sandbox writable roots from ${file}: ${why}`);
-  const roots = [];
-  let from = 0;
-  for (;;) {
-    const at = text.indexOf("writable_roots", from);
-    if (at < 0) break;
-    from = at + "writable_roots".length;
-    const lineStart = text.lastIndexOf("\n", at) + 1;
-    const before = text.slice(lineStart, at);
-    if (/^\s*#/.test(before)) continue;
-    // Only a key path or an inline table may come before the key on its line;
-    // anything else, such as a string that names it, leaves the policy unknown.
-    if (!/^[\s\w."'{=,-]*$/.test(before)) throw unknown("writable_roots appears where it cannot be read");
-    let i = from;
-    if (text[i] === '"' || text[i] === "'") i++;
-    const assign = text.slice(i).match(/^[ \t]*=[ \t]*\[/);
-    if (!assign) throw unknown("writable_roots is not an array");
-    i += assign[0].length;
-    for (;;) {
-      while (i < text.length && /[\s,]/.test(text[i])) i++;
-      if (text[i] === "#") {
-        while (i < text.length && text[i] !== "\n") i++;
-        continue;
-      }
-      if (text[i] === "]") break;
-      let value;
-      if (text.startsWith('"""', i) || text.startsWith("'''", i)) throw unknown("multi-line strings are not read");
-      if (text[i] === "'") {
-        const end = text.indexOf("'", i + 1);
-        if (end < 0 || text.slice(i + 1, end).includes("\n")) throw unknown("an unterminated string");
-        value = text.slice(i + 1, end);
-        i = end + 1;
-      } else if (text[i] === '"') {
-        value = "";
-        i++;
-        for (;;) {
-          const c = text[i];
-          if (c === undefined || c === "\n") throw unknown("an unterminated string");
-          if (c === '"') {
-            i++;
-            break;
-          }
-          if (c === "\\") {
-            const e = text[i + 1];
-            const simple = { "\\": "\\", '"': '"', n: "\n", t: "\t", r: "\r", b: "\b", f: "\f" }[e];
-            if (simple !== undefined) {
-              value += simple;
-              i += 2;
-            } else if (e === "u" && /^[0-9a-fA-F]{4}$/.test(text.slice(i + 2, i + 6))) {
-              value += String.fromCodePoint(parseInt(text.slice(i + 2, i + 6), 16));
-              i += 6;
-            } else if (e === "U" && /^[0-9a-fA-F]{8}$/.test(text.slice(i + 2, i + 10))) {
-              value += String.fromCodePoint(parseInt(text.slice(i + 2, i + 10), 16));
-              i += 10;
-            } else {
-              throw unknown("an unknown escape");
-            }
-            continue;
-          }
-          value += c;
-          i++;
-        }
-      } else {
-        throw unknown("an element that is not a string");
-      }
-      if (value.startsWith("~/")) value = path.join(os.homedir(), value.slice(2));
-      if (!path.isAbsolute(value)) throw unknown(`a relative root: ${value}`);
-      roots.push(value);
-    }
-    from = i;
-  }
-  return roots;
-};
-
-// Every root a Codex workspace-write run may write beyond its --cwd, /tmp, and
-// $TMPDIR: the writable_roots of the user, system, and project configuration
-// files that apply to the target, in every profile.
-const sandboxRoots = (target) => {
-  const home = process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) : path.join(os.homedir(), ".codex");
-  const files = [path.join(home, "config.toml"), "/etc/codex/config.toml", "/etc/codex/managed_config.toml"];
-  for (let dir = target; ; dir = path.dirname(dir)) {
-    files.push(path.join(dir, ".codex", "config.toml"));
-    if (dir === path.dirname(dir)) break;
-  }
-  return files.flatMap(configRoots);
-};
-
-// The record's real path, after checking that its directory is private and
-// outside every root a Codex run of the set can write: the target, the other
-// worktrees given with --writable, /tmp, $TMPDIR, and the configured writable
-// roots. Throws Fail for a bad place, and Unavailable when the configured
-// roots cannot be read.
-const recordPlace = (file, target, others, Fail) => {
+// The record's real path: outside the target, in an existing directory.
+// Throws Fail for a bad place.
+const recordPath = (file, target, Fail) => {
   const abs = path.resolve(file);
   let parent;
   try {
@@ -335,21 +231,18 @@ const recordPlace = (file, target, others, Fail) => {
     throw new Fail(`the record's directory does not exist: ${file}`);
   }
   const real = path.join(parent, path.basename(abs));
-  const writable = [target, ...others, "/tmp", process.env.TMPDIR, os.tmpdir(), ...sandboxRoots(target)]
-    .filter(Boolean)
-    .flatMap((dir) => [path.resolve(dir), realOrSelf(dir)]);
-  if (writable.some((root) => under(real, root))) {
-    throw new Fail(`the record must lie outside the target, /tmp, $TMPDIR, and every root a Codex run can write: ${file}`);
-  }
-  const stat = statSync(parent);
-  if (stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0) {
-    throw new Fail(`the record's directory must be yours alone (mode 700): ${path.dirname(abs)}`);
-  }
-  return real;
+  if (under(real, target)) throw new Fail(`the record must lie outside the target: ${file}`);
+  return { real, parent };
 };
 
-const record = async (target, file, others) => {
-  const real = recordPlace(file, target, others, Usage);
+const sha256 = (buffer) => createHash("sha256").update(buffer).digest("hex");
+
+const record = async (target, file) => {
+  const { real, parent } = recordPath(file, target, Usage);
+  const stat = statSync(parent);
+  if (stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0) {
+    throw new Usage(`the record's directory must be yours alone (mode 700): ${path.dirname(path.resolve(file))}`);
+  }
   let exists = true;
   try {
     lstatSync(real);
@@ -375,6 +268,7 @@ const record = async (target, file, others) => {
   } finally {
     closeSync(fd);
   }
+  process.stdout.write(`sha256 ${sha256(Buffer.from(content, "utf8"))}\n`);
 };
 
 const isPair = (entry) => Array.isArray(entry) && entry.length === 2
@@ -382,21 +276,30 @@ const isPair = (entry) => Array.isArray(entry) && entry.length === 2
   && typeof entry[1] === "string" && STARTED.test(entry[1]);
 
 // The record's pairs as a Map of pid -> started, or Unavailable.
-const readRecord = (target, file, others) => {
-  const real = recordPlace(file, target, others, Unavailable);
-  let data;
+// It reads the file once, checks that read against the SHA-256 the caller
+// kept, and parses the same bytes.
+const readRecord = (target, file, expected) => {
+  const { real } = recordPath(file, target, Unavailable);
+  let bytes;
   try {
     const fd = openSync(real, constants.O_RDONLY | constants.O_NOFOLLOW);
     try {
       const stat = fstatSync(fd);
       if (!stat.isFile()) throw new Error("not a regular file");
       if (stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0) throw new Error("not a private file (mode 600)");
-      data = JSON.parse(readFileSync(fd, "utf8"));
+      bytes = readFileSync(fd);
     } finally {
       closeSync(fd);
     }
   } catch (error) {
     throw new Unavailable(`cannot read the record ${file}: ${error.code ?? error.message}`);
+  }
+  if (sha256(bytes) !== expected) throw new Unavailable(`the record ${file} does not match --sha256`);
+  let data;
+  try {
+    data = JSON.parse(bytes.toString("utf8"));
+  } catch {
+    throw new Unavailable(`the record ${file} has an unknown format`);
   }
   if (data === null || typeof data !== "object" || Array.isArray(data)
     || data.version !== RECORD_VERSION || typeof data.target !== "string"
@@ -499,9 +402,9 @@ const waitFor = async (procs, ms) => {
   }
 };
 
-const stop = async (target, file, others, waitSeconds) => {
+const stop = async (target, file, expected, waitSeconds) => {
   // Everything that can make the teardown unavailable runs before any signal.
-  const before = readRecord(target, file, others);
+  const before = readRecord(target, file, expected);
   const nested = await nestedWorktrees(target);
   const first = await processTable();
   if (first.get("1").started !== before.get("1")) {
@@ -603,17 +506,17 @@ const main = async (argv) => {
   const [subcommand, ...args] = argv;
   if (subcommand !== "record" && subcommand !== "stop") throw new Usage("");
   let wait = 10;
-  const others = [];
+  let expected = null;
   const positional = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--wait" && subcommand === "stop") {
       const value = args[++i];
       if (!/^\d+(\.\d+)?$/.test(value ?? "") || Number(value) > 60) throw new Usage("--wait takes seconds from 0 to 60");
       wait = Number(value);
-    } else if (args[i] === "--writable") {
+    } else if (args[i] === "--sha256" && subcommand === "stop" && expected === null) {
       const value = args[++i];
-      if (!value) throw new Usage("--writable takes a directory");
-      others.push(path.resolve(value));
+      if (!/^[0-9a-f]{64}$/.test(value ?? "")) throw new Usage("--sha256 takes the 64 lowercase hex digits record printed");
+      expected = value;
     } else if (args[i].startsWith("-")) {
       throw new Usage(`unknown option: ${args[i]}`);
     } else {
@@ -623,10 +526,11 @@ const main = async (argv) => {
   if (positional.length !== 2) throw new Usage("");
   const target = resolveTarget(positional[0]);
   if (subcommand === "record") {
-    await record(target, positional[1], others);
+    await record(target, positional[1]);
     return 0;
   }
-  return stop(target, positional[1], others, wait);
+  if (expected === null) throw new Usage("stop needs --sha256 with the value record printed");
+  return stop(target, positional[1], expected, wait);
 };
 
 // Exit codes are set, never forced, so stdout and stderr drain before exit.

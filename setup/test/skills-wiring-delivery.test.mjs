@@ -712,15 +712,15 @@ test("Codex review runs stop only the process trees they started", async () => {
   assert.match(trees, /`scripts\/stop-run-processes\.mjs` in this skill's directory decides which processes the run started, sends them only SIGTERM, and signals nothing else/);
   assert.match(trees, /Runs started together for one worktree as a set count as one run: record before any starts and stop after all end\./);
   assert.match(trees, /node <this skill>\/scripts\/stop-run-processes\.mjs record <worktree> "\$dir\/record\.json"/);
-  assert.match(trees, /node <this skill>\/scripts\/stop-run-processes\.mjs stop <worktree> "\$dir\/record\.json"/);
   assert.match(trees, /After the run, whether it succeeded or failed/);
   assert.match(trees, /absent from the record by PID and start time, every lookup gives it the same start time, `list-processes\.sh` lists it with reason `cwd under target` and an exact cwd at or below the target \(no backslash, no ` \(deleted\)` suffix\), its cwd is outside every worktree registered below the target, it has no tty, and its parent is pid 1 or another process the run started/);
   // #262 round 1: the record stays where a Codex run cannot write, other work stays out of the target, and no argv is reported.
-  assert.match(trees, /in a directory only you can access, outside every root a Codex `workspace-write` run of the set can write, so no run can edit the record: the worktree, each other worktree a run of the set gets as `--cwd`, `\/tmp`, `\$TMPDIR`, and the `writable_roots` of the Codex configuration/);
-  // #262 round 2: grouped runs name the other worktrees, and an unknown sandbox policy signals nothing.
-  assert.match(trees, /keep one record per worktree and add `--writable <other worktree>` for each other one to both calls/);
-  assert.match(trees, /it refuses a record in a writable root or in a directory others can access \(exit 2\), and exits 1 when it cannot establish the writable roots/);
-  assert.match(trees, /with the same `--writable` options, then remove `\$dir`/);
+  // #262 round 4: the record is bound by the SHA-256 the launcher keeps, not by where it lives.
+  assert.match(trees, /keep the SHA-256 that `record` prints in your own context, such as its command output or your progress record outside the worktree, never only in a file beside the record/);
+  assert.match(trees, /the hash, not the location, is what makes an edited record refuse to stop anything/);
+  assert.match(trees, /keep one record and its hash per worktree/);
+  assert.match(trees, /stop <worktree> "\$dir\/record\.json" --sha256 <hex>` with the hash `record` printed for that worktree, then remove `\$dir`\. A record whose SHA-256 differs stops nothing \(exit 1\)\./);
+  assert.doesNotMatch(trees, /--writable|writable_roots/);
   assert.match(trees, /reports it as `unverified`, a leftover, and never signals it/);
   assert.match(trees, /While the run lasts, keep other work out of the target worktree\. The script reads ownership from the parent chain when it stops, so a process another session starts in the target during the run counts as started by the run once its parent has exited, and is stopped\./);
   assert.match(trees, /its rows carry no command lines/);

@@ -46,16 +46,17 @@ link.
   for one worktree, `record` writes every process's PID and start time to a new
   mode-0600 file. After the run, `stop` lists the target with
   `list-processes.sh` between two process tables.
-- **A record the run cannot edit.** The record decides what existed before the
-  run, so it lives in a directory only the user can access, outside every root
-  a Codex `workspace-write` run of the set can write: the target, the other
-  worktrees of the set (given with `--writable`), `/tmp`, `$TMPDIR`, and the
-  `writable_roots` of every Codex configuration file that applies, in any
-  profile. The script refuses any other place, and signals nothing when it
-  cannot read those roots. `stop` also refuses a record that is empty,
-  malformed (PIDs and start times not exactly as `ps` prints them), for
-  another target, missing pid 1 or the process that wrote it, or whose pid 1
-  start time differs from the current one, and signals nothing then.
+- **A record bound by its hash.** The record decides what existed before the
+  run, and a Codex `workspace-write` run may be able to write where it lives.
+  `record` prints the SHA-256 of what it wrote; the launcher keeps that value
+  in its own context and passes it to `stop` with `--sha256`, and `stop` reads
+  the file once and signals nothing unless that read has the same hash. A
+  set whose runs use different `--cwd` worktrees keeps one record and hash per
+  worktree. `stop` also refuses a record that is malformed (PIDs and start
+  times not exactly as `ps` prints them), for another target, missing pid 1
+  or the process that wrote it, or whose pid 1 start time differs from the
+  current one. The record still lies outside the target, in a mode-700
+  directory, as a mode-0600 regular file.
 - **Ownership.** A process is one the run started only when it is absent from
   the record by PID and start time, both tables and the listing give it the
   same start time (so its cwd and start time belong to one process), it is
@@ -99,6 +100,13 @@ link.
   outside the listing and would be stopped.
 - **Treat known subreapers, such as `systemd --user`, as pid 1.** It covers
   more Linux hosts, but it decides ownership by process names again.
+- **Keep the record where no run can write.** Round 1 and 2 of #262 placed
+  the record outside the target, `/tmp`, `$TMPDIR`, and then the
+  `writable_roots` read from every Codex configuration file and profile. Each
+  review found another way the effective sandbox policy could differ from what
+  the script read (configuration layers, profiles, runtime overrides), so
+  the protection rested on a model of Codex's configuration. A hash the
+  launcher keeps does not depend on where a run can write.
 - **Keep the rules as prose the review agent follows.** The selection, recheck,
   and escaping rules are mechanical, their prose needed repeated fixes, and
   only a run of the stop can show a tree being stopped.
