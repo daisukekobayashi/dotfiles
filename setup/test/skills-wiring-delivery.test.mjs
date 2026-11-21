@@ -842,7 +842,7 @@ test("both worktree cleanup skills run the shared cleanup target checks in one l
   assert.equal(azure.step7to10, github.step7to10, "steps 7-10 differ between providers");
   assert.match(github.step6, /^Build the \*\*cleanup target manifest\*\* and require explicit confirmation of it: run `node <cleanup-script> manifest <facts> --worktree '<path>' --out '<file>'`/);
   assert.match(github.step6, /any non-zero status stops the cleanup\./);
-  assert.match(github.step7to10, /Before any removal, run `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'`/);
+  assert.match(github.step7to10, /On a fresh cleanup, where no part of the confirmed runtime stop has run, before any removal, run `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'`/);
   assert.match(github.step7to10, /Exit 0 continues; exit 3 means the targets changed, so remove nothing and confirm the new targets at step 6; any other status stops the cleanup\./);
   assert.match(github.step7to10, /conditioned on the SHA in compare's `lease <remote> <sha>` line; without that line, delete none: `git push --force-with-lease=refs\/heads\/<branch>:<sha> <remote> :refs\/heads\/<branch>`\./);
 
@@ -864,12 +864,18 @@ test("both worktree cleanup skills decide the local branch from merge evidence a
     assert.match(step3, /Step 6's manifest checks this and exits 3 with the reason otherwise\./, cleanup);
     assert.doesNotMatch(step3, /Check local git state first/, `${cleanup}: merged is not judged from local state`);
 
-    assert.match(step7to8, /After the confirmed runtime stop, and when resuming a cleanup that already ran it, run the same compare with `--after-stop` right before `git worktree remove`\./, cleanup);
-    assert.match(step7to8, /The last compare's `local` and `lease` lines decide steps 8 and 9\./, cleanup);
-    assert.match(step7to8, /conditioned on the SHA in compare's `local <branch> <sha>` line; without that line, delete none: `git update-ref -d refs\/heads\/<branch> <sha>`\./, cleanup);
+    assert.match(step7to8, /On a resumed cleanup, where any part of the confirmed runtime stop already ran, skip that strict compare: before any further stop or removal, run the same compare with `--after-stop` and the same exit handling, then finish the stop below\./, cleanup);
+    assert.match(step7to8, /After the confirmed runtime stop, run the same compare with `--after-stop` right before `git worktree remove`\./, cleanup);
+    assert.match(step7to8, /The last compare's `local` and `lease` lines decide steps 8 and 9: use each only when that compare exited 0 and printed exactly one such line, and the `local` line only when it names the step 1 branch\./, cleanup);
+    assert.match(step7to8, /conditioned on the SHA in compare's `local <branch> <sha>` line; without that line, delete none\. Immediately before deleting, run `node <cleanup-script> local <facts>` with step 5's facts: continue only on exit 0 with `proposed <sha>` at that SHA; exit 3 means a checkout uses the branch, it moved, or it is otherwise not deletable, so keep it and report the reason; any other status stops the cleanup\. Then run `git update-ref --no-deref -d refs\/heads\/<branch> <sha>`\./, cleanup);
     assert.match(step7to8, /Never use `git branch -d`, which judges against the local default branch and refuses a squash merge, or `git branch -D`, which deletes without the SHA condition\./, cleanup);
-    assert.match(step7to8, /Then run `git config --remove-section 'branch\.<branch>'`; a `no such section` error means there was none\./, cleanup);
-    assert.ok(step7to8.indexOf("Before any removal, run") < step7to8.indexOf("Before removal, follow") && step7to8.indexOf("Before removal, follow") < step7to8.indexOf("--after-stop"), `${cleanup}: compare, runtime stop, then compare --after-stop`);
+    assert.match(step7to8, /If the update is rejected, keep the branch and its configuration and report that it changed\. Only when the update exits 0 and `node <cleanup-script> local <facts>` then prints `absent`, run `git config --remove-section 'branch\.<branch>'`; a `no such section` error means there was none\./, cleanup);
+    assert.doesNotMatch(step7to8, /`git update-ref -d /, `${cleanup}: the delete never follows a symbolic ref`);
+    const fresh = step7to8.indexOf("On a fresh cleanup");
+    const resumed = step7to8.indexOf("On a resumed cleanup");
+    const stop = step7to8.indexOf("Before removal, follow");
+    const afterStop = step7to8.indexOf("After the confirmed runtime stop, run the same compare with `--after-stop`");
+    assert.ok(fresh !== -1 && fresh < resumed && resumed < stop && stop < afterStop, `${cleanup}: fresh or resumed compare, runtime stop, then compare --after-stop`);
   }
 });
 

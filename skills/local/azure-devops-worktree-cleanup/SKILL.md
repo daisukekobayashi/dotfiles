@@ -72,31 +72,42 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    the preview as Caller preview defines; otherwise show them and ask again.
 7. Remove the local worktree first when one exists. If you are inside it, change
    to a safe location before removal.
-   - Before any removal, run
-     `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'`
-     with step 5's facts, the same `--worktree` or `--no-worktree` and
-     `--temp` targets as the confirmed manifest, and that manifest. Exit 0
-     continues; exit 3 means the targets changed, so remove nothing and confirm
-     the new targets at step 6; any other status stops the cleanup.
+   - On a fresh cleanup, where no part of the confirmed runtime stop has run,
+     before any removal, run `node <cleanup-script> compare <facts> <targets>
+     --confirmed '<file>'` with step 5's facts, the same `--worktree` or
+     `--no-worktree` and `--temp` targets as the confirmed manifest, and that
+     manifest. Exit 0 continues; exit 3 means the targets changed, so remove
+     nothing and confirm the new targets at step 6; any other status stops the
+     cleanup.
+   - On a resumed cleanup, where any part of the confirmed runtime stop already
+     ran, skip that strict compare: before any further stop or removal, run the
+     same compare with `--after-stop` and the same exit handling, then finish
+     the stop below.
    - Before removal, follow `../worktree-runtime-cleanup/SKILL.md` for the
      worktree path, after that compare. If that file is absent, say so in the
      summary.
-   - After the confirmed runtime stop, and when resuming a cleanup that already
-     ran it, run the same compare with `--after-stop` right before
-     `git worktree remove`. It expects confirmed processes, Compose projects,
-     and temporary paths that the stop removed, and prints each as
-     `stopped as confirmed`; exit 3 on any other difference means remove
-     nothing and confirm the new targets at step 6, and any other status stops
-     the cleanup. The last compare's `local` and `lease` lines decide steps 8
-     and 9.
-8. Delete the local branch after the worktree is removed, conditioned on the
-   SHA in compare's `local <branch> <sha>` line; without that line, delete
-   none: `git update-ref -d refs/heads/<branch> <sha>`. Never use
-   `git branch -d`, which judges against the local default branch and refuses
-   a squash merge, or `git branch -D`, which deletes without the SHA
-   condition. If the update is rejected, keep the branch and report that it
-   changed. Then run `git config --remove-section 'branch.<branch>'`; a
-   `no such section` error means there was none.
+   - After the confirmed runtime stop, run the same compare with `--after-stop`
+     right before `git worktree remove`. It expects confirmed processes, Compose
+     projects, and temporary paths that the stop removed, and prints each as
+     `stopped as confirmed`; exit 3 on any other difference means remove nothing
+     and confirm the new targets at step 6, and any other status stops the
+     cleanup. The last compare's `local` and `lease` lines decide steps 8 and 9:
+     use each only when that compare exited 0 and printed exactly one such line,
+     and the `local` line only when it names the step 1 branch.
+8. Delete the local branch after the worktree is removed, conditioned on the SHA
+   in compare's `local <branch> <sha>` line; without that line, delete none.
+   Immediately before deleting, run `node <cleanup-script> local <facts>` with
+   step 5's facts: continue only on exit 0 with `proposed <sha>` at that SHA;
+   exit 3 means a checkout uses the branch, it moved, or it is otherwise not
+   deletable, so keep it and report the reason; any other status stops the
+   cleanup. Then run `git update-ref --no-deref -d refs/heads/<branch> <sha>`.
+   Never use `git branch -d`, which judges against the local default branch and
+   refuses a squash merge, or `git branch -D`, which deletes without the SHA
+   condition. If the update is rejected, keep the branch and its configuration
+   and report that it changed. Only when the update exits 0 and `node
+   <cleanup-script> local <facts>` then prints `absent`, run `git config
+   --remove-section 'branch.<branch>'`; a `no such section` error means there
+   was none.
 9. Delete the confirmed remote branch last, conditioned on the SHA in compare's
    `lease <remote> <sha>` line; without that line, delete none:
    `git push --force-with-lease=refs/heads/<branch>:<sha> <remote> :refs/heads/<branch>`.

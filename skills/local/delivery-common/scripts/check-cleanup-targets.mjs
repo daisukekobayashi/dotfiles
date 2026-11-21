@@ -3,6 +3,7 @@
 //
 // Usage:
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
+//   node check-cleanup-targets.mjs local <facts>
 //   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]
 //   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--after-stop]
 //
@@ -43,6 +44,12 @@
 //   <remote>` when the remote branch no longer exists, or `kept <remote|->`
 //   with the reason on stderr.
 //
+// local
+//   Rechecks the local branch right before its deletion, after the worktree
+//   is removed, with the same rule as manifest below and no worktree excluded.
+//   Prints one tab-separated line: `proposed <sha>`, `absent`, or `unmerged
+//   <sha>` with the reason on stderr.
+//
 // manifest
 //   Builds the **cleanup target manifest**: the worktree, the local branch
 //   result, the remote branch result, processes from `list-processes.sh <worktree>`, Compose
@@ -52,13 +59,17 @@
 //   from this skill tree. A lookup that exits non-zero or writes to stderr
 //   cannot run; it never counts as an empty listing. The manifest also
 //   records the PR head repository.
-//   The local branch is `proposed <sha>` when `refs/heads/<branch>` exists,
-//   the PR is merged (skipped with --preview, before the merge), the branch is
-//   not the default branch, and its tip equals --pr-head, for any merge
-//   method; `absent` when the ref does not exist; and otherwise `unmerged`,
-//   which fails the check with the reason on stderr and writes no manifest.
-//   The merged state comes from the provider facts, never from the local
-//   default branch, which can lag its remote.
+//   The local branch is `proposed <sha>` when `refs/heads/<branch>` is a
+//   direct ref that `git for-each-ref` lists under exactly that name (so no
+//   case-equivalent spelling matches), the PR is merged (skipped with
+//   --preview, before the merge), the branch is not the default branch in any
+//   letter case, its tip equals --pr-head, for any merge method, and no
+//   checkout uses it: no worktree other than --worktree has it checked out,
+//   and no worktree, --worktree included, is rebasing or bisecting it. It is
+//   `absent` when no such ref is listed, and otherwise `unmerged`, including a
+//   symbolic ref, which fails the check with the reason on stderr and writes
+//   no manifest. The merged state comes from the provider facts, never from
+//   the local default branch, which can lag its remote.
 //   Writes the manifest as JSON to --out, a new file outside the worktree
 //   created with mode 0600 (an existing path, including a symlink, is a usage
 //   error), and prints the targets. With --preview it is a
@@ -89,6 +100,13 @@
 //   proposed local branch `local <branch> <sha>`, the SHA to delete it at, and
 //   for a proposed remote branch `lease <remote> <sha>`.
 //
+// Every displayed value, such as a path or command, is printed with control
+// characters encoded as \xNN, so no target can print a line of its own; the
+// `local` and `lease` lines are the only lines that start with those words.
+// A --temp path is missing only when resolving it fails with ENOENT or
+// ENOTDIR; any other failure, such as a symlink loop, means the check cannot
+// run.
+//
 // The script reads git, process, and Docker state only; it never deletes,
 // stops, or signals anything.
 //
@@ -99,14 +117,14 @@
 //      path inside the worktree or that already exists, or an unreadable
 //      confirmed manifest, including one of an earlier manifest version
 //   3  the check failed: remote keeps the remote branch (cleanup continues
-//      without it); manifest finds the local branch unmerged; manifest
+//      without it); local or manifest finds the local branch unmerged; manifest
 //      --preview has a listing that cannot run; compare found a difference. The reasons are reported on stderr.
 // Any other status, including 1, which node uses for a missing script or an
 // uncaught error and this script uses when git or check-push-target.mjs cannot
 // run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, constants, existsSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, openSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -122,6 +140,7 @@ const runtimeScripts = path.join(here, "..", "..", "worktree-runtime-cleanup", "
 
 const USAGE = [
   "usage: check-cleanup-targets.mjs remote <facts> [--preview]",
+  "       check-cleanup-targets.mjs local <facts>",
   "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]",
   "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--after-stop]",
   "facts: (--github <host> <owner>/<repo> | --azure <org> <project> <repo>) --branch <branch>",
@@ -130,18 +149,29 @@ const USAGE = [
   "targets: (--worktree <path> | --no-worktree) [--temp <path>]...",
 ].join("\n");
 
+// Encodes control characters, including tab and line breaks, so a displayed
+// value always stays within its own field and line.
+const display = (value) =>
+  String(value).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, (c) => {
+    const code = c.charCodeAt(0);
+    return code > 0xff ? `\\u${code.toString(16).padStart(4, "0")}` : `\\x${code.toString(16).padStart(2, "0")}`;
+  });
+
+// One output line of tab-separated fields, each displayed.
+const row = (...fields) => fields.map(display).join("\t");
+
 const usage = (reason) => {
-  process.stderr.write(`${reason ? `${reason}\n` : ""}${USAGE}\n`);
+  process.stderr.write(`${reason ? `${display(reason)}\n` : ""}${USAGE}\n`);
   process.exit(2);
 };
 
 const fail = (lines) => {
-  process.stderr.write(`${lines.join("\n")}\n`);
+  process.stderr.write(`${lines.map(display).join("\n")}\n`);
   process.exit(3);
 };
 
 const cannotRun = (reason) => {
-  process.stderr.write(`check could not run: ${reason}\n`);
+  process.stderr.write(`check could not run: ${display(reason)}\n`);
   process.exit(1);
 };
 
@@ -221,6 +251,9 @@ const readFacts = (options) => {
   };
 };
 
+// Branch names that a case-insensitive ref store could treat as one.
+const sameBranchName = (a, b) => a.toLowerCase() === b.toLowerCase();
+
 // Resolves the remote by the push target rule; returns the remote, or null
 // with the reason.
 const resolveRemote = (facts) => {
@@ -271,7 +304,7 @@ const checkRemote = (facts, { preview }) => {
   const sha = lsRemote(remote, facts.branch);
   if (sha === null) return { status: "absent", remote };
   if (!preview && !facts.merged) return kept(remote, facts.provider === "github" ? "the PR is not merged" : "the PR is not completed");
-  if (facts.branch === facts.defaultBranch) return kept(remote, "the branch is the default branch");
+  if (sameBranchName(facts.branch, facts.defaultBranch)) return kept(remote, "the branch is the default branch");
   if (facts.protectedBranch) return kept(remote, facts.provider === "github" ? "the branch is protected" : "the branch has branch policies");
   if (facts.openPrs > 0) return kept(remote, `${facts.openPrs} other open PR(s) use the branch`);
   if (sha !== facts.head) return kept(remote, `the remote branch is at ${sha}, not the PR head ${facts.head}; a later push means unmerged work`);
@@ -292,37 +325,112 @@ const remoteCommand = (args) => {
   if (result.status === "kept") fail([`remote branch kept: ${result.reason}`]);
 };
 
-// Returns the SHA refs/heads/<branch> has in this repository, or null when
-// absent.
-const localBranchSha = (branch) => {
-  const result = spawnSync("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], { encoding: "utf8" });
-  const out = (result.stdout ?? "").trim();
-  if (result.status === 1 && out === "") return null;
-  if (result.status !== 0 || !SHA.test(out)) {
-    return cannotRun(`git rev-parse --verify refs/heads/${branch} exited ${result.status ?? result.signal}: ${(result.stderr || result.error?.message || "").toString().trim()}`);
+const git = (args) => {
+  const result = spawnSync("git", args, { encoding: "utf8" });
+  if (result.status !== 0) {
+    return cannotRun(`git ${args.join(" ")} exited ${result.status ?? result.signal}: ${(result.stderr || result.error?.message || "").toString().trim()}`);
   }
-  return out;
+  return result.stdout;
 };
 
-// Whether the local branch is proven merged by the provider facts; never
-// exits on an unmet condition.
-const checkLocal = (facts, { preview }) => {
-  const sha = localBranchSha(facts.branch);
-  if (sha === null) return { status: "absent" };
+// Returns refs/heads/<branch> as git enumerates it under exactly that name,
+// { sha, symref }, or null when no ref has that exact name. An exact match
+// rules out a case-equivalent spelling that a case-insensitive ref store
+// would resolve to another ref.
+const localRef = (branch) => {
+  const ref = `refs/heads/${branch}`;
+  const out = git(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", ref]);
+  const rows = out.split("\n").filter((line) => line !== "").map((line) => line.split("\0"));
+  const matches = rows.filter(([name]) => name === ref);
+  if (matches.length === 0) return null;
+  if (matches.length > 1 || !SHA.test(matches[0][1])) cannotRun(`unexpected git for-each-ref output for ${ref}`);
+  const [, sha, symref] = matches[0];
+  return { sha, symref };
+};
+
+const readOrNull = (file) => {
+  try {
+    return readFileSync(file, "utf8").trim();
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
+    return cannotRun(`cannot read ${file}: ${error.message}`);
+  }
+};
+
+// Returns why a checkout uses the branch, or null: a worktree other than
+// `exclude` has it checked out, or any worktree is rebasing or bisecting it,
+// the uses `git branch -d` refuses. Names compare in any letter case, so a
+// spelling a case-insensitive ref store merges counts as the same branch.
+const branchUse = (branch, exclude) => {
+  const ref = `refs/heads/${branch}`.toLowerCase();
+  const fields = git(["worktree", "list", "--porcelain", "-z"]).split("\0");
+  let current = null;
+  for (const field of fields) {
+    if (field.startsWith("worktree ")) current = field.slice("worktree ".length);
+    else if (field.startsWith("branch ") && field.slice("branch ".length).toLowerCase() === ref) {
+      const real = realpathOrNull(current) ?? current;
+      if (exclude === null || real !== exclude) return `the branch is checked out in the worktree at ${current}`;
+    }
+  }
+  const common = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
+  const worktrees = path.join(common, "worktrees");
+  let linked = [];
+  try {
+    linked = readdirSync(worktrees, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(worktrees, entry.name));
+  } catch (error) {
+    if (error.code !== "ENOENT" && error.code !== "ENOTDIR") cannotRun(`cannot read ${worktrees}: ${error.message}`);
+  }
+  for (const gitDir of [common, ...linked]) {
+    for (const file of ["rebase-merge/head-name", "rebase-apply/head-name"]) {
+      if (readOrNull(path.join(gitDir, file))?.toLowerCase() === ref) return `the branch is being rebased in ${gitDir}`;
+    }
+    const bisect = readOrNull(path.join(gitDir, "BISECT_START"))?.toLowerCase();
+    if (bisect !== undefined && bisect !== null && (bisect === ref || `refs/heads/${bisect}` === ref)) return `the branch is being bisected in ${gitDir}`;
+  }
+  return null;
+};
+
+// Whether the local branch is proven merged by the provider facts and free to
+// delete; never exits on an unmet condition. `exclude` is the worktree about
+// to be removed, whose checkout of the branch does not count.
+const checkLocal = (facts, { preview, exclude = null }) => {
+  const found = localRef(facts.branch);
+  if (found === null) return { status: "absent" };
+  const { sha } = found;
   const unmerged = (reason) => ({ status: "unmerged", sha, reason });
+  if (found.symref) return unmerged(`the local branch is a symbolic ref to ${found.symref}`);
   if (!preview && !facts.merged) return unmerged(facts.provider === "github" ? "the PR is not merged" : "the PR is not completed");
-  if (facts.branch === facts.defaultBranch) return unmerged("the branch is the default branch");
+  if (sameBranchName(facts.branch, facts.defaultBranch)) return unmerged("the branch is the default branch");
   if (sha !== facts.head) return unmerged(`the local branch is at ${sha}, not the PR head ${facts.head}`);
+  const use = branchUse(facts.branch, exclude);
+  if (use) return unmerged(use);
   return { status: "proposed", sha };
 };
 
 const describeLocal = (result) => (result.status === "absent" ? "absent" : `${result.status}\t${result.sha}`);
+
+const localCommand = (args) => {
+  const facts = readFacts(parseOptions(args, FACTS));
+  const result = checkLocal(facts, { preview: false });
+  process.stdout.write(`${describeLocal(result)}\n`);
+  if (result.status === "unmerged") fail([`local branch refs/heads/${facts.branch} cannot be deleted: ${result.reason}`]);
+};
 
 const realpathOrNull = (target) => {
   try {
     return realpathSync(target);
   } catch {
     return null;
+  }
+};
+
+// A temporary path's real target, or null only when it is missing.
+const resolveTemp = (given) => {
+  try {
+    return realpathSync(given);
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
+    return cannotRun(`cannot resolve --temp ${given}: ${error.code ?? error.message}`);
   }
 };
 
@@ -340,7 +448,7 @@ const readTargets = (options) => {
     if (!path.isAbsolute(given)) usage(`--temp is not an absolute path: ${JSON.stringify(given)}`);
     if (seen.has(given)) usage(`repeated --temp: ${JSON.stringify(given)}`);
     seen.add(given);
-    return { path: given, resolved: realpathOrNull(given) };
+    return { path: given, resolved: resolveTemp(given) };
   });
   return { worktree, temps };
 };
@@ -413,7 +521,7 @@ const buildManifest = (facts, targets, { preview }) => {
     repository: repositoryOf(facts),
     worktree: targets.worktree,
     branch: facts.branch,
-    local: checkLocal(facts, { preview }),
+    local: checkLocal(facts, { preview, exclude: targets.worktree }),
     remote: checkRemote(facts, { preview }),
     processes: targets.worktree ? listProcesses(targets.worktree) : none,
     compose: targets.worktree ? listCompose(targets.worktree) : none,
@@ -425,26 +533,26 @@ const unavailableSections = (manifest) =>
   ["processes", "compose"].filter((section) => manifest[section].status === "unavailable");
 
 const formatTargets = (manifest) => {
-  const lines = [`worktree\t${manifest.worktree ?? "-"}`];
+  const lines = [row("worktree", manifest.worktree ?? "-")];
   const local = manifest.local;
-  if (local.status === "proposed") lines.push(`local branch\tdelete refs/heads/${manifest.branch} at ${local.sha}`);
-  else if (local.status === "absent") lines.push(`local branch\talready absent: refs/heads/${manifest.branch}`);
-  else lines.push(`local branch\tunmerged: ${local.reason}`);
+  if (local.status === "proposed") lines.push(row("local branch", `delete refs/heads/${manifest.branch} at ${local.sha}`));
+  else if (local.status === "absent") lines.push(row("local branch", `already absent: refs/heads/${manifest.branch}`));
+  else lines.push(row("local branch", `unmerged: ${local.reason}`));
   const remote = manifest.remote;
-  if (remote.status === "proposed") lines.push(`remote branch\tdelete ${remote.remote} refs/heads/${manifest.branch} at ${remote.sha}`);
-  else if (remote.status === "absent") lines.push(`remote branch\talready absent on ${remote.remote}`);
-  else lines.push(`remote branch\tkept: ${remote.reason}`);
+  if (remote.status === "proposed") lines.push(row("remote branch", `delete ${remote.remote} refs/heads/${manifest.branch} at ${remote.sha}`));
+  else if (remote.status === "absent") lines.push(row("remote branch", `already absent on ${remote.remote}`));
+  else lines.push(row("remote branch", `kept: ${remote.reason}`));
   for (const item of manifest.processes.items) {
-    lines.push(`process\tpid ${item.pid}\tstarted ${item.started}\tcwd ${item.cwd}\t${item.reason}\t${item.command}`);
+    lines.push(row("process", `pid ${item.pid}`, `started ${item.started}`, `cwd ${item.cwd}`, item.reason, item.command));
   }
   for (const item of manifest.compose.items) {
-    lines.push(`compose project\t${item.project}\tworking_dir ${item.working_dir}\tvolumes ${item.volumes.join(",") || "-"}\t${item.reason}`);
+    lines.push(row("compose project", item.project, `working_dir ${item.working_dir}`, `volumes ${item.volumes.join(",") || "-"}`, item.reason));
   }
   for (const section of unavailableSections(manifest)) {
-    lines.push(`${section}\tunverified: ${manifest[section].reason}`);
+    lines.push(row(section, `unverified: ${manifest[section].reason}`));
   }
   for (const temp of manifest.temps) {
-    lines.push(`temporary path\t${temp.path}${temp.resolved && temp.resolved !== temp.path ? ` -> ${temp.resolved}` : ""}${temp.resolved ? "" : " (missing)"}`);
+    lines.push(row("temporary path", `${temp.path}${temp.resolved && temp.resolved !== temp.path ? ` -> ${temp.resolved}` : ""}${temp.resolved ? "" : " (missing)"}`));
   }
   return `${lines.join("\n")}\n`;
 };
@@ -492,7 +600,7 @@ const manifestCommand = (args) => {
 
   const preview = Boolean(options["--preview"]);
   const manifest = buildManifest(facts, targets, { preview });
-  if (manifest.local.status === "unmerged") fail([`local branch refs/heads/${manifest.branch} is not proven merged: ${manifest.local.reason}`]);
+  if (manifest.local.status === "unmerged") fail([`local branch refs/heads/${manifest.branch} cannot be deleted: ${manifest.local.reason}`]);
   const unavailable = unavailableSections(manifest);
   if (preview && unavailable.length > 0) {
     fail(unavailable.map((section) => `${section} cannot be listed for a Caller preview: ${manifest[section].reason}`));
@@ -565,7 +673,7 @@ const compareCommand = (args) => {
   if (localAfter.status === "absent" && localBefore.status === "proposed") {
     localDeleted = true;
   } else if (localAfter.status === "unmerged") {
-    differences.push(`local branch refs/heads/${current.branch} is not proven merged: ${localAfter.reason}`);
+    differences.push(`local branch refs/heads/${current.branch} cannot be deleted: ${localAfter.reason}`);
   } else if (localBefore.status !== localAfter.status || localBefore.sha !== localAfter.sha) {
     differences.push(`local branch: confirmed ${JSON.stringify(describeLocal(localBefore))}, now ${JSON.stringify(describeLocal(localAfter))}`);
   }
@@ -621,14 +729,16 @@ const compareCommand = (args) => {
 
   if (differences.length > 0) fail(["the cleanup targets differ from the confirmed manifest:", ...differences]);
   process.stdout.write(formatTargets(current));
-  for (const item of stopped ?? []) process.stdout.write(`stopped as confirmed\t${item}\n`);
-  if (localDeleted) process.stdout.write(`local branch already deleted: refs/heads/${current.branch}\n`);
+  for (const item of stopped ?? []) process.stdout.write(`${row("stopped as confirmed", item)}\n`);
+  if (localDeleted) process.stdout.write(`${row(`local branch already deleted: refs/heads/${current.branch}`)}\n`);
+  if (hostDeleted) process.stdout.write(`${row(`remote branch already deleted by the host: ${after.remote} refs/heads/${current.branch}`)}\n`);
+  // The authorization lines come last; branch, remote, and SHA are checked
+  // safe names and SHAs, so they need no encoding.
   if (localAfter.status === "proposed") process.stdout.write(`local\t${current.branch}\t${localAfter.sha}\n`);
-  if (hostDeleted) process.stdout.write(`remote branch already deleted by the host: ${after.remote} refs/heads/${current.branch}\n`);
   if (after.status === "proposed") process.stdout.write(`lease\t${after.remote}\t${after.sha}\n`);
 };
 
 const [subcommand, ...rest] = process.argv.slice(2);
-const subcommands = { remote: remoteCommand, manifest: manifestCommand, compare: compareCommand };
+const subcommands = { remote: remoteCommand, local: localCommand, manifest: manifestCommand, compare: compareCommand };
 if (!Object.hasOwn(subcommands, subcommand ?? "")) usage(subcommand === undefined ? "" : `unknown subcommand: ${JSON.stringify(subcommand)}`);
 subcommands[subcommand](rest);
