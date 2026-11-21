@@ -1109,3 +1109,177 @@ DOCKER
   [ "${status}" -eq 3 ]
   [[ "${stderr}" == *"is gone but it has new volumes: wt_new"* ]]
 }
+
+# A git that, like Git before 2.36, has no `worktree list -z`.
+old_git() {
+  local real
+  real="$(command -v git)"
+  mkdir -p "${root}/oldgit"
+  cat >"${root}/oldgit/git" <<WRAP
+#!/usr/bin/env bash
+w=""; z=""
+for a in "\$@"; do [ "\$a" = worktree ] && w=1; [ "\$a" = -z ] && z=1; done
+if [ -n "\$w" ] && [ -n "\$z" ]; then
+  echo "error: unknown switch \\\`z'" >&2
+  exit 129
+fi
+if [ -n "\$w" ] && [ -n "\${FAKE_WORKTREE_LINE:-}" ]; then
+  "${real}" "\$@" && printf '%s\n' "\${FAKE_WORKTREE_LINE}"
+  exit
+fi
+exec "${real}" "\$@"
+WRAP
+  chmod +x "${root}/oldgit/git"
+  printf '%s' "${root}/oldgit"
+}
+
+@test "process identity is the start time read under C and UTC, whatever the session's time zone" {
+  start_in "${worktree}"
+  local pid="${pids[0]}"
+  TZ=UTC preview
+  [ "${status}" -eq 0 ]
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!/^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2} \d\d:\d\d:\d\d \d{4}$/.test(m.processes.items[0].start_utc)) process.exit(1)' "${state}/preview.json"
+  # Still listed, compared from another time zone: no difference.
+  TZ=Asia/Tokyo compare
+  [ "${status}" -eq 0 ]
+
+  # Gone from the listing but alive, rechecked from another time zone: held.
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
+  TZ=Asia/Tokyo compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"process pid ${pid} "*"is gone but it is still running with the same start time"* ]]
+
+  # A confirmed start time that cannot be compared holds while the PID runs.
+  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); delete m.processes.items[0].start_utc; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/raw.json"
+  compare "${state}/raw.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"its confirmed start time cannot be compared"* ]]
+
+  kill "${pid}"
+  wait "${pid}" 2>/dev/null || true
+  compare "${state}/raw.json" --after-stop
+  [ "${status}" -eq 0 ]
+}
+
+@test "a fresh confirmation with --previous keeps holding a confirmed process that still runs" {
+  start_in "${worktree}"
+  local pid="${pids[0]}"
+  preview
+  [ "${status}" -eq 0 ]
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/fresh.json" --previous "${state}/preview.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"process"$'\t'"pid ${pid}"*"carried from the replaced manifest: it is still running with the same start time"* ]]
+  compare "${state}/fresh.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"process pid ${pid} "*"still running"* ]]
+
+  kill "${pid}"
+  wait "${pid}" 2>/dev/null || true
+  compare "${state}/fresh.json" --after-stop
+  [ "${status}" -eq 0 ]
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/after.json" --previous "${state}/fresh.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" != *"carried"* ]]
+
+  mkdir -p "${root}/elsewhere"
+  check manifest "${args[@]}" --worktree "${root}/elsewhere" --out "${state}/wrong.json" --previous "${state}/fresh.json"
+  [ "${status}" -eq 2 ]
+}
+
+@test "a symbolic link in the inspected git metadata refuses the deletion" {
+  git branch feat/1-x "${head}"
+  local -a args
+  mapfile -t args < <(facts)
+  local gitdir
+  gitdir="$(git rev-parse --absolute-git-dir)"
+
+  # A linked worktree whose metadata directory is a link.
+  local linked="${root}/linked"
+  git worktree add -q --detach "${linked}" "${head}"
+  local id
+  id="$(basename "$(git -C "${linked}" rev-parse --absolute-git-dir)")"
+  mv "${gitdir}/worktrees/${id}" "${root}/moved-meta"
+  ln -s "${root}/moved-meta" "${gitdir}/worktrees/${id}"
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"${gitdir}/worktrees/${id} is a symbolic link or special file"* ]]
+  rm "${gitdir}/worktrees/${id}"
+  mv "${root}/moved-meta" "${gitdir}/worktrees/${id}"
+
+  # A rebase state directory that is a link.
+  mkdir -p "${root}/rebase-state"
+  ln -s "${root}/rebase-state" "${gitdir}/rebase-merge"
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"${gitdir}/rebase-merge is a symbolic link or special file"* ]]
+  rm "${gitdir}/rebase-merge"
+
+  # A ref directory on the branch's path that is a link.
+  git pack-refs --all
+  rmdir "${gitdir}/refs/heads/feat" 2>/dev/null || true
+  mkdir -p "${root}/refdir"
+  ln -s "${root}/refdir" "${gitdir}/refs/heads/feat"
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"${gitdir}/refs/heads/feat is a symbolic link or special file"* ]]
+  rm "${gitdir}/refs/heads/feat"
+
+  check local "${args[@]}"
+  [ "${status}" -eq 0 ]
+}
+
+@test "names compare after Unicode normalization and case folding" {
+  git branch feat/1-s "${head}"
+  local -a args
+  mapfile -t args < <(facts)
+  args[4]=feat/1-s
+  # U+017F LATIN SMALL LETTER LONG S folds to s.
+  git symbolic-ref HEAD "refs/heads/feat/1-ſ"
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"case-equivalent refs/heads/feat/1-ſ"* ]]
+  git symbolic-ref HEAD refs/heads/main
+  check local "${args[@]}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "proposed"$'\t'"${head}" ]
+}
+
+@test "the worktree check reads git worktree list without -z on Git before 2.36" {
+  git branch feat/1-x "${head}"
+  local -a args
+  mapfile -t args < <(facts)
+  local wrap
+  wrap="$(old_git)"
+  PATH="${wrap}:${PATH}" check local "${args[@]}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "proposed"$'\t'"${head}" ]
+
+  git symbolic-ref HEAD refs/heads/Feat/1-x
+  PATH="${wrap}:${PATH}" check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"the worktree at ${repo} has the case-equivalent refs/heads/Feat/1-x checked out"* ]]
+  git symbolic-ref HEAD refs/heads/main
+
+  # A line that is not a known field, such as a path broken across lines.
+  FAKE_WORKTREE_LINE="/tmp/broken path" PATH="${wrap}:${PATH}" check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"git worktree list printed a line that cannot be parsed: /tmp/broken path"* ]]
+}
+
+@test "--after-stop reports both new and remaining volumes of a gone project" {
+  printf 'worktree\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  printf 'worktree\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  : >"${FAKE_DOCKER_PS}"
+  printf 'worktree\tworktree_data\nworktree\tworktree_new\n' >"${FAKE_DOCKER_VOLUMES}"
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"it has new volumes: worktree_new; and its volumes remain: worktree_data; one may be an external volume"* ]]
+}
