@@ -29,6 +29,11 @@ teardown() {
   for group in "${groups[@]}"; do
     kill -KILL -- "-${group}" 2>/dev/null || true
   done
+  # A fixture a test's listing shim or payload started records its pid here.
+  for group in "${BATS_TEST_TMPDIR}"/fixture-*.pid; do
+    [[ -s "${group}" ]] && kill -KILL -- "-$(cat "${group}")" "$(cat "${group}")" 2>/dev/null
+  done
+  true
 }
 
 # Runs record for ${target} into ${record} with the script $1 (default
@@ -391,14 +396,17 @@ lstart_of() {
   [[ "${stderr}" == *"does not match --sha256"* ]]
   alive "${started}"
 
-  # Without --sha256, or with a malformed one, stop is a usage error.
+  # Without --sha256, or with a malformed or repeated one, stop refuses like
+  # any unusable record: exit 1, nothing signaled.
   run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
-  [ "${status}" -eq 2 ]
-  [[ "${stderr}" == *"needs --sha256"* ]]
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"needs --sha256"*"nothing was signaled"* ]]
   run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum^^}" --wait 1
-  [ "${status}" -eq 2 ]
+  [ "${status}" -eq 1 ]
   run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --sha256 "${sum}" --wait 1
-  [ "${status}" -eq 2 ]
+  [ "${status}" -eq 1 ]
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1 --sha256
+  [ "${status}" -eq 1 ]
   alive "${started}"
 }
 
@@ -490,4 +498,101 @@ EOF
   # Without the bound the hung read would last 60 seconds.
   [ "$((SECONDS - began))" -lt 50 ]
   alive "${root}"
+}
+
+@test "stop-run-processes refuses a record that is not a regular file without blocking" {
+  command -v timeout >/dev/null 2>&1 || skip "timeout is not installed"
+  local fifo="${recdir}/fifo.json"
+  mkfifo -m 600 "${fifo}"
+  run --separate-stderr timeout 30 node "${script}" stop "${target}" "${fifo}" --sha256 "$(printf '0%.0s' {1..64})" --wait 1
+  [ "${status}" -eq 1 ] || { echo "status ${status}: ${stderr}"; return 1; }
+  [[ "${stderr}" == *"not a regular file"* ]]
+  mkdir -m 700 "${recdir}/dir.json"
+  run --separate-stderr timeout 30 node "${script}" stop "${target}" "${recdir}/dir.json" --sha256 "$(printf '0%.0s' {1..64})" --wait 1
+  [ "${status}" -eq 1 ]
+}
+
+@test "stop-run-processes follows a case alias of the target and its nested worktree" {
+  local alias="${BATS_TEST_TMPDIR}/TARGET" nested started inner
+  [[ -d "${alias}" ]] || skip "the volume is case-sensitive"
+  # The nested worktree is registered through the alias spelling.
+  git -C "${target}" worktree add -q --detach "${alias}/nested"
+  run --separate-stderr node "${script}" record "${alias}" "${record}"
+  [ "${status}" -eq 0 ]
+  sum="${output#sha256 }"
+  start_detached "${target}" sleep 300
+  started="${started_pid}"
+  start_detached "${target}/nested" sleep 300
+  inner="${started_pid}"
+
+  run --separate-stderr node "${script}" stop "${alias}" "${record}" --sha256 "${sum}" --wait 2
+  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${started}" | cut -f1)" = stopped ]
+  [ "$(row_for "${inner}" | cut -f1)" = left ]
+  [[ "$(row_for "${inner}" | cut -f6)" == "in nested worktree "* ]]
+  gone "${started}"
+  alive "${inner}"
+}
+
+@test "stop-run-processes reports a process whose cwd was removed unverified" {
+  local orphan
+  record_now
+  mkdir -p "${target}/gone"
+  start_detached "${target}/gone" sleep 300
+  orphan="${started_pid}"
+  rmdir "${target}/gone"
+
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${orphan}" | cut -f1)" = unverified ]
+  [[ "$(row_for "${orphan}" | cut -f6)" == "cwd no longer exists" || "$(row_for "${orphan}" | cut -f6)" == "cwd deleted" ]]
+  alive "${orphan}"
+}
+
+@test "stop-run-processes reports a child forked after its signal as a leftover" {
+  local forker="${BATS_TEST_TMPDIR}/forker.sh" root child
+  cat >"${forker}" <<'EOF'
+#!/usr/bin/env bash
+# On SIGTERM, forks a child in its own cwd and exits.
+trap 'sleep 300 & echo "$!" >"$1"; exit 0' TERM
+echo ready >"$2"
+while :; do sleep 0.1; done
+EOF
+  chmod +x "${forker}"
+  record_now
+  start_detached "${target}" "${forker}" "${BATS_TEST_TMPDIR}/fixture-child.pid" "${BATS_TEST_TMPDIR}/ready"
+  root="${started_pid}"
+  wait_for_file "${BATS_TEST_TMPDIR}/ready"
+
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 2
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  child="$(cat "${BATS_TEST_TMPDIR}/fixture-child.pid")"
+  [ "$(row_for "${root}" | cut -f1)" = stopped ]
+  [ "$(row_for "${child}" | cut -f1,6)" = "$(printf 'unverified\tfirst seen after the first signal')" ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
+  alive "${child}"
+}
+
+@test "stop-run-processes reports a process first seen during the teardown unverified" {
+  local copy="${BATS_TEST_TMPDIR}/skill" late
+  mkdir -p "${copy}"
+  cp -R "$(repo_root)/skills/local/worktree-runtime-cleanup/scripts" "${copy}/"
+  record_now "${copy}/scripts/stop-run-processes.mjs"
+  # A listing that starts a process under the target after the first process
+  # table, as a run's process forking during the listing would, and lists it.
+  cat >"${copy}/scripts/list-processes.sh" <<EOF
+#!/usr/bin/env bash
+pid="\$(node -e '
+  const c = require("node:child_process").spawn("sleep", ["300"], { cwd: process.argv[1], detached: true, stdio: "ignore" });
+  c.unref(); console.log(c.pid);
+' "${target}")"
+echo "\${pid}" >"${BATS_TEST_TMPDIR}/fixture-late.pid"
+printf '%s\t1\t?\t%s\t%s\tcwd under target\tsleep 300\n' "\${pid}" "\$(LC_ALL=C ps -p "\${pid}" -o lstart= | sed 's/^ *//')" "${target}"
+EOF
+
+  run --separate-stderr node "${copy}/scripts/stop-run-processes.mjs" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  late="$(cat "${BATS_TEST_TMPDIR}/fixture-late.pid")"
+  [ "$(row_for "${late}" | cut -f1,6)" = "$(printf 'unverified\tfirst seen during the teardown')" ]
+  alive "${late}"
 }

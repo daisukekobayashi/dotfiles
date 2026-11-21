@@ -48,9 +48,12 @@ link.
   `list-processes.sh` between two process tables.
 - **A record bound by its hash.** The record decides what existed before the
   run, and a Codex `workspace-write` run may be able to write where it lives.
-  `record` prints the SHA-256 of what it wrote; the launcher keeps that value
-  in its own context and passes it to `stop` with `--sha256`, and `stop` reads
-  the file once and signals nothing unless that read has the same hash. A
+  `record` prints the SHA-256 of what it wrote; the launcher takes that value
+  only from the output it captured, never from a file it wrote and read back,
+  and passes it to `stop` with `--sha256`. `stop` checks with `lstat` that the
+  record is a regular file, reads it once without blocking, and signals
+  nothing unless that read has the same hash; a missing hash signals nothing
+  too, and a launcher that lost it does not run `stop`. A
   set whose runs use different `--cwd` worktrees keeps one record and hash per
   worktree. `stop` also refuses a record that is malformed (PIDs and start
   times not exactly as `ps` prints them), for another target, missing pid 1
@@ -64,10 +67,15 @@ link.
   target (normalized, with no backslash and no ` (deleted)` suffix), it lies
   outside every worktree registered below the target, it has no tty, and it
   has pid 1 or 0, or another process the run started, as its parent.
-  Ownership comes from timing and location, never from process names. A new
-  process listed under the target whose cwd is not an exact live path, such as
-  a Linux cwd with a ` (deleted)` suffix, may be the run's: it is reported
-  `unverified`, counts as a leftover, and is never signaled.
+  Ownership comes from timing and location, never from process names. Paths
+  are compared by canonical real path as the file system spells them, folding
+  case on a case-insensitive volume, and a cwd counts only while it still
+  exists. A new process under the target whose cwd is not an exact live path
+  (a Linux ` (deleted)` suffix, a cwd macOS still names after its removal, or
+  an ambiguous one), one first seen during the teardown, and one a listing
+  after the signals first shows, such as a child forked meanwhile, may be the
+  run's: each is reported `unverified`, counts as a leftover, and is never
+  signaled.
 - **Ancestry over the whole table.** A process under a parent that existed
   before the run, wherever that parent's cwd is, or under a new parent outside
   the target, is reported `left` and never signaled. Only pid 1 and 0 end the

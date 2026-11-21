@@ -9,15 +9,16 @@
 // The record file
 //   The record decides which processes existed before the run, so a run must
 //   not be able to change it unnoticed. `record` prints the SHA-256 of what it
-//   wrote as one line, "sha256 <64 lowercase hex digits>"; the caller keeps
-//   that value in its own context, never only in a file a run could write, and
-//   passes it to `stop` with --sha256. `stop` reads the file once and refuses
-//   it unless its SHA-256 equals that value, so a record a Codex run edited,
+//   wrote as one line, "sha256 <64 lowercase hex digits>"; the caller takes
+//   that value from this output and passes it to `stop` with --sha256, never
+//   reading it back from a file. `stop` reads the file once and refuses it
+//   unless its SHA-256 equals that value, so a record a Codex run edited,
 //   wherever it lives, signals nothing. The record must lie outside the target
 //   in a directory owned by the current user with no group or other access
 //   (mode 700); `record` creates it exclusively, without following a symbolic
-//   link, with mode 0600, and `stop` accepts only a regular file opened
-//   without following a symbolic link.
+//   link, with mode 0600. `stop` checks with lstat that the path names a
+//   regular file of at most 16 MiB before opening it, without blocking or
+//   following a symbolic link, so a FIFO or device is refused, not waited on.
 //
 // record
 //   Before the run, writes the target's real path, its own PID, and every
@@ -38,16 +39,23 @@
 //     during the listing;
 //   - it is absent from the record by PID and start time;
 //   - list-processes.sh lists it with reason exactly "cwd under target" (a
-//     --cwd argument alone never counts) and its cwd is an exact path at or
-//     below the target: absolute and normalized, without a backslash (the
-//     listing's escape) and without a " (deleted)" suffix;
-//   - its cwd is not inside a worktree registered below the target;
+//     --cwd argument alone never counts) and its cwd is an exact path:
+//     absolute and normalized, without a backslash (the listing's escape) and
+//     without a " (deleted)" suffix, still an existing directory, whose
+//     canonical real path lies at or below the target's;
+//   - that canonical cwd is not inside a worktree registered below the target.
+//     Paths are compared by canonical real path as the file system spells
+//     them, folding case when the target's volume is case-insensitive, so a
+//     case alias neither hides the target nor a nested worktree;
 //   - it has no tty;
 //   - its parent is pid 1 or 0, or itself a process the run started.
-//   A new process listed under the target whose cwd is not such an exact path,
-//   such as a cwd with a " (deleted)" suffix or an ambiguous one, may be the
-//   run's: it is reported "unverified" and never signaled, and counts as a
-//   leftover. Any other listed process is reported "left" with the reason and
+//   A new process listed under the target whose cwd is not such an exact live
+//   path, such as a cwd with a " (deleted)" suffix, a removed one, or an
+//   ambiguous one, may be the run's: it is reported "unverified" and never
+//   signaled, and counts as a leftover. So does a process under the target
+//   first seen during the teardown, and, when any signal was sent, a process
+//   under the target that a listing after the signals shows and neither the
+//   record nor the first listing had, such as a child forked meanwhile. Any other listed process is reported "left" with the reason and
 //   never signaled: one that existed before the run, one under a parent that
 //   did (such as another session's shell, wherever its cwd is), and one under a
 //   new parent outside the target. Ownership is read from the parent chain at
@@ -75,32 +83,34 @@
 //   running        still running after the second SIGTERM
 //   unverified     not signaled, or its exit not confirmed: its start time
 //                  changed or differs between lookups, its cwd is not an
-//                  exact live path, its parent was not found, or it could not
-//                  be read or signaled
+//                  exact live path, it was first seen during or after the
+//                  teardown's signals, its parent was not found, or it could
+//                  not be read or signaled
 //   left           not started by the run; <reason> says why
 //
 // Exit status:
 //   0  stop: every started process exited, or the run started none; record:
 //      written
 //   1  could not run, and nothing was signaled: list-processes.sh, ps, or git
-//      failed, wrote to stderr, or ran past 120 seconds, or the record is
-//      unusable (its SHA-256 differs from --sha256, or its place, type,
-//      format, or contents) or names another target. The teardown is
-//      unverified.
-//   2  usage error: an unknown subcommand or option, stop without a
-//      well-formed --sha256, a target that is not a directory, or for record
-//      a path that exists, lies inside the target, or is in a directory that
-//      is not private
-//   3  stop: a started process is still running or unverified
+//      failed, wrote to stderr, or ran past 120 seconds, --sha256 is missing,
+//      repeated, or malformed, or the record is unusable (its SHA-256 differs
+//      from --sha256, or its place, type, size, format, or contents) or names
+//      another target. The teardown is unverified.
+//   2  usage error: an unknown subcommand or option, a target that is not a
+//      directory, or for record a path that exists, lies inside the target,
+//      or is in a directory that is not private
+//   3  stop: a process is still running or unverified, or the listing after
+//      the signals could not run
 // Leftovers never change a review's result; worktree cleanup handles them.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync, statSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync, statSync, writeSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const RECORD_VERSION = 1;
+const RECORD_MAX_BYTES = 16 * 1024 * 1024;
 const LOOKUP_TIMEOUT_MS = 120_000;
 const RECHECK_TIMEOUT_MS = 10_000;
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -201,10 +211,15 @@ const processTable = async (timeoutMs = LOOKUP_TIMEOUT_MS) => {
   return table;
 };
 
+// Paths are compared by their canonical real path, as the file system spells
+// it (realpathSync.native), so a case alias on a case-insensitive volume
+// names the same directory; there, containment also folds case.
+const canonical = (p) => realpathSync.native(p);
+
 const resolveTarget = (target) => {
   let real;
   try {
-    real = realpathSync(target);
+    real = canonical(target);
   } catch {
     throw new Usage(`not a directory: ${target}`);
   }
@@ -214,10 +229,24 @@ const resolveTarget = (target) => {
 
 const realOrSelf = (dir) => {
   try {
-    return realpathSync(dir);
+    return canonical(dir);
   } catch {
     return path.resolve(dir);
   }
+};
+
+// True when the target's volume treats names case-insensitively: the target
+// with one letter's case flipped names the same directory. A target without a
+// letter to flip counts as case-insensitive, the cautious choice.
+const caseInsensitive = (target) => {
+  const at = [...target].findLastIndex((c) => c.toLowerCase() !== c.toUpperCase());
+  if (at < 0) return true;
+  const c = target[at];
+  const flipped = target.slice(0, at) + (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()) + target.slice(at + 1);
+  if (!existsSync(flipped)) return false;
+  const a = statSync(target);
+  const b = statSync(flipped);
+  return a.dev === b.dev && a.ino === b.ino;
 };
 
 // The record's real path: outside the target, in an existing directory.
@@ -226,12 +255,12 @@ const recordPath = (file, target, Fail) => {
   const abs = path.resolve(file);
   let parent;
   try {
-    parent = realpathSync(path.dirname(abs));
+    parent = canonical(path.dirname(abs));
   } catch {
     throw new Fail(`the record's directory does not exist: ${file}`);
   }
   const real = path.join(parent, path.basename(abs));
-  if (under(real, target)) throw new Fail(`the record must lie outside the target: ${file}`);
+  if (under(real.toLowerCase(), target.toLowerCase())) throw new Fail(`the record must lie outside the target: ${file}`);
   return { real, parent };
 };
 
@@ -282,11 +311,17 @@ const readRecord = (target, file, expected) => {
   const { real } = recordPath(file, target, Unavailable);
   let bytes;
   try {
-    const fd = openSync(real, constants.O_RDONLY | constants.O_NOFOLLOW);
+    // The type is checked before any open, so a FIFO or device never blocks,
+    // and the opened file must be the one checked.
+    const named = lstatSync(real);
+    if (!named.isFile()) throw new Error("not a regular file");
+    if (named.size > RECORD_MAX_BYTES) throw new Error("larger than a record can be");
+    const fd = openSync(real, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const stat = fstatSync(fd);
-      if (!stat.isFile()) throw new Error("not a regular file");
+      if (!stat.isFile() || stat.dev !== named.dev || stat.ino !== named.ino) throw new Error("the file changed while it was opened");
       if (stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0) throw new Error("not a private file (mode 600)");
+      if (stat.size > RECORD_MAX_BYTES) throw new Error("larger than a record can be");
       bytes = readFileSync(fd);
     } finally {
       closeSync(fd);
@@ -294,6 +329,7 @@ const readRecord = (target, file, expected) => {
   } catch (error) {
     throw new Unavailable(`cannot read the record ${file}: ${error.code ?? error.message}`);
   }
+  if (bytes.length > RECORD_MAX_BYTES) throw new Unavailable(`cannot read the record ${file}: larger than a record can be`);
   if (sha256(bytes) !== expected) throw new Unavailable(`the record ${file} does not match --sha256`);
   let data;
   try {
@@ -330,23 +366,34 @@ const listing = async (target) => {
 };
 
 // Worktrees registered strictly below the target, by real path.
-const nestedWorktrees = async (target) => {
+const nestedWorktrees = async (target, inside) => {
   const out = await run("git worktree list", "git", ["--no-optional-locks", "-C", target, "worktree", "list", "--porcelain", "-z"]);
   const nested = [];
   for (const field of out.split("\0")) {
     if (!field.startsWith("worktree ")) continue;
     const dir = realOrSelf(field.slice("worktree ".length));
-    if (dir !== target && under(dir, target)) nested.push(dir);
+    if (inside(dir, target) && !inside(target, dir)) nested.push(dir);
   }
   return nested;
 };
 
-// Why a listed cwd is not an exact path at or below the target, or "".
-const cwdProblem = (cwd, target) => {
-  if (cwd.includes("\\")) return "cwd ambiguous";
-  if (cwd.endsWith(" (deleted)")) return "cwd deleted";
-  if (!cwd.startsWith("/") || path.posix.normalize(cwd) !== cwd || !under(cwd, target)) return "cwd not an exact path under the target";
-  return "";
+// The live canonical path of a listed cwd at or below the target, or why it
+// is not one: { live } or { problem }. The directory must still exist (macOS
+// reports a removed cwd without a " (deleted)" suffix) and resolve inside the
+// target; a cwd that cannot be resolved is never trusted.
+const liveCwd = (cwd, target, inside) => {
+  if (cwd.includes("\\")) return { problem: "cwd ambiguous" };
+  if (cwd.endsWith(" (deleted)")) return { problem: "cwd deleted" };
+  if (!cwd.startsWith("/") || path.posix.normalize(cwd) !== cwd) return { problem: "cwd not an exact path under the target" };
+  let live;
+  try {
+    live = canonical(cwd);
+    if (!statSync(live).isDirectory()) return { problem: "cwd no longer a directory" };
+  } catch {
+    return { problem: "cwd no longer exists" };
+  }
+  if (!inside(live, target)) return { problem: "cwd not an exact path under the target" };
+  return { live };
 };
 
 // The start time of one process now: a string, "" when it is gone, or null
@@ -405,7 +452,9 @@ const waitFor = async (procs, ms) => {
 const stop = async (target, file, expected, waitSeconds) => {
   // Everything that can make the teardown unavailable runs before any signal.
   const before = readRecord(target, file, expected);
-  const nested = await nestedWorktrees(target);
+  const folded = caseInsensitive(target);
+  const inside = (dir, root) => (folded ? under(dir.toLowerCase(), root.toLowerCase()) : under(dir, root));
+  const nested = await nestedWorktrees(target, inside);
   const first = await processTable();
   if (first.get("1").started !== before.get("1")) {
     throw new Unavailable(`the record ${file} was not taken on this host since it last started`);
@@ -421,9 +470,10 @@ const stop = async (target, file, expected, waitSeconds) => {
     const now = table.get(pid);
     const then = first.get(pid);
     let verdict;
-    const problem = row.reason === "cwd under target" ? cwdProblem(row.cwd, target) : "";
-    const inNested = nested.find((dir) => under(row.cwd, dir));
+    const { problem, live } = row.reason === "cwd under target" ? liveCwd(row.cwd, target, inside) : {};
+    const inNested = live && nested.find((dir) => inside(live, dir));
     if (!now) verdict = { status: "gone", reason: "exited before the teardown" };
+    else if (!then && (row.reason === "cwd under target" || row.reason === "cwd ambiguous")) verdict = { status: "unverified", reason: "first seen during the teardown" };
     else if (!then) verdict = { status: "left", reason: "started during the teardown" };
     else if (then.started !== row.started || now.started !== row.started) verdict = { status: "unverified", reason: "start time differs between lookups" };
     else if (before.get(pid) === now.started) verdict = { status: "left", reason: "existed before the run" };
@@ -496,6 +546,25 @@ const stop = async (target, file, expected, waitSeconds) => {
     if (result.status === "running" || result.status === "unverified") leftover = true;
     lines.push([result.status, pid, table.get(pid)?.ppid ?? row.ppid, row.started, row.cwd, result.reason || row.reason].join("\t"));
   }
+  // After any signal, list the target again: a process under it that the
+  // record and the first listing did not have, such as a child a started
+  // process forked during the teardown, is a leftover, never signaled.
+  if (started.length > 0) {
+    let again;
+    try {
+      again = await listing(target);
+    } catch (error) {
+      if (!(error instanceof Unavailable)) throw error;
+      process.stderr.write(`the listing after the signals could not run (${error.message}); the teardown is unverified\n`);
+      leftover = true;
+    }
+    for (const [pid, row] of again ?? []) {
+      if (row.reason !== "cwd under target" && row.reason !== "cwd ambiguous") continue;
+      if (before.get(pid) === row.started || rows.get(pid)?.started === row.started) continue;
+      leftover = true;
+      lines.push(["unverified", pid, row.ppid, row.started, row.cwd, "first seen after the first signal"].join("\t"));
+    }
+  }
   const state = leftover ? "leftovers" : started.length ? "verified" : "none";
   lines.push(`teardown\t${state}`);
   process.stdout.write(`${lines.join("\n")}\n`);
@@ -513,9 +582,13 @@ const main = async (argv) => {
       const value = args[++i];
       if (!/^\d+(\.\d+)?$/.test(value ?? "") || Number(value) > 60) throw new Usage("--wait takes seconds from 0 to 60");
       wait = Number(value);
-    } else if (args[i] === "--sha256" && subcommand === "stop" && expected === null) {
+    } else if (args[i] === "--sha256" && subcommand === "stop") {
+      // A missing, repeated, or malformed hash leaves the record unverifiable:
+      // stop refuses like any unusable record (exit 1).
       const value = args[++i];
-      if (!/^[0-9a-f]{64}$/.test(value ?? "")) throw new Usage("--sha256 takes the 64 lowercase hex digits record printed");
+      if (expected !== null || !/^[0-9a-f]{64}$/.test(value ?? "")) {
+        throw new Unavailable("--sha256 takes, once, the 64 lowercase hex digits record printed");
+      }
       expected = value;
     } else if (args[i].startsWith("-")) {
       throw new Usage(`unknown option: ${args[i]}`);
@@ -529,7 +602,7 @@ const main = async (argv) => {
     await record(target, positional[1]);
     return 0;
   }
-  if (expected === null) throw new Usage("stop needs --sha256 with the value record printed");
+  if (expected === null) throw new Unavailable("stop needs --sha256 with the value record printed");
   return stop(target, positional[1], expected, wait);
 };
 

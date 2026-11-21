@@ -92,44 +92,50 @@ session starts in the target during the run counts as started by the run once
 its parent has exited, and is stopped.
 
 1. Before the run, record the process table in a new `mktemp -d` directory
-   outside the worktree, and keep the SHA-256 that `record` prints in your own
-   context, such as its command output or your progress record outside the
-   worktree, never only in a file beside the record:
+   outside the worktree:
 
    ```text
    dir="$(mktemp -d)" &&
      node <this skill>/scripts/stop-run-processes.mjs record <worktree> "$dir/record.json"
    ```
 
-   It prints one line, `sha256 <hex>`. A Codex run may be able to write the
-   record's directory; the hash, not the location, is what makes an edited
-   record refuse to stop anything. When the runs of a set use different
-   `--cwd` worktrees, such as the adversarial review's reviewed and disposable
-   worktrees, keep one record and its hash per worktree. A non-zero exit leaves
-   no usable record: run the review, report the teardown as unverified, and
-   skip step 2.
+   It prints one line, `sha256 <hex>`. Take the hash only from that output, as
+   you captured it, and pass it unchanged to step 2. Never write it to a file
+   and read it back, including a progress record, a file beside the record, or
+   anything a run could write: a Codex run may be able to write such files and
+   the record's directory, and the hash, not the location, is what makes an
+   edited record refuse to stop anything. If you no longer have the captured
+   output, skip step 2 and report the teardown as unverified. When the runs of a
+   set use different `--cwd` worktrees, such as the adversarial review's
+   reviewed and disposable worktrees, keep one record and its hash per worktree.
+   A non-zero exit leaves no usable record: run the review, report the teardown
+   as unverified, and skip step 2.
 2. After the run, whether it succeeded or failed, run
    `node <this skill>/scripts/stop-run-processes.mjs stop <worktree> "$dir/record.json" --sha256 <hex>`
    with the hash `record` printed for that worktree, then remove `$dir`. A
-   record whose SHA-256 differs stops nothing (exit 1). A process is one the
-   run started only when it is absent from the record by PID and start time,
-   every lookup gives it the same start time, `list-processes.sh` lists it with
-   reason `cwd under target` and an exact cwd at or below the target (no
-   backslash, no ` (deleted)` suffix), its cwd is outside every worktree
+   record whose SHA-256 differs, or a missing or malformed hash, stops nothing
+   (exit 1). A process is one the run started only when it is absent from the
+   record by PID and start time, every lookup gives it the same start time,
+   `list-processes.sh` lists it with reason `cwd under target` and an exact cwd
+   (no backslash, no ` (deleted)` suffix) that still exists and whose canonical
+   real path lies at or below the target's, that cwd is outside every worktree
    registered below the target, it has no tty, and its parent is pid 1 or
-   another process the run started. A `--cwd` argument alone, a process that
-   existed before the run, and one under a parent that did or under a new parent
-   outside the target never count: the script reports them as `left` and leaves
-   them running. A new process listed under the target whose cwd is not an exact
-   live path, such as one with a ` (deleted)` suffix or an ambiguous one, may be
-   the run's: the script reports it as `unverified`, a leftover, and never
-   signals it. It sends SIGTERM to the top of each started tree after rechecking
-   its PID and start time, waits about 10 seconds, sends SIGTERM once more to
-   each started process still running whose PID and start time match, even if
-   reparented, and never sends SIGKILL.
+   another process the run started. Paths are compared as the file system spells
+   them, folding case on a case-insensitive volume, so a case alias hides
+   neither the target nor a nested worktree. A `--cwd` argument alone, a process
+   that existed before the run, and one under a parent that did or under a new
+   parent outside the target never count: the script reports them as `left` and
+   leaves them running. A new process under the target whose cwd is not an exact
+   live path, such as one with a ` (deleted)` suffix, a removed one, or an
+   ambiguous one, or one first seen during the teardown or in the listing it
+   takes after its signals, may be the run's: the script reports it as
+   `unverified`, a leftover, and never signals it. It sends SIGTERM to the top
+   of each started tree after rechecking its PID and start time, waits about 10
+   seconds, sends SIGTERM once more to each started process still running whose
+   PID and start time match, even if reparented, and never sends SIGKILL.
 3. Report its output with the review; its rows carry no command lines. Exit 0
    means every started process exited, or the run started none; exit 3 means a
-   started process is still running or unverified. Leftovers do not change the
+   process is still running or unverified. Leftovers do not change the
    review result; cleanup under
    [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
    handles them before the worktree is removed.
