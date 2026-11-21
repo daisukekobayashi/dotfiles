@@ -20,7 +20,8 @@ the user owns, or to commands the user approved.
   skill is called directly. Only the launcher creates and removes disposable
   worktrees.
 - **Reviewer:** reads the reviewed worktree only with the review skill's
-  read-only collection commands, such as `git -C <reviewed worktree> diff`, and
+  read-only collection commands, such as
+  `git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> diff`, and
   runs repros only inside the disposable worktree the launcher
   gives it. It never runs `git worktree` or any command that writes refs.
 - **Parent:** the caller that acts on the findings, the same session as the
@@ -44,7 +45,10 @@ The reviewer never decides provenance itself; without the launcher's
 decision, it treats runs as approval required.
 
 When approval is required, the reviewer runs no command. It writes the repro
-files and `command` under [Evidence](#evidence) without running them, and
+files and `command` under [Evidence](#evidence) without running them, or, on a
+read-only Codex route that cannot write them, gives each file's path and full
+content and the `command` lines in the finding, which the launcher writes to
+the evidence directory under the same checks; and it
 reports each finding that a run could show as `unproven: needs approval` with
 the exact commands it would run, dependency restoration included. The parent
 handles them under [Approved run](#approved-run); issue, PR, comment, or
@@ -67,12 +71,12 @@ Create one for the reviewer before it starts, and one for each parent rerun:
    `/private/var/...` for macOS's `/var/...`, and build the path from it, since
    git lists worktrees by real path.
 3. Run
-   `git -c core.hooksPath=/dev/null -C <reviewed worktree> worktree add --detach <path> <reviewed head SHA>`
+   `git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> worktree add --detach <path> <reviewed head SHA>`
    and record the path and the head, for the reviewer's run, a parent rerun,
    and an approved run alike. The `core.hooksPath` setting keeps every hook,
    such as a `post-checkout` hook that a tracked hooks directory in the
    reviewed head would supply, from running during creation, before any run is
-   approved. Never create a branch. Uncommitted changes in the reviewed
+   approved, as [Git commands](#git-commands) requires. Never create a branch. Uncommitted changes in the reviewed
    worktree are not part of the run; a finding that depends on them is
    `unproven: uncommitted change`.
 4. When the target has no git checkout or no commit for the reviewed head,
@@ -90,10 +94,11 @@ After the run ends, whether it completed, failed, or reached a bound:
    "Brokers Started by a Codex Review" with the disposable worktree as its
    target worktree.
 2. For the reviewer's worktree, copy the evidence under [Evidence](#evidence).
-3. Check that a `worktree` line of `git worktree list --porcelain` equals the
+3. Check that a `worktree` line of
+   `git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> worktree list --porcelain` equals the
    recorded real path byte for byte. Report a `HEAD` that is no longer the
    recorded head as a boundary breach.
-4. Run `git -C <reviewed worktree> worktree remove --force <path>`. Keep the
+4. Run `git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> worktree remove --force <path>`. Keep the
    `mktemp -d` directory when it holds evidence and report its path;
    otherwise, such as after a parent rerun, remove it with `rmdir`.
 
@@ -130,6 +135,17 @@ sets; the subagent route and the parent rerun have only the host's permission
 mode. The reviewed code itself, its tests, and its dependencies are not bound by
 the instruction, which is why [Provenance](#provenance) gates them. Every
 review states this residual scope in its Coverage and Residual Risk.
+
+## Git commands
+
+Every git command that the launcher, the reviewer, or the parent runs itself,
+for collection, worktree creation and removal, reruns, and approved runs, on
+the reviewed worktree or a disposable worktree, runs as
+`git --no-optional-locks -c core.hooksPath=/dev/null ...`. A hooks directory that the reviewed head tracks, through a
+relative `core.hooksPath`, then supplies no hook, and `git status` writes no
+index, so no hook such as `post-checkout` or `post-index-change` runs before a
+run is approved. Git commands inside an approved or automatic proving command
+are part of that run.
 
 ## Bounds
 

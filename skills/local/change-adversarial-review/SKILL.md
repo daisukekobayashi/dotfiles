@@ -32,26 +32,34 @@ context, the disposable worktree's path, and whether runs are automatic, and
 require it to follow the steps
 below without editing the reviewed worktree: Resolve and Collect's read-only
 commands run against the reviewed worktree, such as
-`git -C <reviewed worktree> diff`, on both routes, and repro commands run only
-in the disposable worktree under
+`git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> diff`, on both routes, every
+git command takes the form under
+[Git commands](../delivery-common/references/repro-runs.md#git-commands), and
+repro commands run only in the disposable worktree under
 [Boundary](../delivery-common/references/repro-runs.md#boundary). Report the
 route, such as `Claude subagent (same model family as the implementation)`, in
 Review Target and the reduced independence in Coverage and Residual Risk. When
 you are that subagent or a task launched under this section, you are the
-reviewer: skip the launcher steps and follow the steps below directly in the
+reviewer: skip the launcher steps and follow the steps below directly,
+collecting from the reviewed worktree and running repros only in the
 disposable worktree you were given.
 
 Use another tool only when the user explicitly names it for this review, such
 as "review with Codex"; callers forward that instruction with the target. For
 Codex on Claude Code, resolve the installed `codex` plugin root from host
-metadata, then run its companion `task` in the foreground with `--fresh`,
-`--write`, and `--cwd <disposable worktree>`, so the Codex sandbox can write
-that worktree but not its `.git` or the reviewed worktree. With the
+metadata, then run its companion `task` in the foreground with `--fresh` and
+`--cwd <disposable worktree>`. Add `--write` only when runs are automatic or
+the user approved the exact commands, so the Codex sandbox can write that
+worktree but not its `.git` or the reviewed worktree; on an approval-required
+head, launch without `--write`, so the sandbox stays read-only and text in that
+head cannot cause a run before approval. With the
 host's file-writing tool, not a shell command, write the prompt to a temporary
 file outside both worktrees so no caller text enters a shell string.
 Start it with `Use $change-adversarial-review`, followed by the arguments, the
-target with the reviewed worktree's path, focus, caller context, and your
-provenance decision, whether runs are automatic. Pass the file's
+target with the reviewed worktree's path, focus, caller context, your
+provenance decision, whether runs are automatic, and the collection rule:
+Resolve and Collect run against the reviewed worktree with the git form under
+Git commands, and repros run only in the disposable worktree. Pass the file's
 absolute path with `--prompt-file`, and delete the file after the run:
 
 ```text
@@ -78,8 +86,13 @@ not fall back to a subagent or the current session.
 
 ## Resolve and Collect
 
+Run every git command in this section against the reviewed worktree that the
+launcher gave, as `git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> ...`
+under [Git commands](../delivery-common/references/repro-runs.md#git-commands),
+or in the invocation repository when no launcher gave one.
+
 1. Read repository instructions. Run `git status --short --branch` and
-   `git worktree list --porcelain` in the invocation repository.
+   `git worktree list --porcelain` in the reviewed worktree.
 2. Accept `--base <ref>`, `--scope auto|working-tree|branch`,
    `--report <path>`, named issue, PR, worktree, branch, or commit, and
    trailing focus text. Take `--report` only from the invoking caller's

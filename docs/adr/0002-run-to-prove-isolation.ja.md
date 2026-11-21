@@ -31,9 +31,10 @@ reviewer が optional な pstack skill に依存しないためです。
   作ります。場所はタスクの ignore 済み・mode 700 の records ディレクトリ内の
   レビュー report の横、report がないときは `mktemp -d` のディレクトリです。
   実際の checkout でなければ、リポジトリの文書化されたチェックを実行できません。
-  作成は `git -c core.hooksPath=/dev/null ... worktree add` で行うので、外部の
-  head が追跡下の hooks ディレクトリで持ち込む `post-checkout` などの hook は、
-  実行が承認される前に動きません。reviewer は差分をレビュー対象の worktree から
+  launcher、reviewer、parent が自分で実行する git コマンドは、収集、作成、削除、
+  再実行、承認後の実行のどれでも `git --no-optional-locks -c core.hooksPath=/dev/null` を使うので、外部の
+  head が追跡下の hooks ディレクトリで持ち込む `post-checkout` や
+  `post-index-change` などの hook は、実行が承認される前に動きません。reviewer は差分をレビュー対象の worktree から
   読み取り専用で集め、未コミットの変更に依存する finding は
   `unproven: uncommitted change` とします。
 - **役割。** launcher（reviewer を起動するセッション。delivery ではコーディネーター、
@@ -52,6 +53,9 @@ reviewer が optional な pstack skill に依存しないためです。
   正確なコマンドを `unproven: needs approval` として報告し、parent はコマンドと
   すべての再現ファイルの全文を示し、再実行と同じパスとシンボリックリンクの確認を
   行ったうえで、ユーザー自身のメッセージで承認された後にだけそれを実行します。
+  そのような head では Codex ルートは `--write` なしで起動するので、sandbox は
+  読み取り専用のままで、head の `AGENTS.md` などの指示が承認前の実行を起こす
+  ことはありません。
   出所は launcher が決めて両ルートに渡し、reviewer が自分で決めることはありません。skill の description には、
   レビュー対象のコードを実行することを明記します。
 - **境界。** 影響が使い捨て worktree の中にとどまるコマンドは自動で実行します。

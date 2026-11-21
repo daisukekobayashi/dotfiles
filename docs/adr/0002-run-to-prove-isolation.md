@@ -31,10 +31,11 @@ required reviewer does not depend on an optional pstack skill.
 - **Location.** Each run gets a detached `git worktree` at the reviewed head,
   beside the review report in the task's ignored, mode-700 records directory,
   or in a `mktemp -d` directory without a report. Only a real checkout runs a
-  repository's documented checks. It is created with
-  `git -c core.hooksPath=/dev/null ... worktree add`, so no hook, such as a
-  `post-checkout` hook from a tracked hooks directory in an external head, runs
-  before a run is approved. The reviewer still collects the diff read-only from
+  repository's documented checks. Every git command that the launcher, the
+  reviewer, or the parent runs itself, for collection, creation, removal,
+  reruns, and approved runs, uses `git --no-optional-locks -c core.hooksPath=/dev/null`, so no hook, such as
+  `post-checkout` or `post-index-change` from a tracked hooks directory in an
+  external head, runs before a run is approved. The reviewer still collects the diff read-only from
   the reviewed worktree, and a finding that depends on uncommitted changes is
   `unproven: uncommitted change`.
 - **Roles.** The launcher, the session that starts the reviewer (the
@@ -56,7 +57,9 @@ required reviewer does not depend on an optional pstack skill.
   reports the exact commands as `unproven: needs approval`, and the parent runs
   them only after the user approves them in the user's own message, having
   shown the command and the full body of every repro file and run the same
-  path and symlink checks as a rerun. The launcher decides provenance and
+  path and symlink checks as a rerun. On such a head the Codex route launches
+  without `--write`, so the sandbox stays read-only and instructions in the
+  head, such as its `AGENTS.md`, cannot cause a run before approval. The launcher decides provenance and
   passes it to both routes; the reviewer never decides it. The skill's
   description states that it executes the reviewed code.
 - **Boundary.** Commands whose effects stay inside the disposable worktree run
