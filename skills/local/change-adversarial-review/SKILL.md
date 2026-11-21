@@ -1,6 +1,6 @@
 ---
 name: change-adversarial-review
-description: Use only when explicitly invoked with `$change-adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items. It executes the reviewed head's code in a disposable worktree to prove findings, only on a head the user trusts.
+description: Use only when explicitly invoked with `$change-adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items. It executes the reviewed head's code in a disposable worktree to prove findings, only on the delivery's own head or when the user's request asks it to run them.
 ---
 
 # Change Adversarial Review

@@ -197,8 +197,8 @@ the in-flight deliveries and the reports this affects.
 
 ## Codex route
 
-The Codex companion runs `task` read-only and cannot write the file, so the
-caller writes it. Leave `--report` out of the prompt and ask instead for a final
+The report path lies outside the Codex sandbox's writable roots, so the
+companion cannot write the file, and the caller writes it. Leave `--report` out of the prompt and ask instead for a final
 message of the unchanged Output, then the v3 delimiter, the
 [Review block](#review-block) with `report` set to the path, and the end line,
 writing no file. Redirect the output to the

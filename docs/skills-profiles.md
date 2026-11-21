@@ -140,8 +140,9 @@ independence. Another tool, such as Codex through the installed Codex plugin's
 `task` runtime on Claude Code, runs them only when the user explicitly
 names it. `change-review` runs read-only. `change-adversarial-review` backs each
 finding with a run against the real code where a run is possible, but only on
-a trusted head: the delivery's own work, the user's own local changes, or a
-head the user declares trusted. There the coordinator creates a detached
+a trusted head: the delivery's own work, or, when invoked directly, a head
+whose review the user explicitly asks to run or prove findings. There the
+coordinator creates a detached
 worktree at the reviewed head beside the review report, the reviewer runs
 repros only there (Codex launched as `repro-runs.md`'s Trusted heads rule
 sets), and the coordinator copies the evidence, removes the worktree without

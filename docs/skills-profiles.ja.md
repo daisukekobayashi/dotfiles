@@ -140,8 +140,8 @@ Claude Code での導入済み Codex plugin の `task` ランタイムなど、
 別のツールはユーザーが明示的に指定した場合だけ使います。`change-review` は
 読み取り専用で実行します。`change-adversarial-review` は、実行できる場合は各
 finding を実際のコードでの実行で裏付けますが、それは信頼できる head、つまり
-delivery 自身の作業、ユーザー自身のローカルの変更、ユーザーが信頼すると明言した
-head に限ります。その場合、コーディネーターがレビュー対象の head で detached の
+delivery 自身の作業か、直接呼び出しでユーザーが実行や証明を明示的に求めた
+レビューの head に限ります。その場合、コーディネーターがレビュー対象の head で detached の
 worktree をレビュー report の横に作り、reviewer はその中でだけ再現を実行します
 （Codex は `repro-runs.md` の Trusted heads のルールどおりに起動します）。
 コーディネーターは証拠をコピーしてから worktree を確認なしで削除し、finding に
