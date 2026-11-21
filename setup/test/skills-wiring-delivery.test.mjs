@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -11,6 +12,18 @@ import {
 } from "./skills-helpers.mjs";
 
 const flat = (text) => text?.replace(/\s+/g, " ");
+// A gitignore-style glob from the repository root, as Risk Tier's sensitive path entries use.
+const gitignoreGlob = (pattern) => {
+  const body = pattern.replace(/^\//, "").replace(/\/$/, "");
+  const source = body.replace(/\*\*\/|\/\*\*$|\*\*|\*|\?|[.+^${}()|[\]\\]/g, (token) => ({
+    "**/": "(?:.*/)?",
+    "/**": "/.*",
+    "**": ".*",
+    "*": "[^/]*",
+    "?": "[^/]",
+  })[token] ?? `\\${token}`);
+  return new RegExp(`^${body.includes("/") ? "" : "(?:.*/)?"}${source}(?:/.*)?$`);
+};
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const scriptClause = "where `<script>` is [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs) resolved from this skill's directory";
 const quoteRule = "Write a name into this or any command only when it uses solely ASCII letters, digits, `/`, `.`, `_`, and `-`; any other name is not safe, without running the check.";
@@ -273,26 +286,58 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(riskTier, /`AGENTS\.md` entries ignored as invalid/);
   const agents = await readText(path.join(repoRoot, "AGENTS.md"));
   assert.match(agents, /^## Delivery sensitive paths$/m);
-  assert.match(agents, /^- exclude `skills\/\*\*\/\*\.md` from agent instruction files$/m);
-  assert.match(agents, /^- add `skills\/local\/delivery-common\/\*\*`$/m);
-  assert.match(agents, /^- add `skills\/local\/change-\*review\/\*\*`$/m);
-  assert.match(agents, /^- add `skills\/local\/\*-delivery\/\*\*`$/m);
-  for (const pattern of [
-    "*-worktree-cleanup/**",
-    "worktree-runtime-cleanup/**",
-    "beads-merge-cleanup/**",
-    "github-pr-*/**",
-    "azure-devops-pr-*/**",
-    "azure-devops-common/**",
-    "github-issue-create/**",
-    "azure-devops-work-item-create/**",
-    "github-issue-start/**",
-    "azure-devops-work-item-start/**",
-  ]) {
-    assert.ok(agents.includes(`- add \`skills/local/${pattern}\`\n`), `AGENTS.md: missing add ${pattern}`);
-  }
+  const sensitiveSection = riskTier.match(/\n## Sensitive paths\n[\s\S]*?(?=\n## )/)?.[0] ?? "";
+  const defaultLabels = [...sensitiveSection.matchAll(/^- ([^:\n]+)/gm)].map((m) => m[1].trim().toLowerCase());
+  assert.ok(defaultLabels.includes("install, setup, and bootstrap scripts"), "risk-tier.md: missing setup default");
+  assert.ok(defaultLabels.includes("agent instruction files"), "risk-tier.md: missing agent instruction files default");
+  const tracked = spawnSync("git", ["ls-files", "-z"], { cwd: repoRoot, encoding: "utf8" }).stdout.split("\0").filter(Boolean);
+  assert.ok(tracked.length > 0, "git ls-files listed no files");
+  const entries = { add: [], exclude: [] };
   for (const line of agents.split("\n").filter((l) => l.startsWith("- "))) {
-    assert.match(line, /^- (add `[^`]+`|exclude `[^`]+` from [^`]+)$/, `AGENTS.md: invalid entry ${line}`);
+    const entry = line.match(/^- (?:add `([^`]+)`|exclude `([^`]+)` from ([^`]+))$/);
+    assert.ok(entry, `AGENTS.md: invalid entry ${line}`);
+    const [, added, excluded, label] = entry;
+    if (label !== undefined) {
+      assert.ok(defaultLabels.includes(label.trim().toLowerCase()), `AGENTS.md: unknown default ${label}`);
+    }
+    const pattern = added ?? excluded;
+    const glob = gitignoreGlob(pattern);
+    // A stale pattern, such as one left behind by a rename, silently drops a file from the sensitive set.
+    assert.ok(tracked.some((file) => glob.test(file)), `AGENTS.md: ${pattern} matches no tracked file`);
+    entries[added ? "add" : "exclude"].push(glob);
+  }
+  const added = (file) => entries.add.some((glob) => glob.test(file));
+  const excluded = (file) => entries.exclude.some((glob) => glob.test(file));
+  for (const file of [
+    "skills/local/delivery-common/SKILL.md",
+    "skills/local/delivery-common/references/completion.md",
+    "skills/local/delivery-common/references/phase-delegation.md",
+    "skills/local/delivery-common/references/risk-tier.md",
+    "skills/local/change-security-review/SKILL.md",
+    "skills/local/github-issue-delivery/SKILL.md",
+    "skills/local/azure-devops-work-item-delivery/SKILL.md",
+    "skills/local/github-worktree-cleanup/SKILL.md",
+    "skills/local/azure-devops-worktree-cleanup/SKILL.md",
+    "skills/local/github-pr-publish/SKILL.md",
+  ]) {
+    assert.ok(added(file), `AGENTS.md: ${file} must stay sensitive`);
+  }
+  for (const file of [
+    "skills/local/delivery-common/scripts/check-push-target.mjs",
+    "skills/local/delivery-common/scripts/check-cleanup-targets.mjs",
+    "skills/local/delivery-common/scripts/check-report-handoff.mjs",
+    "skills/local/change-review/agents/openai.yaml",
+    "skills/profiles/base.json",
+    "setup/bootstrap.sh",
+    "setup/tools.sh",
+    "setup/links.sh",
+    "setup/packages.ps1",
+    "setup/src/skills.ts",
+    "setup/src/codex.ts",
+    "setup/src/claude.ts",
+    "setup/package-lock.json",
+  ]) {
+    assert.equal(excluded(file), false, `AGENTS.md: ${file} must not be excluded`);
   }
   assert.match(riskTier, /^## Sensitive paths$/m);
   assert.match(riskTier, /deletes `SECURITY\.md`, `REVIEW\.md`, or `CODEOWNERS`\s+touches a sensitive path/);

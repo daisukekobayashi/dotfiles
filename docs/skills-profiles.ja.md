@@ -180,7 +180,7 @@ sensitive path を対象外にしたり、material やセキュリティの基�
 delivery フローでは、変更のリスク tier が High のとき、
 または diff が sensitive path に触れるときに3番目のローカルレビューとして実行します。
 リポジトリはルートの `AGENTS.md` の `## Delivery sensitive paths` セクションで、
-既定の sensitive path を追加または除外できます。このリポジトリは `delivery-common`、`*-delivery`、`change-*review` と、ローカルやリモートのリソースを削除する skill や GitHub、Azure DevOps に書き込む skill（worktree、runtime、beads merge の cleanup skill、GitHub と Azure DevOps の PR skill、`azure-devops-common`、issue と Work Item の create skill と start skill）を除く `skills/` 配下の Markdown を除外します。
+既定の sensitive path を追加または除外できます。このリポジトリは、エージェントの権限を与える、制限する、またはゲートするファイル（commit、push、merge、cleanup、リモートへの書き込みの承認、読み取り専用の制限、コードの実行、permission、allowlist、hook のルール、tier とセキュリティレビューの選択）と、エージェントの設定をインストールするか、リモートのコンテンツを取得または実行する setup コードだけを sensitive に残します。ルートの `SECURITY.md` は公開リポジトリの読者を攻撃者に、個人情報を資産に挙げ、ルートの `REVIEW.md` はその情報の公開や、`AGENTS.md` のエントリが対象としないファイルへの新しい権限ルールの追加を material な欠陥とします。
 `delivery-common` のリスク tier（Low、Medium、High）は作者ではなく変更から決まり、
 tier ごとの1つの表でレビューの量を決めます。preflight の深さ、ローカルレビューの reviewer と
 ラウンド上限、hosted レビューのラウンド数、マージと cleanup の確認をまとめるかどうか、
