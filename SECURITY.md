@@ -1,0 +1,36 @@
+# Security Policy
+
+This repository is public. Anyone can read every tracked file, its full
+history, and its pull requests and issues. Removing a committed value later
+needs a history rewrite and does not recall copies already made.
+
+## Assets
+
+These are categories. This file and the rest of the repository never list
+actual values.
+
+- Personal identifiers: real names, email addresses, phone numbers, postal
+  addresses, and account or user IDs of the owner or other people.
+- Employer, customer, and organization names: any organization the owner
+  works for or with, other than the public vendors and projects the tooling
+  already depends on.
+- Internal hostnames: names, IP addresses, and URLs of private networks,
+  machines, or services.
+- Absolute paths that contain a real user name, such as a home directory.
+- Credentials: tokens, API keys, passwords, private keys, certificates, and
+  connection strings.
+- Agent logs and transcripts: session logs, conversation exports, delivery and
+  review records, and tool output copied from them.
+
+## Attackers
+
+- Public readers: anyone who reads the repository, its history, forks, pull
+  requests, or issues, including crawlers and indexers. Committing an asset
+  discloses it to them, even when the developer commits it.
+
+The default attacker positions of the security review still apply.
+
+## Sensitive paths
+
+This file names no sensitive paths. The root `AGENTS.md`
+`## Delivery sensitive paths` section is their single source.
