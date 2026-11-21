@@ -59,8 +59,11 @@
 //   cannot run; it never counts as an empty listing. The manifest also
 //   records the PR head repository.
 //   The local branch is `proposed <sha>` when `refs/heads/<branch>` is a
-//   direct ref that `git for-each-ref` lists under exactly that name, no other
-//   listed ref, loose or packed, has a case-equivalent name, the PR is merged
+//   direct ref that `git for-each-ref` lists under exactly that name, nothing
+//   else uses a case-equivalent name (a listed ref, a loose ref file, a
+//   packed-refs entry, a worktree HEAD, or a rebase, including
+//   rebase-merge/update-refs, or bisect state in any worktree's git dir), the
+//   exact loose ref file, if any, is a direct ref, the PR is merged
 //   (skipped with --preview, before the merge), the branch is not the default
 //   branch in any letter case, and its tip equals --pr-head, for any merge
 //   method. It is `absent` only when no ref is listed under the name or a
@@ -96,11 +99,19 @@
 //   --after-stop, run after the confirmed runtime stop, a confirmed process,
 //   Compose project, or temporary path that is gone is also expected and
 //   printed as `stopped as confirmed`; a new or changed item is still a
-//   difference. A Compose project counts as gone only when, for a
-//   worktree-owned project (reason exactly `under target`, whose stop deletes
-//   its volumes), `docker volume ls` runs and lists none of its confirmed
-//   volumes. A temporary path counts as gone only when `lstat` finds no entry
-//   at the path. Without it, a
+//   difference. A process counts as gone only when `ps` finds no process with
+//   its PID and confirmed start time, since the listing drops a running
+//   process whose cwd leaves the worktree. A Compose project counts as gone
+//   only when `docker volume ls` runs and lists no volume of the project
+//   that the confirmed manifest did not have and, for a worktree-owned project
+//   (reason exactly `under target`, whose stop deletes its volumes), none of
+//   its confirmed volumes. An external volume the stop keeps by design also
+//   holds here, since Docker records no external flag and the check never
+//   evaluates the checkout's Compose configuration; a manifest rebuilt after
+//   the stop no longer lists the project, so the user's fresh confirmation
+//   continues with the volume in place. A temporary path counts as gone only
+//   when `lstat`
+//   finds no entry at the path. Without it, a
 //   confirmed item that is gone is a difference. A listing that cannot run is
 //   a difference for a Caller preview, and for any other manifest unless it
 //   could not run there either. On a match it prints the targets, for a
@@ -132,7 +143,7 @@
 // run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -356,12 +367,103 @@ const gitStatus = (args, allowed) => {
 // ref, loose or packed, has a case-equivalent name, { unresolved } when git
 // omits the ref from the listing but it still exists, such as a dangling
 // symbolic ref, and null only when absence is established independently.
+// Reads a file, or returns null when it does not exist; any other failure
+// means the check cannot run.
+const readOrNull = (file) => {
+  try {
+    return readFileSync(file, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
+    return cannotRun(`cannot read ${file}: ${error.message}`);
+  }
+};
+
+// Directory entries, or [] when the directory does not exist.
+const entriesOrEmpty = (dir) => {
+  try {
+    return readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
+    return cannotRun(`cannot read ${dir}: ${error.message}`);
+  }
+};
+
+// Returns why something other than the exact ref uses a case-equivalent
+// name of refs/heads/<branch>, or null. A case-insensitive ref store resolves
+// such a name to the same loose file, so git's own exact-name guards miss it:
+// a loose ref file under another spelling, a packed-refs entry, a worktree
+// HEAD (the main checkout included), or a rebase or bisect state, including
+// a ref queued in rebase-merge/update-refs, in any worktree's git dir. An
+// exact loose ref file that is not a direct ref also counts, since git may
+// omit it from its listing.
+const caseConflict = (branch) => {
+  const ref = `refs/heads/${branch}`;
+  const lower = ref.toLowerCase();
+  const other = (name) => name !== ref && name.toLowerCase() === lower;
+  const common = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).replace(/\n$/, "");
+
+  // Loose ref files: walk only the directories whose names match the
+  // branch's path segments in any letter case.
+  let level = [[path.join(common, "refs", "heads"), "refs/heads"]];
+  const segments = branch.split("/");
+  for (const [i, segment] of segments.entries()) {
+    const next = [];
+    for (const [dir, prefix] of level) {
+      for (const entry of entriesOrEmpty(dir)) {
+        if (entry.name.toLowerCase() !== segment.toLowerCase()) continue;
+        const name = `${prefix}/${entry.name}`;
+        const file = path.join(dir, entry.name);
+        if (i < segments.length - 1) {
+          if (entry.isDirectory()) next.push([file, name]);
+        } else if (!entry.isDirectory()) {
+          if (other(name)) return `a case-equivalent loose ref file ${name} exists`;
+          const content = readOrNull(file);
+          if (content?.startsWith("ref: ")) return `the loose ref file ${name} is a symbolic ref to ${content.slice("ref: ".length).trim()}`;
+          if (content !== null && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})\n?$/.test(content)) return `the loose ref file ${name} is not a direct ref`;
+        }
+      }
+    }
+    level = next;
+  }
+
+  for (const line of (readOrNull(path.join(common, "packed-refs")) ?? "").split("\n")) {
+    if (line.startsWith("#") || line.startsWith("^")) continue;
+    const name = line.split(" ")[1];
+    if (name !== undefined && other(name)) return `a case-equivalent packed ref ${name} exists`;
+  }
+
+  const fields = git(["worktree", "list", "--porcelain", "-z"]).split("\0");
+  let worktree = null;
+  for (const field of fields) {
+    if (field.startsWith("worktree ")) worktree = field.slice("worktree ".length);
+    else if (field.startsWith("branch ") && other(field.slice("branch ".length))) {
+      return `the worktree at ${worktree} has the case-equivalent ${field.slice("branch ".length)} checked out`;
+    }
+  }
+  const linked = path.join(common, "worktrees");
+  const gitDirs = [common, ...entriesOrEmpty(linked).filter((entry) => entry.isDirectory()).map((entry) => path.join(linked, entry.name))];
+  for (const gitDir of gitDirs) {
+    const head = (readOrNull(path.join(gitDir, "HEAD")) ?? "").trim();
+    if (head.startsWith("ref: ") && other(head.slice("ref: ".length))) return `the HEAD of ${gitDir} is the case-equivalent ${head.slice("ref: ".length)}`;
+    for (const file of ["rebase-merge/head-name", "rebase-apply/head-name", "rebase-merge/update-refs"]) {
+      for (const line of (readOrNull(path.join(gitDir, file)) ?? "").split("\n")) {
+        if (other(line.trim())) return `${path.join(gitDir, file)} names the case-equivalent ${line.trim()}`;
+      }
+    }
+    const bisect = (readOrNull(path.join(gitDir, "BISECT_START")) ?? "").trim();
+    if (bisect !== "" && (other(bisect) || other(`refs/heads/${bisect}`))) return `${path.join(gitDir, "BISECT_START")} names the case-equivalent ${bisect}`;
+  }
+  return null;
+};
+
 const localRef = (branch) => {
   const ref = `refs/heads/${branch}`;
   const rows = git(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", "refs/heads/"])
     .split("\n").filter((line) => line !== "").map((line) => line.split("\0"));
   const siblings = rows.filter(([name]) => name !== ref && name.toLowerCase() === ref.toLowerCase());
-  if (siblings.length > 0) return { ambiguous: siblings.map(([name]) => name).join(", ") };
+  if (siblings.length > 0) return { ambiguous: `a case-equivalent ref exists: ${siblings.map(([name]) => name).join(", ")}` };
+  const conflict = caseConflict(branch);
+  if (conflict) return { ambiguous: conflict };
   const matches = rows.filter(([name]) => name === ref);
   if (matches.length > 1 || (matches.length === 1 && !SHA.test(matches[0][1]))) cannotRun(`unexpected git for-each-ref output for ${ref}`);
   if (matches.length === 1) return { sha: matches[0][1], symref: matches[0][2] };
@@ -386,7 +488,7 @@ const localRef = (branch) => {
 const checkLocal = (facts, { preview }) => {
   const found = localRef(facts.branch);
   if (found === null) return { status: "absent" };
-  if (found.ambiguous) return { status: "unmerged", sha: null, reason: `a case-equivalent ref exists: ${found.ambiguous}` };
+  if (found.ambiguous) return { status: "unmerged", sha: null, reason: found.ambiguous };
   if (found.unresolved) return { status: "unmerged", sha: null, reason: `the local branch is ${found.unresolved}` };
   const { sha } = found;
   const unmerged = (reason) => ({ status: "unmerged", sha, reason });
@@ -650,16 +752,41 @@ const compareRuntime = (section, confirmed, current, identity, label, difference
   }
 };
 
-// For a worktree-owned Compose project that is gone, whose confirmed stop
-// deletes its volumes, why the stop is not proven complete, or null. Other
-// projects keep their volumes by design.
-const composeVolumesRemain = (item) => {
-  if (item.reason !== "under target" || item.volumes.length === 0) return null;
+// For a Compose project that is gone, why its stop is not proven complete,
+// or null. The project label still lists its volumes: a volume the
+// confirmed manifest did not have is a new target, and for a worktree-owned
+// project (reason exactly `under target`), whose stop deletes its volumes, a
+// confirmed volume that remains means the stop did not finish. Projects with
+// another reason keep their volumes by design.
+const composeStopIncomplete = (item) => {
   const volumes = runLookup("docker volume ls", "docker", ["volume", "ls", "--filter", `label=com.docker.compose.project=${item.project}`, "--format", "{{.Name}}"]);
   if (volumes.unavailable) return `its volumes cannot be verified: ${volumes.unavailable}`;
-  const left = new Set(volumes.stdout.split("\n").filter((line) => line !== ""));
-  const remaining = item.volumes.filter((volume) => left.has(volume));
-  return remaining.length > 0 ? `its volumes remain: ${remaining.join(", ")}` : null;
+  const listed = volumes.stdout.split("\n").filter((line) => line !== "");
+  const added = listed.filter((volume) => !item.volumes.includes(volume));
+  if (added.length > 0) return `it has new volumes: ${added.join(", ")}`;
+  if (item.reason !== "under target") return null;
+  const remaining = item.volumes.filter((volume) => listed.includes(volume));
+  // Docker records no external flag, and this check never evaluates the
+  // checkout's Compose configuration, so an external volume that the stop
+  // keeps by design also holds here, and the user confirms fresh targets.
+  return remaining.length > 0
+    ? `its volumes remain: ${remaining.join(", ")}; one may be an external volume the stop keeps by design, so confirm the targets again at step 6 to continue with it in place`
+    : null;
+};
+
+// For a process that is gone from the listing, why it may still run, or
+// null. The listing covers only processes tied to the worktree, so a process
+// whose cwd moved away drops out while it keeps running: it is gone only
+// when `ps` finds no process with its PID, or one with another start time
+// (the PID was reused).
+const processSurvives = (item) => {
+  if (!/^[1-9][0-9]*$/.test(item.pid)) return `its PID ${item.pid} cannot be checked`;
+  const result = spawnSync("ps", ["-o", "lstart=", "-p", item.pid], { encoding: "utf8" });
+  const stdout = (result.stdout ?? "").replace(/\n$/, "").replace(/^ */, "");
+  const stderr = (result.stderr ?? "").trim();
+  if (result.status === 0 && stdout !== "") return stdout === item.started ? "it is still running with the same start time" : null;
+  if (result.status === 1 && stdout === "" && stderr === "") return null;
+  return `its state cannot be verified: ps exited ${result.status ?? result.signal}${stderr ? `: ${stderr}` : ""}`;
 };
 
 const compareCommand = (args) => {
@@ -708,6 +835,7 @@ const compareCommand = (args) => {
     (item) => `process pid ${item.pid} started ${item.started} cwd ${item.cwd}`,
     differences,
     stopped,
+    processSurvives,
   );
   compareRuntime(
     "compose", confirmed, current,
@@ -715,7 +843,7 @@ const compareCommand = (args) => {
     (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${JSON.stringify(item.volumes)}`,
     differences,
     stopped,
-    composeVolumesRemain,
+    composeStopIncomplete,
   );
   const tempIdentity = (temp) => [temp.path, temp.resolved];
   const confirmedTemps = confirmed.temps ?? [];

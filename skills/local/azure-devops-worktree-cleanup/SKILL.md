@@ -88,25 +88,33 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      summary.
    - After the confirmed runtime stop, run the same compare with `--after-stop`
      right before `git worktree remove`. It expects confirmed processes, Compose
-     projects, and temporary paths that the stop removed, and prints each as
-     `stopped as confirmed`; exit 3 on any other difference means remove nothing
-     and confirm the new targets at step 6, and any other status stops the
-     cleanup. The last compare's `local` and `lease` lines decide steps 8 and 9:
-     use each only when that compare exited 0 and printed exactly one such line,
-     and the `local` line only when it names the step 1 branch.
+     projects, and temporary paths that the stop removed, once a fresh check
+     shows each process exited and each project left none of the volumes it
+     should delete and no new one, and prints each as `stopped as confirmed`;
+     exit 3 on any other difference means remove nothing and confirm the new
+     targets at step 6, and any other status stops the cleanup. The last
+     compare's `local` and `lease` lines decide steps 8 and 9: use each only
+     when that compare exited 0 and printed exactly one such line, and the
+     `local` line only when it names the step 1 branch. A remaining volume of a
+     worktree-owned Compose project holds it even when it is an external volume
+     the stop keeps by design, since the check never evaluates the checkout's
+     Compose configuration: confirm the targets again at step 6, where the
+     rebuilt manifest no longer lists the project, and continue with the volume
+     in place.
 8. Delete the local branch after the worktree is removed, only with compare's
    `local <branch> <sha>` line; without that line, delete none. Immediately
    before deleting, run `node <cleanup-script> local <facts>` with step 5's
    facts: continue only on exit 0 with `proposed <sha>` at that SHA; exit 3
-   means the branch moved or is otherwise not deletable, so keep it and report
-   the reason; any other status stops the cleanup. Then run `git branch -D
-   <branch>`, which refuses a branch that any checkout still uses (checked out,
-   rebasing including with `--update-refs`, or bisecting) and removes the
-   branch's configuration with it. If it refuses, keep the branch and report the
-   reason; never fall back to `git update-ref`. Never use `git branch -d`, which
-   judges against the local default branch and refuses a squash merge. A commit
-   that lands on the branch between the recheck and `git branch -D` is not
-   detected, the same window `git branch -d` leaves.
+   means the branch moved, another spelling of its name is in use, which git's
+   exact-name guards miss on a case-insensitive ref store, or it is otherwise
+   not deletable, so keep it and report the reason; any other status stops the
+   cleanup. Then run `git branch -D <branch>`, which refuses a branch that any
+   checkout still uses (checked out, rebasing including with `--update-refs`, or
+   bisecting) and removes the branch's configuration with it. If it refuses,
+   keep the branch and report the reason; never fall back to `git update-ref`.
+   Never use `git branch -d`, which judges against the local default branch and
+   refuses a squash merge. A commit that lands on the branch between the recheck
+   and `git branch -D` is not detected, the same window `git branch -d` leaves.
 9. Delete the confirmed remote branch last, conditioned on the SHA in compare's
    `lease <remote> <sha>` line; without that line, delete none:
    `git push --force-with-lease=refs/heads/<branch>:<sha> <remote> :refs/heads/<branch>`.

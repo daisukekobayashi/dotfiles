@@ -825,7 +825,7 @@ LISTING
   [ "$(git rev-parse feat/1-x)" = "${head}" ]
   manifest_with -- --worktree "${worktree}" --out "${state}/symref.json"
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"the local branch is a symbolic ref to refs/heads/main"* ]]
+  [[ "${stderr}" == *"the loose ref file refs/heads/feat/1-x is a symbolic ref to refs/heads/main"* ]]
   check local "${args[@]}"
   [ "${status}" -eq 3 ]
   git symbolic-ref --delete refs/heads/feat/1-x
@@ -875,20 +875,20 @@ LISTING
   [ -z "$(git for-each-ref refs/heads/feat/1-x)" ]
   compare "${state}/step6.json"
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"cannot be deleted: the local branch is a symbolic ref to refs/heads/nowhere that git does not list"* ]]
+  [[ "${stderr}" == *"cannot be deleted: the loose ref file refs/heads/feat/1-x is a symbolic ref to refs/heads/nowhere"* ]]
   [[ "${output}" != *"already deleted"* ]]
   check local "${args[@]}"
   [ "${status}" -eq 3 ]
 
-  # A broken loose ref file: the lookup fails, which stops the cleanup.
+  # A broken loose ref file is not a direct ref.
   git symbolic-ref --delete refs/heads/feat/1-x
   local loose
   loose="$(git rev-parse --path-format=absolute --git-path refs/heads/feat/1-x)"
   mkdir -p "$(dirname "${loose}")"
   printf 'garbage\n' >"${loose}"
   check local "${args[@]}"
-  [ "${status}" -eq 1 ]
-  [[ "${stderr}" == *"check could not run: git symbolic-ref -q refs/heads/feat/1-x exited 128"* ]]
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"the loose ref file refs/heads/feat/1-x is not a direct ref"* ]]
   [[ "${output}" != *"absent"* ]]
   rm "${loose}"
   check local "${args[@]}"
@@ -942,7 +942,18 @@ LISTING
   : >"${FAKE_DOCKER_PS}"
   compare "${state}/preview.json" --after-stop
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"compose: confirmed compose project worktree"*"is gone but its volumes remain: worktree_data"* ]]
+  [[ "${stderr}" == *"compose: confirmed compose project worktree"*"is gone but its volumes remain: worktree_data; one may be an external volume the stop keeps by design, so confirm the targets again at step 6 to continue with it in place"* ]]
+
+  # An external volume kept by design: the fresh confirmation's manifest no
+  # longer lists the project, so the cleanup continues with the volume.
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/fresh.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" != *"compose project"* ]]
+  compare "${state}/fresh.json" --after-stop
+  [ "${status}" -eq 0 ]
+  [ "$(cat "${FAKE_DOCKER_VOLUMES}")" = "worktree"$'\t'"worktree_data" ]
 
   # Volume lookup fails: unverified holds too.
   cat >"${root}/bin/docker" <<'DOCKER'
@@ -984,4 +995,117 @@ DOCKER
   compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"stopped as confirmed"$'\t'"temporary path ${root}/run.pid"* ]]
+}
+
+@test "a worktree that checks out a case-equivalent spelling blocks the deletion" {
+  git branch feat/1-x "${head}"
+  local other="${root}/other"
+  # Only a case-insensitive ref store resolves Feat/1-x to feat/1-x.
+  git worktree add -q "${other}" Feat/1-x 2>/dev/null || skip "the ref store is case-sensitive"
+  [ "$(git -C "${other}" symbolic-ref HEAD)" = refs/heads/Feat/1-x ]
+  [ -z "$(git for-each-ref refs/heads/Feat/1-x)" ]
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"case-equivalent refs/heads/Feat/1-x"* ]]
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [ "${output}" = "unmerged"$'\t'"-" ]
+}
+
+@test "case-equivalent names in HEAD, loose and packed refs, and rebase or bisect state block the deletion" {
+  git branch feat/1-x "${head}"
+  local -a args
+  mapfile -t args < <(facts)
+  local gitdir
+  gitdir="$(git rev-parse --absolute-git-dir)"
+
+  # The main checkout's HEAD names another spelling.
+  git symbolic-ref HEAD refs/heads/Feat/1-x
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"the worktree at ${repo} has the case-equivalent refs/heads/Feat/1-x checked out"* ]]
+  git symbolic-ref HEAD refs/heads/main
+
+  # An exact packed ref beside a loose sibling that git omits from its
+  # listing, because its object is missing.
+  git pack-refs --all
+  rmdir "${gitdir}/refs/heads/feat" 2>/dev/null || true
+  mkdir -p "${gitdir}/refs/heads/Feat"
+  [ "$(ls "${gitdir}/refs/heads")" != feat ]
+  printf '%s\n' 1111111111111111111111111111111111111111 >"${gitdir}/refs/heads/Feat/1-x"
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"case-equivalent"*"refs/heads/Feat/1-x"* ]]
+  # A dangling symbolic sibling, which git omits from its listing.
+  printf 'ref: refs/heads/nowhere\n' >"${gitdir}/refs/heads/Feat/1-x"
+  [ -z "$(git for-each-ref 'refs/heads/Feat/')" ]
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"a case-equivalent loose ref file refs/heads/Feat/1-x exists"* ]]
+  rm -r "${gitdir}/refs/heads/Feat"
+
+  # A rebase queues another spelling in a linked worktree's update-refs, or a
+  # bisect started from it.
+  local linked="${root}/linked"
+  git worktree add -q --detach "${linked}" "${head}"
+  local linkedDir
+  linkedDir="$(git -C "${linked}" rev-parse --absolute-git-dir)"
+  mkdir -p "${linkedDir}/rebase-merge"
+  printf 'refs/heads/Feat/1-x\n%s\n%s\n' "${head}" "${head}" >"${linkedDir}/rebase-merge/update-refs"
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"rebase-merge/update-refs names the case-equivalent refs/heads/Feat/1-x"* ]]
+  rm -r "${linkedDir}/rebase-merge"
+  printf 'Feat/1-x\n' >"${linkedDir}/BISECT_START"
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"BISECT_START names the case-equivalent Feat/1-x"* ]]
+  rm "${linkedDir}/BISECT_START"
+
+  check local "${args[@]}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "proposed"$'\t'"${head}" ]
+}
+
+@test "--after-stop holds a confirmed process that left the listing but still runs" {
+  start_in "${worktree}"
+  local pid="${pids[0]}"
+  preview
+  [ "${status}" -eq 0 ]
+  # The listing no longer shows it, as when its cwd moved out of the worktree.
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes: confirmed process pid ${pid} "*"is gone but it is still running with the same start time"* ]]
+
+  kill "${pid}"
+  wait "${pid}" 2>/dev/null || true
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"process pid ${pid} "* ]]
+}
+
+@test "--after-stop holds a gone Compose project that has new volumes" {
+  printf 'worktree\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  preview
+  [ "${status}" -eq 0 ]
+  : >"${FAKE_DOCKER_PS}"
+  # A restart created a volume before its first container.
+  printf 'worktree\tworktree_new\n' >"${FAKE_DOCKER_VOLUMES}"
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"compose: confirmed compose project worktree"*"is gone but it has new volumes: worktree_new"* ]]
+
+  # The same for a project that keeps its volumes by design.
+  printf 'wt\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  printf 'wt\twt_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  : >"${FAKE_DOCKER_PS}"
+  printf 'wt\twt_data\nwt\twt_new\n' >"${FAKE_DOCKER_VOLUMES}"
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"is gone but it has new volumes: wt_new"* ]]
 }
