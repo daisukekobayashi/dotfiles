@@ -307,8 +307,10 @@ test("change review skills are explicit-only and share target selection", async 
   for (const file of [
     "skills/local/delivery-common/SKILL.md",
     "skills/local/delivery-common/references/completion.md",
+    "skills/local/delivery-common/references/optional-workflows.md",
     "skills/local/delivery-common/references/phase-delegation.md",
     "skills/local/delivery-common/references/report-handoff.md",
+    "skills/local/delivery-common/references/worker-dialogue.md",
     "skills/local/delivery-common/references/risk-tier.md",
     "skills/local/change-review/SKILL.md",
     "skills/local/change-security-review/SKILL.md",
@@ -317,6 +319,8 @@ test("change review skills are explicit-only and share target selection", async 
     "skills/local/github-worktree-cleanup/SKILL.md",
     "skills/local/azure-devops-worktree-cleanup/SKILL.md",
     "skills/local/github-pr-publish/SKILL.md",
+    "skills/local/azure-devops-common/SKILL.md",
+    "skills/local/azure-devops-common/references/context.md",
   ]) {
     assert.ok(added(file), `AGENTS.md: ${file} must stay sensitive`);
   }

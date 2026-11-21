@@ -33,13 +33,7 @@ matches and no `add` entry matches is a `REVIEW.md` failure.
 - exclude `skills/**/LICENSE` from agent instruction files
 - exclude `setup/test/**` from install, setup, and bootstrap scripts
 - exclude `setup/tsconfig.json` from install, setup, and bootstrap scripts
-- add `skills/local/delivery-common/SKILL.md`
-- add `skills/local/delivery-common/references/completion.md`
-- add `skills/local/delivery-common/references/local-review.md`
-- add `skills/local/delivery-common/references/phase-delegation.md`
-- add `skills/local/delivery-common/references/report-handoff.md`
-- add `skills/local/delivery-common/references/repro-runs.md`
-- add `skills/local/delivery-common/references/risk-tier.md`
+- add `skills/local/delivery-common/**`
 - add `skills/local/change-review/SKILL.md`
 - add `skills/local/change-adversarial-review/SKILL.md`
 - add `skills/local/change-security-review/SKILL.md`
@@ -51,7 +45,7 @@ matches and no `add` entry matches is a `REVIEW.md` failure.
 - add `skills/local/github-pr-*/SKILL.md`
 - add `skills/local/github-pr-review-request/references/*.md`
 - add `skills/local/azure-devops-pr-*/SKILL.md`
-- add `skills/local/azure-devops-common/references/context.md`
+- add `skills/local/azure-devops-common/**`
 - add `skills/local/github-issue-create/SKILL.md`
 - add `skills/local/azure-devops-work-item-create/SKILL.md`
 - add `skills/local/github-issue-start/SKILL.md`
