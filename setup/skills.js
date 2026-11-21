@@ -186,8 +186,7 @@ function writeMetadata(plan, outputFile) {
     });
 }
 function validateProfiles(dotfilesRoot, profilesCsv) {
-    const profileDir = path.join(dotfilesRoot, "skills", "profiles");
-    const requestedProfiles = profilesCsv ? (0, skill_profiles_1.csv)(profilesCsv) : (0, skill_profiles_1.listProfiles)(profileDir);
+    const requestedProfiles = profilesCsv ? (0, skill_profiles_1.csv)(profilesCsv) : (0, skill_profiles_1.listProfiles)(dotfilesRoot);
     (0, skill_profiles_1.resolveProfiles)(dotfilesRoot, requestedProfiles, ["codex"], "validate");
     console.log(`Profiles valid: ${requestedProfiles.join(",")}`);
 }

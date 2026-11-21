@@ -942,7 +942,7 @@ project scope では、各インストールを1つのプライベートディ�
 
 Local skill は `skills/local/<name>` に置き、dotfiles が正本です。
 
-選択した各 local skill はチェックアウト内の実際のディレクトリです。`skills/`、`skills/local/`、`skills/local/<name>` がシンボリックリンクの場合は、`skills/local/` 内の別の skill を指すものやリンク切れのものでも、`profile validate` とすべてのインストール (user scope、project scope、`--copy`) が、external のインストールや user view と project への変更の前に `<path> is a symbolic link; setup reads only real files in the dotfiles repository` で失敗します。Skill は dotfiles のチェックアウト内に解決される必要もあります。チェックアウト自体へは、`~/.dotfiles` から別のディレクトリへのリンクのように、リンク経由で到達してもかまいません。別の場所で skill を開発する場合は、リンクせずに `skills/local/<name>` へコピーします。Export も同じ規則を適用します。Skill ディレクトリ内のリンクは、インストールと検証では確認しません。
+選択した各 local skill はチェックアウト内の実際のディレクトリです。`skills/`、`skills/local/`、`skills/local/<name>` がシンボリックリンクの場合は、`skills/local/` 内の別の skill を指すものやリンク切れのものでも、`profile validate` とすべてのインストール (user scope、project scope、`--copy`) が、external のインストールや user view と project への変更の前に `<path> is a symbolic link; setup reads only real files in the dotfiles repository` で失敗します。Skill は dotfiles のチェックアウト内に解決される必要もあります。チェックアウト自体へは、`~/.dotfiles` から別のディレクトリへのリンクのように、リンク経由で到達してもかまいません。別の場所で skill を開発する場合は、リンクせずに `skills/local/<name>` へコピーします。Export も、`--exclude` の後に残る skill とその依存先に同じ規則を適用します。`--exclude` で外したリンクの skill では export は失敗しません。Skill ディレクトリ内のリンクは、インストールと検証では確認しません。
 
 Project scope では、選択した agent の project skill ディレクトリに local skill を symlink します。
 

@@ -578,6 +578,42 @@ test("export rejects a selected skill root that is a symbolic link", { skip: pro
     assert.deepEqual(await readdir(fixture.outParent), []);
   }));
 
+async function linkOutsideExportSkill(fixture, name) {
+  const outside = path.join(fixture.root, `outside-${name}`);
+  await mkdir(outside);
+  await writeFile(path.join(outside, "SKILL.md"), `---\nname: ${name}\n---\n`);
+  await symlink(outside, path.join(fixture.dotfiles, "skills", "local", name));
+}
+
+test("export skips the link check for a symbolic-link skill that --exclude drops and checks it when kept", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    await linkOutsideExportSkill(fixture, "linked");
+    await writeProfile(fixture.dotfiles, "mixed", { description: "Mixed", local: ["gamma", "linked"] });
+
+    const excluded = runExport(["--profile", "mixed", "--exclude", "linked", "--out", fixture.out], fixture);
+    assertOk(excluded);
+    const manifest = await readManifest(fixture.out);
+    assert.deepEqual(manifest.local.map((skill) => skill.name), ["gamma"]);
+    assert.deepEqual(manifest.excluded, ["linked"]);
+
+    const kept = runExport(["--profile", "mixed", "--out", path.join(fixture.outParent, "kept")], fixture);
+    assert.notEqual(kept.status, 0);
+    assert.match(kept.stderr, /skills\/local\/linked is a symbolic link; setup reads only real files in the dotfiles repository/);
+    assert.ok(!existsSync(path.join(fixture.outParent, "kept")));
+  }));
+
+test("export rejects a symbolic-link skill that a kept skill depends on", { skip: process.platform === "win32" }, () =>
+  withFixture(async (fixture) => {
+    await linkOutsideExportSkill(fixture, "linked");
+    await writeSkill(fixture.dotfiles, "user", "Read `../linked/SKILL.md` first.\n");
+    await writeProfile(fixture.dotfiles, "dependent", { description: "Dependent", local: ["user"] });
+
+    const result = runExport(["--profile", "dependent", "--out", fixture.out], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /skills\/local\/linked is a symbolic link/);
+    assert.deepEqual(await readdir(fixture.outParent), []);
+  }));
+
 test("export rejects profile and rule files that resolve outside their roots", { skip: process.platform === "win32" }, () =>
   withFixture(async (fixture) => {
     const outsideProfile = path.join(fixture.root, "outside.json");

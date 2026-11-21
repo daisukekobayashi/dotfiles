@@ -153,8 +153,17 @@ function profilePath(profileDir: string, name: string): string {
   return path.join(profileDir, `${name}.json`);
 }
 
-export function listProfiles(profileDir: string): string[] {
+// Before a profile or the profile directory is reported missing, a link at
+// skills or skills/profiles, such as a dangling one, is named instead. This
+// only changes the diagnostic: an existing profile is read as before.
+function requireNoLinkedProfileDir(dotfilesRoot: string): void {
+  requireSourcePath(dotfilesRoot, "skills/profiles", "directory");
+}
+
+export function listProfiles(dotfilesRoot: string): string[] {
+  const profileDir = path.join(dotfilesRoot, "skills", "profiles");
   if (!fs.existsSync(profileDir)) {
+    requireNoLinkedProfileDir(dotfilesRoot);
     fail(`skills profiles directory not found: ${profileDir}`);
   }
   return fs
@@ -193,6 +202,7 @@ export function resolveProfiles(
 
     const filePath = profilePath(profileDir, name);
     if (!fs.existsSync(filePath)) {
+      requireNoLinkedProfileDir(dotfilesRoot);
       fail(`unknown profile ${name}`);
     }
 
@@ -242,12 +252,18 @@ export function resolveProfiles(
       }
       requireLocalSkillName(skillName);
       // A link at skills, skills/local, or the skill root fails, wherever it
-      // points and even when dangling, like export; a missing entry is unknown.
-      requireSourcePath(dotfilesRoot, "skills/local", "directory");
+      // points and even when dangling; a missing entry is unknown. Export
+      // checks skills/local itself and applies the same check after
+      // --exclude, only to the skills it keeps and their dependencies.
+      if (scope !== "export") {
+        requireSourcePath(dotfilesRoot, "skills/local", "directory");
+      }
       if (!fs.lstatSync(path.join(localDir, skillName), { throwIfNoEntry: false })) {
         fail(`unknown local skill ${skillName}`);
       }
-      requireSourcePath(dotfilesRoot, `skills/local/${skillName}`, "directory");
+      if (scope !== "export") {
+        requireSourcePath(dotfilesRoot, `skills/local/${skillName}`, "directory");
+      }
       localSkills.add(skillName);
     }
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, lstat, mkdir, readdir, readlink, realpath, rename, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readdir, readlink, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -2031,3 +2031,39 @@ for (const [label, prepare] of [
     });
   }
 }
+
+test("a dangling skills link is named before a profile is reported missing", posixOnly, async () => {
+  const fixture = await createFixture();
+  try {
+    const skills = path.join(fixture.dotfiles, "skills");
+    await rm(skills, { recursive: true, force: true });
+    await symlink(path.join(fixture.root, "missing-skills"), skills);
+
+    for (const args of [
+      ["profile", "validate", "--profile", "base"],
+      ["profile", "validate"],
+      ["--scope", "user", "--profile", "base"],
+    ]) {
+      const result = runSkills(args, fixture);
+      assert.notEqual(result.status, 0, args.join(" "));
+      assert.match(result.stderr, /skills is a symbolic link; setup reads only real files in the dotfiles repository/, args.join(" "));
+    }
+    const project = runSkills(["--scope", "project", "--profile", "base"], fixture, { cwd: fixture.project });
+    assert.notEqual(project.status, 0);
+    assert.match(project.stderr, /skills is a symbolic link/);
+    assert.equal(existsSync(fixture.log), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("a missing profile is still reported as unknown when skills is a real directory", async () => {
+  const fixture = await createFixture();
+  try {
+    const result = runSkills(["profile", "validate", "--profile", "nope"], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /unknown profile nope/);
+  } finally {
+    await fixture.cleanup();
+  }
+});

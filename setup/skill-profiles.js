@@ -127,8 +127,16 @@ function requireLocalSkillName(name) {
 function profilePath(profileDir, name) {
     return path.join(profileDir, `${name}.json`);
 }
-function listProfiles(profileDir) {
+// Before a profile or the profile directory is reported missing, a link at
+// skills or skills/profiles, such as a dangling one, is named instead. This
+// only changes the diagnostic: an existing profile is read as before.
+function requireNoLinkedProfileDir(dotfilesRoot) {
+    requireSourcePath(dotfilesRoot, "skills/profiles", "directory");
+}
+function listProfiles(dotfilesRoot) {
+    const profileDir = path.join(dotfilesRoot, "skills", "profiles");
     if (!fs.existsSync(profileDir)) {
+        requireNoLinkedProfileDir(dotfilesRoot);
         fail(`skills profiles directory not found: ${profileDir}`);
     }
     return fs
@@ -158,6 +166,7 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope, beforeR
         }
         const filePath = profilePath(profileDir, name);
         if (!fs.existsSync(filePath)) {
+            requireNoLinkedProfileDir(dotfilesRoot);
             fail(`unknown profile ${name}`);
         }
         beforeRead?.(filePath, name);
@@ -204,12 +213,18 @@ function resolveProfiles(dotfilesRoot, requestedProfiles, agents, scope, beforeR
             }
             requireLocalSkillName(skillName);
             // A link at skills, skills/local, or the skill root fails, wherever it
-            // points and even when dangling, like export; a missing entry is unknown.
-            requireSourcePath(dotfilesRoot, "skills/local", "directory");
+            // points and even when dangling; a missing entry is unknown. Export
+            // checks skills/local itself and applies the same check after
+            // --exclude, only to the skills it keeps and their dependencies.
+            if (scope !== "export") {
+                requireSourcePath(dotfilesRoot, "skills/local", "directory");
+            }
             if (!fs.lstatSync(path.join(localDir, skillName), { throwIfNoEntry: false })) {
                 fail(`unknown local skill ${skillName}`);
             }
-            requireSourcePath(dotfilesRoot, `skills/local/${skillName}`, "directory");
+            if (scope !== "export") {
+                requireSourcePath(dotfilesRoot, `skills/local/${skillName}`, "directory");
+            }
             localSkills.add(skillName);
         }
         loaded.add(name);
