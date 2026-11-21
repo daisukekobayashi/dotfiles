@@ -139,17 +139,20 @@ run each in a fresh subagent of the current host, reporting the reduced
 independence. Another tool, such as Codex through the installed Codex plugin's
 `task` runtime on Claude Code, runs them only when the user explicitly
 names it. `change-review` runs read-only. `change-adversarial-review` backs each
-finding with a run against the real code where a run is possible: the
-coordinator creates a detached worktree at the reviewed head beside the review
-report, the reviewer runs repros only there (Codex with `--write` and that
-worktree as `--cwd`), and the coordinator copies the evidence, removes the
-worktree without confirmation, and reruns each proving command in a fresh one
-before acting on the finding. Commands whose effects would leave the worktree
-wait for the user's approval, as do all runs on a head that is not the user's
-own work, such as an external pull request; dependencies restore with
-lifecycle scripts off, and the coordinator inspects each retained command and
-repro file before rerunning it. Each finding reports its proof status, so a
-finding no run can show stays `unproven` instead of being dropped.
+finding with a run against the real code where a run is possible, but only on
+a trusted head: the delivery's own work, the user's own local changes, or a
+head the user declares trusted. There the coordinator creates a detached
+worktree at the reviewed head beside the review report, the reviewer runs
+repros only there (Codex launched as `repro-runs.md`'s Trusted heads rule
+sets), and the coordinator copies the evidence, removes the worktree without
+confirmation, and reruns each proving command in a fresh one before acting on
+the finding. Any other head, such as an external pull request, gets a
+read-only review with no runs; vetting untrusted changes is out of its scope.
+Commands whose effects would leave the worktree never run; dependencies
+restore with lifecycle scripts off, and the coordinator inspects each retained
+command and repro file before rerunning it. Each finding reports its proof
+status, so a finding no run can show stays `unproven` instead of being
+dropped.
 `delivery-common`'s `repro-runs.md` holds these rules and their bounds, and
 [ADR 0002](adr/0002-run-to-prove-isolation.md) records why.
 An explicit full delivery request selects the delegated preflight, local review,

@@ -17,7 +17,7 @@ concurrently, run them one at a time and report that.
 under [Repro Runs](repro-runs.md). The coordinator is its launcher and parent:
 it creates and removes the reviewer's disposable worktree and reruns each
 proving command before acting on the finding. The delivery's own worker head
-makes runs automatic under [Provenance](repro-runs.md#provenance).
+is a trusted head under [Trusted heads](repro-runs.md#trusted-heads).
 
 Include [Foreground Checks](../SKILL.md#foreground-checks) in every reviewer
 brief, for full reviews and focused follow-ups, and handle each reviewer's
@@ -98,9 +98,8 @@ evidence, applying these defaults:
   [Parent rerun](repro-runs.md#parent-rerun) and record the result with its
   disposition. Assess a finding that is not reproduced, or whose proof is not
   `ran`, as unproven from its traced failure path; its severity and tag stay
-  hints as for any finding. Handle each `unproven: needs approval` finding
-  under Repro Runs' [Approved run](repro-runs.md#approved-run). Treat a `Do not ship` verdict as a blocker only after the rerun
-  reproduces its finding or your trace confirms it.
+  hints as for any finding. Treat a `Do not ship` verdict as a blocker only
+  after the rerun reproduces its finding or your trace confirms it.
 - **Minor:** Record and defer by default. Every fix creates a new snapshot and
   another review round; fix a minor finding only when it is a trivial, local
   correction bundled with a material fix in the same round.

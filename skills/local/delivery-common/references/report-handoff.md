@@ -217,10 +217,10 @@ append under `set -C`. The check below runs in the same command, so the
 summary shown comes from the bytes it verified. A reviewer that ran the command
 for its caller returns only the report path and `complete`, or `failed` with
 the reason; the caller's own check gives the summary. A non-zero exit is a
-failed run or an invalid report. For `change-adversarial-review`, add
-`--write` and pass its disposable worktree as `--cwd`, as its Run the Reviewer
-says; its launcher, outside the sandbox, copies the run's evidence under
-[Repro Runs](repro-runs.md#evidence).
+failed run or an invalid report. For `change-adversarial-review`, set
+`--write` and `--cwd` as [Trusted heads](repro-runs.md#trusted-heads) sets for
+the Codex companion; on a trusted head its launcher, outside the sandbox,
+copies the run's evidence under [Repro Runs](repro-runs.md#evidence).
 
 ## Check a handoff
 

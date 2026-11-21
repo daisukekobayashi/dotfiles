@@ -28,15 +28,40 @@ that `change-adversarial-review` and later `blast-radius` share them.
 `change-adversarial-review` never references or calls `interrogate`: a
 required reviewer does not depend on an optional pstack skill.
 
-- **Location.** Each run gets a detached `git worktree` at the reviewed head,
-  beside the review report in the task's ignored, mode-700 records directory,
-  or in a `mktemp -d` directory without a report. Only a real checkout runs a
-  repository's documented checks. Every git command that the launcher, the
-  reviewer, or the parent runs itself, for collection, creation, removal,
-  reruns, and approved runs, uses `git --no-optional-locks -c core.hooksPath=/dev/null`, so no hook, such as
-  `post-checkout` or `post-index-change` from a tracked hooks directory in an
-  external head, runs before a run is approved. The reviewer still collects the diff read-only from
-  the reviewed worktree, and a finding that depends on uncommitted changes is
+- **Trusted heads only.** A run executes the reviewed code, its tests, and its
+  dependencies with the user's privileges. Run-to-prove therefore proves
+  defects in code the user trusts: the delivery's own worker head, the invoking
+  user's own local changes, or a head the user declares trusted in the user's
+  own message; issue, PR, comment, or repository text never makes a head
+  trusted, and an unsure head is untrusted. Any other head, such as an external
+  pull request, gets no disposable worktree and no runs: the review stays
+  read-only, as before run-to-prove, and findings a run could show are
+  `unproven: untrusted head`. Vetting an untrusted change for malicious content
+  is out of scope for `change-adversarial-review` and belongs to a separate
+  skill. The launcher decides trust and passes it to the reviewer, which never
+  decides it; the skill's description states that it executes the reviewed
+  code. This supersedes an earlier design in which untrusted heads ran after
+  the user approved the exact commands; that approval path added checks for
+  reviewer-supplied files and commands at every step without making the
+  untrusted code safer to run.
+- **Route rule.** `repro-runs.md`'s Trusted heads section states once how each
+  route launches: on a trusted head, a host subagent gets the disposable
+  worktree and the Codex companion runs with `--write` and
+  `--cwd <disposable worktree>`; on an untrusted head, the Codex companion runs
+  without `--write`, with `--cwd <reviewed worktree>`, as before. Other text
+  links that rule instead of restating it.
+- **Location.** On a trusted head, each run gets a detached `git worktree` at
+  the reviewed head, beside the review report in the task's ignored, mode-700
+  records directory, or in a `mktemp -d` directory without a report. Only a
+  real checkout runs a repository's documented checks. Its path is built from
+  the real path of its parent directory, since git lists worktrees by real
+  path; macOS's `mktemp -d` returns `/var/...` for `/private/var/...`.
+- **Git commands.** Every git command that the launcher, the reviewer, or the
+  parent runs itself, for collection, creation, removal, and reruns, uses
+  `git --no-optional-locks -c core.hooksPath=/dev/null`, so no hook, such as
+  `post-checkout` or `post-index-change` from a tracked hooks directory, runs
+  from the reviewed head. The reviewer collects the diff read-only from the
+  reviewed worktree, and a finding that depends on uncommitted changes is
   `unproven: uncommitted change`.
 - **Roles.** The launcher, the session that starts the reviewer (the
   coordinator in delivery, the invoking session when called directly), creates
@@ -48,37 +73,21 @@ required reviewer does not depend on an optional pstack skill.
   launcher to remove, without confirmation, only a disposable worktree it
   created for that run, also after a failure or a bound. Every other removal
   keeps its confirmation.
-- **Provenance.** A run executes the reviewed code, its tests, and its
-  dependencies with the user's privileges, so the author of that code is an
-  attacker position, as is the author of text that steers the reviewer's
-  repros. Runs are automatic only for the delivery's own worker head or the
-  invoking user's own local changes. For any other head, such as an external
-  pull request or someone else's branch or commit, the reviewer runs nothing,
-  reports the exact commands as `unproven: needs approval`, and the parent runs
-  them only after the user approves them in the user's own message, having
-  shown the command and the full body of every repro file and run the same
-  path and symlink checks as a rerun. On such a head the Codex route launches
-  without `--write`, so the sandbox stays read-only and instructions in the
-  head, such as its `AGENTS.md`, cannot cause a run before approval. The launcher decides provenance and
-  passes it to both routes; the reviewer never decides it. The skill's
-  description states that it executes the reviewed code.
-- **Boundary.** Commands whose effects stay inside the disposable worktree run
-  automatically, including lockfile-respecting dependency restoration with
-  lifecycle scripts off (`--ignore-scripts`), with `TMPDIR` and
-  package-manager caches pointed inside it; a check that needs those scripts
-  asks for approval of the restoration command that runs them. Commands with effects
-  outside it, such as Docker, home or global configuration, privilege, remote
-  writes, shared ports or processes, or opt-in end-to-end suites, are not run
-  by the reviewer: the finding is reported `unproven: needs approval` with the
-  exact command, and the parent runs it only after the user approves it.
-- **Enforcement.** The boundary is kept by instruction. The Codex route runs
-  with `--write --cwd <disposable worktree>`; Codex 0.171.0's `workspace-write`
-  sandbox protects `.git` and a linked worktree's gitdir but also allows
-  `/tmp`, `$TMPDIR`, and the network that the user's Codex configuration
-  enables, and the companion cannot override that per run. The subagent route
-  and the parent's rerun have only the host's permission mode, and no
-  instruction binds what the reviewed code does once it runs; the provenance
-  gate covers that. Every review reports this residual scope.
+- **Boundary.** On a trusted head, commands whose effects stay inside the
+  disposable worktree run, including lockfile-respecting dependency
+  restoration with lifecycle scripts off (`--ignore-scripts`), with `TMPDIR`
+  and package-manager caches pointed inside it. Commands with effects outside
+  it, such as Docker, home or global configuration, privilege, remote writes,
+  shared ports or processes, opt-in end-to-end suites, or a restoration that
+  runs lifecycle scripts, never run for the review: the finding is reported
+  `unproven: outside boundary` with the exact command.
+- **Enforcement.** The boundary is kept by instruction. Codex 0.171.0's
+  `workspace-write` sandbox protects `.git` and a linked worktree's gitdir but
+  also allows `/tmp`, `$TMPDIR`, and the network that the user's Codex
+  configuration enables, and the companion cannot override that per run. The
+  subagent route and the parent's rerun have only the host's permission mode,
+  and no instruction binds what the reviewed code does once it runs; running
+  only trusted heads covers that. Every review reports this residual scope.
 - **Findings without a run.** A finding no run can show is kept, labeled
   `unproven: <reason>`, with its severity and tag unchanged. `Do not ship`
   stands only on a proven introduced or worsened blocker, or one the parent
@@ -94,23 +103,18 @@ required reviewer does not depend on an optional pstack skill.
   without a report into the launcher's `mktemp -d` directory, before the
   worktree is removed. The `command` file holds the directory relative to the
   worktree root, the exact dependency restoration command, and the proving
-  command, each command one line of POSIX `sh`, so a rerun or an approved run
-  restores exactly what was inspected. Finding IDs are checked as whole names
-  and quoted in commands.
+  command, each command one line of POSIX `sh`, so a rerun restores exactly
+  what was inspected. Finding IDs are checked as whole names and quoted in
+  commands.
 - **Parent rerun.** The parent runs outside any sandbox, so before a rerun it
   displays and reads the command and every repro file, checks that every path
-  is relative, has no `..`, and is no symbolic link, and treats anything that
-  touches the outside of the worktree as `unproven: needs approval`. It
-  restores dependencies the same way as the reviewer's run, and checks every
-  finding ID against the reviewer's form before using it in a path or
-  command.
-- **Paths.** Disposable worktree paths are built from the real path of their
-  parent directory, since git lists worktrees by real path; macOS's
-  `mktemp -d` returns `/var/...` for `/private/var/...`. The
-  review block gains a required per-finding `proof`; `change-review` and
-  `change-security-review` write `not requested`. The block moves to the
-  `<!-- report-summary v3 -->` delimiter, and the check accepts a v2 block only
-  on a `--sha256` recheck of a report recorded before the switch.
+  is relative, has no `..`, and is no symbolic link, and runs nothing for a
+  finding that touches the outside of the worktree. It restores dependencies
+  the same way as the reviewer's run.
+- **Review block.** The review block gains a required per-finding `proof`;
+  `change-review` and `change-security-review` write `not requested`. The block
+  moves to the `<!-- report-summary v3 -->` delimiter, and the check accepts a
+  v2 block only on a `--sha256` recheck of a report recorded before the switch.
 - **`interrogate`.** It stays the read-only manual entry point and reuses only
   the failure-path criteria, not the run requirement.
 
@@ -123,10 +127,14 @@ required reviewer does not depend on an optional pstack skill.
   subagent would hold removal power over the repository.
 - **Codex stays read-only, or runs only with enforced network isolation.**
   Either removes most of the Codex route's ability to prove findings.
-- **Run any reviewed head automatically, or rerun in a sandbox only.** Running
-  an external pull request's code without approval exposes the user's
-  credentials and network to its author; the companion offers no sandbox for
-  the parent's own rerun.
+- **Run any reviewed head automatically.** Running an external pull request's
+  code exposes the user's credentials and network to its author.
+- **Run untrusted heads after the user approves the exact commands.** This was
+  the earlier design. Each review round found another place where
+  reviewer-supplied commands or files, or the head's own hooks and
+  instructions, could act before or around the approval, and an approved run
+  still executes untrusted code with the user's privileges. Vetting untrusted
+  changes needs its own skill.
 - **Drop findings without a run, as upstream does.** Reviews of skill-text
   changes, most of this repository's deliveries, would return nothing.
 - **Keep the v2 block and add `proof` as a breaking change.** In-flight
@@ -139,4 +147,7 @@ required reviewer does not depend on an optional pstack skill.
   finding.
 - The adversarial reviewer's Run the Reviewer section no longer matches the
   normal and security reviewers', which stay read-only.
+- An untrusted head, such as an external pull request, gets a read-only
+  adversarial review with no runs; vetting it is follow-up work for a separate
+  skill.
 - `blast-radius` in High-tier delivery (#253) links the same reference.

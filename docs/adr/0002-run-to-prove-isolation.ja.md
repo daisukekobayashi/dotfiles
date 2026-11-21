@@ -27,15 +27,41 @@ finding だけを残します。#239 でユーザーはローカルの `interrog
 `change-adversarial-review` は `interrogate` を参照も呼び出しもしません。必須の
 reviewer が optional な pstack skill に依存しないためです。
 
-- **場所。** 実行ごとに、レビュー対象の head で detached の `git worktree` を
-  作ります。場所はタスクの ignore 済み・mode 700 の records ディレクトリ内の
-  レビュー report の横、report がないときは `mktemp -d` のディレクトリです。
-  実際の checkout でなければ、リポジトリの文書化されたチェックを実行できません。
-  launcher、reviewer、parent が自分で実行する git コマンドは、収集、作成、削除、
-  再実行、承認後の実行のどれでも `git --no-optional-locks -c core.hooksPath=/dev/null` を使うので、外部の
-  head が追跡下の hooks ディレクトリで持ち込む `post-checkout` や
-  `post-index-change` などの hook は、実行が承認される前に動きません。reviewer は差分をレビュー対象の worktree から
-  読み取り専用で集め、未コミットの変更に依存する finding は
+- **信頼できる head だけ。** 実行はレビュー対象のコード、テスト、依存関係を
+  ユーザーの権限で動かします。そのため run-to-prove が証明するのは、ユーザーが
+  信頼するコードの欠陥です。信頼できる head は、delivery 自身の worker head、
+  呼び出したユーザー自身のローカルの変更、ユーザー自身のメッセージで信頼すると
+  明言された head です。issue、PR、コメント、リポジトリのテキストが head を
+  信頼できるものにすることはなく、判断がつかない head は信頼できないものとして
+  扱います。外部の pull request など、それ以外の head には使い捨て worktree を作らず
+  実行もしません。レビューは run-to-prove 以前と同じく読み取り専用で、実行で示せた
+  はずの finding は `unproven: untrusted head` とします。信頼できない変更に悪意の
+  ある内容がないかの審査は `change-adversarial-review` の対象外で、別の skill が
+  担います。信頼の判断は launcher が行って reviewer に渡し、reviewer が自分で
+  決めることはありません。skill の description には、レビュー対象のコードを実行する
+  ことを明記します。これは、信頼できない head でもユーザーが正確なコマンドを承認
+  すれば実行するという以前の設計を置き換えます。その承認の経路は、reviewer が
+  用意したファイルとコマンドの確認をあらゆる段階に加えましたが、信頼できない
+  コードを実行することの危険は減らしませんでした。
+- **ルートのルール。** 各ルートの起動方法は `repro-runs.md` の Trusted heads 節で
+  一度だけ定めます。信頼できる head では、ホストの subagent に使い捨て worktree を
+  渡し、Codex companion は `--write` と `--cwd <使い捨て worktree>` で実行します。
+  信頼できない head では、Codex companion は以前と同じく `--write` なしで、
+  `--cwd <レビュー対象の worktree>` で実行します。ほかの文書はこのルールを言い直さず
+  参照します。
+- **場所。** 信頼できる head では、実行ごとにレビュー対象の head で detached の
+  `git worktree` を作ります。場所はタスクの ignore 済み・mode 700 の records
+  ディレクトリ内のレビュー report の横、report がないときは `mktemp -d` の
+  ディレクトリです。実際の checkout でなければ、リポジトリの文書化されたチェックを
+  実行できません。git は worktree を実パスで一覧するため、パスは親ディレクトリの
+  実パスから組み立てます。macOS の `mktemp -d` は `/private/var/...` に対して
+  `/var/...` を返します。
+- **git コマンド。** launcher、reviewer、parent が自分で実行する git コマンドは、
+  収集、作成、削除、再実行のどれでも
+  `git --no-optional-locks -c core.hooksPath=/dev/null` を使うので、追跡下の
+  hooks ディレクトリの `post-checkout` や `post-index-change` などの hook が
+  レビュー対象の head から動くことはありません。reviewer は差分をレビュー対象の
+  worktree から読み取り専用で集め、未コミットの変更に依存する finding は
   `unproven: uncommitted change` とします。
 - **役割。** launcher（reviewer を起動するセッション。delivery ではコーディネーター、
   直接呼び出しでは呼び出したセッション）が、両ルートとも使い捨て worktree の作成と
@@ -45,35 +71,20 @@ reviewer が optional な pstack skill に依存しないためです。
 - **削除の権限。** レビューを求めたユーザーの依頼は、launcher がその実行のために
   作った使い捨て worktree だけを、失敗や上限到達の後も含めて、確認なしで削除する
   ことを認めます。それ以外の削除は確認を保ちます。
-- **出所。** 実行はレビュー対象のコード、テスト、依存関係をユーザーの権限で
-  動かします。そのため、そのコードの作者は攻撃者の位置にあり、reviewer の再現を
-  誘導するテキストの作者も同じです。実行が自動になるのは、delivery 自身の worker
-  head か、呼び出したユーザー自身のローカルの変更だけです。外部の pull request や
-  他者のブランチやコミットなど、それ以外の head では reviewer は何も実行せず、
-  正確なコマンドを `unproven: needs approval` として報告し、parent はコマンドと
-  すべての再現ファイルの全文を示し、再実行と同じパスとシンボリックリンクの確認を
-  行ったうえで、ユーザー自身のメッセージで承認された後にだけそれを実行します。
-  そのような head では Codex ルートは `--write` なしで起動するので、sandbox は
-  読み取り専用のままで、head の `AGENTS.md` などの指示が承認前の実行を起こす
-  ことはありません。
-  出所は launcher が決めて両ルートに渡し、reviewer が自分で決めることはありません。skill の description には、
-  レビュー対象のコードを実行することを明記します。
-- **境界。** 影響が使い捨て worktree の中にとどまるコマンドは自動で実行します。
-  lifecycle script を無効にした（`--ignore-scripts`）lockfile に従う依存関係の
-  復元も含み、`TMPDIR` とパッケージマネージャーのキャッシュは worktree の中に
-  向けます。その script が必要なチェックは、script を実行する復元コマンドの承認を
-  求めます。Docker、ホームやグローバル設定、特権、
-  リモートへの書き込み、共有ポートやプロセス、opt-in の end-to-end スイートなど、
-  外に影響するコマンドを reviewer は実行しません。finding は正確なコマンドとともに
-  `unproven: needs approval` と報告し、parent はユーザーの承認後にだけ実行します。
-- **強制の仕組み。** 境界は指示で守ります。Codex ルートは
-  `--write --cwd <使い捨て worktree>` で実行します。Codex 0.171.0 の
-  `workspace-write` sandbox は `.git` と linked worktree の gitdir を保護しますが、
-  `/tmp`、`$TMPDIR`、ユーザーの Codex 設定が有効にするネットワークも許し、
-  companion は実行ごとにそれを変えられません。subagent ルートと parent の再実行には
-  ホストの permission mode しかなく、実行されたレビュー対象のコードの動作を縛る
-  指示もありません。それは出所のゲートで扱います。各レビューはこの残る範囲を
-  報告します。
+- **境界。** 信頼できる head では、影響が使い捨て worktree の中にとどまるコマンドを
+  実行します。lifecycle script を無効にした（`--ignore-scripts`）lockfile に従う
+  依存関係の復元も含み、`TMPDIR` とパッケージマネージャーのキャッシュは worktree
+  の中に向けます。Docker、ホームやグローバル設定、特権、リモートへの書き込み、
+  共有ポートやプロセス、opt-in の end-to-end スイート、lifecycle script を実行する
+  復元など、外に影響するコマンドはレビューのためには実行しません。finding は
+  正確なコマンドとともに `unproven: outside boundary` と報告します。
+- **強制の仕組み。** 境界は指示で守ります。Codex 0.171.0 の `workspace-write`
+  sandbox は `.git` と linked worktree の gitdir を保護しますが、`/tmp`、
+  `$TMPDIR`、ユーザーの Codex 設定が有効にするネットワークも許し、companion は
+  実行ごとにそれを変えられません。subagent ルートと parent の再実行にはホストの
+  permission mode しかなく、実行されたレビュー対象のコードの動作を縛る指示も
+  ありません。それは信頼できる head だけを実行することで扱います。各レビューは
+  この残る範囲を報告します。
 - **実行できない finding。** 実行で示せない finding は残し、`unproven: <reason>`
   と表示して、重大度とタグは変えません。`Do not ship` は、証明された introduced
   または worsened の blocker か、parent がトレースで確かめたものにだけ使います。
@@ -87,21 +98,16 @@ reviewer が optional な pstack skill に依存しないためです。
   report がないときは launcher の `mktemp -d` ディレクトリへコピーします。
   `command` ファイルは、worktree のルートからの相対ディレクトリ、依存関係を
   復元する正確なコマンド、証明のコマンドを持ち、コマンドはそれぞれ POSIX `sh` の
-  1 行です。再実行や承認後の実行は、確認したとおりの復元を行います。finding の ID は
-  名前全体で照合し、コマンドでは引用符で囲みます。
+  1 行です。再実行は、確認したとおりの復元を行います。finding の ID は名前全体で
+  照合し、コマンドでは引用符で囲みます。
 - **parent の再実行。** parent は sandbox の外で実行するため、再実行の前に
   コマンドとすべての再現ファイルを表示して読み、すべてのパスが相対で `..` を含まず
-  シンボリックリンクでないことを確かめ、worktree の外に触れるものは
-  `unproven: needs approval` として扱います。依存関係は reviewer の実行と同じ
-  方法で復元し、finding の ID はパスやコマンドに使う前に reviewer の形式と
-  照合します。
-- **パス。** git は worktree を実パスで一覧するため、使い捨て worktree のパスは
-  親ディレクトリの実パスから組み立てます。macOS の `mktemp -d` は
-  `/private/var/...` に対して `/var/...` を返します。review block には
-  finding ごとの必須キー `proof` が加わり、`change-review` と
-  `change-security-review` は `not requested` を書きます。block の区切りは
-  `<!-- report-summary v3 -->` に変わり、チェックは切り替え前に記録された report の
-  `--sha256` 再チェックでだけ v2 の block を受け付けます。
+  シンボリックリンクでないことを確かめ、worktree の外に触れる finding では何も
+  実行しません。依存関係は reviewer の実行と同じ方法で復元します。
+- **review block。** review block には finding ごとの必須キー `proof` が加わり、
+  `change-review` と `change-security-review` は `not requested` を書きます。
+  block の区切りは `<!-- report-summary v3 -->` に変わり、チェックは切り替え前に
+  記録された report の `--sha256` 再チェックでだけ v2 の block を受け付けます。
 - **`interrogate`。** 読み取り専用の手動の入り口のままにし、失敗経路の基準だけを
   再利用して、実行の要件は取り込みません。
 
@@ -114,10 +120,13 @@ reviewer が optional な pstack skill に依存しないためです。
   権限を持つことになります。
 - **Codex を読み取り専用のままにする、またはネットワークを強制的に隔離したときだけ
   実行する。** どちらも Codex ルートで finding を証明する力をほぼ失います。
-- **どの head も自動で実行する、または sandbox の中でだけ再実行する。** 外部の
-  pull request のコードを承認なしで実行すると、ユーザーの資格情報とネットワークを
-  その作者に晒します。companion は parent 自身の再実行のための sandbox を
-  提供しません。
+- **どの head も自動で実行する。** 外部の pull request のコードを実行すると、
+  ユーザーの資格情報とネットワークをその作者に晒します。
+- **信頼できない head も、ユーザーが正確なコマンドを承認すれば実行する。** これが
+  以前の設計です。レビューのたびに、reviewer が用意したコマンドやファイル、または
+  head 自身の hook や指示が承認の前後で動ける箇所が新たに見つかり、承認された実行も
+  信頼できないコードをユーザーの権限で動かすことに変わりはありませんでした。
+  信頼できない変更の審査には別の skill が必要です。
 - **upstream のように実行のない finding を捨てる。** このリポジトリの delivery の
   大半を占める skill テキストの変更では、レビューが何も返さなくなります。
 - **v2 の block のまま `proof` を破壊的に追加する。** 進行中の delivery が記録済み
@@ -129,4 +138,6 @@ reviewer が optional な pstack skill に依存しないためです。
   再現を実行し、コーディネーターは証明された finding をそれぞれ再実行します。
 - adversarial reviewer の Run the Reviewer セクションは、読み取り専用のままの
   通常レビューとセキュリティレビューのものと一致しなくなります。
+- 外部の pull request など信頼できない head は、実行のない読み取り専用の
+  adversarial review になります。その審査は別の skill の後続作業です。
 - High tier の delivery の `blast-radius`（#253）は同じ reference を参照します。

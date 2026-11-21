@@ -1,6 +1,6 @@
 ---
 name: change-adversarial-review
-description: Use only when explicitly invoked with `$change-adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items. It executes the reviewed head's code in a disposable worktree to prove findings, automatically only for the user's own changes.
+description: Use only when explicitly invoked with `$change-adversarial-review` to pressure-test a repository change, branch, worktree, commit, pull request, or issue before shipping, or as the adversarial phase of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items. It executes the reviewed head's code in a disposable worktree to prove findings, only on a head the user trusts.
 ---
 
 # Change Adversarial Review
@@ -15,67 +15,72 @@ repros only in a disposable worktree under
 
 Unless you are the reviewer this section launched, you are the launcher under
 [Repro Runs](../delivery-common/references/repro-runs.md#roles). Before the
-reviewer starts, decide whether runs are automatic under
-[Provenance](../delivery-common/references/repro-runs.md#provenance), and
-create its disposable worktree at the reviewed head under
-[Disposable worktree](../delivery-common/references/repro-runs.md#disposable-worktree).
-After it ends, including a failed run or a bound, remove it under
+reviewer starts, decide whether the reviewed head is trusted under
+[Trusted heads](../delivery-common/references/repro-runs.md#trusted-heads),
+which also sets how each route launches. On a trusted head, create the
+reviewer's disposable worktree at the reviewed head under
+[Disposable worktree](../delivery-common/references/repro-runs.md#disposable-worktree);
+after it ends, including a failed run or a bound, remove it under
 [Remove](../delivery-common/references/repro-runs.md#remove), then rerun each
 proving command under
 [Parent rerun](../delivery-common/references/repro-runs.md#parent-rerun)
-before acting on its finding.
+before acting on its finding. On an untrusted head, create none; the review is
+read-only.
 
 By default, run this review in one fresh subagent of the current host instead
 of the current session: a Claude Code subagent on Claude Code, a Codex subagent
 on Codex. Give it this skill's path, the arguments, target, focus, caller
-context, the disposable worktree's path, and whether runs are automatic, and
-require it to follow the steps
+context, your trust decision, and on a trusted head the disposable worktree's
+path, and require it to follow the steps
 below without editing the reviewed worktree: Resolve and Collect's read-only
 commands run against the reviewed worktree, such as
 `git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> diff`, on both routes, every
 git command takes the form under
 [Git commands](../delivery-common/references/repro-runs.md#git-commands), and
-repro commands run only in the disposable worktree under
+repro commands run only in a disposable worktree under
 [Boundary](../delivery-common/references/repro-runs.md#boundary). Report the
 route, such as `Claude subagent (same model family as the implementation)`, in
 Review Target and the reduced independence in Coverage and Residual Risk. When
 you are that subagent or a task launched under this section, you are the
 reviewer: skip the launcher steps and follow the steps below directly,
 collecting from the reviewed worktree and running repros only in the
-disposable worktree you were given.
+disposable worktree you were given, and none on an untrusted head.
 
 Use another tool only when the user explicitly names it for this review, such
 as "review with Codex"; callers forward that instruction with the target. For
 Codex on Claude Code, resolve the installed `codex` plugin root from host
-metadata, then run its companion `task` in the foreground with `--fresh` and
-`--cwd <disposable worktree>`. Add `--write` only when runs are automatic or
-the user approved the exact commands, so the Codex sandbox can write that
-worktree but not its `.git` or the reviewed worktree; on an approval-required
-head, launch without `--write`, so the sandbox stays read-only and text in that
-head cannot cause a run before approval. With the
+metadata, then run its companion `task` in the foreground with `--fresh`, and
+with `--write` and `--cwd` exactly as
+[Trusted heads](../delivery-common/references/repro-runs.md#trusted-heads)
+sets for the Codex companion. With `--write`, the Codex sandbox can write the
+disposable worktree but not its `.git` or the reviewed worktree. With the
 host's file-writing tool, not a shell command, write the prompt to a temporary
-file outside both worktrees so no caller text enters a shell string.
+file outside every worktree so no caller text enters a shell string.
 Start it with `Use $change-adversarial-review`, followed by the arguments, the
 target with the reviewed worktree's path, focus, caller context, your
-provenance decision, whether runs are automatic, and the collection rule:
-Resolve and Collect run against the reviewed worktree with the git form under
-Git commands, and repros run only in the disposable worktree. Pass the file's
+trust decision, and the collection rule: Resolve and Collect run against the
+reviewed worktree with the git form under Git commands, and repros run only in
+the disposable worktree on a trusted head. Pass the file's
 absolute path with `--prompt-file`, and delete the file after the run:
 
 ```text
+# trusted head
 node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --write \
   --cwd <disposable worktree> --prompt-file <prompt-file>
+# untrusted head
+node "<plugin-root>/scripts/codex-companion.mjs" task --fresh \
+  --cwd <reviewed worktree> --prompt-file <prompt-file>
 ```
 
 Run one Codex run at a time per target worktree; wait for any other in progress.
 Before and after the run, including a failed run, follow
 `../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
-the disposable worktree, and report its result with the output.
+the worktree passed as `--cwd`, and report its result with the output.
 When you start the Codex runs of several review skills for one worktree
 together, wait for any other run in progress, then run them in parallel as one
 set instead: follow that section once before the first run starts and once
-after every run ends, for the reviewed worktree and for this review's
-disposable worktree, and report its result once.
+after every run ends, for the reviewed worktree and, on a trusted head, for
+this review's disposable worktree, and report its result once.
 
 With `--report <path>`, run it with the redirection and check in
 [Report Handoff](../delivery-common/references/report-handoff.md#codex-route)
@@ -162,8 +167,8 @@ weight it heavily, but still report any other material issue you can defend.
 ### Prove
 
 Back each finding with a run against the real code where a run is possible
-and the launcher reports that runs are automatic under
-[Provenance](../delivery-common/references/repro-runs.md#provenance):
+and the launcher reports a trusted head under
+[Trusted heads](../delivery-common/references/repro-runs.md#trusted-heads):
 a failing test, a repro script, or command output that shows the wrong
 behavior, run in the disposable worktree under
 [Repro Runs](../delivery-common/references/repro-runs.md) and within its
@@ -175,10 +180,11 @@ For a design flaw, try a probe of the current tree first.
 
 Keep a finding that no run can show, and give it the
 [Proof](../delivery-common/references/repro-runs.md#proof) status
-`unproven: <reason>`; its severity and tag stay as the evidence supports. Do
-not run a command whose effects leave the disposable worktree, or any command
-when runs need approval: name the exact commands and report the finding
-`unproven: needs approval`. Restore dependencies with lifecycle scripts off
+`unproven: <reason>`; its severity and tag stay as the evidence supports. On
+an untrusted head, run nothing and report each finding a run could show
+`unproven: untrusted head`. Never run a command whose effects leave the
+disposable worktree: name the exact command and report the finding
+`unproven: outside boundary`. Restore dependencies with lifecycle scripts off
 under [Boundary](../delivery-common/references/repro-runs.md#boundary), and
 record the exact restoration command in the finding's `command` file. The
 disposable worktree holds only the committed head, so report a finding that
@@ -260,7 +266,7 @@ and return only the report path and its completion:
 
 **Coverage and Residual Risk**
 - <coverage, skipped evidence, test gaps, stale refs, uncertainty>
-- <repro runs: provenance, total time, bounds reached, evidence path, and the boundary's residual scope>
+- <repro runs: trust decision, total time, bounds reached, evidence path, and the boundary's residual scope>
 ```
 
 Report every material defect under Material Findings with a label and tag;
