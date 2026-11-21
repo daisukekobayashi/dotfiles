@@ -3,28 +3,37 @@
 // together, started under its target worktree.
 //
 // Usage:
-//   node stop-run-processes.mjs record <target> <record-file>
-//   node stop-run-processes.mjs stop <target> <record-file> [--wait <seconds>]
+//   node stop-run-processes.mjs record <target> <record-file> [--writable <dir>]...
+//   node stop-run-processes.mjs stop <target> <record-file> [--writable <dir>]... [--wait <seconds>]
 //
 // The record file
 //   The record decides which processes existed before the run, so a Codex run
 //   must not be able to edit it. Its directory must be owned by the current
-//   user with no group or other access (mode 700), and must lie outside the
-//   target, `/tmp`, and `$TMPDIR` (with `os.tmpdir()`), which a Codex
-//   `workspace-write` run can write. Writable roots that the user's Codex
-//   configuration adds are not known here. `record` creates the file
-//   exclusively, without following a symbolic link, with mode 0600; `stop`
-//   accepts only such a regular file in such a directory.
+//   user with no group or other access (mode 700), and must lie outside every
+//   root a Codex `workspace-write` run of the set can write: the target, each
+//   other worktree a run of the set gets as --cwd (pass each with
+//   --writable), `/tmp`, `$TMPDIR` (with `os.tmpdir()`), and every
+//   `writable_roots` entry in the Codex configuration files that apply:
+//   `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`),
+//   `/etc/codex/config.toml`, `/etc/codex/managed_config.toml`, and
+//   `.codex/config.toml` in the target and each directory above it, in any
+//   table or profile. A configuration file that exists but cannot be read, or
+//   a `writable_roots` value that is not an array of absolute paths in plain
+//   strings, leaves the policy unknown: both subcommands exit 1. `record`
+//   creates the file exclusively, without following a symbolic link, with
+//   mode 0600; `stop` accepts only such a regular file in such a directory.
 //
 // record
-//   Before the run, writes the target's real path and every process's PID and
-//   start time, from one `ps` read, to <record-file>. It holds no command
-//   lines.
+//   Before the run, writes the target's real path, its own PID, and every
+//   process's PID and start time, from one `ps` read, to <record-file>. It
+//   holds no command lines.
 //
 // stop
 //   After the run, whether it succeeded or failed, reads and checks the record
-//   (its format, a non-empty list of PID and start time pairs that includes
-//   pid 1 with the start time it has now, and the target), lists the worktrees
+//   (its format; PIDs and start times exactly as ps prints them under
+//   LC_ALL=C, such as "Sat Nov 21 16:21:27 2026"; entries for pid 1, with the
+//   start time it has now, and for the process that wrote it; and the target),
+//   lists the worktrees
 //   registered below the target, takes a process table, lists the target with
 //   list-processes.sh beside this script, and takes a second table. A process
 //   is one the run started only when all of these hold:
@@ -39,8 +48,11 @@
 //   - its cwd is not inside a worktree registered below the target;
 //   - it has no tty;
 //   - its parent is pid 1 or 0, or itself a process the run started.
-//   Any other listed process is reported "left" with the reason and never
-//   signaled: one that existed before the run, one under a parent that did
+//   A new process listed under the target whose cwd is not such an exact path,
+//   such as a cwd with a " (deleted)" suffix or an ambiguous one, may be the
+//   run's: it is reported "unverified" and never signaled, and counts as a
+//   leftover. Any other listed process is reported "left" with the reason and
+//   never signaled: one that existed before the run, one under a parent that did
 //   (such as another session's shell, wherever its cwd is), and one under a
 //   new parent outside the target. Ownership is read from the parent chain at
 //   stop: a process another session starts in the target during the run
@@ -66,20 +78,21 @@
 //   gone           exited before it was signaled
 //   running        still running after the second SIGTERM
 //   unverified     not signaled, or its exit not confirmed: its start time
-//                  changed or differs between lookups, its parent was not
-//                  found, or it could not be read or signaled
+//                  changed or differs between lookups, its cwd is not an
+//                  exact live path, its parent was not found, or it could not
+//                  be read or signaled
 //   left           not started by the run; <reason> says why
 //
 // Exit status:
 //   0  stop: every started process exited, or the run started none; record:
 //      written
 //   1  could not run, and nothing was signaled: list-processes.sh, ps, or git
-//      failed, wrote to stderr, or ran past 120 seconds, or the record is
-//      unusable (place, mode, format, or contents) or names another target.
-//      The teardown is unverified.
+//      failed, wrote to stderr, or ran past 120 seconds, the Codex sandbox
+//      policy is unknown, or the record is unusable (place, mode, format, or
+//      contents) or names another target. The teardown is unverified.
 //   2  usage error: an unknown subcommand or option, a target that is not a
 //      directory, or for record a path that exists or a directory that is not
-//      a private one outside the target, /tmp, and $TMPDIR
+//      a private one outside every root a Codex run of the set can write
 //   3  stop: a started process is still running or unverified
 // Leftovers never change a review's result; worktree cleanup handles them.
 import { spawn } from "node:child_process";
@@ -97,12 +110,17 @@ const listScript = path.join(here, "list-processes.sh");
 const env = { ...process.env, LC_ALL: "C" };
 
 const USAGE = [
-  "usage: stop-run-processes.mjs record <target> <record-file>",
-  "       stop-run-processes.mjs stop <target> <record-file> [--wait <seconds>]",
+  "usage: stop-run-processes.mjs record <target> <record-file> [--writable <dir>]...",
+  "       stop-run-processes.mjs stop <target> <record-file> [--writable <dir>]... [--wait <seconds>]",
 ].join("\n");
 
 class Usage extends Error {}
 class Unavailable extends Error {}
+
+// A PID and a start time exactly as ps prints them under LC_ALL=C, after
+// normalize: "Sat Nov 21 16:21:27 2026".
+const PID = /^[1-9]\d*$/;
+const STARTED = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([1-9]|[12]\d|3[01]) ([01]\d|2[0-3]):[0-5]\d:[0-5]\d \d{4}$/;
 
 const under = (dir, root) => dir === root || dir.startsWith(root.endsWith("/") ? root : `${root}/`);
 const normalize = (started) => started.trim().replace(/\s+/g, " ");
@@ -175,7 +193,11 @@ const processTable = async (timeoutMs = LOOKUP_TIMEOUT_MS) => {
       if (line.trim() !== "") throw new Unavailable(`ps printed an unexpected line: ${line}`);
       continue;
     }
-    table.set(match[1], { ppid: match[2], started: normalize(match[3]) });
+    const started = normalize(match[3]);
+    if (!PID.test(match[1]) || !/^(0|[1-9]\d*)$/.test(match[2]) || !STARTED.test(started)) {
+      throw new Unavailable(`ps printed an unexpected line: ${line}`);
+    }
+    table.set(match[1], { ppid: match[2], started });
   }
   if (!table.has(String(process.pid)) || !table.has("1")) throw new Unavailable("ps did not list this process and pid 1");
   return table;
@@ -200,9 +222,111 @@ const realOrSelf = (dir) => {
   }
 };
 
+// Reads the writable_roots arrays of one Codex configuration file: every
+// `writable_roots = [...]` in it, in any table or profile, counts. Returns
+// [] for a missing file; throws Unavailable for a file it cannot read or a
+// value it cannot parse, since the sandbox policy is then unknown.
+const configRoots = (file) => {
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
+    throw new Unavailable(`cannot read the Codex configuration ${file}: ${error.code ?? error.message}`);
+  }
+  const unknown = (why) => new Unavailable(`cannot establish the Codex sandbox writable roots from ${file}: ${why}`);
+  const roots = [];
+  let from = 0;
+  for (;;) {
+    const at = text.indexOf("writable_roots", from);
+    if (at < 0) break;
+    from = at + "writable_roots".length;
+    const lineStart = text.lastIndexOf("\n", at) + 1;
+    const before = text.slice(lineStart, at);
+    if (/^\s*#/.test(before)) continue;
+    // Only a key path or an inline table may come before the key on its line;
+    // anything else, such as a string that names it, leaves the policy unknown.
+    if (!/^[\s\w."'{=,-]*$/.test(before)) throw unknown("writable_roots appears where it cannot be read");
+    let i = from;
+    if (text[i] === '"' || text[i] === "'") i++;
+    const assign = text.slice(i).match(/^[ \t]*=[ \t]*\[/);
+    if (!assign) throw unknown("writable_roots is not an array");
+    i += assign[0].length;
+    for (;;) {
+      while (i < text.length && /[\s,]/.test(text[i])) i++;
+      if (text[i] === "#") {
+        while (i < text.length && text[i] !== "\n") i++;
+        continue;
+      }
+      if (text[i] === "]") break;
+      let value;
+      if (text.startsWith('"""', i) || text.startsWith("'''", i)) throw unknown("multi-line strings are not read");
+      if (text[i] === "'") {
+        const end = text.indexOf("'", i + 1);
+        if (end < 0 || text.slice(i + 1, end).includes("\n")) throw unknown("an unterminated string");
+        value = text.slice(i + 1, end);
+        i = end + 1;
+      } else if (text[i] === '"') {
+        value = "";
+        i++;
+        for (;;) {
+          const c = text[i];
+          if (c === undefined || c === "\n") throw unknown("an unterminated string");
+          if (c === '"') {
+            i++;
+            break;
+          }
+          if (c === "\\") {
+            const e = text[i + 1];
+            const simple = { "\\": "\\", '"': '"', n: "\n", t: "\t", r: "\r", b: "\b", f: "\f" }[e];
+            if (simple !== undefined) {
+              value += simple;
+              i += 2;
+            } else if (e === "u" && /^[0-9a-fA-F]{4}$/.test(text.slice(i + 2, i + 6))) {
+              value += String.fromCodePoint(parseInt(text.slice(i + 2, i + 6), 16));
+              i += 6;
+            } else if (e === "U" && /^[0-9a-fA-F]{8}$/.test(text.slice(i + 2, i + 10))) {
+              value += String.fromCodePoint(parseInt(text.slice(i + 2, i + 10), 16));
+              i += 10;
+            } else {
+              throw unknown("an unknown escape");
+            }
+            continue;
+          }
+          value += c;
+          i++;
+        }
+      } else {
+        throw unknown("an element that is not a string");
+      }
+      if (value.startsWith("~/")) value = path.join(os.homedir(), value.slice(2));
+      if (!path.isAbsolute(value)) throw unknown(`a relative root: ${value}`);
+      roots.push(value);
+    }
+    from = i;
+  }
+  return roots;
+};
+
+// Every root a Codex workspace-write run may write beyond its --cwd, /tmp, and
+// $TMPDIR: the writable_roots of the user, system, and project configuration
+// files that apply to the target, in every profile.
+const sandboxRoots = (target) => {
+  const home = process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) : path.join(os.homedir(), ".codex");
+  const files = [path.join(home, "config.toml"), "/etc/codex/config.toml", "/etc/codex/managed_config.toml"];
+  for (let dir = target; ; dir = path.dirname(dir)) {
+    files.push(path.join(dir, ".codex", "config.toml"));
+    if (dir === path.dirname(dir)) break;
+  }
+  return files.flatMap(configRoots);
+};
+
 // The record's real path, after checking that its directory is private and
-// outside every root a Codex run can write. Throws Fail for a bad place.
-const recordPlace = (file, target, Fail) => {
+// outside every root a Codex run of the set can write: the target, the other
+// worktrees given with --writable, /tmp, $TMPDIR, and the configured writable
+// roots. Throws Fail for a bad place, and Unavailable when the configured
+// roots cannot be read.
+const recordPlace = (file, target, others, Fail) => {
   const abs = path.resolve(file);
   let parent;
   try {
@@ -211,11 +335,11 @@ const recordPlace = (file, target, Fail) => {
     throw new Fail(`the record's directory does not exist: ${file}`);
   }
   const real = path.join(parent, path.basename(abs));
-  const writable = [target, "/tmp", process.env.TMPDIR, os.tmpdir()]
+  const writable = [target, ...others, "/tmp", process.env.TMPDIR, os.tmpdir(), ...sandboxRoots(target)]
     .filter(Boolean)
     .flatMap((dir) => [path.resolve(dir), realOrSelf(dir)]);
   if (writable.some((root) => under(real, root))) {
-    throw new Fail(`the record must lie outside the target, /tmp, and $TMPDIR, which a Codex run can write: ${file}`);
+    throw new Fail(`the record must lie outside the target, /tmp, $TMPDIR, and every root a Codex run can write: ${file}`);
   }
   const stat = statSync(parent);
   if (stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0) {
@@ -224,8 +348,8 @@ const recordPlace = (file, target, Fail) => {
   return real;
 };
 
-const record = async (target, file) => {
-  const real = recordPlace(file, target, Usage);
+const record = async (target, file, others) => {
+  const real = recordPlace(file, target, others, Usage);
   let exists = true;
   try {
     lstatSync(real);
@@ -237,6 +361,7 @@ const record = async (target, file) => {
   const content = `${JSON.stringify({
     version: RECORD_VERSION,
     target,
+    recorder: String(process.pid),
     processes: [...table].map(([pid, { started }]) => [pid, started]),
   })}\n`;
   let fd;
@@ -253,12 +378,12 @@ const record = async (target, file) => {
 };
 
 const isPair = (entry) => Array.isArray(entry) && entry.length === 2
-  && typeof entry[0] === "string" && /^\d+$/.test(entry[0])
-  && typeof entry[1] === "string" && normalize(entry[1]) !== "" && normalize(entry[1]) === entry[1];
+  && typeof entry[0] === "string" && PID.test(entry[0])
+  && typeof entry[1] === "string" && STARTED.test(entry[1]);
 
 // The record's pairs as a Map of pid -> started, or Unavailable.
-const readRecord = (target, file) => {
-  const real = recordPlace(file, target, Unavailable);
+const readRecord = (target, file, others) => {
+  const real = recordPlace(file, target, others, Unavailable);
   let data;
   try {
     const fd = openSync(real, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -275,13 +400,16 @@ const readRecord = (target, file) => {
   }
   if (data === null || typeof data !== "object" || Array.isArray(data)
     || data.version !== RECORD_VERSION || typeof data.target !== "string"
+    || typeof data.recorder !== "string" || !PID.test(data.recorder) || data.recorder === "1"
     || !Array.isArray(data.processes) || data.processes.length === 0 || !data.processes.every(isPair)) {
     throw new Unavailable(`the record ${file} has an unknown format`);
   }
   if (data.target !== target) throw new Unavailable(`the record ${file} names another target`);
   const before = new Map(data.processes);
   if (before.size !== data.processes.length) throw new Unavailable(`the record ${file} lists a PID twice`);
-  if (!before.has("1")) throw new Unavailable(`the record ${file} does not list pid 1`);
+  if (!before.has("1") || !before.has(data.recorder)) {
+    throw new Unavailable(`the record ${file} does not list pid 1 and the process that wrote it`);
+  }
   return before;
 };
 
@@ -371,9 +499,9 @@ const waitFor = async (procs, ms) => {
   }
 };
 
-const stop = async (target, file, waitSeconds) => {
+const stop = async (target, file, others, waitSeconds) => {
   // Everything that can make the teardown unavailable runs before any signal.
-  const before = readRecord(target, file);
+  const before = readRecord(target, file, others);
   const nested = await nestedWorktrees(target);
   const first = await processTable();
   if (first.get("1").started !== before.get("1")) {
@@ -396,8 +524,9 @@ const stop = async (target, file, waitSeconds) => {
     else if (!then) verdict = { status: "left", reason: "started during the teardown" };
     else if (then.started !== row.started || now.started !== row.started) verdict = { status: "unverified", reason: "start time differs between lookups" };
     else if (before.get(pid) === now.started) verdict = { status: "left", reason: "existed before the run" };
+    else if (row.reason === "cwd ambiguous") verdict = { status: "unverified", reason: "cwd ambiguous" };
     else if (row.reason !== "cwd under target") verdict = { status: "left", reason: row.reason === "--cwd under target" ? "only its --cwd argument is under the target" : row.reason };
-    else if (problem) verdict = { status: "left", reason: problem };
+    else if (problem) verdict = { status: "unverified", reason: problem };
     else if (inNested) verdict = { status: "left", reason: `in nested worktree ${inNested}` };
     else if (row.tty !== "?") verdict = { status: "left", reason: `has tty ${row.tty}` };
     else {
@@ -472,29 +601,32 @@ const stop = async (target, file, waitSeconds) => {
 
 const main = async (argv) => {
   const [subcommand, ...args] = argv;
+  if (subcommand !== "record" && subcommand !== "stop") throw new Usage("");
+  let wait = 10;
+  const others = [];
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--wait" && subcommand === "stop") {
+      const value = args[++i];
+      if (!/^\d+(\.\d+)?$/.test(value ?? "") || Number(value) > 60) throw new Usage("--wait takes seconds from 0 to 60");
+      wait = Number(value);
+    } else if (args[i] === "--writable") {
+      const value = args[++i];
+      if (!value) throw new Usage("--writable takes a directory");
+      others.push(path.resolve(value));
+    } else if (args[i].startsWith("-")) {
+      throw new Usage(`unknown option: ${args[i]}`);
+    } else {
+      positional.push(args[i]);
+    }
+  }
+  if (positional.length !== 2) throw new Usage("");
+  const target = resolveTarget(positional[0]);
   if (subcommand === "record") {
-    if (args.length !== 2) throw new Usage("");
-    await record(resolveTarget(args[0]), args[1]);
+    await record(target, positional[1], others);
     return 0;
   }
-  if (subcommand === "stop") {
-    let wait = 10;
-    const positional = [];
-    for (let i = 0; i < args.length; i++) {
-      if (args[i] === "--wait") {
-        const value = args[++i];
-        if (!/^\d+(\.\d+)?$/.test(value ?? "") || Number(value) > 60) throw new Usage("--wait takes seconds from 0 to 60");
-        wait = Number(value);
-      } else if (args[i].startsWith("-")) {
-        throw new Usage(`unknown option: ${args[i]}`);
-      } else {
-        positional.push(args[i]);
-      }
-    }
-    if (positional.length !== 2) throw new Usage("");
-    return stop(resolveTarget(positional[0]), positional[1], wait);
-  }
-  throw new Usage("");
+  return stop(target, positional[1], others, wait);
 };
 
 // Exit codes are set, never forced, so stdout and stderr drain before exit.

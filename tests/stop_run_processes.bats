@@ -21,6 +21,9 @@ setup() {
   # Codex run can write, and outside the bats temporary directory below them.
   recdir="$(mktemp -d /var/tmp/stop-run-processes-test.XXXXXX)"
   record="${recdir}/record.json"
+  # An empty Codex home, so the user's configuration never changes a result.
+  export CODEX_HOME="${BATS_TEST_TMPDIR}/codex-home"
+  mkdir -p "${CODEX_HOME}"
   groups=()
 }
 
@@ -173,7 +176,7 @@ EOF
   alive "${child2}"
 }
 
-@test "stop-run-processes leaves a process in a nested worktree or with an ambiguous cwd" {
+@test "stop-run-processes leaves a nested worktree process and reports an ambiguous cwd unverified" {
   git -C "${target}" worktree add -q --detach "${target}/nested"
   mkdir -p "${target}/a\\b"
   run node "${script}" record "${target}" "${record}"
@@ -184,9 +187,10 @@ EOF
   local ambiguous="${started_pid}"
 
   run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
-  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
   [ "$(row_for "${nested}" | cut -f1,6)" = "$(printf 'left\tin nested worktree %s' "${target}/nested")" ]
-  [ "$(row_for "${ambiguous}" | cut -f1,6)" = "$(printf 'left\tcwd ambiguous')" ]
+  [ "$(row_for "${ambiguous}" | cut -f1,6)" = "$(printf 'unverified\tcwd ambiguous')" ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
   alive "${nested}"
   alive "${ambiguous}"
 }
@@ -266,7 +270,7 @@ EOF
   # The bats temporary directory lies under /tmp or $TMPDIR.
   run --separate-stderr node "${script}" record "${target}" "${outside}/record.json"
   [ "${status}" -eq 2 ]
-  [[ "${stderr}" == *"outside the target, /tmp, and \$TMPDIR"* ]]
+  [[ "${stderr}" == *"outside the target, /tmp, \$TMPDIR, and every root a Codex run can write"* ]]
   [ ! -e "${outside}/record.json" ]
   mkdir -m 755 "${recdir}/shared"
   run --separate-stderr node "${script}" record "${target}" "${recdir}/shared/record.json"
@@ -297,17 +301,29 @@ write_record() {
   (umask 077 && printf '%s\n' "$1" >"${record}")
 }
 
+# The start time of pid $1 as the record holds it.
+lstart_of() {
+  LC_ALL=C ps -p "$1" -o lstart= | sed 's/^ *//; s/ *$//; s/  */ /g'
+}
+
 @test "stop-run-processes signals nothing for a malformed or foreign record" {
-  local one started bad
-  one="$(LC_ALL=C ps -p 1 -o lstart= | sed 's/^ *//; s/ *$//; s/  */ /g')"
+  local one me started bad good
+  one="$(lstart_of 1)"
+  me="$(lstart_of "$$")"
   start_detached "${target}" sleep 300
   started="${started_pid}"
+  good="[\"1\",\"${one}\"],[\"$$\",\"${me}\"]"
   for bad in \
-    "{\"version\":1,\"target\":\"${target}\",\"processes\":[]}" \
-    "{\"version\":1,\"target\":\"${target}\",\"processes\":[[1,\"${one}\"]]}" \
-    "{\"version\":1,\"target\":\"${target}\",\"processes\":[[\"2\",\"${one}\"]]}" \
-    "{\"version\":2,\"target\":\"${target}\",\"processes\":[[\"1\",\"${one}\"]]}" \
-    "{\"version\":1,\"target\":\"${target}\",\"processes\":[[\"1\",\"Thu Jan 1 00:00:00 1970\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[[1,\"${one}\"],[\"$$\",\"${me}\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[[\"$$\",\"${me}\"]]}" \
+    "{\"version\":2,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[${good}]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[[\"1\",\"Thu Jan 1 00:00:00 1970\"],[\"$$\",\"${me}\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"processes\":[${good}]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"1\",\"processes\":[[\"1\",\"${one}\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[[\"1\",\"${one}\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[${good},[\"0${started}\",\"${me}\"]]}" \
+    "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[${good},[\"${started}\",\"yesterday\"]]}" \
     "[]"; do
     rm -f "${record}"
     write_record "${bad}"
@@ -318,15 +334,19 @@ write_record() {
   done
   # A well-formed record in a file others can read is refused too.
   rm -f "${record}"
-  write_record "{\"version\":1,\"target\":\"${target}\",\"processes\":[[\"1\",\"${one}\"]]}"
+  write_record "{\"version\":1,\"target\":\"${target}\",\"recorder\":\"$$\",\"processes\":[${good}]}"
   chmod 644 "${record}"
   run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
   [ "${status}" -eq 1 ]
   [[ "${stderr}" == *"mode 600"* ]]
   alive "${started}"
+  # The same record, private, is accepted.
+  chmod 600 "${record}"
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
 }
 
-@test "stop-run-processes leaves a cwd with a deleted suffix outside the target" {
+@test "stop-run-processes reports a cwd with a deleted suffix unverified and never signals it" {
   local sibling="${target} (deleted)"
   mkdir -p "${sibling}"
   run node "${script}" record "${target}" "${record}"
@@ -335,9 +355,91 @@ write_record() {
   local outsider="${started_pid}"
 
   run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
-  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
-  [ "$(row_for "${outsider}" | cut -f1,6)" = "$(printf 'left\tcwd deleted')" ]
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${outsider}" | cut -f1,6)" = "$(printf 'unverified\tcwd deleted')" ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
   alive "${outsider}"
+}
+
+@test "stop-run-processes reports a Linux row whose cwd was deleted as a leftover" {
+  local copy="${BATS_TEST_TMPDIR}/skill" orphan started
+  mkdir -p "${copy}"
+  cp -R "$(repo_root)/skills/local/worktree-runtime-cleanup/scripts" "${copy}/"
+  run node "${copy}/scripts/stop-run-processes.mjs" record "${target}" "${record}"
+  [ "${status}" -eq 0 ]
+  # The run's orphan, whose cwd under the target was removed: Linux lists it
+  # with a " (deleted)" suffix, which this listing reproduces.
+  start_detached "${target}" sleep 300
+  orphan="${started_pid}"
+  started="$(LC_ALL=C ps -p "${orphan}" -o lstart= | sed 's/^ *//')"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\t1\\t?\\t%%s\\t%%s\\tcwd under target\\tsleep 300\\n" %q %q %q\n' \
+    "${orphan}" "${started}" "${target}/gone (deleted)" >"${copy}/scripts/list-processes.sh"
+
+  run --separate-stderr node "${copy}/scripts/stop-run-processes.mjs" stop "${target}" "${record}" --wait 1
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${orphan}" | cut -f1,5,6)" = "$(printf 'unverified\t%s\tcwd deleted' "${target}/gone (deleted)")" ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
+  alive "${orphan}"
+}
+
+@test "stop-run-processes keeps the record outside the configured Codex writable roots" {
+  local outer
+  outer="$(dirname "${recdir}")"
+  # A comment and other keys do not count.
+  printf '# writable_roots = ["/"]\n[sandbox_workspace_write]\nnetwork_access = true\n' >"${CODEX_HOME}/config.toml"
+  run --separate-stderr node "${script}" record "${target}" "${record}"
+  [ "${status}" -eq 0 ] || { echo "status ${status}: ${stderr}"; return 1; }
+
+  # A root in the user configuration, in a profile, or in the target's project
+  # configuration covers the record: record refuses, stop signals nothing.
+  start_detached "${target}" sleep 300
+  local started="${started_pid}"
+  for config in \
+    "[sandbox_workspace_write]
+writable_roots = [\"${recdir}\"]" \
+    "profile = \"p\"
+[profiles.p.sandbox_workspace_write]
+writable_roots = [
+  '/nonexistent', # a comment
+  '${outer}',
+]"; do
+    printf '%s\n' "${config}" >"${CODEX_HOME}/config.toml"
+    run --separate-stderr node "${script}" record "${target}" "${recdir}/second.json"
+    [ "${status}" -eq 2 ] || { echo "config ${config}: status ${status}: ${stderr}"; return 1; }
+    [[ "${stderr}" == *"every root a Codex run can write"* ]]
+    run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+    [ "${status}" -eq 1 ] || { echo "config ${config}: status ${status}: ${output} ${stderr}"; return 1; }
+    [ -z "${output}" ]
+  done
+  : >"${CODEX_HOME}/config.toml"
+  mkdir -p "${target}/.codex"
+  printf 'sandbox_workspace_write = { writable_roots = ["%s"] }\n' "${recdir}" >"${target}/.codex/config.toml"
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  [ "${status}" -eq 1 ]
+  rm -r "${target}/.codex"
+
+  # A policy that cannot be read leaves the teardown unverified.
+  for config in 'writable_roots = "/"' 'writable_roots = ["relative"]' 'writable_roots = [1]' 'notify = ["/x/writable_roots"]'; do
+    printf '[sandbox_workspace_write]\n%s\n' "${config}" >"${CODEX_HOME}/config.toml"
+    run --separate-stderr node "${script}" record "${target}" "${recdir}/third.json"
+    [ "${status}" -eq 1 ] || { echo "config ${config}: status ${status}: ${stderr}"; return 1; }
+    [[ "${stderr}" == *"cannot establish the Codex sandbox writable roots"* ]]
+    run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+    [ "${status}" -eq 1 ]
+  done
+  : >"${CODEX_HOME}/config.toml"
+  chmod 000 "${CODEX_HOME}/config.toml"
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --wait 1
+  chmod 600 "${CODEX_HOME}/config.toml"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"cannot read the Codex configuration"* ]]
+
+  # Another worktree of the set, given with --writable, counts too.
+  run --separate-stderr node "${script}" stop "${target}" "${record}" --writable "${outer}" --wait 1
+  [ "${status}" -eq 1 ]
+  run --separate-stderr node "${script}" record "${target}" "${recdir}/fourth.json" --writable "${recdir}"
+  [ "${status}" -eq 2 ]
+  alive "${started}"
 }
 
 @test "stop-run-processes signals no process whose start times differ between lookups" {

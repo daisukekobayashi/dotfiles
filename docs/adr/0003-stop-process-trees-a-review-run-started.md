@@ -47,11 +47,15 @@ link.
   mode-0600 file. After the run, `stop` lists the target with
   `list-processes.sh` between two process tables.
 - **A record the run cannot edit.** The record decides what existed before the
-  run, so it lives in a directory only the user can access, outside the
-  target, `/tmp`, and `$TMPDIR`, which a Codex `workspace-write` run can write;
-  the script refuses any other place. `stop` also refuses a record that is
-  empty, malformed, for another target, or whose pid 1 start time differs from
-  the current one, and signals nothing then.
+  run, so it lives in a directory only the user can access, outside every root
+  a Codex `workspace-write` run of the set can write: the target, the other
+  worktrees of the set (given with `--writable`), `/tmp`, `$TMPDIR`, and the
+  `writable_roots` of every Codex configuration file that applies, in any
+  profile. The script refuses any other place, and signals nothing when it
+  cannot read those roots. `stop` also refuses a record that is empty,
+  malformed (PIDs and start times not exactly as `ps` prints them), for
+  another target, missing pid 1 or the process that wrote it, or whose pid 1
+  start time differs from the current one, and signals nothing then.
 - **Ownership.** A process is one the run started only when it is absent from
   the record by PID and start time, both tables and the listing give it the
   same start time (so its cwd and start time belong to one process), it is
@@ -59,7 +63,10 @@ link.
   target (normalized, with no backslash and no ` (deleted)` suffix), it lies
   outside every worktree registered below the target, it has no tty, and it
   has pid 1 or 0, or another process the run started, as its parent.
-  Ownership comes from timing and location, never from process names.
+  Ownership comes from timing and location, never from process names. A new
+  process listed under the target whose cwd is not an exact live path, such as
+  a Linux cwd with a ` (deleted)` suffix, may be the run's: it is reported
+  `unverified`, counts as a leftover, and is never signaled.
 - **Ancestry over the whole table.** A process under a parent that existed
   before the run, wherever that parent's cwd is, or under a new parent outside
   the target, is reported `left` and never signaled. Only pid 1 and 0 end the

@@ -92,43 +92,56 @@ session starts in the target during the run counts as started by the run once
 its parent has exited, and is stopped.
 
 1. Before the run, record the process table in a directory only you can
-   access, outside the worktree, `/tmp`, and `$TMPDIR`, which a Codex
-   `workspace-write` run can write, so the run cannot edit the record. In
-   delivery, use a new `mkdir -m 700` directory in the task's records
-   directory; otherwise create one with
+   access, outside every root a Codex `workspace-write` run of the set can
+   write, so no run can edit the record: the worktree, each other worktree a
+   run of the set gets as `--cwd`, `/tmp`, `$TMPDIR`, and the
+   `writable_roots` of the Codex configuration. In delivery, use a new
+   `mkdir -m 700` directory in the task's records directory; otherwise create
+   one with
    `mkdir -p "$HOME/.cache" && dir="$(mktemp -d "$HOME/.cache/review-teardown.XXXXXX")"`.
 
    ```text
    node <this skill>/scripts/stop-run-processes.mjs record <worktree> "$dir/record.json"
    ```
 
-   The script refuses a record in a writable root or in a directory others can
-   access (exit 2). A non-zero exit leaves no usable record: run the review,
-   report the teardown as unverified, and skip step 2.
+   When the runs of a set use different `--cwd` worktrees, such as the
+   adversarial review's reviewed and disposable worktrees, keep one record per
+   worktree and add `--writable <other worktree>` for each other one to both
+   calls. The script checks the place itself, reading the Codex configuration
+   files its header lists: it refuses a record in a writable root or in a
+   directory others can access (exit 2), and exits 1 when it cannot establish
+   the writable roots. A non-zero exit leaves no usable record: run the
+   review, report the teardown as unverified, and skip step 2.
 2. After the run, whether it succeeded or failed, run
-   `node <this skill>/scripts/stop-run-processes.mjs stop <worktree> "$dir/record.json"`,
-   then remove `$dir`. A process is one the run started only when it is absent
-   from the record by PID and start time, every lookup gives it the same start
-   time, `list-processes.sh` lists it with reason `cwd under target` and an
-   exact cwd at or below the target (no backslash, no ` (deleted)` suffix), its
-   cwd is outside every worktree registered below the target, it has no tty,
-   and its parent is pid 1 or another process the run started. A `--cwd`
-   argument alone, a process that existed before the run, and one under a
-   parent that did or under a new parent outside the target never count: the
-   script reports them as `left` and leaves them running. It sends SIGTERM to the top of each
-   started tree after rechecking its PID and start time, waits about 10
-   seconds, sends SIGTERM once more to each started process still running
-   whose PID and start time match, even if reparented, and never sends SIGKILL.
+   `node <this skill>/scripts/stop-run-processes.mjs stop <worktree> "$dir/record.json"`
+   with the same `--writable` options, then remove `$dir`. A process is one the
+   run started only when it is absent from the record by PID and start time,
+   every lookup gives it the same start time, `list-processes.sh` lists it with
+   reason `cwd under target` and an exact cwd at or below the target (no
+   backslash, no ` (deleted)` suffix), its cwd is outside every worktree
+   registered below the target, it has no tty, and its parent is pid 1 or
+   another process the run started. A `--cwd` argument alone, a process that
+   existed before the run, and one under a parent that did or under a new parent
+   outside the target never count: the script reports them as `left` and leaves
+   them running. A new process listed under the target whose cwd is not an exact
+   live path, such as one with a ` (deleted)` suffix or an ambiguous one, may be
+   the run's: the script reports it as `unverified`, a leftover, and never
+   signals it. It sends SIGTERM to the top of each started tree after rechecking
+   its PID and start time, waits about 10 seconds, sends SIGTERM once more to
+   each started process still running whose PID and start time match, even if
+   reparented, and never sends SIGKILL.
 3. Report its output with the review; its rows carry no command lines. Exit 0
-   means every started process exited, or the run started none; exit 3 means
-   a started process is still running or unverified. Leftovers do not change the review result; cleanup
-   under [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
+   means every started process exited, or the run started none; exit 3 means a
+   started process is still running or unverified. Leftovers do not change the
+   review result; cleanup under
+   [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
    handles them before the worktree is removed.
 
 Exit 1 means the teardown could not run and signaled nothing, such as when
 `list-processes.sh` cannot run without bash, `/proc`, or a working `lsof`, when
-`ps` or git fails, or when the record is unusable: its listing is unavailable,
-never empty. Report the teardown as unverified and leave it to cleanup.
+`ps` or git fails, when the Codex writable roots cannot be established, or when
+the record is unusable: its listing is unavailable, never empty. Report the
+teardown as unverified and leave it to cleanup.
 
 ## Compose Stacks
 
