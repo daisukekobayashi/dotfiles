@@ -416,7 +416,7 @@ async function useRepositorySources(fixture) {
 test("repository bundles resolve every ../ link inside the bundle", () =>
   withFixture(async (fixture) => {
     await useRepositorySources(fixture);
-    for (const profiles of ["base,github", "github", "azure-devops", "base,beads", "pstack"]) {
+    for (const profiles of ["base,github", "github", "azure-devops", "base,beads", "base"]) {
       const out = path.join(fixture.outParent, profiles.replace(/,/g, "-"));
       const result = runExport(["--profile", profiles, "--out", out], fixture);
       assertOk(result);

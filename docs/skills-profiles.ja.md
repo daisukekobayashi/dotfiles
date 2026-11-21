@@ -489,6 +489,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
 - worker の草稿とコーディネーターの質問の流れ、commit 済み snapshot のローカルレビュー手順、リスク tier、delivery の完了ポリシーを共有する `delivery-common`
 - design preflight の前に、before/after の具体例を含む概要で issue や Work Item の内容を読み上げ、決めていることと決めていない点をユーザーと合意する `shared-understanding`
+- Lauren Tan の pstack を元にした13個の local skill（[Adapted from pstack](#adapted-from-pstack) を参照）
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
@@ -496,11 +497,18 @@ Superpowers は `base` に含めません。`writing-great-skills` は上流で�
 
 以前の GitHub 対応込みの baseline が必要な場合は `base,github` を使います.
 
-### `pstack`
+#### Adapted from pstack
 
-Lauren Tan の pstack を、この環境の作業範囲と承認ルールに合わせた13個の local skill。
-`base`・`github` から独立した profile で、外部パッケージ、プラグインの hook、
-モデル設定、既定の自動ルーティングは追加しません。既存の `tdd`・`teach` は維持します。
+`base` には、Lauren Tan の pstack をこの環境の作業範囲と承認ルールに合わせた13個の
+local skill が含まれます。外部パッケージ、プラグインの hook、モデル設定、既定の
+自動ルーティングは追加しません。既存の `tdd`・`teach` は維持します。
+
+これらは独立した `pstack` profile でしたが、`base` の delivery が `architect` と
+`arena` を任意 workflow として実行するため、
+[#271](https://github.com/daisukekobayashi/dotfiles/issues/271) で `base` に移しました。
+これは [ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) が検討して退けた
+「`how`・`why`・`prove-it-works` を `base` に移す」案を置き換えるものです。
+`pstack` profile はもうなく、`--profile ...,pstack` は未知の profile として失敗します。
 
 | Skill | 責務 |
 |---|---|
@@ -532,7 +540,7 @@ delivery でのこれらの skill の使い方は
 [ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) で決めています。
 delivery は `delivery-common` の
 [Optional Workflows](../skills/local/delivery-common/references/optional-workflows.md)
-の registry に登録された pstack workflow だけを実行します。design preflight の
+の registry に登録されたこれらの workflow だけを実行します。design preflight の
 草案では、interface・data shape・module boundary の one-way door に関する質問に
 `architect` を実行し、High tier ではそのうえで2案が残る質問に、`architect` とは
 別の registry entry として `arena` を実行します。`arena` の候補は設計スケッチです。
@@ -565,23 +573,23 @@ Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出しま
 `architect` は利用可能な `codebase-design` の設計語彙を参照し、明示依頼された
 事前確認は `design-preflight` に任せます。`interrogate` は利用可能な
 `change-review`・`change-adversarial-review` の観点を参照しますが、明示起動限定の
-workflow 自体は呼び出しません。`pstack` 単独でも使える最小限の代替基準を持ちます。
+workflow 自体は呼び出しません。それらを使えない場合に備えて最小限の代替基準を持ちます。
 読み取り専用の調査・レビュー、実験による検証、修正の責務を分けます。
 commit・push・依存関係・外部書き込み・破壊的操作の承認は、ユーザーの指示に従います。
 
 live なリンクの正本にする checkout へソースを反映してから実行します。
 
 ```sh
-./setup.sh skills profile validate --profile base,github,pstack
-SETUP_DRY_RUN=1 ./setup.sh skills --scope user --profile base,github,pstack
-./setup.sh skills --scope user --profile base,github,pstack
+./setup.sh skills profile validate --profile base,github
+SETUP_DRY_RUN=1 ./setup.sh skills --scope user --profile base,github
+./setup.sh skills --scope user --profile base,github
 ```
 
 User scope は共通 view を作り直すため、維持したい profile をすべて指定します。
-`pstack` 自体は local skill のみですが、組み合わせた `base` は外部の skills CLI を
+これらは local skill ですが、`base` は自身の外部 skill のために外部の skills CLI を
 実行する場合があります。実行計画と必要な承認を確認してください。
 後で削除する一時 worktree から live な user link を作らないようにします。
-Project scope では `--scope project --profile base,pstack` を使えます。
+Project scope では `--scope project --profile base` を使えます。
 
 共通の生成手順は user scope に置き、生成した検証コマンド・feature map・再利用する
 helper は対象プロジェクトの skill ディレクトリに置きます。生成した手順は実行確認まで

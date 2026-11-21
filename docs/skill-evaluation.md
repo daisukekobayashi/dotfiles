@@ -2,7 +2,7 @@
 
 Invoke `evaluate-skill` to compare a skill against a baseline or previous version.
 The skill coordinates case selection, isolated candidate execution, grading, and
-an evidence-based recommendation. It is included in the `pstack` profile and uses
+an evidence-based recommendation. It is included in the `base` profile and uses
 one instruction body on both agents.
 
 ```text

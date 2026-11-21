@@ -512,6 +512,7 @@ Include:
 - `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
 - `delivery-common` for the shared worker dialogue, committed-snapshot local review procedure, risk tier, and delivery completion policy
 - `shared-understanding`, which before design preflight reads an issue or Work Item back to the user with a before/after example and settles with them what it decides and what it leaves undecided
+- the thirteen local skills adapted from Lauren Tan's pstack, described under [Adapted from pstack](#adapted-from-pstack)
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
@@ -519,11 +520,19 @@ Superpowers is not included in `base`. Use `writing-for-agents`, the upstream re
 
 Use `base,github` when you want the previous GitHub-enabled baseline.
 
-### `pstack`
+#### Adapted from pstack
 
-Thirteen local adaptations of Lauren Tan's pstack. This profile is independent of
-`base` and `github`; it adds no external packages, plugin hooks, model settings,
-or default routing. Existing `tdd` and `teach` skills keep their names and owners.
+`base` includes thirteen local adaptations of Lauren Tan's pstack. They add no
+external packages, plugin hooks, model settings, or default routing. Existing
+`tdd` and `teach` skills keep their names and owners.
+
+These skills formed a separate `pstack` profile until
+[#271](https://github.com/daisukekobayashi/dotfiles/issues/271) moved them into
+`base`, because delivery in `base` runs `architect` and `arena` as optional
+workflows. This replaces the option that
+[ADR 0001](adr/0001-pstack-principles-in-delivery.md) considered and rejected,
+moving `how`, `why`, and `prove-it-works` into `base`. No `pstack` profile
+remains, and `--profile ...,pstack` fails as an unknown profile.
 
 | Skill | Responsibility |
 |---|---|
@@ -552,8 +561,8 @@ through its own invocation interface. The three principles can be consulted
 directly or by the workflow skills.
 
 How delivery uses these skills is decided in
-[ADR 0001](adr/0001-pstack-principles-in-delivery.md). Delivery runs a pstack
-workflow only through its entry in the `delivery-common`
+[ADR 0001](adr/0001-pstack-principles-in-delivery.md). Delivery runs one of these
+workflows only through its entry in the `delivery-common`
 [Optional Workflows](../skills/local/delivery-common/references/optional-workflows.md)
 registry. The design preflight draft runs `architect` on a question about a
 one-way door in an interface, data shape, or module boundary, and at High tier
@@ -590,7 +599,7 @@ reported as a limitation, not simulated independence.
 `architect` consults `codebase-design` when available and leaves explicitly
 requested preflight to `design-preflight`. `interrogate` reads criteria from
 `change-review` and `change-adversarial-review` when available without invoking those
-explicit-only workflows. Standalone `pstack` provides small fallback criteria.
+explicit-only workflows. Its own small fallback criteria apply when those are unavailable.
 Read-only investigation/review stays separate from executable probes and fixes.
 Commit, push, dependency, remote-write, and destructive-operation approvals
 remain governed by the user's instructions.
@@ -598,16 +607,16 @@ remain governed by the user's instructions.
 Install after the sources are in the checkout that should own the live links:
 
 ```sh
-./setup.sh skills profile validate --profile base,github,pstack
-SETUP_DRY_RUN=1 ./setup.sh skills --scope user --profile base,github,pstack
-./setup.sh skills --scope user --profile base,github,pstack
+./setup.sh skills profile validate --profile base,github
+SETUP_DRY_RUN=1 ./setup.sh skills --scope user --profile base,github
+./setup.sh skills --scope user --profile base,github
 ```
 
 User scope rebuilds one shared view; include every profile you want to retain.
-The `pstack` profile itself is local-only, but the combined `base` profile may
-run the external skills CLI. Review that plan and required execution approvals.
+These skills are local, but `base` may run the external skills CLI for its
+external skills. Review that plan and required execution approvals.
 Avoid installing live user links from a temporary worktree that will be removed.
-For a project, use `--scope project --profile base,pstack` instead.
+For a project, use `--scope project --profile base` instead.
 
 The reusable generator belongs in user scope. Generated verification commands,
 feature maps, and reusable helpers belong in the target project's established

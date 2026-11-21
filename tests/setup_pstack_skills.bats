@@ -11,6 +11,15 @@ setup() {
   TEST_BIN="${TEST_ROOT}/bin"
   mkdir -p "${TEST_DOTFILES}" "${TEST_PROJECT}" "${TEST_BIN}"
   cp -R "$(repo_root)/skills" "${TEST_DOTFILES}/skills"
+  # Keep the real base local list but drop its external sources, so the
+  # install runs without the external skills CLI.
+  node - "${TEST_DOTFILES}/skills/profiles/base.json" <<'JS'
+const fs = require("node:fs");
+const [file] = process.argv.slice(2);
+const profile = JSON.parse(fs.readFileSync(file, "utf8"));
+profile.external = [];
+fs.writeFileSync(file, `${JSON.stringify(profile, null, 2)}\n`);
+JS
 
   cat > "${TEST_BIN}/npx" <<'EOF'
 #!/usr/bin/env bash
@@ -25,13 +34,13 @@ teardown() {
   teardown_test_env
 }
 
-@test "pstack user profile installs all thirteen local skills for both agents without external tools" {
+@test "base user profile installs all thirteen pstack-adapted local skills for both agents" {
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
     PATH="${TEST_BIN}:${PATH}" \
-    "$(setup_script_path)" skills --scope user --profile pstack
+    "$(setup_script_path)" skills --scope user --profile base
 
   [ "$status" -eq 0 ]
   [ -L "${TEST_HOME}/.agents/skills" ]
@@ -40,11 +49,11 @@ teardown() {
   [ "$(readlink "${TEST_HOME}/.claude/skills")" = "${TEST_DOTFILES}/.agents/user/skills" ]
   [ ! -e "${TEST_DOTFILES}/skills-lock.json" ]
 
-  run node - "${TEST_DOTFILES}" "${TEST_HOME}" <<'JS'
+  run node - "${TEST_DOTFILES}" "${TEST_HOME}" "$(repo_root)" <<'JS'
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const [root, homeDir] = process.argv.slice(2);
+const [root, homeDir, repoRoot] = process.argv.slice(2);
 const expected = [
   "architect", "arena", "benchmark-checklist", "blast-radius", "create-verification-skill",
   "encode-lessons-in-structure", "evaluate-skill", "explain-the-number", "how", "interrogate",
@@ -60,9 +69,13 @@ const codexExplicitOnly = new Set([
 const deliveryStep = new Set(["arena"]);
 const claudeExplicitOnly = new Set([...codexExplicitOnly].filter((name) => !deliveryStep.has(name)));
 const metadata = JSON.parse(fs.readFileSync(path.join(root, ".agents/user/skills-profile.json")));
-assert.deepEqual(metadata.localSkills, expected);
+const baseLocal = JSON.parse(fs.readFileSync(path.join(repoRoot, "skills/profiles/base.json"), "utf8")).local;
+for (const name of expected) {
+  assert.ok(baseLocal.includes(name), `base.json lists ${name}`);
+}
+assert.deepEqual(metadata.localSkills, [...baseLocal].sort());
 assert.deepEqual(metadata.external, []);
-assert.deepEqual(metadata.requestedProfiles, ["pstack"]);
+assert.deepEqual(metadata.requestedProfiles, ["base"]);
 for (const agentDir of [".agents", ".claude"]) {
   for (const name of expected) {
     const installed = path.join(homeDir, agentDir, "skills", name);
@@ -99,7 +112,7 @@ JS
   done
 }
 
-@test "pstack project install preserves existing tdd teach and external lockfile" {
+@test "base project install of the pstack-adapted skills preserves existing tdd teach and external lockfile" {
   git -C "${TEST_PROJECT}" init -q
   mkdir -p "${TEST_PROJECT}/.agents/skills/tdd" "${TEST_PROJECT}/.claude/skills/teach"
   printf 'existing tdd\n' > "${TEST_PROJECT}/.agents/skills/tdd/SKILL.md"
@@ -113,7 +126,7 @@ JS
     SETUP_DOTFILES_ROOT="${TEST_DOTFILES}" \
     XDG_CACHE_HOME="${TEST_SKILLS_CACHE}" \
     PATH="${TEST_BIN}:${PATH}" \
-    "$(setup_script_path)" skills --scope project --profile pstack
+    "$(setup_script_path)" skills --scope project --profile base
 
   [ "$status" -eq 0 ]
   [ "$(cat .agents/skills/tdd/SKILL.md)" = "existing tdd" ]
@@ -129,7 +142,10 @@ JS
   done
 }
 
-@test "pstack composes with base and github without entering either default profile" {
+@test "the real base profile carries the pstack-adapted skills and no pstack profile remains" {
+  cp "$(repo_root)/skills/profiles/base.json" "${TEST_DOTFILES}/skills/profiles/base.json"
+  [ ! -e "${TEST_DOTFILES}/skills/profiles/pstack.json" ]
+
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
@@ -137,7 +153,8 @@ JS
     PATH="${TEST_BIN}:${PATH}" \
     "$(setup_script_path)" skills profile validate --profile base,github,pstack
 
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown profile pstack"* ]]
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
@@ -147,7 +164,7 @@ JS
     "$(setup_script_path)" skills --scope user --profile base,github
 
   [ "$status" -eq 0 ]
-  [[ "$output" != *"/skills/arena"* ]]
-  [[ "$output" != *"/skills/interrogate"* ]]
+  [[ "$output" == *"/skills/local/arena "* ]]
+  [[ "$output" == *"/skills/local/interrogate "* ]]
   [ ! -e "${TEST_HOME}/.agents/skills" ]
 }
