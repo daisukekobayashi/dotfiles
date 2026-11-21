@@ -13,6 +13,12 @@ infer the host from a directory name. Run the Codex-routed reviewers for one
 pinned head in parallel as one set; only when the host cannot run them
 concurrently, run them one at a time and report that.
 
+`change-adversarial-review` backs its findings with runs against the real code
+under [Repro Runs](repro-runs.md). The coordinator is its launcher and parent:
+it creates and removes the reviewer's disposable worktree and reruns each
+proving command before acting on the finding. The delivery's own worker head
+is a trusted head under [Trusted heads](repro-runs.md#trusted-heads).
+
 Include [Foreground Checks](../SKILL.md#foreground-checks) in every reviewer
 brief, for full reviews and focused follow-ups, and handle each reviewer's
 turn-end result under it.
@@ -87,6 +93,13 @@ evidence, applying these defaults:
 
 - **Triage:** Classify each finding under [Triage classes](#triage-classes).
   Fix material findings or leave them open for the user.
+- **Run evidence:** Read each `change-adversarial-review` finding's proof from
+  the summary. Rerun each `ran` finding under Repro Runs'
+  [Parent rerun](repro-runs.md#parent-rerun) and record the result with its
+  disposition. Assess a finding that is not reproduced, or whose proof is not
+  `ran`, as unproven from its traced failure path; its severity and tag stay
+  hints as for any finding. Treat a `Do not ship` verdict as a blocker only
+  after the rerun reproduces its finding or your trace confirms it.
 - **Minor:** Record and defer by default. Every fix creates a new snapshot and
   another review round; fix a minor finding only when it is a trivial, local
   correction bundled with a material fix in the same round.
@@ -144,6 +157,9 @@ limits. Earlier review evidence remains valid for unaffected areas; decide
 whether broader changes require another full review under Repeat and advance. Keep
 newly discovered material risks visible for that assessment.
 
+For a fixed finding that a run proved, the follow-up reruns its retained
+proving command on the new head under Repro Runs.
+
 Run the selected `change-review` and `change-adversarial-review` with
 `--base <preceding reviewed head> --scope branch`, and `change-security-review`
 with the base Risk Tier sets; pass the accepted findings and dispositions as
@@ -165,9 +181,11 @@ security review's verdict, findings, deferred candidates, threat model, and
 coverage. Report
 unavailable delegation instead of claiming independence.
 
-Keep every review skill execution read-only; only the parent implementation phase applies
-accepted fixes. Wait for required results before editing. Do not substitute or
-add the plugin's `/codex:review` or `/codex:adversarial-review` commands.
+Keep every review skill execution read-only on the reviewed worktree;
+`change-adversarial-review` runs its repros only in disposable worktrees under
+[Repro Runs](repro-runs.md#boundary). Only the parent implementation phase
+applies accepted fixes. Wait for required results before editing. Do not
+substitute or add the plugin's `/codex:review` or `/codex:adversarial-review` commands.
 
 ## Repeat and advance
 

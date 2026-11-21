@@ -198,7 +198,7 @@ diff so one fix round can cover them.
 ## Output
 
 Respond in the user's language. With `--report <path>`, write this Output
-unchanged, then the v2 delimiter, the
+unchanged, then the v3 delimiter, the
 [review block](../delivery-common/references/report-handoff.md#review-block),
 and the end line, to that path under
 [Report Handoff](../delivery-common/references/report-handoff.md#report-file),

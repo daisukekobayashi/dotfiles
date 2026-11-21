@@ -136,8 +136,23 @@ head と一致する場合は、その削除も提案します。
 呼び出します。前提スキルを揃えるには `base,github` を使います。
 どちらのホストも `change-review` と `change-adversarial-review` スキルを使い、
 それぞれ現在のホストの新しい subagent で実行して独立性の低下を報告します。
-Claude Code での導入済み Codex plugin の読み取り専用 `task` ランタイムなど、
-別のツールはユーザーが明示的に指定した場合だけ使います。
+Claude Code での導入済み Codex plugin の `task` ランタイムなど、
+別のツールはユーザーが明示的に指定した場合だけ使います。`change-review` は
+読み取り専用で実行します。`change-adversarial-review` は、実行できる場合は各
+finding を実際のコードでの実行で裏付けますが、それは信頼できる head、つまり
+delivery 自身の作業か、直接呼び出しでユーザーが実行や証明を明示的に求めた
+レビューの head に限ります。その場合、コーディネーターがレビュー対象の head で detached の
+worktree をレビュー report の横に作り、reviewer はその中でだけ再現を実行します
+（Codex は `repro-runs.md` の Trusted heads のルールどおりに起動します）。
+コーディネーターは証拠をコピーしてから worktree を確認なしで削除し、finding に
+基づいて行動する前に、新しい worktree で各証明コマンドを再実行します。外部の
+pull request など、それ以外の head は実行なしの読み取り専用レビューになり、
+信頼できない変更の審査はこの skill の対象外です。影響が worktree の外に出る
+コマンドは実行しません。依存関係は lifecycle script を無効にして復元し、
+コーディネーターは保存されたコマンドと再現ファイルを確認してから再実行します。各 finding は証明の状態を
+報告するので、実行で示せない finding は捨てられずに `unproven` として残ります。
+これらのルールと上限は `delivery-common` の `repro-runs.md` にあり、理由は
+[ADR 0002](adr/0002-run-to-prove-isolation.ja.md) に記録しています。
 ユーザーが一括フローを明示依頼した場合は preflight、local review、
 PR サイクルへの委譲も含みます。自動検出だけではこれらを実行しません。
 各 issue の worker が issue とコードを読み、shared understanding と、推奨回答つきの

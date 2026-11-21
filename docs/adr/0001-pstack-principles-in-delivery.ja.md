@@ -6,8 +6,9 @@ status: accepted
 
 [English](0001-pstack-principles-in-delivery.md)
 
-実装は [#246](https://github.com/daisukekobayashi/dotfiles/issues/246) の子 issue
-と [#245](https://github.com/daisukekobayashi/dotfiles/issues/245) で行います。
+Review 行の run-to-prove の部分は [#245](https://github.com/daisukekobayashi/dotfiles/issues/245)
+で実装し、[ADR 0002](0002-run-to-prove-isolation.ja.md) に記録しました。残りの実装は
+[#246](https://github.com/daisukekobayashi/dotfiles/issues/246) の子 issue で行います。
 それらが実装されるまで、この記録は採用した設計を表し、現在の delivery の動作は
 表しません。現在の動作は [Skills Profile 設計](../skills-profiles.ja.md) に記載しています。
 

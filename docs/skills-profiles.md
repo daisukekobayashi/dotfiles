@@ -137,8 +137,25 @@ numbers, for example `/github-issue-delivery 12 36` in Claude Code or
 Both hosts use the `change-review` and `change-adversarial-review` skills and
 run each in a fresh subagent of the current host, reporting the reduced
 independence. Another tool, such as Codex through the installed Codex plugin's
-read-only `task` runtime on Claude Code, runs them only when the user explicitly
-names it.
+`task` runtime on Claude Code, runs them only when the user explicitly
+names it. `change-review` runs read-only. `change-adversarial-review` backs each
+finding with a run against the real code where a run is possible, but only on
+a trusted head: the delivery's own work, or, when invoked directly, a head
+whose review the user explicitly asks to run or prove findings. There the
+coordinator creates a detached
+worktree at the reviewed head beside the review report, the reviewer runs
+repros only there (Codex launched as `repro-runs.md`'s Trusted heads rule
+sets), and the coordinator copies the evidence, removes the worktree without
+confirmation, and reruns each proving command in a fresh one before acting on
+the finding. Any other head, such as an external pull request, gets a
+read-only review with no runs; vetting untrusted changes is out of its scope.
+Commands whose effects would leave the worktree never run; dependencies
+restore with lifecycle scripts off, and the coordinator inspects each retained
+command and repro file before rerunning it. Each finding reports its proof
+status, so a finding no run can show stays `unproven` instead of being
+dropped.
+`delivery-common`'s `repro-runs.md` holds these rules and their bounds, and
+[ADR 0002](adr/0002-run-to-prove-isolation.md) records why.
 An explicit full delivery request selects the delegated preflight, local review,
 and PR-cycle phases; automatic discovery alone does not authorize them.
 Each issue's worker reads the issue and code and drafts the shared understanding

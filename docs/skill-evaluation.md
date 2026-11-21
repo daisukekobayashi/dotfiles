@@ -35,7 +35,9 @@ regression, and an unavailable prerequisite. Run-specific transcripts, scores,
 and label mappings belong in `/tmp` or ignored storage.
 
 The `change-adversarial-review` suite is built from defects that real delivery
-review rounds found, plus sound controls. Its `execution` object in
+review rounds found, plus sound controls. Its fixtures have no git history, so
+the skill creates no disposable worktree there and reports its findings
+`unproven: no checkout`; the cases check the findings, not repro runs. Its `execution` object in
 `evals.json` records how to run it on both agents, Claude and Codex: three runs
 per case and condition with a 30-minute limit each, and the same command grant
 for both conditions. The Claude arm uses `claude-opus-5-5` at effort high, and
