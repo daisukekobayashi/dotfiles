@@ -19,7 +19,9 @@ the user owns, or to commands the user approved.
   Run the Reviewer: the coordinator in delivery, the invoking session when the
   skill is called directly. Only the launcher creates and removes disposable
   worktrees.
-- **Reviewer:** runs repros only inside the disposable worktree the launcher
+- **Reviewer:** reads the reviewed worktree only with the review skill's
+  read-only collection commands, such as `git -C <reviewed worktree> diff`, and
+  runs repros only inside the disposable worktree the launcher
   gives it. It never runs `git worktree` or any command that writes refs.
 - **Parent:** the caller that acts on the findings, the same session as the
   launcher. It reruns each proving command before acting on the finding under
@@ -64,10 +66,15 @@ Create one for the reviewer before it starts, and one for each parent rerun:
 2. Resolve the parent directory to its real path with `pwd -P`, such as
    `/private/var/...` for macOS's `/var/...`, and build the path from it, since
    git lists worktrees by real path.
-3. Run `git -C <reviewed worktree> worktree add --detach <path> <reviewed head SHA>`
-   and record the path and the head. Never create a branch. Uncommitted
-   changes in the reviewed worktree are not part of the run; the review covers
-   the committed head.
+3. Run
+   `git -c core.hooksPath=/dev/null -C <reviewed worktree> worktree add --detach <path> <reviewed head SHA>`
+   and record the path and the head, for the reviewer's run, a parent rerun,
+   and an approved run alike. The `core.hooksPath` setting keeps every hook,
+   such as a `post-checkout` hook that a tracked hooks directory in the
+   reviewed head would supply, from running during creation, before any run is
+   approved. Never create a branch. Uncommitted changes in the reviewed
+   worktree are not part of the run; a finding that depends on them is
+   `unproven: uncommitted change`.
 4. When the target has no git checkout or no commit for the reviewed head,
    create none and report every finding `unproven: no checkout`.
 
@@ -155,6 +162,7 @@ Each finding has one proof status:
   output shows the failure;
 - `unproven: <reason>`: no run shows it, such as a design or instruction flaw,
   a docs-only change, an unreachable environment, `no checkout`,
+  `uncommitted change`,
   `cap reached`, `opted out`, or `needs approval` with the exact command;
 - `stopped: time bound`: the run reached its bound;
 - `failed: <reason>`: the repro itself did not run, such as on a setup error.

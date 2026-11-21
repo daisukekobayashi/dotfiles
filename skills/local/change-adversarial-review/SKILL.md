@@ -30,8 +30,10 @@ of the current session: a Claude Code subagent on Claude Code, a Codex subagent
 on Codex. Give it this skill's path, the arguments, target, focus, caller
 context, the disposable worktree's path, and whether runs are automatic, and
 require it to follow the steps
-below without editing the reviewed worktree, running commands only in the
-disposable worktree under
+below without editing the reviewed worktree: Resolve and Collect's read-only
+commands run against the reviewed worktree, such as
+`git -C <reviewed worktree> diff`, on both routes, and repro commands run only
+in the disposable worktree under
 [Boundary](../delivery-common/references/repro-runs.md#boundary). Report the
 route, such as `Claude subagent (same model family as the implementation)`, in
 Review Target and the reduced independence in Coverage and Residual Risk. When
@@ -165,8 +167,11 @@ not run a command whose effects leave the disposable worktree, or any command
 when runs need approval: name the exact commands and report the finding
 `unproven: needs approval`. Restore dependencies with lifecycle scripts off
 under [Boundary](../delivery-common/references/repro-runs.md#boundary), and
-record the exact restoration command in the finding's `command` file. A run that reaches its bound or
-fails proves nothing.
+record the exact restoration command in the finding's `command` file. The
+disposable worktree holds only the committed head, so report a finding that
+depends on uncommitted changes in the reviewed worktree
+`unproven: uncommitted change` instead of testing the unchanged head. A run
+that reaches its bound or fails proves nothing.
 
 ### Finding Bar
 

@@ -31,6 +31,11 @@ reviewer が optional な pstack skill に依存しないためです。
   作ります。場所はタスクの ignore 済み・mode 700 の records ディレクトリ内の
   レビュー report の横、report がないときは `mktemp -d` のディレクトリです。
   実際の checkout でなければ、リポジトリの文書化されたチェックを実行できません。
+  作成は `git -c core.hooksPath=/dev/null ... worktree add` で行うので、外部の
+  head が追跡下の hooks ディレクトリで持ち込む `post-checkout` などの hook は、
+  実行が承認される前に動きません。reviewer は差分をレビュー対象の worktree から
+  読み取り専用で集め、未コミットの変更に依存する finding は
+  `unproven: uncommitted change` とします。
 - **役割。** launcher（reviewer を起動するセッション。delivery ではコーディネーター、
   直接呼び出しでは呼び出したセッション）が、両ルートとも使い捨て worktree の作成と
   削除をすべて受け持ちます。reviewer はその中で再現を実行し、parent（launcher と

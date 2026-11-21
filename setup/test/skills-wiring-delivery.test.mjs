@@ -1584,7 +1584,13 @@ test("adversarial review proves findings with runs in disposable worktrees under
   }
   assert.match(section("Roles"), /Only the launcher creates and removes disposable worktrees/);
   assert.match(section("Roles"), /It never runs `git worktree` or any command that writes refs/);
-  assert.match(section("Disposable worktree"), /`git -C <reviewed worktree> worktree add --detach <path> <reviewed head SHA>`/);
+  // Hosted h1 (#245): no hook runs while the disposable worktree is created (D16).
+  assert.match(section("Disposable worktree"), /`git -c core\.hooksPath=\/dev\/null -C <reviewed worktree> worktree add --detach <path> <reviewed head SHA>` and record the path and the head, for the reviewer's run, a parent rerun, and an approved run alike/);
+  assert.match(section("Disposable worktree"), /keeps every hook, such as a `post-checkout` hook that a tracked hooks directory in the reviewed head would supply, from running during creation/);
+  assert.doesNotMatch(repro, /`git -C <reviewed worktree> worktree add/);
+  // Hosted h1 (#245): collection stays on the reviewed worktree; uncommitted work is not tested on the head (D17).
+  assert.match(section("Disposable worktree"), /a finding that depends on them is `unproven: uncommitted change`/);
+  assert.match(section("Roles"), /reads the reviewed worktree only with the review skill's read-only collection commands, such as `git -C <reviewed worktree> diff`/);
   assert.match(section("Disposable worktree"), /Never create a branch/);
   assert.match(section("Disposable worktree"), /report every finding `unproven: no checkout`/);
   assert.match(section("Disposable worktree"), /`TMPDIR=<path>\/\.repro\/tmp` and package-manager caches under `<path>\/\.repro\/cache`/);
@@ -1650,6 +1656,8 @@ test("adversarial review proves findings with runs in disposable worktrees under
   assert.ok(prove, "change-adversarial-review: missing Prove");
   assert.match(prove, /Back each finding with a run against the real code where a run is possible and the launcher reports that runs are automatic under \[Provenance\]/);
   assert.match(prove, /or any command when runs need approval: name the exact commands and report the finding `unproven: needs approval`/);
+  assert.match(prove, /report a finding that depends on uncommitted changes in the reviewed worktree `unproven: uncommitted change` instead of testing the unchanged head/);
+  assert.match(flat(adversarial), /Resolve and Collect's read-only commands run against the reviewed worktree, such as `git -C <reviewed worktree> diff`, on both routes, and repro commands run only in the disposable worktree/);
   assert.match(adversarial, /^description:.*It executes the reviewed head's code in a disposable worktree to prove findings, automatically only for the user's own changes\.$/m);
   assert.match(flat(adversarial), /decide whether runs are automatic under \[Provenance\]/);
   assert.match(flat(adversarial), /target with the reviewed worktree's path, focus, caller context, and your provenance decision, whether runs are automatic/);

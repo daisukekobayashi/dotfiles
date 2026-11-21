@@ -31,7 +31,12 @@ required reviewer does not depend on an optional pstack skill.
 - **Location.** Each run gets a detached `git worktree` at the reviewed head,
   beside the review report in the task's ignored, mode-700 records directory,
   or in a `mktemp -d` directory without a report. Only a real checkout runs a
-  repository's documented checks.
+  repository's documented checks. It is created with
+  `git -c core.hooksPath=/dev/null ... worktree add`, so no hook, such as a
+  `post-checkout` hook from a tracked hooks directory in an external head, runs
+  before a run is approved. The reviewer still collects the diff read-only from
+  the reviewed worktree, and a finding that depends on uncommitted changes is
+  `unproven: uncommitted change`.
 - **Roles.** The launcher, the session that starts the reviewer (the
   coordinator in delivery, the invoking session when called directly), creates
   and removes every disposable worktree, for both routes. The reviewer runs
