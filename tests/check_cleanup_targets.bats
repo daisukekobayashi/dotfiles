@@ -736,80 +736,71 @@ LISTING
   [[ "${stderr}" == *"remote branch: confirmed"* ]]
 }
 
-@test "a branch checked out by any other checkout is not deletable" {
-  # Checked out in the main checkout, with no worktree to remove.
-  git switch -q -c feat/1-x
-  manifest_with -- --no-worktree --out "${state}/main.json"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"local branch refs/heads/feat/1-x cannot be deleted: the branch is checked out in the worktree at ${repo}"* ]]
-  [ ! -e "${state}/main.json" ]
-  git switch -q main
-
-  # Checked out in the worktree being removed: its own checkout does not
-  # count, but the recheck after removal, which excludes no worktree, does.
-  local linked="${root}/linked"
-  git worktree add -q "${linked}" feat/1-x
-  manifest_with -- --worktree "${linked}" --out "${state}/linked.json"
-  [ "${status}" -eq 0 ]
-  [[ "${output}" == *"local branch"$'\t'"delete refs/heads/feat/1-x at ${head}"* ]]
+@test "git branch -D refuses a proposed branch that another checkout uses, and deletes it once free" {
+  git branch feat/1-x "${head}"
+  git config branch.feat/1-x.remote origin
   local -a args
   mapfile -t args < <(facts)
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [ "${output}" = "unmerged"$'\t'"${head}" ]
-  [[ "${stderr}" == *"checked out in the worktree at ${linked}"* ]]
 
-  # Checked out in another worktree than the one being removed.
-  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/other.json"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"checked out in the worktree at ${linked}"* ]]
+  # Checked out in the main checkout, with no worktree to remove.
+  git switch -q feat/1-x
+  check manifest "${args[@]}" --no-worktree --out "${state}/main.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local branch"$'\t'"delete refs/heads/feat/1-x at ${head}"* ]]
+  run git branch -D feat/1-x
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"used by worktree"* ]]
+  git switch -q main
 
-  git worktree remove "${linked}"
+  # Checked out in a second worktree: the recheck still proposes it, and
+  # git branch -D refuses until that worktree is gone.
+  local linked="${root}/linked"
+  git worktree add -q "${linked}" feat/1-x
   check local "${args[@]}"
   [ "${status}" -eq 0 ]
   [ "${output}" = "proposed"$'\t'"${head}" ]
+  run git branch -D feat/1-x
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"used by worktree at '${linked}'"* ]]
   [ "$(git rev-parse feat/1-x)" = "${head}" ]
-}
+  [ "$(git config branch.feat/1-x.remote)" = origin ]
 
-@test "a branch being rebased or bisected in any worktree is not deletable" {
-  git branch feat/1-x "${head}"
-  local -a args
-  mapfile -t args < <(facts)
-  local gitdir
-  gitdir="$(git rev-parse --absolute-git-dir)"
-
-  mkdir -p "${gitdir}/rebase-merge"
-  printf 'refs/heads/feat/1-x\n' >"${gitdir}/rebase-merge/head-name"
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"the branch is being rebased in ${gitdir}"* ]]
-  rm -r "${gitdir}/rebase-merge"
-
-  # A linked worktree's rebase counts, including in the worktree to remove.
-  local linked="${root}/linked"
-  git worktree add -q --detach "${linked}" "${head}"
-  local linkedDir
-  linkedDir="$(git -C "${linked}" rev-parse --absolute-git-dir)"
-  mkdir -p "${linkedDir}/rebase-apply"
-  printf 'refs/heads/feat/1-x\n' >"${linkedDir}/rebase-apply/head-name"
-  check manifest "${args[@]}" --worktree "${linked}" --out "${state}/rebase.json"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"the branch is being rebased in ${linkedDir}"* ]]
-  rm -r "${linkedDir}/rebase-apply"
-
-  printf 'feat/1-x\n' >"${linkedDir}/BISECT_START"
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"the branch is being bisected in ${linkedDir}"* ]]
-  rm "${linkedDir}/BISECT_START"
-
+  git worktree remove "${linked}"
+  git branch -D -q feat/1-x
   check local "${args[@]}"
   [ "${status}" -eq 0 ]
+  [ "${output}" = "absent" ]
+  run git config branch.feat/1-x.remote
+  [ "${status}" -ne 0 ]
 }
 
-@test "local rechecks a moved or deleted branch, so its config stays unless the delete took" {
+@test "git branch -D refuses a proposed branch queued by a paused rebase --update-refs" {
   git branch feat/1-x "${head}"
-  git config branch.feat/1-x.remote origin
+  git switch -q -c topic feat/1-x
+  git commit -q --allow-empty -m topic
+  git switch -q main
+  local linked="${root}/linked"
+  git worktree add -q "${linked}" topic
+  # Pause before any pick, so feat/1-x stays at the PR head with its update
+  # queued in rebase-merge/update-refs.
+  GIT_SEQUENCE_EDITOR='sh -c '"'"'{ echo break; cat "$1"; } >"$1.new" && mv "$1.new" "$1"'"'"' -' \
+    git -C "${linked}" rebase -q -i --update-refs main~1 || true
+  [ -d "$(git -C "${linked}" rev-parse --git-path rebase-merge)" ]
+  grep -q 'refs/heads/feat/1-x' "$(git -C "${linked}" rev-parse --git-path rebase-merge/update-refs)"
+
+  local -a args
+  mapfile -t args < <(facts)
+  check local "${args[@]}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "proposed"$'\t'"${head}" ]
+  run git branch -D feat/1-x
+  [ "${status}" -ne 0 ]
+  [ "$(git rev-parse feat/1-x)" = "${head}" ]
+  git -C "${linked}" rebase --abort
+}
+
+@test "local rechecks a branch that moved after the last compare" {
+  git branch feat/1-x "${head}"
   local -a args
   mapfile -t args < <(facts)
   check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/step6.json"
@@ -818,47 +809,46 @@ LISTING
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
 
-  # The branch moves after the last compare: the recheck and the guarded
-  # delete both refuse, and the branch keeps its config.
   git branch -f feat/1-x main~1
   check local "${args[@]}"
   [ "${status}" -eq 3 ]
+  [[ "${output}" == "unmerged"$'\t'* ]]
   [[ "${stderr}" == *"not the PR head"* ]]
-  run git update-ref --no-deref -d refs/heads/feat/1-x "${head}"
-  [ "${status}" -ne 0 ]
-  [ "$(git config branch.feat/1-x.remote)" = origin ]
-
-  # Once the guarded delete succeeds, local reports it absent.
-  git branch -f feat/1-x "${head}"
-  check local "${args[@]}"
-  [ "${status}" -eq 0 ]
-  [ "${output}" = "proposed"$'\t'"${head}" ]
-  git update-ref --no-deref -d refs/heads/feat/1-x "${head}"
-  check local "${args[@]}"
-  [ "${status}" -eq 0 ]
-  [ "${output}" = "absent" ]
 }
 
-@test "only an exact, direct local ref is deletable" {
+@test "only an exact, direct local ref with no case-equivalent sibling is deletable" {
+  local -a args
+  mapfile -t args < <(facts)
+
   # A symbolic branch whose referent is at the PR head.
   git symbolic-ref refs/heads/feat/1-x refs/heads/main
   [ "$(git rev-parse feat/1-x)" = "${head}" ]
   manifest_with -- --worktree "${worktree}" --out "${state}/symref.json"
   [ "${status}" -eq 3 ]
   [[ "${stderr}" == *"the local branch is a symbolic ref to refs/heads/main"* ]]
-  local -a args
-  mapfile -t args < <(facts)
   check local "${args[@]}"
   [ "${status}" -eq 3 ]
-  # --no-deref deletes the alias, never its referent.
-  git update-ref --no-deref -d refs/heads/feat/1-x "${head}"
+  git symbolic-ref --delete refs/heads/feat/1-x
   [ "$(git rev-parse main)" = "${head}" ]
 
-  # A case-equivalent spelling of a listed ref is not that ref.
+  # A different spelling of an existing ref is ambiguous, never absent.
   git branch feat/1-x "${head}"
   manifest_with --branch FEAT/1-x -- --worktree "${worktree}" --out "${state}/case.json"
-  [ "${status}" -eq 0 ]
-  [[ "${output}" == *"local branch"$'\t'"already absent: refs/heads/FEAT/1-x"* ]]
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"a case-equivalent ref exists: refs/heads/feat/1-x"* ]]
+
+  # An exact packed ref beside a case-equivalent sibling.
+  git pack-refs --all
+  git update-ref refs/heads/Feat/1-x "${head}"
+  git pack-refs --all
+  [ "$(git for-each-ref --format='%(refname)' 'refs/heads/' | grep -ci '^refs/heads/feat/1-x$')" -eq 2 ]
+  manifest_with -- --worktree "${worktree}" --out "${state}/sibling.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"a case-equivalent ref exists: refs/heads/Feat/1-x"* ]]
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [ "${output}" = "unmerged"$'\t'"-" ]
+  git update-ref -d refs/heads/Feat/1-x
 
   # A case-equivalent spelling of the default branch is the default branch,
   # locally and on the remote.
@@ -870,6 +860,40 @@ LISTING
   remote_with --branch Dev --default-branch dev
   [ "${status}" -eq 3 ]
   [[ "${stderr}" == *"the branch is the default branch"* ]]
+}
+
+@test "a ref git omits from the listing is not absent" {
+  git branch feat/1-x "${head}"
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+
+  # Replaced with a dangling symbolic ref, which for-each-ref does not list.
+  git update-ref -d refs/heads/feat/1-x
+  git symbolic-ref refs/heads/feat/1-x refs/heads/nowhere
+  [ -z "$(git for-each-ref refs/heads/feat/1-x)" ]
+  compare "${state}/step6.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"cannot be deleted: the local branch is a symbolic ref to refs/heads/nowhere that git does not list"* ]]
+  [[ "${output}" != *"already deleted"* ]]
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+
+  # A broken loose ref file: the lookup fails, which stops the cleanup.
+  git symbolic-ref --delete refs/heads/feat/1-x
+  local loose
+  loose="$(git rev-parse --path-format=absolute --git-path refs/heads/feat/1-x)"
+  mkdir -p "$(dirname "${loose}")"
+  printf 'garbage\n' >"${loose}"
+  check local "${args[@]}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"check could not run: git symbolic-ref -q refs/heads/feat/1-x exited 128"* ]]
+  [[ "${output}" != *"absent"* ]]
+  rm "${loose}"
+  check local "${args[@]}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "absent" ]
 }
 
 @test "displayed paths cannot forge the local or lease lines" {
@@ -903,4 +927,61 @@ LISTING
   check manifest "${args[@]}" --worktree "${worktree}" --temp "${root}/run.pid" --out "${state}/loop.json"
   [ "${status}" -eq 1 ]
   [ ! -e "${state}/loop.json" ]
+}
+
+@test "--after-stop holds a worktree-owned Compose project whose volumes remain or cannot be verified" {
+  # Project "worktree" is the default name for the worktree, so its reason is
+  # exactly "under target" and its stop deletes its volumes.
+  printf 'worktree\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  printf 'worktree\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"compose project"$'\t'"worktree"*"under target" ]]
+
+  # Containers removed, volume left: the stop is not complete.
+  : >"${FAKE_DOCKER_PS}"
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"compose: confirmed compose project worktree"*"is gone but its volumes remain: worktree_data"* ]]
+
+  # Volume lookup fails: unverified holds too.
+  cat >"${root}/bin/docker" <<'DOCKER'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -a") cat "${FAKE_DOCKER_PS}" ;;
+  "volume ls") echo "permission denied" >&2; exit 1 ;;
+esac
+DOCKER
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"is gone but its volumes cannot be verified: docker volume ls exited 1: permission denied"* ]]
+}
+
+@test "--after-stop accepts a gone Compose project that keeps its volumes by design" {
+  # An explicit project name is not worktree-owned, so its volumes stay.
+  printf 'wt\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  printf 'wt\twt_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  : >"${FAKE_DOCKER_PS}"
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"compose project wt "* ]]
+}
+
+@test "--after-stop holds a temporary path a dangling symbolic link still occupies" {
+  touch "${root}/run.pid"
+  preview --temp "${root}/run.pid"
+  [ "${status}" -eq 0 ]
+  rm "${root}/run.pid"
+  ln -s "${root}/nowhere" "${root}/run.pid"
+  compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"cannot resolve --temp ${root}/run.pid: a dangling symbolic link occupies the path"* ]]
+  [[ "${output}" != *"stopped as confirmed"* ]]
+
+  rm "${root}/run.pid"
+  compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"temporary path ${root}/run.pid"* ]]
 }

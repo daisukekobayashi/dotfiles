@@ -45,10 +45,9 @@
 //   with the reason on stderr.
 //
 // local
-//   Rechecks the local branch right before its deletion, after the worktree
-//   is removed, with the same rule as manifest below and no worktree excluded.
-//   Prints one tab-separated line: `proposed <sha>`, `absent`, or `unmerged
-//   <sha>` with the reason on stderr.
+//   Rechecks the local branch right before `git branch -D` deletes it, with
+//   the same rule as manifest below. Prints one tab-separated line: `proposed
+//   <sha>`, `absent`, or `unmerged <sha|->` with the reason on stderr.
 //
 // manifest
 //   Builds the **cleanup target manifest**: the worktree, the local branch
@@ -60,16 +59,20 @@
 //   cannot run; it never counts as an empty listing. The manifest also
 //   records the PR head repository.
 //   The local branch is `proposed <sha>` when `refs/heads/<branch>` is a
-//   direct ref that `git for-each-ref` lists under exactly that name (so no
-//   case-equivalent spelling matches), the PR is merged (skipped with
-//   --preview, before the merge), the branch is not the default branch in any
-//   letter case, its tip equals --pr-head, for any merge method, and no
-//   checkout uses it: no worktree other than --worktree has it checked out,
-//   and no worktree, --worktree included, is rebasing or bisecting it. It is
-//   `absent` when no such ref is listed, and otherwise `unmerged`, including a
-//   symbolic ref, which fails the check with the reason on stderr and writes
-//   no manifest. The merged state comes from the provider facts, never from
-//   the local default branch, which can lag its remote.
+//   direct ref that `git for-each-ref` lists under exactly that name, no other
+//   listed ref, loose or packed, has a case-equivalent name, the PR is merged
+//   (skipped with --preview, before the merge), the branch is not the default
+//   branch in any letter case, and its tip equals --pr-head, for any merge
+//   method. It is `absent` only when no ref is listed under the name or a
+//   case-equivalent one, `git symbolic-ref` and `git rev-parse --verify` find
+//   none, and the ref store has no loose file at its path, so a ref git omits
+//   from the listing, such as a dangling symbolic ref, is never absent.
+//   Otherwise it is `unmerged`, including a symbolic or unresolved ref, which
+//   fails the check with the reason on stderr and writes no manifest. The
+//   merged state comes from the provider facts, never from the local default
+//   branch, which can lag its remote. Whether a checkout still uses the branch
+//   (checked out, rebased including `--update-refs`, or bisected) is left to
+//   `git branch -D`, which refuses such a branch.
 //   Writes the manifest as JSON to --out, a new file outside the worktree
 //   created with mode 0600 (an existing path, including a symlink, is a usage
 //   error), and prints the targets. With --preview it is a
@@ -91,9 +94,13 @@
 //   a confirmed local branch that no longer exists, reported as already
 //   deleted. A local branch that is `unmerged` now is a difference. With
 //   --after-stop, run after the confirmed runtime stop, a confirmed process,
-//   Compose project, or temporary path that is gone (a temporary path whose
-//   path no longer resolves) is also expected and printed as `stopped as
-//   confirmed`; a new or changed item is still a difference. Without it, a
+//   Compose project, or temporary path that is gone is also expected and
+//   printed as `stopped as confirmed`; a new or changed item is still a
+//   difference. A Compose project counts as gone only when, for a
+//   worktree-owned project (reason exactly `under target`, whose stop deletes
+//   its volumes), `docker volume ls` runs and lists none of its confirmed
+//   volumes. A temporary path counts as gone only when `lstat` finds no entry
+//   at the path. Without it, a
 //   confirmed item that is gone is a difference. A listing that cannot run is
 //   a difference for a Caller preview, and for any other manifest unless it
 //   could not run there either. On a match it prints the targets, for a
@@ -103,8 +110,9 @@
 // Every displayed value, such as a path or command, is printed with control
 // characters encoded as \xNN, so no target can print a line of its own; the
 // `local` and `lease` lines are the only lines that start with those words.
-// A --temp path is missing only when resolving it fails with ENOENT or
-// ENOTDIR; any other failure, such as a symlink loop, means the check cannot
+// A --temp path is missing only when `lstat` finds no entry at it (ENOENT or
+// ENOTDIR); a dangling symbolic link still occupies the path, and it or any
+// other resolution failure, such as a symlink loop, means the check cannot
 // run.
 //
 // The script reads git, process, and Docker state only; it never deletes,
@@ -124,7 +132,7 @@
 // run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, constants, existsSync, openSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -333,81 +341,63 @@ const git = (args) => {
   return result.stdout;
 };
 
-// Returns refs/heads/<branch> as git enumerates it under exactly that name,
-// { sha, symref }, or null when no ref has that exact name. An exact match
-// rules out a case-equivalent spelling that a case-insensitive ref store
-// would resolve to another ref.
+// Runs git and returns { status, stdout }; a status other than those
+// `allowed` means the check cannot run.
+const gitStatus = (args, allowed) => {
+  const result = spawnSync("git", args, { encoding: "utf8" });
+  if (!allowed.includes(result.status)) {
+    return cannotRun(`git ${args.join(" ")} exited ${result.status ?? result.signal}: ${(result.stderr || result.error?.message || "").toString().trim()}`);
+  }
+  return { status: result.status, stdout: result.stdout };
+};
+
+// Looks up refs/heads/<branch> as git enumerates it. Returns { sha, symref }
+// for a ref listed under exactly that name, { ambiguous } when another listed
+// ref, loose or packed, has a case-equivalent name, { unresolved } when git
+// omits the ref from the listing but it still exists, such as a dangling
+// symbolic ref, and null only when absence is established independently.
 const localRef = (branch) => {
   const ref = `refs/heads/${branch}`;
-  const out = git(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", ref]);
-  const rows = out.split("\n").filter((line) => line !== "").map((line) => line.split("\0"));
+  const rows = git(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", "refs/heads/"])
+    .split("\n").filter((line) => line !== "").map((line) => line.split("\0"));
+  const siblings = rows.filter(([name]) => name !== ref && name.toLowerCase() === ref.toLowerCase());
+  if (siblings.length > 0) return { ambiguous: siblings.map(([name]) => name).join(", ") };
   const matches = rows.filter(([name]) => name === ref);
-  if (matches.length === 0) return null;
-  if (matches.length > 1 || !SHA.test(matches[0][1])) cannotRun(`unexpected git for-each-ref output for ${ref}`);
-  const [, sha, symref] = matches[0];
-  return { sha, symref };
-};
+  if (matches.length > 1 || (matches.length === 1 && !SHA.test(matches[0][1]))) cannotRun(`unexpected git for-each-ref output for ${ref}`);
+  if (matches.length === 1) return { sha: matches[0][1], symref: matches[0][2] };
 
-const readOrNull = (file) => {
+  const symbolic = gitStatus(["symbolic-ref", "-q", ref], [0, 1]);
+  if (symbolic.status === 0) return { unresolved: `a symbolic ref to ${symbolic.stdout.trim()} that git does not list` };
+  const verify = gitStatus(["rev-parse", "--verify", "--quiet", ref], [0, 1]);
+  if (verify.status === 0 || verify.stdout.trim() !== "") return { unresolved: "a ref git resolves but does not list under that name" };
+  const loose = git(["rev-parse", "--path-format=absolute", "--git-path", ref]).replace(/\n$/, "");
   try {
-    return readFileSync(file, "utf8").trim();
+    lstatSync(loose);
+    return { unresolved: `an unreadable ref file at ${loose}` };
   } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
-    return cannotRun(`cannot read ${file}: ${error.message}`);
-  }
-};
-
-// Returns why a checkout uses the branch, or null: a worktree other than
-// `exclude` has it checked out, or any worktree is rebasing or bisecting it,
-// the uses `git branch -d` refuses. Names compare in any letter case, so a
-// spelling a case-insensitive ref store merges counts as the same branch.
-const branchUse = (branch, exclude) => {
-  const ref = `refs/heads/${branch}`.toLowerCase();
-  const fields = git(["worktree", "list", "--porcelain", "-z"]).split("\0");
-  let current = null;
-  for (const field of fields) {
-    if (field.startsWith("worktree ")) current = field.slice("worktree ".length);
-    else if (field.startsWith("branch ") && field.slice("branch ".length).toLowerCase() === ref) {
-      const real = realpathOrNull(current) ?? current;
-      if (exclude === null || real !== exclude) return `the branch is checked out in the worktree at ${current}`;
-    }
-  }
-  const common = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).trim();
-  const worktrees = path.join(common, "worktrees");
-  let linked = [];
-  try {
-    linked = readdirSync(worktrees, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(worktrees, entry.name));
-  } catch (error) {
-    if (error.code !== "ENOENT" && error.code !== "ENOTDIR") cannotRun(`cannot read ${worktrees}: ${error.message}`);
-  }
-  for (const gitDir of [common, ...linked]) {
-    for (const file of ["rebase-merge/head-name", "rebase-apply/head-name"]) {
-      if (readOrNull(path.join(gitDir, file))?.toLowerCase() === ref) return `the branch is being rebased in ${gitDir}`;
-    }
-    const bisect = readOrNull(path.join(gitDir, "BISECT_START"))?.toLowerCase();
-    if (bisect !== undefined && bisect !== null && (bisect === ref || `refs/heads/${bisect}` === ref)) return `the branch is being bisected in ${gitDir}`;
+    if (error.code !== "ENOENT" && error.code !== "ENOTDIR") return cannotRun(`cannot check ${loose}: ${error.message}`);
   }
   return null;
 };
 
-// Whether the local branch is proven merged by the provider facts and free to
-// delete; never exits on an unmet condition. `exclude` is the worktree about
-// to be removed, whose checkout of the branch does not count.
-const checkLocal = (facts, { preview, exclude = null }) => {
+// Whether the local branch is proven merged by the provider facts; never
+// exits on an unmet condition. A checkout that still uses the branch is left
+// to `git branch -D`, which refuses it.
+const checkLocal = (facts, { preview }) => {
   const found = localRef(facts.branch);
   if (found === null) return { status: "absent" };
+  if (found.ambiguous) return { status: "unmerged", sha: null, reason: `a case-equivalent ref exists: ${found.ambiguous}` };
+  if (found.unresolved) return { status: "unmerged", sha: null, reason: `the local branch is ${found.unresolved}` };
   const { sha } = found;
   const unmerged = (reason) => ({ status: "unmerged", sha, reason });
   if (found.symref) return unmerged(`the local branch is a symbolic ref to ${found.symref}`);
   if (!preview && !facts.merged) return unmerged(facts.provider === "github" ? "the PR is not merged" : "the PR is not completed");
   if (sameBranchName(facts.branch, facts.defaultBranch)) return unmerged("the branch is the default branch");
   if (sha !== facts.head) return unmerged(`the local branch is at ${sha}, not the PR head ${facts.head}`);
-  const use = branchUse(facts.branch, exclude);
-  if (use) return unmerged(use);
   return { status: "proposed", sha };
 };
 
-const describeLocal = (result) => (result.status === "absent" ? "absent" : `${result.status}\t${result.sha}`);
+const describeLocal = (result) => (result.status === "absent" ? "absent" : `${result.status}\t${result.sha ?? "-"}`);
 
 const localCommand = (args) => {
   const facts = readFacts(parseOptions(args, FACTS));
@@ -424,14 +414,21 @@ const realpathOrNull = (target) => {
   }
 };
 
-// A temporary path's real target, or null only when it is missing.
+// A temporary path's real target, or null only when no entry exists at the
+// path: a dangling symbolic link still occupies it.
 const resolveTemp = (given) => {
   try {
     return realpathSync(given);
   } catch (error) {
+    if (error.code !== "ENOENT" && error.code !== "ENOTDIR") return cannotRun(`cannot resolve --temp ${given}: ${error.code ?? error.message}`);
+  }
+  try {
+    lstatSync(given);
+  } catch (error) {
     if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
     return cannotRun(`cannot resolve --temp ${given}: ${error.code ?? error.message}`);
   }
+  return cannotRun(`cannot resolve --temp ${given}: a dangling symbolic link occupies the path`);
 };
 
 const readTargets = (options) => {
@@ -521,7 +518,7 @@ const buildManifest = (facts, targets, { preview }) => {
     repository: repositoryOf(facts),
     worktree: targets.worktree,
     branch: facts.branch,
-    local: checkLocal(facts, { preview, exclude: targets.worktree }),
+    local: checkLocal(facts, { preview }),
     remote: checkRemote(facts, { preview }),
     processes: targets.worktree ? listProcesses(targets.worktree) : none,
     compose: targets.worktree ? listCompose(targets.worktree) : none,
@@ -633,7 +630,7 @@ const unmatched = (a, b, identity) => {
   });
 };
 
-const compareRuntime = (section, confirmed, current, identity, label, differences, stopped) => {
+const compareRuntime = (section, confirmed, current, identity, label, differences, stopped, verifyGone = () => null) => {
   const before = confirmed[section];
   const after = current[section];
   if (after.status === "unavailable" || before.status === "unavailable") {
@@ -646,9 +643,23 @@ const compareRuntime = (section, confirmed, current, identity, label, difference
   }
   for (const item of unmatched(after.items, before.items, identity)) differences.push(`${section}: new or changed ${label(item)}`);
   for (const item of unmatched(before.items, after.items, identity)) {
-    if (stopped) stopped.push(label(item));
+    const remains = stopped ? verifyGone(item) : null;
+    if (stopped && remains === null) stopped.push(label(item));
+    else if (stopped) differences.push(`${section}: confirmed ${label(item)} is gone but ${remains}`);
     else differences.push(`${section}: confirmed ${label(item)} is gone or changed`);
   }
+};
+
+// For a worktree-owned Compose project that is gone, whose confirmed stop
+// deletes its volumes, why the stop is not proven complete, or null. Other
+// projects keep their volumes by design.
+const composeVolumesRemain = (item) => {
+  if (item.reason !== "under target" || item.volumes.length === 0) return null;
+  const volumes = runLookup("docker volume ls", "docker", ["volume", "ls", "--filter", `label=com.docker.compose.project=${item.project}`, "--format", "{{.Name}}"]);
+  if (volumes.unavailable) return `its volumes cannot be verified: ${volumes.unavailable}`;
+  const left = new Set(volumes.stdout.split("\n").filter((line) => line !== ""));
+  const remaining = item.volumes.filter((volume) => left.has(volume));
+  return remaining.length > 0 ? `its volumes remain: ${remaining.join(", ")}` : null;
 };
 
 const compareCommand = (args) => {
@@ -704,6 +715,7 @@ const compareCommand = (args) => {
     (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${JSON.stringify(item.volumes)}`,
     differences,
     stopped,
+    composeVolumesRemain,
   );
   const tempIdentity = (temp) => [temp.path, temp.resolved];
   const confirmedTemps = confirmed.temps ?? [];

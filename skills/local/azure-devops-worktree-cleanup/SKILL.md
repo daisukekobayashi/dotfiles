@@ -94,20 +94,19 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      cleanup. The last compare's `local` and `lease` lines decide steps 8 and 9:
      use each only when that compare exited 0 and printed exactly one such line,
      and the `local` line only when it names the step 1 branch.
-8. Delete the local branch after the worktree is removed, conditioned on the SHA
-   in compare's `local <branch> <sha>` line; without that line, delete none.
-   Immediately before deleting, run `node <cleanup-script> local <facts>` with
-   step 5's facts: continue only on exit 0 with `proposed <sha>` at that SHA;
-   exit 3 means a checkout uses the branch, it moved, or it is otherwise not
-   deletable, so keep it and report the reason; any other status stops the
-   cleanup. Then run `git update-ref --no-deref -d refs/heads/<branch> <sha>`.
-   Never use `git branch -d`, which judges against the local default branch and
-   refuses a squash merge, or `git branch -D`, which deletes without the SHA
-   condition. If the update is rejected, keep the branch and its configuration
-   and report that it changed. Only when the update exits 0 and `node
-   <cleanup-script> local <facts>` then prints `absent`, run `git config
-   --remove-section 'branch.<branch>'`; a `no such section` error means there
-   was none.
+8. Delete the local branch after the worktree is removed, only with compare's
+   `local <branch> <sha>` line; without that line, delete none. Immediately
+   before deleting, run `node <cleanup-script> local <facts>` with step 5's
+   facts: continue only on exit 0 with `proposed <sha>` at that SHA; exit 3
+   means the branch moved or is otherwise not deletable, so keep it and report
+   the reason; any other status stops the cleanup. Then run `git branch -D
+   <branch>`, which refuses a branch that any checkout still uses (checked out,
+   rebasing including with `--update-refs`, or bisecting) and removes the
+   branch's configuration with it. If it refuses, keep the branch and report the
+   reason; never fall back to `git update-ref`. Never use `git branch -d`, which
+   judges against the local default branch and refuses a squash merge. A commit
+   that lands on the branch between the recheck and `git branch -D` is not
+   detected, the same window `git branch -d` leaves.
 9. Delete the confirmed remote branch last, conditioned on the SHA in compare's
    `lease <remote> <sha>` line; without that line, delete none:
    `git push --force-with-lease=refs/heads/<branch>:<sha> <remote> :refs/heads/<branch>`.
