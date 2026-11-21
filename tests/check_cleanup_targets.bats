@@ -104,6 +104,27 @@ remote_with() {
   check remote "${args[@]}"
 }
 
+# Runs `manifest` with the default facts, overriding or adding any given
+# `--name value` before `--`, and passing the rest as targets and options.
+manifest_with() {
+  local -a args
+  mapfile -t args < <(facts)
+  local i found
+  while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+    found=""
+    for ((i = 0; i < ${#args[@]}; i++)); do
+      if [ "${args[i]}" = "$1" ]; then
+        args[i + 1]="$2"
+        found=1
+      fi
+    done
+    [ -n "${found}" ] || args+=("$1" "$2")
+    shift 2
+  done
+  [ "$#" -eq 0 ] || shift
+  check manifest "${args[@]}" "$@"
+}
+
 preview() {
   local -a args
   mapfile -t args < <(facts OPEN)
@@ -250,7 +271,7 @@ start_in() {
   [[ "${output}" == *"remote branch"$'\t'"delete origin refs/heads/feat/1-x at ${head}"* ]]
   [[ "${output}" == *"compose project"$'\t'"wt"$'\t'"working_dir ${worktree}"$'\t'"volumes wt_data"* ]]
   [[ "${output}" == *"temporary path"$'\t'"${root}/run.pid"* ]]
-  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (m.version !== 1 || m.preview !== false || m.compose.items[0].volumes[0] !== "wt_data") process.exit(1)' "${state}/step6.json"
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (m.version !== 2 || m.preview !== false || m.compose.items[0].volumes[0] !== "wt_data") process.exit(1)' "${state}/step6.json"
 }
 
 @test "manifest refuses an output path inside the worktree or at a symlink" {
@@ -385,9 +406,18 @@ start_in() {
 }
 
 @test "compare rejects an unreadable confirmed manifest" {
-  printf '{"version":2}\n' >"${state}/bad.json"
+  printf 'not json\n' >"${state}/bad.json"
   compare "${state}/bad.json"
   [ "${status}" -eq 2 ]
+}
+
+@test "compare rejects a manifest of an earlier version" {
+  preview
+  [ "${status}" -eq 0 ]
+  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); m.version = 1; delete m.local; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/v1.json"
+  compare "${state}/v1.json"
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"not a version 2 cleanup target manifest"* ]]
 }
 
 @test "a named GitHub remote must name the PR head repository" {
@@ -545,4 +575,163 @@ LISTING
   check compare "${args[@]}" --worktree "${worktree}" --temp "${review}/a" --confirmed "${state}/confirmed.json"
   [ "${status}" -eq 3 ]
   [[ "${stderr}" == *"temporary paths"* ]]
+}
+
+@test "a squash-merged local branch is proven merged from the PR head, not the lagging local default branch" {
+  git switch -q -c feat/1-x
+  git commit -q --allow-empty -m feature
+  head="$(git rev-parse HEAD)"
+  git push -q -f "${FAKE_REMOTE}" HEAD:refs/heads/feat/1-x
+  git switch -q main
+  # The local main never received the squash merge, so git refuses.
+  run git branch -d feat/1-x
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"not fully merged"* ]]
+
+  manifest_with -- --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local branch"$'\t'"delete refs/heads/feat/1-x at ${head}"* ]]
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (m.local.status !== "proposed" || m.local.sha !== process.argv[2]) process.exit(1)' "${state}/step6.json" "${head}"
+
+  compare "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
+  [ "$(git rev-parse feat/1-x)" = "${head}" ]
+}
+
+@test "a Caller preview proposes the local branch at the PR head to be merged" {
+  git branch feat/1-x "${head}"
+  preview
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local branch"$'\t'"delete refs/heads/feat/1-x at ${head}"* ]]
+  compare
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
+  [[ "${output}" == *"lease"$'\t'"origin"$'\t'"${head}"* ]]
+}
+
+@test "manifest stops when the local branch is not proven merged" {
+  git branch feat/1-x "${head}"
+  manifest_with --pr-state OPEN -- --worktree "${worktree}" --out "${state}/open.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"local branch refs/heads/feat/1-x is not proven merged: the PR is not merged"* ]]
+  [ ! -e "${state}/open.json" ]
+
+  manifest_with --default-branch feat/1-x -- --worktree "${worktree}" --out "${state}/default.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"the branch is the default branch"* ]]
+
+  # A local commit after the PR head is unmerged work.
+  git switch -q feat/1-x
+  git commit -q --allow-empty -m local-only
+  local tip
+  tip="$(git rev-parse HEAD)"
+  git switch -q main
+  manifest_with -- --worktree "${worktree}" --out "${state}/ahead.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"the local branch is at ${tip}, not the PR head ${head}"* ]]
+
+  git remote set-url origin git@ssh.dev.azure.com:v3/org/project/repo
+  git branch -f feat/1-x "${head}"
+  check manifest --azure org project repo --branch feat/1-x --pr-state active --pr-head "${head}" \
+    --cross-repo false --default-branch main --protected false --open-prs 0 --worktree "${worktree}" --out "${state}/azure.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"the PR is not completed"* ]]
+  check manifest --azure org project repo --branch feat/1-x --pr-state completed --pr-head "${head}" \
+    --cross-repo false --default-branch main --protected false --open-prs 0 --worktree "${worktree}" --out "${state}/azure.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local branch"$'\t'"delete refs/heads/feat/1-x at ${head}"* ]]
+}
+
+@test "compare binds the local branch to the confirmed SHA" {
+  git branch feat/1-x "${head}"
+  manifest_with -- --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+
+  # Moved after the confirmation: no longer at the PR head.
+  git branch -f feat/1-x main~1
+  compare "${state}/step6.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"local branch refs/heads/feat/1-x is not proven merged"* ]]
+  [[ "${output}" != *"local"$'\t'"feat/1-x"* ]]
+
+  # Already deleted, such as on a resumed cleanup.
+  git branch -D -q feat/1-x
+  compare "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local branch already deleted: refs/heads/feat/1-x"* ]]
+  [[ "${output}" != *"local"$'\t'"feat/1-x"$'\t'* ]]
+
+  # Confirmed absent, present now: a new target.
+  manifest_with -- --worktree "${worktree}" --out "${state}/absent.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local branch"$'\t'"already absent: refs/heads/feat/1-x"* ]]
+  git branch feat/1-x "${head}"
+  compare "${state}/absent.json"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *'local branch: confirmed "absent", now "proposed'* ]]
+}
+
+@test "compare --after-stop expects confirmed runtime resources the confirmed stop removed" {
+  start_in "${worktree}"
+  local pid="${pids[0]}"
+  printf 'wt\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  printf 'wt\twt_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  touch "${root}/run.pid"
+  preview --temp "${root}/run.pid"
+  [ "${status}" -eq 0 ]
+
+  # The confirmed runtime stop: the process, the Compose project with its
+  # volumes, and the temporary file.
+  kill "${pid}"
+  wait "${pid}" 2>/dev/null || true
+  : >"${FAKE_DOCKER_PS}"
+  : >"${FAKE_DOCKER_VOLUMES}"
+  rm "${root}/run.pid"
+
+  compare "${state}/preview.json" --temp "${root}/run.pid"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes: confirmed process pid ${pid}"*"is gone or changed"* ]]
+  [[ "${stderr}" == *"compose: confirmed compose project wt"* ]]
+  [[ "${stderr}" == *"temporary paths"* ]]
+
+  compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"process pid ${pid} "* ]]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"compose project wt "* ]]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"temporary path ${root}/run.pid"* ]]
+  [[ "${output}" == *"lease"$'\t'"origin"$'\t'"${head}"* ]]
+}
+
+@test "compare --after-stop still stops on a new or changed resource" {
+  touch "${root}/run.pid"
+  preview --temp "${root}/run.pid"
+  [ "${status}" -eq 0 ]
+  start_in "${worktree}"
+  compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes: new or changed process pid ${pids[0]}"* ]]
+  kill "${pids[0]}"
+  wait "${pids[0]}" 2>/dev/null || true
+
+  printf 'wt\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"compose: new or changed compose project wt"* ]]
+  : >"${FAKE_DOCKER_PS}"
+
+  # The same path now resolves to another file, not removed.
+  rm "${root}/run.pid"
+  touch "${root}/other"
+  ln -s "${root}/other" "${root}/run.pid"
+  compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"temporary paths"* ]]
+
+  git commit -q --allow-empty -m later
+  git push -q "${FAKE_REMOTE}" HEAD:refs/heads/feat/1-x
+  rm "${root}/run.pid"
+  compare "${state}/preview.json" --temp "${root}/run.pid" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"remote branch: confirmed"* ]]
 }

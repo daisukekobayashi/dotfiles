@@ -807,7 +807,7 @@ test("the risk tier table scales the delivery procedure", async () => {
     assert.match(preview, /lists each process's PID, start time, and cwd as `list-processes\.sh` reports them, each Compose project with its `working_dir` and volumes, and each temporary file path/, cleanup);
     assert.match(preview, /on any non-zero status return no preview, so cleanup keeps its own confirmation\./, cleanup);
     assert.match(preview, /step 7's compare against the preview manifest decides whether the targets match the preview\./, cleanup);
-    assert.match(preview, /The one tolerated difference is a previewed remote branch that no longer exists, [^:]+: compare drops it and reports it as already deleted by the host\./, cleanup);
+    assert.match(preview, /One tolerated difference is a previewed remote branch that no longer exists, [^:]+: compare drops it and reports it as already deleted by the host\. Compare also accepts a previewed local branch that no longer exists, reporting it as already deleted, and, with `--after-stop`, previewed runtime resources the confirmed stop removed\./, cleanup);
     assert.match(preview, /A combined confirmation authorizes stopping or removing only runtime resources whose identifiers match the preview; any new or different resource needs its own confirmation\./, cleanup);
     assert.match(cleanupSkill, /Under a caller's combined confirmation, skip this build: the Caller preview manifest is the confirmed manifest\. A caller's combined confirmation from Caller preview counts only when the user gave it in their own message and explicitly accepted these resources, and they match the preview as Caller preview defines; otherwise show them and ask again\./, cleanup);
   }
@@ -848,6 +848,29 @@ test("both worktree cleanup skills run the shared cleanup target checks in one l
 
   const deliveryCommon = flat(await readText(path.join(repoRoot, "skills", "local", "delivery-common", "SKILL.md")));
   assert.match(deliveryCommon, /\[`scripts\/check-cleanup-targets\.mjs`\]\(scripts\/check-cleanup-targets\.mjs\) is the shared \*\*remote branch deletion check\*\* and \*\*cleanup target manifest\*\*/);
+});
+
+test("both worktree cleanup skills decide the local branch from merge evidence and compare again after the runtime stop", async () => {
+  for (const [cleanup, merged] of [
+    ["github-worktree-cleanup", /the local branch counts as merged only when step 5's PR lookup reports `MERGED` and the local branch tip equals its `headRefOid`, for any merge method\./],
+    ["azure-devops-worktree-cleanup", /the local branch counts as merged only when step 5's PR lookup reports `completed` and the local branch tip equals its `lastMergeSourceCommit`, for any merge type\./],
+  ]) {
+    const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
+    const step3 = skill.match(/ 3\. (Verify [\s\S]*?) 5\. /)?.[1];
+    const step7to8 = skill.match(/ 7\. (Remove the local worktree first[\s\S]*?) 9\. Delete the confirmed remote branch/)?.[1];
+    assert.ok(step3 && step7to8, `${cleanup}: missing steps 3-4 or 7-8`);
+    assert.match(step3, /from the PR's merge evidence, never from the local default branch, which can lag its remote/, cleanup);
+    assert.match(step3, merged, cleanup);
+    assert.match(step3, /Step 6's manifest checks this and exits 3 with the reason otherwise\./, cleanup);
+    assert.doesNotMatch(step3, /Check local git state first/, `${cleanup}: merged is not judged from local state`);
+
+    assert.match(step7to8, /After the confirmed runtime stop, and when resuming a cleanup that already ran it, run the same compare with `--after-stop` right before `git worktree remove`\./, cleanup);
+    assert.match(step7to8, /The last compare's `local` and `lease` lines decide steps 8 and 9\./, cleanup);
+    assert.match(step7to8, /conditioned on the SHA in compare's `local <branch> <sha>` line; without that line, delete none: `git update-ref -d refs\/heads\/<branch> <sha>`\./, cleanup);
+    assert.match(step7to8, /Never use `git branch -d`, which judges against the local default branch and refuses a squash merge, or `git branch -D`, which deletes without the SHA condition\./, cleanup);
+    assert.match(step7to8, /Then run `git config --remove-section 'branch\.<branch>'`; a `no such section` error means there was none\./, cleanup);
+    assert.ok(step7to8.indexOf("Before any removal, run") < step7to8.indexOf("Before removal, follow") && step7to8.indexOf("Before removal, follow") < step7to8.indexOf("--after-stop"), `${cleanup}: compare, runtime stop, then compare --after-stop`);
+  }
 });
 
 test("local review defines the triage classes apart from delivery actions", async () => {
