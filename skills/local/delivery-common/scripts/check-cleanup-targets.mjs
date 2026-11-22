@@ -4,7 +4,7 @@
 // Usage:
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
 //   node check-cleanup-targets.mjs local <facts>
-//   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview] [--previous <file>]
+//   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]
 //   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--after-stop]
 //
 // <facts> are the provider facts the caller looked up; the script makes no
@@ -51,35 +51,31 @@
 //
 // manifest
 //   Builds the **cleanup target manifest**: the worktree, the local branch
-//   result, the remote branch result, processes from `list-processes.sh <worktree>`, Compose
-//   projects from `list-stacks.sh <worktree>` with their volumes from
+//   result, the remote branch result, processes from
+//   `list-processes.sh <worktree>`, Compose projects from
+//   `list-stacks.sh <worktree>` with their volumes from
 //   `docker volume ls`, and the temporary paths with their resolved targets.
 //   The listings are the read-only scripts of worktree-runtime-cleanup, run
 //   from this skill tree. A lookup that exits non-zero or writes to stderr
 //   cannot run; it never counts as an empty listing. The manifest also
 //   records the PR head repository.
 //   The local branch is `proposed <sha>` when `refs/heads/<branch>` is a
-//   direct ref that `git for-each-ref` lists under exactly that name, nothing
-//   else uses an equivalent name (equal after Unicode compatibility
-//   normalization, case folding, and dropping combining marks: a listed ref,
-//   a loose ref file, a packed-refs entry, a worktree HEAD, or a rebase,
-//   including rebase-merge/update-refs, or bisect state in any worktree's git
-//   dir), no inspected git metadata path is a symbolic link or special file,
-//   and `git worktree list` output parses (its line form is read on Git before
-//   2.36, which has no -z), the
-//   exact loose ref file, if any, is a direct ref, the PR is merged
-//   (skipped with --preview, before the merge), the branch is not the default
-//   branch in any letter case, and its tip equals --pr-head, for any merge
-//   method. It is `absent` only when no ref is listed under the name or a
-//   case-equivalent one, `git symbolic-ref` and `git rev-parse --verify` find
-//   none, and the ref store has no loose file at its path, so a ref git omits
-//   from the listing, such as a dangling symbolic ref, is never absent.
-//   Otherwise it is `unmerged`, including a symbolic or unresolved ref, which
+//   direct ref that `git for-each-ref` lists under exactly that name, no ref
+//   it lists and no branch `git worktree list` reports checked out differs
+//   from that name only by case (compared after NFKC normalization and
+//   lower-casing), the PR is merged (skipped with --preview, before the
+//   merge), the branch is not the default branch in any letter case, and its
+//   tip equals --pr-head, for any merge method. It is `absent` when no ref is
+//   listed under the name and neither `git symbolic-ref` nor `git rev-parse
+//   --verify` finds one, so a ref git omits from its listing, such as a
+//   dangling symbolic ref, is never absent. Otherwise it is `unmerged`, which
 //   fails the check with the reason on stderr and writes no manifest. The
 //   merged state comes from the provider facts, never from the local default
-//   branch, which can lag its remote. Whether a checkout still uses the branch
-//   (checked out, rebased including `--update-refs`, or bisected) is left to
-//   `git branch -D`, which refuses such a branch.
+//   branch, which can lag its remote. Whether a checkout still uses the
+//   branch under its exact name (checked out, rebasing including
+//   `--update-refs`, or bisecting) is left to `git branch -D`, which refuses
+//   such a branch. On Git before 2.36, which has no `worktree list -z`, the
+//   line output counts only when every line is a known field.
 //   Writes the manifest as JSON to --out, a new file outside the worktree
 //   created with mode 0600 (an existing path, including a symlink, is a usage
 //   error), and prints the targets. With --preview it is a
@@ -87,13 +83,6 @@
 //   check runs as before the merge, and a listing that cannot run fails the
 //   check. Without --preview a listing that cannot run is recorded and printed
 //   as unverified.
-//   Each process also records start_utc, its start time read with `ps` under
-//   LC_ALL=C and TZ=UTC, and processes compare by it, so a session in another
-//   locale or time zone reads the same identity.
-//   With --previous <file>, the manifest it replaces after a compare exit 3,
-//   each process of that manifest the listing no longer shows but that still
-//   runs, or whose state cannot be verified, is carried into the new manifest,
-//   so a fresh confirmation never clears a confirmed process that still runs.
 //
 // compare
 //   Builds the manifest again, after the merge, and compares it with the
@@ -110,20 +99,19 @@
 //   --after-stop, run after the confirmed runtime stop, a confirmed process,
 //   Compose project, or temporary path that is gone is also expected and
 //   printed as `stopped as confirmed`; a new or changed item is still a
-//   difference. A process counts as gone only when `ps` finds no process with
-//   its PID, or one whose start time differs from a confirmed start_utc,
-//   since the listing drops a running process whose cwd leaves the worktree;
-//   a start time that cannot be normalized or compared holds. A Compose project counts as gone
-//   only when `docker volume ls` runs and lists no volume of the project
-//   that the confirmed manifest did not have and, for a worktree-owned project
-//   (reason exactly `under target`, whose stop deletes its volumes), none of
-//   its confirmed volumes. An external volume the stop keeps by design also
-//   holds here, since Docker records no external flag and the check never
-//   evaluates the checkout's Compose configuration; a manifest rebuilt after
-//   the stop no longer lists the project, so the user's fresh confirmation
-//   continues with the volume in place. A temporary path counts as gone only
-//   when `lstat`
-//   finds no entry at the path. Without it, a
+//   difference, and a listing that cannot run holds. A process counts as gone
+//   only when no process has its PID (`kill -0`, which sends no signal, finds
+//   none), since the listing drops a running process whose cwd leaves the
+//   worktree; a reused PID also holds. A Compose project counts as gone only
+//   when `docker volume ls` runs and lists no volume of the project that the
+//   confirmed manifest did not have and, for a worktree-owned project (reason
+//   exactly `under target`, whose stop deletes its volumes), none of its
+//   confirmed volumes. An external volume the stop keeps by design also holds
+//   here, since Docker records no external flag and the check never evaluates
+//   the checkout's Compose configuration; a manifest rebuilt after the stop no
+//   longer lists the project, so the user's fresh confirmation continues with
+//   the volume in place. A temporary path counts as gone only when `lstat`
+//   finds no entry at the path. Without --after-stop, a
 //   confirmed item that is gone is a difference. A listing that cannot run is
 //   a difference for a Caller preview, and for any other manifest unless it
 //   could not run there either. On a match it prints the targets, for a
@@ -155,7 +143,7 @@
 // run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, constants, existsSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -172,7 +160,7 @@ const runtimeScripts = path.join(here, "..", "..", "worktree-runtime-cleanup", "
 const USAGE = [
   "usage: check-cleanup-targets.mjs remote <facts> [--preview]",
   "       check-cleanup-targets.mjs local <facts>",
-  "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview] [--previous <file>]",
+  "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]",
   "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--after-stop]",
   "facts: (--github <host> <owner>/<repo> | --azure <org> <project> <repo>) --branch <branch>",
   "       --pr-state <state> --pr-head <sha> --cross-repo true|false --default-branch <branch>",
@@ -282,11 +270,9 @@ const readFacts = (options) => {
   };
 };
 
-// A key under which names that a case- or normalization-insensitive file
-// system could treat as one compare equal: compatibility normalization, case
-// folding through both cases (so "ſ" meets "s" and "K" meets "k"), and
-// combining marks dropped. It errs toward treating names as equal.
-const foldName = (name) => name.normalize("NFKC").toUpperCase().toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
+// A name compared without case, so names a case-insensitive ref store
+// resolves to one loose ref file compare equal.
+const foldName = (name) => name.normalize("NFKC").toLowerCase();
 
 // Branch names that a case-insensitive ref store could treat as one.
 const sameBranchName = (a, b) => foldName(a) === foldName(b);
@@ -385,45 +371,10 @@ const gitStatus = (args, allowed) => {
 // ref, loose or packed, has a case-equivalent name, { unresolved } when git
 // omits the ref from the listing but it still exists, such as a dangling
 // symbolic ref, and null only when absence is established independently.
-// Reads a file, or returns null when it does not exist; any other failure
-// means the check cannot run.
-const readOrNull = (file) => {
-  try {
-    return readFileSync(file, "utf8");
-  } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
-    return cannotRun(`cannot read ${file}: ${error.message}`);
-  }
-};
-
-// Directory entries, or [] when the directory does not exist.
-const entriesOrEmpty = (dir) => {
-  try {
-    return readdirSync(dir, { withFileTypes: true });
-  } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return [];
-    return cannotRun(`cannot read ${dir}: ${error.message}`);
-  }
-};
-
-// The file type at a path without following a link: null when nothing is
-// there, otherwise "dir", "file", or "other" (a symbolic link or a special
-// file).
-const kindOf = (target) => {
-  try {
-    const stat = lstatSync(target);
-    if (stat.isDirectory()) return "dir";
-    if (stat.isFile()) return "file";
-    return "other";
-  } catch (error) {
-    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null;
-    return cannotRun(`cannot check ${target}: ${error.message}`);
-  }
-};
-
-// The names git records as checked out, from `git worktree list`. Git before
-// 2.36 has no -z: its line output is read only when every line is a known
-// field, so a path or reason that breaks a line refuses the deletion.
+// The worktrees and branches `git worktree list` reports checked out, or
+// the reason its output cannot be trusted. Git before 2.36 has no -z: its
+// line output counts only when every line is a known field, so a path that
+// breaks a line holds the deletion.
 const checkedOutBranches = () => {
   const z = gitStatus(["worktree", "list", "--porcelain", "-z"], [0, 129]);
   const fields = z.status === 0 ? z.stdout.split("\0") : git(["worktree", "list", "--porcelain"]).split("\n");
@@ -431,133 +382,37 @@ const checkedOutBranches = () => {
   const branches = [];
   let worktree = null;
   for (const field of fields) {
-    if (z.status !== 0 && !known.test(field)) throw new RefConflict(`git worktree list printed a line that cannot be parsed: ${field}`);
+    if (z.status !== 0 && !known.test(field)) return `git worktree list printed a line that cannot be parsed: ${field}`;
     if (field.startsWith("worktree ")) worktree = field.slice("worktree ".length);
     else if (field.startsWith("branch ")) branches.push([worktree, field.slice("branch ".length)]);
   }
   return branches;
 };
 
-class RefConflict extends Error {}
-
-// Returns why something other than the exact ref uses a name equivalent to
-// refs/heads/<branch> under foldName, or null. A case- or
-// normalization-insensitive ref store resolves such a name to the same loose
-// file, so git's own exact-name guards miss it: a loose ref file under
-// another spelling, a packed-refs entry, a worktree HEAD (the main checkout
-// included), or a rebase or bisect state, including a ref queued in
-// rebase-merge/update-refs, in any worktree's git dir. An exact loose ref
-// file that is not a direct ref also counts, since git may omit it from its
-// listing. A symbolic link or special file anywhere in the inspected git
-// metadata refuses the deletion, since git may follow it where this scan does
-// not.
-const caseConflict = (branch) => {
-  try {
-    return scanRefUse(branch);
-  } catch (error) {
-    if (error instanceof RefConflict) return error.message;
-    throw error;
-  }
-};
-
-const scanRefUse = (branch) => {
-  const ref = `refs/heads/${branch}`;
-  const key = foldName(ref);
-  const other = (name) => name !== ref && foldName(name) === key;
-  const common = git(["rev-parse", "--path-format=absolute", "--git-common-dir"]).replace(/\n$/, "");
-  // The kind of an inspected metadata path; a link or special file refuses.
-  const expect = (target, kind) => {
-    const found = kindOf(target);
-    if (found !== null && found !== kind) throw new RefConflict(`${target} is ${found === "other" ? "a symbolic link or special file" : `a ${found === "dir" ? "directory" : "file"}`}, not a ${kind === "dir" ? "directory" : "file"}`);
-    return found;
-  };
-  const readExpected = (target) => (expect(target, "file") ? readOrNull(target) : null);
-
-  // Loose ref files: walk only the directories whose names match the
-  // branch's path segments under foldName.
-  expect(path.join(common, "refs"), "dir");
-  let level = expect(path.join(common, "refs", "heads"), "dir") ? [[path.join(common, "refs", "heads"), "refs/heads"]] : [];
-  const segments = branch.split("/");
-  for (const [i, segment] of segments.entries()) {
-    const next = [];
-    for (const [dir, prefix] of level) {
-      for (const entry of entriesOrEmpty(dir)) {
-        if (foldName(entry.name) !== foldName(segment)) continue;
-        const name = `${prefix}/${entry.name}`;
-        const file = path.join(dir, entry.name);
-        if (!entry.isDirectory() && !entry.isFile()) throw new RefConflict(`${file} is a symbolic link or special file`);
-        if (i < segments.length - 1) {
-          if (entry.isDirectory()) next.push([file, name]);
-        } else if (entry.isFile()) {
-          if (other(name)) return `a case-equivalent loose ref file ${name} exists`;
-          const content = readOrNull(file);
-          if (content?.startsWith("ref: ")) return `the loose ref file ${name} is a symbolic ref to ${content.slice("ref: ".length).trim()}`;
-          if (content !== null && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})\n?$/.test(content)) return `the loose ref file ${name} is not a direct ref`;
-        } else if (other(name)) {
-          return `a case-equivalent loose ref directory ${name} exists`;
-        }
-      }
-    }
-    level = next;
-  }
-
-  for (const line of (readExpected(path.join(common, "packed-refs")) ?? "").split("\n")) {
-    if (line.startsWith("#") || line.startsWith("^")) continue;
-    const name = line.split(" ")[1];
-    if (name !== undefined && other(name)) return `a case-equivalent packed ref ${name} exists`;
-  }
-
-  for (const [worktree, name] of checkedOutBranches()) {
-    if (other(name)) return `the worktree at ${worktree} has the case-equivalent ${name} checked out`;
-  }
-  const linked = path.join(common, "worktrees");
-  const gitDirs = [common];
-  if (expect(linked, "dir")) {
-    for (const entry of entriesOrEmpty(linked)) {
-      const dir = path.join(linked, entry.name);
-      if (entry.isDirectory()) gitDirs.push(dir);
-      else if (!entry.isFile()) throw new RefConflict(`${dir} is a symbolic link or special file`);
-    }
-  }
-  for (const gitDir of gitDirs) {
-    const head = (readExpected(path.join(gitDir, "HEAD")) ?? "").trim();
-    if (head.startsWith("ref: ") && other(head.slice("ref: ".length))) return `the HEAD of ${gitDir} is the case-equivalent ${head.slice("ref: ".length)}`;
-    expect(path.join(gitDir, "rebase-merge"), "dir");
-    expect(path.join(gitDir, "rebase-apply"), "dir");
-    for (const file of ["rebase-merge/head-name", "rebase-apply/head-name", "rebase-merge/update-refs"]) {
-      for (const line of (readExpected(path.join(gitDir, file)) ?? "").split("\n")) {
-        if (other(line.trim())) return `${path.join(gitDir, file)} names the case-equivalent ${line.trim()}`;
-      }
-    }
-    const bisect = (readExpected(path.join(gitDir, "BISECT_START")) ?? "").trim();
-    if (bisect !== "" && (other(bisect) || other(`refs/heads/${bisect}`))) return `${path.join(gitDir, "BISECT_START")} names the case-equivalent ${bisect}`;
-  }
-  return null;
-};
-
+// Looks up refs/heads/<branch> from git's own output. Returns { sha, symref }
+// for a ref listed under exactly that name, { held } when a listed ref or a
+// checked-out branch differs from the name only by case, or when git omits
+// the ref from its listing but it still resolves, such as a dangling
+// symbolic ref, and null when no ref exists.
 const localRef = (branch) => {
   const ref = `refs/heads/${branch}`;
+  const variant = (name) => name !== ref && foldName(name) === foldName(ref);
   const rows = git(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", "refs/heads/"])
     .split("\n").filter((line) => line !== "").map((line) => line.split("\0"));
-  const siblings = rows.filter(([name]) => name !== ref && foldName(name) === foldName(ref));
-  if (siblings.length > 0) return { ambiguous: `a case-equivalent ref exists: ${siblings.map(([name]) => name).join(", ")}` };
-  const conflict = caseConflict(branch);
-  if (conflict) return { ambiguous: conflict };
+  const variants = rows.map(([name]) => name).filter(variant);
+  if (variants.length > 0) return { held: `a case-equivalent ref exists: ${variants.join(", ")}` };
+  const checkedOut = checkedOutBranches();
+  if (typeof checkedOut === "string") return { held: checkedOut };
+  const used = checkedOut.find(([, name]) => variant(name));
+  if (used) return { held: `the worktree at ${used[0]} has the case-equivalent ${used[1]} checked out` };
+
   const matches = rows.filter(([name]) => name === ref);
   if (matches.length > 1 || (matches.length === 1 && !SHA.test(matches[0][1]))) cannotRun(`unexpected git for-each-ref output for ${ref}`);
   if (matches.length === 1) return { sha: matches[0][1], symref: matches[0][2] };
-
   const symbolic = gitStatus(["symbolic-ref", "-q", ref], [0, 1]);
-  if (symbolic.status === 0) return { unresolved: `a symbolic ref to ${symbolic.stdout.trim()} that git does not list` };
+  if (symbolic.status === 0) return { held: `the local branch is a symbolic ref to ${symbolic.stdout.trim()} that git does not list` };
   const verify = gitStatus(["rev-parse", "--verify", "--quiet", ref], [0, 1]);
-  if (verify.status === 0 || verify.stdout.trim() !== "") return { unresolved: "a ref git resolves but does not list under that name" };
-  const loose = git(["rev-parse", "--path-format=absolute", "--git-path", ref]).replace(/\n$/, "");
-  try {
-    lstatSync(loose);
-    return { unresolved: `an unreadable ref file at ${loose}` };
-  } catch (error) {
-    if (error.code !== "ENOENT" && error.code !== "ENOTDIR") return cannotRun(`cannot check ${loose}: ${error.message}`);
-  }
+  if (verify.status === 0 || verify.stdout.trim() !== "") return { held: "the local branch is a ref git resolves but does not list under that name" };
   return null;
 };
 
@@ -567,8 +422,7 @@ const localRef = (branch) => {
 const checkLocal = (facts, { preview }) => {
   const found = localRef(facts.branch);
   if (found === null) return { status: "absent" };
-  if (found.ambiguous) return { status: "unmerged", sha: null, reason: found.ambiguous };
-  if (found.unresolved) return { status: "unmerged", sha: null, reason: `the local branch is ${found.unresolved}` };
+  if (found.held) return { status: "unmerged", sha: null, reason: found.held };
   const { sha } = found;
   const unmerged = (reason) => ({ status: "unmerged", sha, reason });
   if (found.symref) return unmerged(`the local branch is a symbolic ref to ${found.symref}`);
@@ -657,34 +511,14 @@ const runListing = (name, worktree, columns) => {
   return { rows };
 };
 
-// A process's start time read under a fixed locale and time zone, so the
-// same process reads the same in any session: { state: "live", start },
-// { state: "gone" }, or { state: "unknown", reason }.
-const LSTART = /^[A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]{1,2} [0-9]{2}:[0-9]{2}:[0-9]{2} [0-9]{4}$/;
-const processStart = (pid) => {
-  if (!/^[1-9][0-9]*$/.test(String(pid))) return { state: "unknown", reason: `its PID ${pid} cannot be checked` };
-  const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", env: { ...process.env, LC_ALL: "C", TZ: "UTC" } });
-  const stdout = (result.stdout ?? "").trim();
-  const stderr = (result.stderr ?? "").trim();
-  if (result.status === 0 && LSTART.test(stdout)) return { state: "live", start: stdout.replace(/ +/g, " ") };
-  if (result.status === 1 && stdout === "" && stderr === "") return { state: "gone" };
-  return { state: "unknown", reason: `ps exited ${result.status ?? result.signal}${stderr ? `: ${stderr}` : ""}${result.status === 0 ? `, printing ${stdout}` : ""}` };
-};
-
-// The start identity a process compares by: the normalized start time, or
-// one that never equals another reading when it could not be normalized.
-const startKey = (item) => (typeof item.start_utc === "string" && LSTART.test(item.start_utc) ? item.start_utc : `unverified:${item.started}`);
-
 const listProcesses = (worktree) => {
   const listing = runListing("list-processes.sh", worktree, 7);
   if (listing.unavailable) return { status: "unavailable", reason: listing.unavailable, items: [] };
   // <pid> <ppid> <tty> <started> <cwd> <reason> <command>; the command may
-  // contain tabs. `started` follows the caller's locale and time zone, so
-  // start_utc carries the start time read under C and UTC.
-  const items = listing.rows.map(([pid, ppid, tty, started, cwd, reason, ...command]) => {
-    const start = processStart(pid);
-    return { pid, ppid, tty, started, start_utc: start.state === "live" ? start.start : null, cwd, reason, command: command.join("\t") };
-  });
+  // contain tabs.
+  const items = listing.rows.map(([pid, ppid, tty, started, cwd, reason, ...command]) => ({
+    pid, ppid, tty, started, cwd, reason, command: command.join("\t"),
+  }));
   return { status: "ok", items };
 };
 
@@ -783,26 +617,11 @@ const writeNewFile = (file, text) => {
 
 const isInside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
 
-// Carries each process of the manifest being replaced that the listing no
-// longer shows but that may still run into the new manifest, so a fresh
-// confirmation never clears a confirmed process that is still running.
-const carryLiveProcesses = (previous, manifest) => {
-  const listed = new Set(manifest.processes.items.map((item) => JSON.stringify([item.pid, startKey(item)])));
-  for (const item of previous.processes?.items ?? []) {
-    if (listed.has(JSON.stringify([item.pid, startKey(item)]))) continue;
-    const live = processSurvives(item);
-    if (live === null) continue;
-    manifest.processes.items.push({ ...item, reason: `${item.reason}; carried from the replaced manifest: ${live}` });
-  }
-};
-
 const manifestCommand = (args) => {
-  const options = parseOptions(args, { ...FACTS, ...TARGETS, "--out": 1, "--preview": 0, "--previous": 1 });
+  const options = parseOptions(args, { ...FACTS, ...TARGETS, "--out": 1, "--preview": 0 });
   if (!options["--out"]) usage("missing --out");
   const facts = readFacts(options);
   const targets = readTargets(options);
-  const previous = options["--previous"] ? readConfirmed(options["--previous"][0]) : null;
-  if (previous && (previous.branch !== facts.branch || previous.worktree !== targets.worktree)) usage("--previous is a manifest for another branch or worktree");
   const [out] = options["--out"];
   if (!path.isAbsolute(out)) usage(`--out is not an absolute path: ${JSON.stringify(out)}`);
   const outDir = realpathOrNull(path.dirname(out));
@@ -813,7 +632,6 @@ const manifestCommand = (args) => {
 
   const preview = Boolean(options["--preview"]);
   const manifest = buildManifest(facts, targets, { preview });
-  if (previous) carryLiveProcesses(previous, manifest);
   if (manifest.local.status === "unmerged") fail([`local branch refs/heads/${manifest.branch} cannot be deleted: ${manifest.local.reason}`]);
   const unavailable = unavailableSections(manifest);
   if (preview && unavailable.length > 0) {
@@ -851,7 +669,9 @@ const compareRuntime = (section, confirmed, current, identity, label, difference
   const before = confirmed[section];
   const after = current[section];
   if (after.status === "unavailable" || before.status === "unavailable") {
-    if (confirmed.preview) {
+    if (stopped && after.status === "unavailable") {
+      differences.push(`${section} cannot be listed after the stop, so the stop is unverified: ${after.reason}`);
+    } else if (confirmed.preview) {
       differences.push(`${section} cannot be listed and the confirmation came from a Caller preview: ${(after.status === "unavailable" ? after : before).reason}`);
     } else if (after.status !== before.status) {
       differences.push(`${section} was ${before.status === "unavailable" ? "unverified" : "listed"} at confirmation and is ${after.status === "unavailable" ? "unverified" : "listed"} now`);
@@ -890,18 +710,18 @@ const composeStopIncomplete = (item) => {
 
 // For a process that is gone from the listing, why it may still run, or
 // null. The listing covers only processes tied to the worktree, so a process
-// whose cwd moved away drops out while it keeps running: it is gone only
-// when `ps` finds no process with its PID, or one with another start time
-// (the PID was reused).
+// whose cwd moved away drops out while it keeps running: it is gone only when
+// no process has its PID. A reused PID also holds; a fresh confirmation at
+// step 6 continues.
 const processSurvives = (item) => {
-  const now = processStart(item.pid);
-  if (now.state === "gone") return null;
-  if (now.state === "unknown") return `its state cannot be verified: ${now.reason}`;
-  if (startKey(item) === now.start) return "it is still running with the same start time";
-  // Another start time means the PID was reused, but only when the
-  // confirmed start time was read the same way.
-  if (startKey(item) === item.start_utc) return null;
-  return "a process with its PID runs, and its confirmed start time cannot be compared";
+  if (!/^[1-9][0-9]*$/.test(String(item.pid))) return `its PID ${item.pid} cannot be checked`;
+  try {
+    process.kill(Number(item.pid), 0);
+  } catch (error) {
+    if (error.code === "ESRCH") return null;
+    if (error.code !== "EPERM") return `its PID cannot be checked: ${error.message}`;
+  }
+  return `a process with PID ${item.pid} still runs`;
 };
 
 const compareCommand = (args) => {
@@ -946,7 +766,7 @@ const compareCommand = (args) => {
 
   compareRuntime(
     "processes", confirmed, current,
-    (item) => [item.pid, startKey(item), item.cwd],
+    (item) => [item.pid, item.started, item.cwd],
     (item) => `process pid ${item.pid} started ${item.started} cwd ${item.cwd}`,
     differences,
     stopped,

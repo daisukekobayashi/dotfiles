@@ -100,11 +100,10 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      the stop keeps by design, since the check never evaluates the checkout's
      Compose configuration: confirm the targets again at step 6, where the
      rebuilt manifest no longer lists the project, and continue with the volume
-     in place. Whenever a compare's exit 3 sends the cleanup back to step 6,
-     build the new manifest with `--previous '<file>'` naming the manifest it
-     replaces: it carries each confirmed process that still runs into the new
-     targets, so a fresh confirmation never clears a known-live process and
-     compare keeps holding until that process stops.
+     in place. A confirmed process holds while any process has its PID, even a
+     reused one, and an unavailable listing holds; a fresh confirmation at step
+     6 re-lists the worktree's processes and continues, and a process that has
+     left the worktree is no longer listed there, an accepted residual.
 8. Delete the local branch after the worktree is removed, only with compare's
    `local <branch> <sha>` line; without that line, delete none. Immediately
    before deleting, run `node <cleanup-script> local <facts>` with step 5's

@@ -825,7 +825,7 @@ LISTING
   [ "$(git rev-parse feat/1-x)" = "${head}" ]
   manifest_with -- --worktree "${worktree}" --out "${state}/symref.json"
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"the loose ref file refs/heads/feat/1-x is a symbolic ref to refs/heads/main"* ]]
+  [[ "${stderr}" == *"the local branch is a symbolic ref to refs/heads/main"* ]]
   check local "${args[@]}"
   [ "${status}" -eq 3 ]
   git symbolic-ref --delete refs/heads/feat/1-x
@@ -875,20 +875,20 @@ LISTING
   [ -z "$(git for-each-ref refs/heads/feat/1-x)" ]
   compare "${state}/step6.json"
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"cannot be deleted: the loose ref file refs/heads/feat/1-x is a symbolic ref to refs/heads/nowhere"* ]]
+  [[ "${stderr}" == *"cannot be deleted: the local branch is a symbolic ref to refs/heads/nowhere that git does not list"* ]]
   [[ "${output}" != *"already deleted"* ]]
   check local "${args[@]}"
   [ "${status}" -eq 3 ]
 
-  # A broken loose ref file is not a direct ref.
+  # A broken loose ref file: git cannot read it, which stops the check.
   git symbolic-ref --delete refs/heads/feat/1-x
   local loose
   loose="$(git rev-parse --path-format=absolute --git-path refs/heads/feat/1-x)"
   mkdir -p "$(dirname "${loose}")"
   printf 'garbage\n' >"${loose}"
   check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"the loose ref file refs/heads/feat/1-x is not a direct ref"* ]]
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"check could not run"* ]]
   [[ "${output}" != *"absent"* ]]
   rm "${loose}"
   check local "${args[@]}"
@@ -1014,7 +1014,7 @@ DOCKER
   [ "${output}" = "unmerged"$'\t'"-" ]
 }
 
-@test "case-equivalent names in HEAD, loose and packed refs, and rebase or bisect state block the deletion" {
+@test "a case-only variant in a listed ref or a checked-out HEAD blocks the deletion" {
   git branch feat/1-x "${head}"
   local -a args
   mapfile -t args < <(facts)
@@ -1028,41 +1028,16 @@ DOCKER
   [[ "${stderr}" == *"the worktree at ${repo} has the case-equivalent refs/heads/Feat/1-x checked out"* ]]
   git symbolic-ref HEAD refs/heads/main
 
-  # An exact packed ref beside a loose sibling that git omits from its
-  # listing, because its object is missing.
+  # An exact packed ref beside a loose sibling that git lists.
   git pack-refs --all
   rmdir "${gitdir}/refs/heads/feat" 2>/dev/null || true
   mkdir -p "${gitdir}/refs/heads/Feat"
-  [ "$(ls "${gitdir}/refs/heads")" != feat ]
-  printf '%s\n' 1111111111111111111111111111111111111111 >"${gitdir}/refs/heads/Feat/1-x"
+  printf '%s\n' "${head}" >"${gitdir}/refs/heads/Feat/1-x"
+  [ "$(git for-each-ref --format='%(refname)' refs/heads/ | grep -ci '^refs/heads/feat/1-x$')" -eq 2 ]
   check local "${args[@]}"
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"case-equivalent"*"refs/heads/Feat/1-x"* ]]
-  # A dangling symbolic sibling, which git omits from its listing.
-  printf 'ref: refs/heads/nowhere\n' >"${gitdir}/refs/heads/Feat/1-x"
-  [ -z "$(git for-each-ref 'refs/heads/Feat/')" ]
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"a case-equivalent loose ref file refs/heads/Feat/1-x exists"* ]]
+  [[ "${stderr}" == *"a case-equivalent ref exists: refs/heads/Feat/1-x"* ]]
   rm -r "${gitdir}/refs/heads/Feat"
-
-  # A rebase queues another spelling in a linked worktree's update-refs, or a
-  # bisect started from it.
-  local linked="${root}/linked"
-  git worktree add -q --detach "${linked}" "${head}"
-  local linkedDir
-  linkedDir="$(git -C "${linked}" rev-parse --absolute-git-dir)"
-  mkdir -p "${linkedDir}/rebase-merge"
-  printf 'refs/heads/Feat/1-x\n%s\n%s\n' "${head}" "${head}" >"${linkedDir}/rebase-merge/update-refs"
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"rebase-merge/update-refs names the case-equivalent refs/heads/Feat/1-x"* ]]
-  rm -r "${linkedDir}/rebase-merge"
-  printf 'Feat/1-x\n' >"${linkedDir}/BISECT_START"
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"BISECT_START names the case-equivalent Feat/1-x"* ]]
-  rm "${linkedDir}/BISECT_START"
 
   check local "${args[@]}"
   [ "${status}" -eq 0 ]
@@ -1078,7 +1053,7 @@ DOCKER
   printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
   compare "${state}/preview.json" --after-stop
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"processes: confirmed process pid ${pid} "*"is gone but it is still running with the same start time"* ]]
+  [[ "${stderr}" == *"processes: confirmed process pid ${pid} "*"is gone but a process with PID ${pid} still runs"* ]]
 
   kill "${pid}"
   wait "${pid}" 2>/dev/null || true
@@ -1133,105 +1108,69 @@ WRAP
   printf '%s' "${root}/oldgit"
 }
 
-@test "process identity is the start time read under C and UTC, whatever the session's time zone" {
-  start_in "${worktree}"
-  local pid="${pids[0]}"
-  TZ=UTC preview
-  [ "${status}" -eq 0 ]
-  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (!/^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2} \d\d:\d\d:\d\d \d{4}$/.test(m.processes.items[0].start_utc)) process.exit(1)' "${state}/preview.json"
-  # Still listed, compared from another time zone: no difference.
-  TZ=Asia/Tokyo compare
-  [ "${status}" -eq 0 ]
-
-  # Gone from the listing but alive, rechecked from another time zone: held.
-  printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
-  TZ=Asia/Tokyo compare "${state}/preview.json" --after-stop
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"process pid ${pid} "*"is gone but it is still running with the same start time"* ]]
-
-  # A confirmed start time that cannot be compared holds while the PID runs.
-  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); delete m.processes.items[0].start_utc; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/raw.json"
-  compare "${state}/raw.json" --after-stop
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"its confirmed start time cannot be compared"* ]]
-
-  kill "${pid}"
-  wait "${pid}" 2>/dev/null || true
-  compare "${state}/raw.json" --after-stop
-  [ "${status}" -eq 0 ]
-}
-
-@test "a fresh confirmation with --previous keeps holding a confirmed process that still runs" {
+@test "--after-stop holds a live confirmed PID whatever its start time" {
   start_in "${worktree}"
   local pid="${pids[0]}"
   preview
   [ "${status}" -eq 0 ]
+  # Gone from the listing, with a confirmed start time that no longer
+  # matches, as after a time zone change or a reused PID: it still holds.
+  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); m.processes.items[0].started = "Thu Jan  1 00:00:00 1970"; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/other-start.json"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
-  compare "${state}/preview.json" --after-stop
+  TZ=Asia/Tokyo compare "${state}/other-start.json" --after-stop
   [ "${status}" -eq 3 ]
-
-  local -a args
-  mapfile -t args < <(facts)
-  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/fresh.json" --previous "${state}/preview.json"
-  [ "${status}" -eq 0 ]
-  [[ "${output}" == *"process"$'\t'"pid ${pid}"*"carried from the replaced manifest: it is still running with the same start time"* ]]
-  compare "${state}/fresh.json" --after-stop
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"process pid ${pid} "*"still running"* ]]
+  [[ "${stderr}" == *"process pid ${pid} "*"is gone but a process with PID ${pid} still runs"* ]]
 
   kill "${pid}"
   wait "${pid}" 2>/dev/null || true
-  compare "${state}/fresh.json" --after-stop
+  compare "${state}/other-start.json" --after-stop
   [ "${status}" -eq 0 ]
-  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/after.json" --previous "${state}/fresh.json"
-  [ "${status}" -eq 0 ]
-  [[ "${output}" != *"carried"* ]]
-
-  mkdir -p "${root}/elsewhere"
-  check manifest "${args[@]}" --worktree "${root}/elsewhere" --out "${state}/wrong.json" --previous "${state}/fresh.json"
-  [ "${status}" -eq 2 ]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"process pid ${pid} "* ]]
 }
 
-@test "a symbolic link in the inspected git metadata refuses the deletion" {
+@test "--after-stop holds when the process listing cannot run" {
+  start_in "${worktree}"
+  local pid="${pids[0]}"
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  kill "${pid}"
+  wait "${pid}" 2>/dev/null || true
+  printf '#!/usr/bin/env bash\necho "Neither /proc nor lsof is available" >&2\nexit 1\n' \
+    >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
+  compare "${state}/step6.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes cannot be listed after the stop, so the stop is unverified: list-processes.sh exited 1"* ]]
+
+  # Unverified at confirmation too: the stop still cannot be verified.
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/unverified.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"processes"$'\t'"unverified"* ]]
+  compare "${state}/unverified.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes cannot be listed after the stop"* ]]
+}
+
+@test "a reftable repository, with no loose ref files, is not rejected" {
+  local table="${root}/table"
+  git init -q -b main --ref-format=reftable "${table}" 2>/dev/null || skip "git has no reftable support"
+  cd "${table}" || return 1
+  [ ! -e .git/refs/heads/main ] || [ -z "$(ls -A .git/refs/heads 2>/dev/null)" ]
+  git commit -q --allow-empty -m base
+  git commit -q --allow-empty -m work
+  head="$(git rev-parse HEAD)"
   git branch feat/1-x "${head}"
   local -a args
   mapfile -t args < <(facts)
-  local gitdir
-  gitdir="$(git rev-parse --absolute-git-dir)"
-
-  # A linked worktree whose metadata directory is a link.
-  local linked="${root}/linked"
-  git worktree add -q --detach "${linked}" "${head}"
-  local id
-  id="$(basename "$(git -C "${linked}" rev-parse --absolute-git-dir)")"
-  mv "${gitdir}/worktrees/${id}" "${root}/moved-meta"
-  ln -s "${root}/moved-meta" "${gitdir}/worktrees/${id}"
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"${gitdir}/worktrees/${id} is a symbolic link or special file"* ]]
-  rm "${gitdir}/worktrees/${id}"
-  mv "${root}/moved-meta" "${gitdir}/worktrees/${id}"
-
-  # A rebase state directory that is a link.
-  mkdir -p "${root}/rebase-state"
-  ln -s "${root}/rebase-state" "${gitdir}/rebase-merge"
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"${gitdir}/rebase-merge is a symbolic link or special file"* ]]
-  rm "${gitdir}/rebase-merge"
-
-  # A ref directory on the branch's path that is a link.
-  git pack-refs --all
-  rmdir "${gitdir}/refs/heads/feat" 2>/dev/null || true
-  mkdir -p "${root}/refdir"
-  ln -s "${root}/refdir" "${gitdir}/refs/heads/feat"
-  check local "${args[@]}"
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"${gitdir}/refs/heads/feat is a symbolic link or special file"* ]]
-  rm "${gitdir}/refs/heads/feat"
-
   check local "${args[@]}"
   [ "${status}" -eq 0 ]
+  [ "${output}" = "proposed"$'\t'"${head}" ]
+
+  git symbolic-ref HEAD refs/heads/Feat/1-x
+  check local "${args[@]}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"has the case-equivalent refs/heads/Feat/1-x checked out"* ]]
 }
 
 @test "names compare after Unicode normalization and case folding" {
