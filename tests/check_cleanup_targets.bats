@@ -1143,13 +1143,70 @@ WRAP
   [ "${status}" -eq 3 ]
   [[ "${stderr}" == *"processes cannot be listed after the stop, so the stop is unverified: list-processes.sh exited 1"* ]]
 
-  # Unverified at confirmation too: the stop still cannot be verified.
+  # Unverified at confirmation too: it stays unverified and passes, as in
+  # the strict compare.
   check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/unverified.json"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"processes"$'\t'"unverified"* ]]
   compare "${state}/unverified.json" --after-stop
+  [ "${status}" -eq 0 ]
+}
+
+@test "--after-stop passes Compose unverified at both confirmation and after the stop" {
+  # A host without a working Docker: list-stacks.sh cannot run either time.
+  local -a args
+  mapfile -t args < <(facts)
+  FAKE_DOCKER_FAIL=1 check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"compose"$'\t'"unverified"* ]]
+  FAKE_DOCKER_FAIL=1 compare "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  FAKE_DOCKER_FAIL=1 compare "${state}/step6.json" --after-stop
+  [ "${status}" -eq 0 ]
+}
+
+@test "--after-stop holds Compose listed at confirmation that cannot be listed after the stop" {
+  printf 'worktree\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/step6.json"
+  [ "${status}" -eq 0 ]
+  FAKE_DOCKER_FAIL=1 compare "${state}/step6.json" --after-stop
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"processes cannot be listed after the stop"* ]]
+  [[ "${stderr}" == *"compose cannot be listed after the stop, so the stop is unverified"* ]]
+}
+
+@test "--after-stop holds a confirmed target the stop should have removed that is still listed" {
+  start_in "${worktree}"
+  local pid="${pids[0]}"
+  printf 'worktree\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  preview
+  [ "${status}" -eq 0 ]
+  # The process has no terminal, as a detached runtime does.
+  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); for (const p of m.processes.items) p.tty = "?"; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/detached.json"
+
+  # Neither the process nor the Compose project was stopped.
+  compare "${state}/detached.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"processes: confirmed process pid ${pid} "*"is still listed after the stop"* ]]
+  [[ "${stderr}" == *"compose: confirmed compose project worktree "*"is still listed after the stop"* ]]
+
+  # The project is down; the process still runs.
+  : >"${FAKE_DOCKER_PS}"
+  compare "${state}/detached.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"is still listed after the stop"* ]]
+  [[ "${stderr}" != *"compose project worktree"*"still listed"* ]]
+
+  # A terminal session stays running by design.
+  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); for (const p of m.processes.items) p.tty = "ttys009"; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/terminal.json"
+  compare "${state}/terminal.json" --after-stop
+  [ "${status}" -eq 0 ]
+
+  kill "${pid}"
+  wait "${pid}" 2>/dev/null || true
+  compare "${state}/detached.json" --after-stop
+  [ "${status}" -eq 0 ]
 }
 
 @test "a reftable repository, with no loose ref files, is not rejected" {

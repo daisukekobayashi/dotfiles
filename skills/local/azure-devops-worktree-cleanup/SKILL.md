@@ -101,9 +101,12 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      Compose configuration: confirm the targets again at step 6, where the
      rebuilt manifest no longer lists the project, and continue with the volume
      in place. A confirmed process holds while any process has its PID, even a
-     reused one, and an unavailable listing holds; a fresh confirmation at step
-     6 re-lists the worktree's processes and continues, and a process that has
-     left the worktree is no longer listed there, an accepted residual.
+     reused one, and so does a confirmed Compose project, or a confirmed process
+     the stop should remove, that is still listed; a listing that cannot run
+     holds when it was listed at confirmation, while one already unverified then
+     stays unverified and continues. A fresh confirmation at step 6 re-lists the
+     worktree's processes and continues, and a process that has left the
+     worktree is no longer listed there, an accepted residual.
 8. Delete the local branch after the worktree is removed, only with compare's
    `local <branch> <sha>` line; without that line, delete none. Immediately
    before deleting, run `node <cleanup-script> local <facts>` with step 5's
