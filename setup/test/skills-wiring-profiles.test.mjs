@@ -461,3 +461,28 @@ test("triage skills read item text only for the shared detail band", async () =>
   assert.match(beads, /`bd blocked --json=false`/, "bd blocked prints descriptions when the workspace sets json: true");
   assert.match(beads, /`bd show <id> --json --include-comments --brief-deps`/);
 });
+
+test("Azure triage reports an incomplete overview before relying on returned candidates", async () => {
+  const skill = await readText(path.join(repoRoot, "skills", "local", "azure-devops-work-item-triage", "SKILL.md"));
+  const overviewStep = skill.match(/\n2\. Fetch the overview data\.\n([\s\S]*?)\n3\./)?.[1];
+  assert.ok(overviewStep, "missing overview step");
+  const overview = overviewStep.replace(/\s+/g, " ");
+  assert.match(overview, /Prefer repository or project guidance when it defines the query\. Keep any CLI output options it specifies, including a `--query` filter, and triage the candidates it returns\. - Otherwise use `az boards query --wiql`/);
+  const select = overview.match(/`SELECT ([^`]+)`/)?.[1];
+  assert.ok(select, "the default overview must name its full projection");
+  const fields = [...select.matchAll(/\[([^\]]+)\]/g)].map(([, field]) => field);
+  assert.deepEqual(fields, [
+    "System.Id", "System.Title", "System.State", "System.WorkItemType", "System.Tags",
+    "System.IterationPath", "Microsoft.VSTS.Common.Severity", "Microsoft.VSTS.Common.Priority",
+  ]);
+  const encodedLength = fields.map(encodeURIComponent).join("%2C").length;
+  assert.match(overview, new RegExp(`${encodedLength} URL-encoded characters[^.]+800-character field budget`));
+  assert.match(overview, /If a known project-defined projection exceeds that budget, report possible\s+omission of trailing fields/);
+  assert.match(overview, /Treat unavailable fields needed for triage as\s+unknown and report the limitation/);
+  assert.match(overview, /When guidance leaves CLI output options open for `az boards query`, use `--output json` without a `--query` filter/);
+  assert.match(overview, /When the original JSON array from a successful query is available, count its rows before filtering, sorting, or reading relations/);
+  assert.match(overview, /At 1,000 or more rows, flag the overview as potentially\s+incomplete in \*\*Current State\*\*/);
+  assert.match(overview, /If the unfiltered array is unavailable, report that completeness could\s+not be checked in \*\*Current State\*\*/);
+  assert.match(overview, /In either case, label the ranking, blocker assessment, and\s+parallel recommendations as provisional for the retrieved candidates/);
+  assert.match(skill, /^- Candidate Work Items: <count with a completeness warning when applicable>$/m);
+});
