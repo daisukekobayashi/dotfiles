@@ -104,8 +104,8 @@ allowed effects stay inside the worktree.
 After the run ends, whether it completed, failed, or reached a bound:
 
 1. For a Codex run, follow `../../worktree-runtime-cleanup/SKILL.md`
-   "Brokers Started by a Codex Review" with the disposable worktree as its
-   target worktree.
+   "Process Trees Started by a Codex Review" with the disposable worktree as
+   its target worktree.
 2. For the reviewer's worktree, copy the evidence under [Evidence](#evidence).
 3. Check that a `worktree` line of
    `git --no-optional-locks -c core.hooksPath=/dev/null -C <reviewed worktree> worktree list --porcelain`

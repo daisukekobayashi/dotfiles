@@ -218,7 +218,7 @@ test("change review skills are explicit-only and share target selection", async 
     assert.doesNotMatch(runnerSection(skill), /single quotes|'Use \$/);
     assert.match(runnerSection(skill), /Run one Codex run at a time per target worktree/);
     assert.match(runnerSection(skill), /several review skills for one worktree\s+together, wait for any other run in progress, then run them in parallel as one\s+set instead: follow that section once before the first run starts and once\s+after every run ends/);
-    assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Brokers Started by a Codex Review"/);
+    assert.match(runnerSection(skill), /Before and after the run, including a failed run, follow\s+`\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Process Trees Started by a Codex Review"/);
   }
   // The normal and security reviewers stay read-only on the reviewed worktree.
   assert.match(runnerSection(changeReview), /codex-companion\.mjs" task --fresh --cwd/);
@@ -243,7 +243,7 @@ test("change review skills are explicit-only and share target selection", async 
   assert.match(adversarialRunner, /On an untrusted head, create none; the review is read-only\./);
   assert.match(adversarialRunner, /after it ends, including a failed run or a bound, remove it under \[Remove\]/);
   assert.match(adversarialRunner, /rerun each proving command under \[Parent rerun\]\([^)]*\) before acting on its finding/);
-  assert.match(adversarialRunner, /"Brokers Started by a Codex Review" for the worktree passed as `--cwd`/);
+  assert.match(adversarialRunner, /"Process Trees Started by a Codex Review" for the worktree passed as `--cwd`/);
   assert.match(adversarialRunner, /for the reviewed worktree and, on a trusted head, for this review's disposable worktree/);
   assert.doesNotMatch(adversarial, /interrogate/);
   const securityRoot = path.join(repoRoot, "skills", "local", "change-security-review");
@@ -698,33 +698,54 @@ test("delivery resume checks the recorded branch name", async () => {
   }
 });
 
-test("Codex review runs stop only the broker tree they started", async () => {
+test("Codex review runs stop only the process trees they started", async () => {
   const runtime = await readText(
     path.join(repoRoot, "skills", "local", "worktree-runtime-cleanup", "SKILL.md"),
   );
-  const brokers = flat(runtime.match(/## Brokers Started by a Codex Review\n[\s\S]*?(?=\n## )/)?.[0]);
+  const trees = flat(runtime.match(/## Process Trees Started by a Codex Review\n[\s\S]*?(?=\n## )/)?.[0]);
 
-  assert.ok(brokers, "worktree-runtime-cleanup: missing Brokers Started by a Codex Review");
-  assert.match(brokers, /stopping them needs no confirmation/);
-  assert.match(brokers, /Runs started together for one worktree as a set count as one run: record the first list before any starts and the second after all end\./);
-  assert.match(brokers, /Before the run, record `scripts\/list-processes\.sh <worktree>`/);
-  assert.match(brokers, /is a broker this run started only when it is absent from the first list, by PID and start time, and/);
-  assert.match(brokers, /its `cwd` column in the second list equals exactly the target worktree root/);
-  assert.match(brokers, /The `command` column is cut to 200 bytes and never establishes ownership/);
-  assert.match(brokers, /A missing, unreadable, or ` \(deleted\)` cwd is not an exact match/);
-  assert.match(brokers, /nor is a `cwd` column containing a backslash: the script escapes control bytes and backslashes in the path, and a `cwd ambiguous` row always carries one\./);
-  assert.doesNotMatch(brokers, /`--cwd` argument, or its cwd when it has none/);
-  assert.match(brokers, /prefix matching never establishes ownership here/);
-  assert.match(brokers, /Report any other listed broker, whether pre-existing or under the target without equaling it, and leave it running\./);
-  assert.match(brokers, /every listed process descending from it by `ppid`, with PID and start time/);
-  assert.match(brokers, /Immediately before signaling, recheck each broker's PID and start time/);
-  assert.match(brokers, /Never signal a process outside the recorded tree, and never use SIGKILL\./);
-  assert.match(brokers, /Leftovers do not change the review result/);
-  assert.match(brokers, /report the teardown as unverified and leave it to cleanup/);
+  // #262: sandboxed command trees count under the same rule as brokers, decided by the script.
+  assert.ok(trees, "worktree-runtime-cleanup: missing Process Trees Started by a Codex Review");
+  assert.doesNotMatch(runtime, /Brokers Started by a Codex Review/);
+  assert.match(trees, /the sandboxed commands Codex runs, such as `codex-linux-sandbox -> node -> git hash-object --stdin`/);
+  assert.match(trees, /Stopping them needs no confirmation\./);
+  assert.match(trees, /`scripts\/stop-run-processes\.mjs` in this skill's directory decides which processes the run started, sends them only SIGTERM, and signals nothing else/);
+  assert.match(trees, /Runs started together for one worktree as a set count as one run: record before any starts and stop after all end\./);
+  assert.match(trees, /node <this skill>\/scripts\/stop-run-processes\.mjs record <worktree> "\$dir\/record\.json"/);
+  assert.match(trees, /After the run, whether it succeeded or failed/);
+  assert.match(trees, /absent from the record by PID and start time, every lookup gives it the same start time, `list-processes\.sh` lists it with reason `cwd under target` and an exact cwd \(no backslash, no ` \(deleted\)` suffix\) that still exists and whose canonical real path lies at or below the target's, that cwd is outside every worktree registered below the target, it has no tty, and its parent is pid 1 or another process the run started/);
+  // #262 round 5: case aliases, removed cwds, and late children never pass as stopped.
+  assert.match(trees, /folding case on a case-insensitive volume, so a case alias hides neither the target nor a nested worktree/);
+  assert.match(trees, /or one first seen during the teardown or in the listing it takes after its signals, may be the run's/);
+  // #262 round 1: the record stays where a Codex run cannot write, other work stays out of the target, and no argv is reported.
+  // #262 round 4: the record is bound by the SHA-256 the launcher keeps, not by where it lives.
+  assert.match(trees, /Take the hash only from that output, as you captured it, and pass it unchanged to step 2\. Never write it to a file and read it back, including a progress record, a file beside the record, or anything a run could write/);
+  assert.match(trees, /If you no longer have the captured output, skip step 2 and report the teardown as unverified\./);
+  assert.match(trees, /the hash, not the location, is what makes an edited record refuse to stop anything/);
+  assert.match(trees, /keep one record and its hash per worktree/);
+  assert.match(trees, /stop <worktree> "\$dir\/record\.json" --sha256 <hex>` with the hash `record` printed for that worktree, then remove `\$dir`\. A record whose SHA-256 differs, or a missing or malformed hash, stops nothing \(exit 1\)\./);
+  assert.doesNotMatch(trees, /--writable|writable_roots/);
+  assert.match(trees, /reports it as `unverified`, a leftover, and never signals it/);
+  assert.match(trees, /While the run lasts, keep other work out of the target worktree\. The script reads ownership from the parent chain when it stops, so a process another session starts in the target during the run counts as started by the run once its parent has exited, and is stopped\./);
+  assert.match(trees, /its rows carry no command lines/);
+  assert.match(trees, /A `--cwd` argument alone, a process that existed before the run, and one under a parent that did or under a new parent outside the target never count/);
+  assert.match(trees, /never sends SIGKILL/);
+  assert.match(trees, /Leftovers do not change the review result/);
+  assert.match(trees, /Exit 1 means the teardown could not run and signaled nothing/);
+  assert.match(trees, /Report the teardown as unverified and leave it to cleanup\./);
+  const script = await readText(
+    path.join(repoRoot, "skills", "local", "worktree-runtime-cleanup", "scripts", "stop-run-processes.mjs"),
+  );
+  assert.doesNotMatch(script, /SIGKILL|"KILL"/);
+  assert.match(flat(runtime), /Review skills that run Codex follow only \[Process Trees Started by a Codex Review\]\(#process-trees-started-by-a-codex-review\)/);
+  const repro = flat(await readText(path.join(repoRoot, "skills", "local", "delivery-common", "references", "repro-runs.md")));
+  assert.match(repro, /For a Codex run, follow `\.\.\/\.\.\/worktree-runtime-cleanup\/SKILL\.md` "Process Trees Started by a Codex Review" with the disposable worktree as its target worktree\./);
+  for (const adr of ["0003-stop-process-trees-a-review-run-started.md", "0003-stop-process-trees-a-review-run-started.ja.md"]) {
+    assert.ok(existsSync(path.join(repoRoot, "docs", "adr", adr)), adr);
+  }
   const daemons = flat(runtime.match(/## Dev Servers, Watchers, and Tool Daemons\n[\s\S]*?(?=\n## )/)?.[0]);
   assert.ok(daemons, "worktree-runtime-cleanup: missing Dev Servers, Watchers, and Tool Daemons");
   assert.match(daemons, /A row with reason `cwd ambiguous` or `--cwd ambiguous` never establishes ownership, because its cwd or `--cwd` may name another directory: report it as uncertain\./);
-  assert.match(flat(runtime), /Review skills that run Codex follow only \[Brokers Started by a Codex Review\]\(#brokers-started-by-a-codex-review\)/);
 
   const localReview = flat(await readText(
     path.join(repoRoot, "skills", "local", "delivery-common", "references", "local-review.md"),

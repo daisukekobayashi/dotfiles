@@ -36,8 +36,8 @@ node "<plugin-root>/scripts/codex-companion.mjs" task --fresh --cwd <worktree> \
 
 Run one Codex run at a time per target worktree; wait for any other in progress.
 Before and after the run, including a failed run, follow
-`../worktree-runtime-cleanup/SKILL.md` "Brokers Started by a Codex Review" for
-the target worktree, and report its result with the output.
+`../worktree-runtime-cleanup/SKILL.md` "Process Trees Started by a Codex Review"
+for the target worktree, and report its result with the output.
 When you start the Codex runs of several review skills for one worktree
 together, wait for any other run in progress, then run them in parallel as one
 set instead: follow that section once before the first run starts and once
