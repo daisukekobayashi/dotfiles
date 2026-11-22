@@ -22,6 +22,7 @@ async function createExportFixture() {
   await mkdir(xdgConfig, { recursive: true });
   const env = {
     ...fixture.env,
+    ...(process.platform === "win32" ? { USERPROFILE: fixture.home } : {}),
     GIT_CONFIG_GLOBAL: gitConfig,
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CEILING_DIRECTORIES: fixture.root,
@@ -908,7 +909,7 @@ test("the home path is redacted from progress output", () =>
     const out = path.join(fixture.home, "share", "bundle");
     const result = runExport(["--profile", "base", "--out", out], fixture);
     assertOk(result);
-    assert.match(result.stdout, /Skills bundle written: <home>\/share\/bundle/);
+    assert.match(result.stdout, /Skills bundle written: <home>[\\/]share[\\/]bundle/);
     assert.ok(!result.stdout.includes(fixture.home));
   }));
 
@@ -928,7 +929,23 @@ test("a missing git fails the export", () =>
     await mkdir(empty);
     const result = runExport(["--profile", "base", "--out", fixture.out], fixture, { PATH: empty });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /cannot read git config user\.name/);
+    assert.equal(result.stderr.trim(), "cannot read git config user.name: ENOENT");
+  }));
+
+test("a Git spawn failure reports the setting and code without the executable path", () =>
+  withFixture(async (fixture) => {
+    const result = runExportPatched(["--profile", "base", "--out", fixture.out], fixture, `
+      const { spawnSync } = require("node:child_process");
+      require("node:child_process").spawnSync = (command, args, options) => {
+        if (args[0] === "config" && args[1] === "--get") {
+          return { error: Object.assign(new Error("spawnSync /fixture-private-location/bin/git EACCES"), { code: "EACCES" }) };
+        }
+        return spawnSync(command, args, options);
+      };
+    `);
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stderr.trim(), "cannot read git config user.name: EACCES");
+    assert.deepEqual(await readdir(fixture.outParent), []);
   }));
 
 test("skill files that are not strict UTF-8 without NUL fail the export", () =>
@@ -1057,8 +1074,10 @@ test("README shell arguments are quoted", () => {
   assert.equal(shellArg("a b"), "'a b'");
   assert.equal(shellArg("x; rm -rf ~"), "'x; rm -rf ~'");
   assert.equal(shellArg("it's"), "'it'\\''s'");
-  const parsed = spawnSync("sh", ["-c", `printf '%s\\n' ${shellArg("x; $(id) 'q'")}`], { encoding: "utf8" });
-  assert.equal(parsed.stdout, "x; $(id) 'q'\n");
+  if (process.platform !== "win32") {
+    const parsed = spawnSync("sh", ["-c", `printf '%s\\n' ${shellArg("x; $(id) 'q'")}`], { encoding: "utf8" });
+    assert.equal(parsed.stdout, "x; $(id) 'q'\n");
+  }
 });
 
 // D10: Windows resolves git to an absolute path.
@@ -1257,7 +1276,8 @@ test("a reference that climbs out of skills/ fails even when a same-named skill 
 // D18a: every bundle export writes can be replaced by the next --force.
 test("export bundles round-trip through --force", () =>
   withFixture(async (fixture) => {
-    await writeFile(path.join(fixture.dotfiles, "skills", "local", "beta", "references", "note:v2 \\ draft.md"), "Note.\n");
+    const noteName = process.platform === "win32" ? "note v2 draft.md" : "note:v2 \\ draft.md";
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "beta", "references", noteName), "Note.\n");
     await mkdir(path.join(fixture.dotfiles, "skills", "local", "empty", "evals"), { recursive: true });
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "empty", "SKILL.md"), "---\nname: empty\n---\n");
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "empty", "evals", "only.md"), "Fixture.\n");
@@ -1445,27 +1465,45 @@ test("references through a file or with a trailing slash on a file fail", () =>
   }));
 
 // D22: the destination is resolved physically and compared by identity.
-test("links are resolved before .. in --out, and the resolved path is used", { skip: process.platform === "win32" }, () =>
+test("links are resolved before .. in --out, and the resolved path is used", () =>
   withFixture(async (fixture) => {
+    const linkType = process.platform === "win32" ? "junction" : "dir";
     const inside = path.join(fixture.root, "inside-link");
-    await symlink(path.join(fixture.dotfiles, "skills"), inside);
-    let result = runExport(["--profile", "base", "--out", `${inside}/../bundle`], fixture);
+    await symlink(path.join(fixture.dotfiles, "skills"), inside, linkType);
+    let result = runExport(["--profile", "base", "--out", `${inside}/../bundle`, "--force"], fixture);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /must be outside the dotfiles repository/);
     assert.ok(!existsSync(path.join(fixture.dotfiles, "bundle")));
+    assert.ok(!existsSync(path.join(fixture.root, "bundle")));
 
     const elsewhere = path.join(fixture.root, "elsewhere", "deep");
     await mkdir(elsewhere, { recursive: true });
     const outside = path.join(fixture.root, "outside-link");
-    await symlink(elsewhere, outside);
-    result = runExport(["--profile", "base", "--out", `${outside}/../bundle`], fixture);
-    assertOk(result);
-    assert.ok(existsSync(path.join(fixture.root, "elsewhere", "bundle", "skills-bundle.json")));
-    assert.ok(!existsSync(path.join(fixture.root, "bundle")));
+    await symlink(elsewhere, outside, linkType);
+    const written = `${outside}/../bundle`;
+    const physicalBundle = path.join(fixture.root, "elsewhere", "bundle");
+    const lexicalBundle = path.join(fixture.root, "bundle");
+    assertOk(runExport(["--profile", "base", "--out", written], fixture));
+    assert.deepEqual((await readManifest(physicalBundle)).requestedProfiles, ["base"]);
+    assert.ok(!existsSync(lexicalBundle));
+
+    assertOk(runExport(["--profile", "base", "--out", lexicalBundle], fixture));
+    assertOk(runExport(["--profile", "work", "--out", written, "--force"], fixture));
+    assert.deepEqual((await readManifest(physicalBundle)).requestedProfiles, ["work"]);
+    assert.deepEqual((await readManifest(lexicalBundle)).requestedProfiles, ["base"]);
 
     result = runExport(["--profile", "base", "--out", `${fixture.root}/missing/../bundle`], fixture);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /has "\.\." after a directory that does not exist/);
+    assert.deepEqual((await readManifest(lexicalBundle)).requestedProfiles, ["base"]);
+
+    const file = path.join(fixture.root, "plain-file");
+    await writeFile(file, "keep me\n");
+    result = runExport(["--profile", "work", "--out", `${file}/../bundle`, "--force"], fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /output path continues below a file/);
+    assert.equal(await readFile(file, "utf8"), "keep me\n");
+    assert.deepEqual((await readManifest(lexicalBundle)).requestedProfiles, ["base"]);
   }));
 
 test("an --out that is an ancestor of the checkout is refused", () =>
