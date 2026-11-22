@@ -554,20 +554,69 @@ function filesystemRoot(input: string): string {
   return path.parse(input).root;
 }
 
+function resolveWindowsLink(link: string, linksLeft: number): string {
+  try {
+    return fs.realpathSync.native(link);
+  } catch (error) {
+    // A link can open successfully even when Windows cannot supply a DOS
+    // name for its target. Check the target identity before using readlink.
+    const expected = fs.statSync(link, { bigint: true });
+    if (linksLeft === 0) {
+      throw error;
+    }
+    let target = fs.readlinkSync(link);
+    if (target.startsWith("\\??\\")) {
+      target = "\\\\?\\" + target.slice(4);
+    }
+    // readlink can supply the exact GUID root of an openable directory.
+    // Probing that root with stat strips its required trailing backslash.
+    if (expected.isDirectory() && /^\\\\\?\\Volume\{[a-f0-9-]+\}\\$/i.test(target)) {
+      return target;
+    }
+    const root = filesystemRoot(target);
+    if (!root) {
+      target = path.dirname(link) + path.sep + target;
+    } else if (root === "\\" || root === "/") {
+      target = filesystemRoot(link) + target.slice(root.length);
+    }
+    const resolved = existingPhysicalPath(target, true, linksLeft - 1);
+    if (resolved === undefined) {
+      throw error;
+    }
+    const actual = fs.statSync(resolved, { bigint: true });
+    if (actual.dev !== expected.dev || actual.ino !== expected.ino) {
+      throw error;
+    }
+    return resolved;
+  }
+}
+
 // Walk existing entries before interpreting dot-dot, including on Windows
 // where a full path may be normalized before a junction is followed. Only a
 // missing directory entry is absent; failure to resolve a link is an error.
-function existingPhysicalPath(input: string): string | undefined {
+function existingPhysicalPath(input: string, followWindowsLinks = false, linksLeft = 63): string | undefined {
+  const windows = process.platform === "win32";
   const root = filesystemRoot(input);
   const base = path.resolve(root || ".");
-  if (!fs.lstatSync(base, { throwIfNoEntry: false })) {
+  const startsAtWindowsRoot = windows && base === filesystemRoot(base);
+  // Check Windows descendants directly. On a GUID root, lstat may address
+  // the volume device itself instead of the root directory.
+  if (!startsAtWindowsRoot && !fs.lstatSync(base, { throwIfNoEntry: false })) {
     return undefined;
   }
-  let resolved = fs.realpathSync.native(base);
-  let isDirectory = true;
-  const windows = process.platform === "win32";
   const components = input.slice(root.length).split(windows ? /[\\/]+/ : /\/+/);
-  for (const component of components) {
+  const lastParent = components.lastIndexOf("..");
+  let resolved = windows ? base : fs.realpathSync.native(base);
+  if (windows && !startsAtWindowsRoot && (followWindowsLinks || lastParent >= 0)) {
+    // A relative path may start in a directory reached through a link.
+    const physicalBase = existingPhysicalPath(base, true, linksLeft);
+    if (physicalBase === undefined) {
+      return undefined;
+    }
+    resolved = physicalBase;
+  }
+  let isDirectory = true;
+  for (const [index, component] of components.entries()) {
     if (!isDirectory) {
       throw Object.assign(new Error("path continues below a file"), { code: "ENOTDIR" });
     }
@@ -580,14 +629,24 @@ function existingPhysicalPath(input: string): string | undefined {
       // Interpret the traversal within the already resolved drive or share.
       const currentRoot = filesystemRoot(prefix);
       next = currentRoot + path.win32.join("\\", prefix.slice(currentRoot.length), component).slice(1);
+      if (next === currentRoot) {
+        resolved = next;
+        continue;
+      }
     }
     const entry = fs.lstatSync(next, { throwIfNoEntry: false });
     if (!entry) {
       return undefined;
     }
     if (entry.isSymbolicLink()) {
-      resolved = fs.realpathSync.native(next);
-      isDirectory = fs.statSync(resolved).isDirectory();
+      if (!windows) {
+        resolved = fs.realpathSync.native(next);
+      } else {
+        // A live link can be read at the supplied path unless later traversal
+        // needs its physical parent or the target is itself a home marker.
+        resolved = followWindowsLinks || index < lastParent ? resolveWindowsLink(next, linksLeft) : next;
+      }
+      isDirectory = fs.statSync(windows ? next : resolved).isDirectory();
     } else {
       resolved = windows ? next : path.normalize(next);
       isDirectory = entry.isDirectory();
@@ -622,8 +681,12 @@ function addHomeMarkers(markers: Markers, context: ExportContext): void {
   for (const home of unique([context.home, ...homes(context)])) {
     spellings.push(home, home.replace(/[\\/]+$/, ""));
     try {
-      const resolved = home === context.env.SETUP_HOME ? existingPhysicalPath(home) : home;
+      const setupHome = home === context.env.SETUP_HOME;
+      const resolved = setupHome ? existingPhysicalPath(home, true) : home;
       if (resolved !== undefined) {
+        if (setupHome) {
+          spellings.push(resolved);
+        }
         spellings.push(fs.realpathSync.native(resolved));
       }
     } catch {

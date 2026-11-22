@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { createRequire } from "node:module";
+import { runInNewContext } from "node:vm";
 import { repoRoot, skillsRuntime, createFixture } from "./skills-helpers.mjs";
 
 const require = createRequire(import.meta.url);
@@ -376,6 +377,98 @@ test("export follows links before dot-dot in default and override marker paths",
       assert.doesNotMatch(result.stderr, /leaf skill/i);
     }
   }));
+
+test("Windows marker lookup does not require a DOS volume name", async () => {
+  const volume = String.raw`\\?\Volume{00000000-0000-0000-0000-000000000001}`;
+  const marker = "fixture-private-marker";
+  const directory = (ino) => ({ dev: 1n, ino, isDirectory: () => true, isSymbolicLink: () => false });
+  const file = { dev: 1n, ino: 3n, isDirectory: () => false, isSymbolicLink: () => false, isFile: () => true };
+  const nested = directory(2n);
+  const home = "C:\\home";
+  const link = "C:\\link";
+  const rootLink = "C:\\volume-link";
+  const defaultPath = volume + "\\dotfiles\\export-personal-markers";
+  const entries = new Map([
+    [volume + "\\nested", nested],
+    [volume + "\\markers", file],
+    [volume + "\\dotfiles", directory(5n)],
+    [defaultPath, file],
+    ["C:", directory(4n)],
+    [link, { isSymbolicLink: () => true }],
+    [rootLink, { isSymbolicLink: () => true }],
+    [link + "\\markers", file],
+  ]);
+  const reads = [];
+  const nativeLookups = [];
+  const statEntry = (name) => {
+    const entry = name.replace(/\\$/, "");
+    if (entry === volume) {
+      throw Object.assign(new Error("fixture volume device cannot be statted"), { code: "EACCES" });
+    }
+    return entries.get(entry);
+  };
+  const fs = {
+    lstatSync: statEntry,
+    statSync: (name) => {
+      if (name === link) return nested;
+      if (name === rootLink) return directory(1n);
+      return statEntry(name);
+    },
+    realpathSync: {
+      native: (name) => {
+        if (name === home) {
+          return home;
+        }
+        nativeLookups.push(name);
+        throw Object.assign(new Error("fixture has no DOS volume name"), { code: "ENOENT" });
+      },
+    },
+    readlinkSync: (name) => {
+      assert.ok(name === link || name === rootLink);
+      return "\\??\\" + volume.slice(4) + (name === link ? "\\nested" : "\\");
+    },
+    readFileSync: (name) => {
+      assert.equal(entries.get(name), file);
+      reads.push(name);
+      return Buffer.from(marker + "\n");
+    },
+  };
+  const sandbox = {
+    exports: {},
+    Buffer,
+    TextDecoder,
+    process: { platform: "win32" },
+    require(name) {
+      switch (name) {
+        case "node:fs": return fs;
+        case "node:path": return path.win32;
+        case "node:os": return { homedir: () => home, userInfo: () => ({ homedir: home }) };
+        case "node:child_process": return { spawnSync: () => ({ status: 1 }) };
+        case "./skill-profiles": return require("../skill-profiles.js");
+        default: return require(name);
+      }
+    },
+  };
+  runInNewContext(await readFile(path.join(repoRoot, "setup", "skills-export.js"), "utf8"), sandbox);
+  for (const [env, selected, canonicalized] of [
+    [{ XDG_CONFIG_HOME: volume }, defaultPath, []],
+    [{ SETUP_EXPORT_PERSONAL_MARKERS_FILE: volume + "\\markers" }, volume + "\\markers", []],
+    [{ SETUP_EXPORT_PERSONAL_MARKERS_FILE: link + "\\markers" }, link + "\\markers", []],
+    [{ SETUP_EXPORT_PERSONAL_MARKERS_FILE: link + "\\..\\markers" }, volume + "\\markers", [link]],
+    [{ SETUP_EXPORT_PERSONAL_MARKERS_FILE: rootLink + "\\..\\markers" }, volume + "\\markers", [rootLink]],
+  ]) {
+    // An invalid agent echoes its name only after the marker file is loaded.
+    const args = ["--profile", "work", "--out", "C:\\bundle", "--agent", marker];
+    assert.throws(() => sandbox.exports.runExportCommand(args, {
+      dotfilesRoot: "C:\\fixture",
+      home,
+      env,
+      gitCommand: () => "git",
+    }), /^Error: unsupported skills agent: <redacted>$/);
+    assert.equal(reads.pop(), selected);
+    assert.deepEqual(nativeLookups.splice(0), canonicalized);
+  }
+});
 
 test("export refuses a non-empty output directory without --force", () =>
   withFixture(async (fixture) => {
