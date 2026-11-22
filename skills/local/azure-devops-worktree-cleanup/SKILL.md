@@ -30,12 +30,13 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      the check.
 2. Detect whether the target checkout has an associated git worktree and record
    the path if present.
-3. Verify cleanup safety.
-   - Check local git state first.
-   - If local state is not enough, confirm PR completed/merged status with
-     `az repos pr show`.
-4. If the branch is not merged or completion is unclear, stop and explain why
-   cleanup is unsafe.
+3. Verify cleanup safety from the PR's merge evidence, never from the local
+   default branch, which can lag its remote: the local branch counts as merged
+   only when step 5's PR lookup reports `completed` and the local branch tip
+   equals its `lastMergeSourceCommit`, for any merge type. Step 6's manifest
+   checks this and exits 3 with the reason otherwise.
+4. If the branch is not merged, its local tip differs from the PR source
+   commit, or completion is unclear, stop and explain why cleanup is unsafe.
 5. Run the **remote branch deletion check**. Look up the PR for this branch
    (the PR id from the caller's merge evidence when given) with
    `az repos pr show --id <id> --query "{status: status, head: lastMergeSourceCommit.commitId, fork: forkSource}"`,
@@ -71,15 +72,58 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    the preview as Caller preview defines; otherwise show them and ask again.
 7. Remove the local worktree first when one exists. If you are inside it, change
    to a safe location before removal.
-   - Before any removal, run
-     `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'`
-     with step 5's facts, the same `--worktree` or `--no-worktree` and
-     `--temp` targets as the confirmed manifest, and that manifest. Exit 0
-     continues; exit 3 means the targets changed, so remove nothing and confirm
-     the new targets at step 6; any other status stops the cleanup.
+   - On a fresh cleanup, where no part of the confirmed runtime stop has run,
+     before any removal, run `node <cleanup-script> compare <facts> <targets>
+     --confirmed '<file>'` with step 5's facts, the same `--worktree` or
+     `--no-worktree` and `--temp` targets as the confirmed manifest, and that
+     manifest. Exit 0 continues; exit 3 means the targets changed, so remove
+     nothing and confirm the new targets at step 6; any other status stops the
+     cleanup.
+   - On a resumed cleanup, where any part of the confirmed runtime stop already
+     ran, skip that strict compare: before any further stop or removal, run the
+     same compare with `--after-stop` and the same exit handling, then finish
+     the stop below.
    - Before removal, follow `../worktree-runtime-cleanup/SKILL.md` for the
-     worktree path. If that file is absent, say so in the summary.
-8. Delete the local branch after the worktree is removed.
+     worktree path, after that compare. If that file is absent, say so in the
+     summary.
+   - After the confirmed runtime stop, run the same compare with `--after-stop`
+     right before `git worktree remove`. It expects confirmed processes, Compose
+     projects, and temporary paths that the stop removed, once a fresh check
+     shows each process exited and each project left none of the volumes it
+     should delete and no new one, and prints each as `stopped as confirmed`;
+     exit 3 on any other difference means remove nothing and confirm the new
+     targets at step 6, and any other status stops the cleanup. The last
+     compare's `local` and `lease` lines decide steps 8 and 9: use each only
+     when that compare exited 0 and printed exactly one such line, and the
+     `local` line only when it names the step 1 branch. A remaining volume of a
+     worktree-owned Compose project holds it even when it is an external volume
+     the stop keeps by design, since the check never evaluates the checkout's
+     Compose configuration: confirm the targets again at step 6, where the
+     rebuilt manifest no longer lists the project, and continue with the volume
+     in place. A confirmed process gone from the listing holds while any process
+     has its PID, even a reused one, and a listing that cannot run holds when it
+     was listed at confirmation, while one already unverified then stays
+     unverified and continues. A confirmed target still listed unchanged passes:
+     a failed stop is caught by the survivor check of
+     `../worktree-runtime-cleanup/SKILL.md`, and a process that returns to the
+     worktree after that check and before removal is an accepted residual. A
+     fresh confirmation at step 6 re-lists the worktree's processes and
+     continues, and a process that has left the worktree is no longer listed
+     there, an accepted residual.
+8. Delete the local branch after the worktree is removed, only with compare's
+   `local <branch> <sha>` line; without that line, delete none. Immediately
+   before deleting, run `node <cleanup-script> local <facts>` with step 5's
+   facts: continue only on exit 0 with `proposed <sha>` at that SHA; exit 3
+   means the branch moved, another spelling of its name is in use, which git's
+   exact-name guards miss on a case-insensitive ref store, or it is otherwise
+   not deletable, so keep it and report the reason; any other status stops the
+   cleanup. Then run `git branch -D <branch>`, which refuses a branch that any
+   checkout still uses (checked out, rebasing including with `--update-refs`, or
+   bisecting) and removes the branch's configuration with it. If it refuses,
+   keep the branch and report the reason; never fall back to `git update-ref`.
+   Never use `git branch -d`, which judges against the local default branch and
+   refuses a squash merge. A commit that lands on the branch between the recheck
+   and `git branch -D` is not detected, the same window `git branch -d` leaves.
 9. Delete the confirmed remote branch last, conditioned on the SHA in compare's
    `lease <remote> <sha>` line; without that line, delete none:
    `git push --force-with-lease=refs/heads/<branch>:<sha> <remote> :refs/heads/<branch>`.
@@ -92,24 +136,28 @@ When a delivery caller combines the merge and cleanup confirmations, it asks for
 a preview before the merge. Run steps 1-2 and step 5's lookups, then run step
 6's `manifest` command with `--preview`, which checks step 5's conditions other
 than the completed state with the PR source commit to be merged as the expected
-remote SHA, and lists each process's PID, start time, and cwd as
+remote SHA and local branch tip, and lists each process's PID, start time, and cwd as
 `list-processes.sh` reports them, each Compose project with its `working_dir`
 and volumes, and each temporary file path. Return the printed targets and the
 manifest path; on any non-zero status return no preview, so cleanup keeps its
 own confirmation. Remove and stop nothing.
 
 After the merge, run the full workflow; step 7's compare against the preview
-manifest decides whether the targets match the preview. The one tolerated
+manifest decides whether the targets match the preview. One tolerated
 difference is a previewed remote branch that no longer exists, such as a source
 branch deleted on PR completion: compare drops it and reports it as already
-deleted by the host. A combined confirmation authorizes stopping or removing
-only runtime resources whose identifiers match the preview; any new or
-different resource needs its own confirmation.
+deleted by the host. Compare also accepts a previewed local branch that no
+longer exists, reporting it as already deleted, and, with `--after-stop`,
+previewed runtime resources the confirmed stop removed. A combined
+confirmation authorizes stopping or removing only runtime resources whose
+identifiers match the preview; any new or different resource needs its own
+confirmation.
 
 ## Guardrails
 
 - Treat cleanup as destructive and require explicit confirmation.
-- Never delete an unmerged branch.
+- Never delete an unmerged branch. Decide merged from the PR's merge evidence,
+  never from the local default branch.
 - Remove a remote branch only when step 5 proposed it and the user confirmed
   it, or when the user explicitly asks.
 - Never assume the current branch is disposable just because the prompt says

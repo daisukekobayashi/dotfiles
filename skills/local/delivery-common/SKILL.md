@@ -127,9 +127,10 @@ usage and exit codes.
 [`scripts/check-cleanup-targets.mjs`](scripts/check-cleanup-targets.mjs) is the
 shared **remote branch deletion check** and **cleanup target manifest**. The
 worktree cleanup skills of both providers run it to decide whether to delete the
-remote branch, to build the targets the user confirms or a Caller preview, and
-to compare them right before any removal; its header gives the usage and exit
-codes.
+remote branch, to prove the local branch merged from the PR's merge evidence, to
+build the targets the user confirms or a Caller preview, and to compare them
+right before any removal and again after the confirmed runtime stop; its header
+gives the usage and exit codes.
 
 [`scripts/check-report-handoff.mjs`](scripts/check-report-handoff.mjs) is the
 shared **report handoff check**. Delivery coordinators and Codex-routed review

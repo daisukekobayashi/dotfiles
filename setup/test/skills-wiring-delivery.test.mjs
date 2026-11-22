@@ -828,7 +828,7 @@ test("the risk tier table scales the delivery procedure", async () => {
     assert.match(preview, /lists each process's PID, start time, and cwd as `list-processes\.sh` reports them, each Compose project with its `working_dir` and volumes, and each temporary file path/, cleanup);
     assert.match(preview, /on any non-zero status return no preview, so cleanup keeps its own confirmation\./, cleanup);
     assert.match(preview, /step 7's compare against the preview manifest decides whether the targets match the preview\./, cleanup);
-    assert.match(preview, /The one tolerated difference is a previewed remote branch that no longer exists, [^:]+: compare drops it and reports it as already deleted by the host\./, cleanup);
+    assert.match(preview, /One tolerated difference is a previewed remote branch that no longer exists, [^:]+: compare drops it and reports it as already deleted by the host\. Compare also accepts a previewed local branch that no longer exists, reporting it as already deleted, and, with `--after-stop`, previewed runtime resources the confirmed stop removed\./, cleanup);
     assert.match(preview, /A combined confirmation authorizes stopping or removing only runtime resources whose identifiers match the preview; any new or different resource needs its own confirmation\./, cleanup);
     assert.match(cleanupSkill, /Under a caller's combined confirmation, skip this build: the Caller preview manifest is the confirmed manifest\. A caller's combined confirmation from Caller preview counts only when the user gave it in their own message and explicitly accepted these resources, and they match the preview as Caller preview defines; otherwise show them and ask again\./, cleanup);
   }
@@ -863,12 +863,45 @@ test("both worktree cleanup skills run the shared cleanup target checks in one l
   assert.equal(azure.step7to10, github.step7to10, "steps 7-10 differ between providers");
   assert.match(github.step6, /^Build the \*\*cleanup target manifest\*\* and require explicit confirmation of it: run `node <cleanup-script> manifest <facts> --worktree '<path>' --out '<file>'`/);
   assert.match(github.step6, /any non-zero status stops the cleanup\./);
-  assert.match(github.step7to10, /Before any removal, run `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'`/);
+  assert.match(github.step7to10, /On a fresh cleanup, where no part of the confirmed runtime stop has run, before any removal, run `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'`/);
   assert.match(github.step7to10, /Exit 0 continues; exit 3 means the targets changed, so remove nothing and confirm the new targets at step 6; any other status stops the cleanup\./);
   assert.match(github.step7to10, /conditioned on the SHA in compare's `lease <remote> <sha>` line; without that line, delete none: `git push --force-with-lease=refs\/heads\/<branch>:<sha> <remote> :refs\/heads\/<branch>`\./);
 
   const deliveryCommon = flat(await readText(path.join(repoRoot, "skills", "local", "delivery-common", "SKILL.md")));
   assert.match(deliveryCommon, /\[`scripts\/check-cleanup-targets\.mjs`\]\(scripts\/check-cleanup-targets\.mjs\) is the shared \*\*remote branch deletion check\*\* and \*\*cleanup target manifest\*\*/);
+});
+
+test("both worktree cleanup skills decide the local branch from merge evidence and compare again after the runtime stop", async () => {
+  for (const [cleanup, merged] of [
+    ["github-worktree-cleanup", /the local branch counts as merged only when step 5's PR lookup reports `MERGED` and the local branch tip equals its `headRefOid`, for any merge method\./],
+    ["azure-devops-worktree-cleanup", /the local branch counts as merged only when step 5's PR lookup reports `completed` and the local branch tip equals its `lastMergeSourceCommit`, for any merge type\./],
+  ]) {
+    const skill = flat(await readText(path.join(repoRoot, "skills", "local", cleanup, "SKILL.md")));
+    const step3 = skill.match(/ 3\. (Verify [\s\S]*?) 5\. /)?.[1];
+    const step7to8 = skill.match(/ 7\. (Remove the local worktree first[\s\S]*?) 9\. Delete the confirmed remote branch/)?.[1];
+    assert.ok(step3 && step7to8, `${cleanup}: missing steps 3-4 or 7-8`);
+    assert.match(step3, /from the PR's merge evidence, never from the local default branch, which can lag its remote/, cleanup);
+    assert.match(step3, merged, cleanup);
+    assert.match(step3, /Step 6's manifest checks this and exits 3 with the reason otherwise\./, cleanup);
+    assert.doesNotMatch(step3, /Check local git state first/, `${cleanup}: merged is not judged from local state`);
+
+    assert.match(step7to8, /On a resumed cleanup, where any part of the confirmed runtime stop already ran, skip that strict compare: before any further stop or removal, run the same compare with `--after-stop` and the same exit handling, then finish the stop below\./, cleanup);
+    assert.match(step7to8, /After the confirmed runtime stop, run the same compare with `--after-stop` right before `git worktree remove`\./, cleanup);
+    assert.match(step7to8, /A remaining volume of a worktree-owned Compose project holds it even when it is an external volume the stop keeps by design, since the check never evaluates the checkout's Compose configuration: confirm the targets again at step 6, where the rebuilt manifest no longer lists the project, and continue with the volume in place\./, cleanup);
+    assert.match(step7to8, /A confirmed process gone from the listing holds while any process has its PID, even a reused one, and a listing that cannot run holds when it was listed at confirmation, while one already unverified then stays unverified and continues\. A confirmed target still listed unchanged passes: a failed stop is caught by the survivor check of `\.\.\/worktree-runtime-cleanup\/SKILL\.md`, and a process that returns to the worktree after that check and before removal is an accepted residual\. A fresh confirmation at step 6 re-lists the worktree's processes and continues, and a process that has left the worktree is no longer listed there, an accepted residual\./, cleanup);
+    assert.doesNotMatch(step7to8, /--previous/, `${cleanup}: no carried process blocker`);
+    assert.match(step7to8, /The last compare's `local` and `lease` lines decide steps 8 and 9: use each only when that compare exited 0 and printed exactly one such line, and the `local` line only when it names the step 1 branch\./, cleanup);
+    assert.match(step7to8, /Delete the local branch after the worktree is removed, only with compare's `local <branch> <sha>` line; without that line, delete none\. Immediately before deleting, run `node <cleanup-script> local <facts>` with step 5's facts: continue only on exit 0 with `proposed <sha>` at that SHA; exit 3 means the branch moved, another spelling of its name is in use, which git's exact-name guards miss on a case-insensitive ref store, or it is otherwise not deletable, so keep it and report the reason; any other status stops the cleanup\./, cleanup);
+    assert.match(step7to8, /Then run `git branch -D <branch>`, which refuses a branch that any checkout still uses \(checked out, rebasing including with `--update-refs`, or bisecting\) and removes the branch's configuration with it\. If it refuses, keep the branch and report the reason; never fall back to `git update-ref`\./, cleanup);
+    assert.match(step7to8, /Never use `git branch -d`, which judges against the local default branch and refuses a squash merge\./, cleanup);
+    assert.match(step7to8, /A commit that lands on the branch between the recheck and `git branch -D` is not detected, the same window `git branch -d` leaves\./, cleanup);
+    assert.doesNotMatch(step7to8, /`git update-ref (?:--no-deref )?-d|git config --remove-section/, `${cleanup}: git branch -D guards use and removes the config`);
+    const fresh = step7to8.indexOf("On a fresh cleanup");
+    const resumed = step7to8.indexOf("On a resumed cleanup");
+    const stop = step7to8.indexOf("Before removal, follow");
+    const afterStop = step7to8.indexOf("After the confirmed runtime stop, run the same compare with `--after-stop`");
+    assert.ok(fresh !== -1 && fresh < resumed && resumed < stop && stop < afterStop, `${cleanup}: fresh or resumed compare, runtime stop, then compare --after-stop`);
+  }
 });
 
 test("local review defines the triage classes apart from delivery actions", async () => {
