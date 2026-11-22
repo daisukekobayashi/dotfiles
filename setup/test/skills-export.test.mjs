@@ -1276,7 +1276,8 @@ test("a reference that climbs out of skills/ fails even when a same-named skill 
 // D18a: every bundle export writes can be replaced by the next --force.
 test("export bundles round-trip through --force", () =>
   withFixture(async (fixture) => {
-    await writeFile(path.join(fixture.dotfiles, "skills", "local", "beta", "references", "note:v2 \\ draft.md"), "Note.\n");
+    const noteName = process.platform === "win32" ? "note v2 draft.md" : "note:v2 \\ draft.md";
+    await writeFile(path.join(fixture.dotfiles, "skills", "local", "beta", "references", noteName), "Note.\n");
     await mkdir(path.join(fixture.dotfiles, "skills", "local", "empty", "evals"), { recursive: true });
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "empty", "SKILL.md"), "---\nname: empty\n---\n");
     await writeFile(path.join(fixture.dotfiles, "skills", "local", "empty", "evals", "only.md"), "Fixture.\n");
