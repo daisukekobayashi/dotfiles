@@ -26,7 +26,9 @@ before step 1.
      a Work Item ID when its branch or path names one; report the rest as
      unmapped.
 2. Fetch the overview data.
-   - Prefer repository or project guidance when it defines the query.
+   - Prefer repository or project guidance when it defines the query. Keep any
+     CLI output options it specifies, including a `--query` filter, and triage
+     the candidates it returns.
    - Otherwise use `az boards query --wiql` for active, relevant Work Items in
      the current project. Use
      `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType],
@@ -41,11 +43,12 @@ before step 1.
      project-defined projection exceeds that budget, report possible omission
      of trailing fields. Treat unavailable fields needed for triage as
      unknown and report the limitation.
-   - For `az boards query`, use `--output json` without a CLI `--query` filter.
-     Count the rows in the original JSON array from a successful query before
-     filtering, sorting, or reading relations. At 1,000 or more rows, flag the
-     overview as potentially incomplete in **Current State**. The extension
-     checks the cap between batches, so it can return more than 1,000 rows.
+   - When guidance leaves CLI output options open for `az boards query`, use
+     `--output json` without a `--query` filter. When the original JSON array
+     from a successful query is available, count its rows before filtering,
+     sorting, or reading relations. At 1,000 or more rows, flag the overview
+     as potentially incomplete in **Current State**. The extension checks the
+     cap between batches, so it can return more than 1,000 rows.
      If the unfiltered array is unavailable, report that completeness could
      not be checked in **Current State**. In either case, label the ranking,
      blocker assessment, and parallel recommendations as provisional for the

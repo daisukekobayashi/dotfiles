@@ -467,7 +467,7 @@ test("Azure triage reports an incomplete overview before relying on returned can
   const overviewStep = skill.match(/\n2\. Fetch the overview data\.\n([\s\S]*?)\n3\./)?.[1];
   assert.ok(overviewStep, "missing overview step");
   const overview = overviewStep.replace(/\s+/g, " ");
-  assert.match(overview, /Prefer repository or project guidance when it defines the query\.\s+- Otherwise use `az boards query --wiql`/);
+  assert.match(overview, /Prefer repository or project guidance when it defines the query\. Keep any CLI output options it specifies, including a `--query` filter, and triage the candidates it returns\. - Otherwise use `az boards query --wiql`/);
   const select = overview.match(/`SELECT ([^`]+)`/)?.[1];
   assert.ok(select, "the default overview must name its full projection");
   const fields = [...select.matchAll(/\[([^\]]+)\]/g)].map(([, field]) => field);
@@ -479,8 +479,8 @@ test("Azure triage reports an incomplete overview before relying on returned can
   assert.match(overview, new RegExp(`${encodedLength} URL-encoded characters[^.]+800-character field budget`));
   assert.match(overview, /If a known project-defined projection exceeds that budget, report possible\s+omission of trailing fields/);
   assert.match(overview, /Treat unavailable fields needed for triage as\s+unknown and report the limitation/);
-  assert.match(overview, /`--output json` without a CLI `--query` filter/);
-  assert.match(overview, /Count the rows in the original JSON array from a successful query before\s+filtering, sorting, or reading relations/);
+  assert.match(overview, /When guidance leaves CLI output options open for `az boards query`, use `--output json` without a `--query` filter/);
+  assert.match(overview, /When the original JSON array from a successful query is available, count its rows before filtering, sorting, or reading relations/);
   assert.match(overview, /At 1,000 or more rows, flag the overview as potentially\s+incomplete in \*\*Current State\*\*/);
   assert.match(overview, /If the unfiltered array is unavailable, report that completeness could\s+not be checked in \*\*Current State\*\*/);
   assert.match(overview, /In either case, label the ranking, blocker assessment, and\s+parallel recommendations as provisional for the retrieved candidates/);
