@@ -119,6 +119,9 @@ jobs:
         shell: pwsh
         run: ./scripts/check-skills-build.ps1
 
+      - name: Skills export tests
+        run: node --test setup/test/skills-export.test.mjs
+
       - name: PowerShell syntax
         shell: pwsh
         run: ./tests/helpers/check_powershell_syntax.ps1 $PWD

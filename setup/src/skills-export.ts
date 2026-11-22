@@ -119,17 +119,31 @@ function toPosix(relative: string): string {
   return relative.split(path.sep).join("/");
 }
 
-// Resolves --out as the filesystem does: the longest existing prefix, as
-// written, is resolved by the operating system (links before ".."), and the
-// missing rest is appended. Path syntax is the platform's own, so a POSIX
-// backslash stays part of a name.
+// Resolve existing entries before appending a missing suffix. A POSIX
+// filesystem can resolve the prefix as written, including links before "..".
+// Windows normalizes ".." first, so walk its existing entries one at a time.
 function physicalPath(target: string): string {
-  if (process.platform === "win32" && /^[A-Za-z]:(?![\\/])/.test(target)) {
-    fail(`output path is relative to a drive's current directory; use an absolute path: ${target}`);
+  if (process.platform === "win32") {
+    if (/^[A-Za-z]:(?![\\/])/.test(target)) {
+      fail(`output path is relative to a drive's current directory; use an absolute path: ${target}`);
+    }
+    let prefix;
+    try {
+      prefix = physicalPathPrefix(target, true);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      fail(code === "ENOTDIR" ? `output path continues below a file: ${target}` : `cannot resolve the output path: ${code}`);
+    }
+    if (!prefix) {
+      fail("cannot resolve the output path: ENOENT");
+    }
+    // Resolve the spelling of the final existing prefix too. For example,
+    // --force must recreate a directory at its long name, not its 8.3 alias.
+    return appendOutputSuffix(fs.realpathSync.native(prefix.path), prefix.suffix, target);
   }
   const absolute = path.isAbsolute(target) ? target : `${process.cwd()}${path.sep}${target}`;
   const root = path.parse(absolute).root;
-  const parts = absolute.slice(root.length).split(process.platform === "win32" ? /[\\/]+/ : /\/+/).filter((part) => part !== "");
+  const parts = absolute.slice(root.length).split(/\/+/).filter((part) => part !== "");
   let existing = 0;
   for (; existing < parts.length; existing += 1) {
     const prefix = root + parts.slice(0, existing + 1).join(path.sep);
@@ -144,7 +158,11 @@ function physicalPath(target: string): string {
     }
   }
   const real = fs.realpathSync.native(root + parts.slice(0, existing).join(path.sep));
-  const rest = parts.slice(existing).filter((part) => part !== ".");
+  return appendOutputSuffix(real, parts.slice(existing), target);
+}
+
+function appendOutputSuffix(real: string, suffix: string[], target: string): string {
+  const rest = suffix.filter((part) => part !== "" && part !== ".");
   if (rest.includes("..")) {
     fail(`output path has ".." after a directory that does not exist: ${target}`);
   }
@@ -595,6 +613,11 @@ function resolveWindowsLink(link: string, linksLeft: number): string {
 // where a full path may be normalized before a junction is followed. Only a
 // missing directory entry is absent; failure to resolve a link is an error.
 function existingPhysicalPath(input: string, followWindowsLinks = false, linksLeft = 63): string | undefined {
+  const prefix = physicalPathPrefix(input, followWindowsLinks, linksLeft);
+  return prefix?.suffix.length === 0 ? prefix.path : undefined;
+}
+
+function physicalPathPrefix(input: string, followWindowsLinks: boolean, linksLeft = 63): { path: string; suffix: string[] } | undefined {
   const windows = process.platform === "win32";
   const root = filesystemRoot(input);
   const base = path.resolve(root || ".");
@@ -636,7 +659,7 @@ function existingPhysicalPath(input: string, followWindowsLinks = false, linksLe
     }
     const entry = fs.lstatSync(next, { throwIfNoEntry: false });
     if (!entry) {
-      return undefined;
+      return { path: resolved, suffix: components.slice(index) };
     }
     if (entry.isSymbolicLink()) {
       if (!windows) {
@@ -652,7 +675,7 @@ function existingPhysicalPath(input: string, followWindowsLinks = false, linksLe
       isDirectory = entry.isDirectory();
     }
   }
-  return resolved;
+  return { path: resolved, suffix: [] };
 }
 
 function appendMarkerPath(directory: string, relative: string): string {
@@ -722,9 +745,15 @@ export function gitEnvironment(env: NodeJS.ProcessEnv, platform: NodeJS.Platform
 // An unset key exits 1; anything else means the identity could not be read,
 // and the check must not pass without it.
 function gitConfig(context: ExportContext, key: string): string {
-  const result = spawnSync(context.gitCommand(), ["config", "--get", key], { cwd: context.dotfilesRoot, env: gitEnvironment(context.env), encoding: "utf8" });
+  let result;
+  try {
+    result = spawnSync(context.gitCommand(), ["config", "--get", key], { cwd: context.dotfilesRoot, env: gitEnvironment(context.env), encoding: "utf8" });
+  } catch (error) {
+    // The Windows command lookup throws when Git is missing, with no errno.
+    fail(`cannot read git config ${key}: ${(error as NodeJS.ErrnoException).code ?? "ENOENT"}`);
+  }
   if (result.error) {
-    fail(`cannot read git config ${key}: ${result.error.message}`);
+    fail(`cannot read git config ${key}: ${(result.error as NodeJS.ErrnoException).code ?? "UNKNOWN"}`);
   }
   if (result.status === 1) {
     return "";
@@ -741,12 +770,7 @@ function gitConfig(context: ExportContext, key: string): string {
 // later error cannot print it.
 function addConfiguredMarkers(markers: Markers, context: ExportContext): void {
   for (const key of ["user.name", "user.email"]) {
-    let value: string;
-    try {
-      value = gitConfig(context, key);
-    } catch (error) {
-      fail(`cannot read git config ${key}: ${(error as Error).message.replace(/^cannot read git config \S+: /, "")}`);
-    }
+    const value = gitConfig(context, key);
     if (value) {
       markers.add(`git ${key}`, value, "<redacted>");
     }
