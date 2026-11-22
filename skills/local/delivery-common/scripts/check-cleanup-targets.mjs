@@ -99,17 +99,14 @@
 //   --after-stop, run after the confirmed runtime stop, a confirmed process,
 //   Compose project, or temporary path that is gone is also expected and
 //   printed as `stopped as confirmed`; a new or changed item is still a
-//   difference, and so is a confirmed Compose project still listed or a
-//   confirmed process still listed that the stop is expected to remove (one
-//   without a terminal whose reason is `cwd under target` or `--cwd under
-//   target`); terminal sessions and ambiguous rows stay running by design.
-//   A listing that cannot run holds when it was listed at confirmation; one
-//   already unverified at confirmation stays unverified and passes, as in the
-//   strict compare. Temporary paths still present pass, since the runtime
-//   cleanup keeps those whose ownership is uncertain. A process counts as gone
-//   only when no process has its PID (`kill -0`, which sends no signal, finds
-//   none), since the listing drops a running process whose cwd leaves the
-//   worktree; a reused PID also holds. A Compose project counts as gone only
+//   difference, while a confirmed item still listed unchanged passes, since
+//   the runtime cleanup's own survivor check catches a failed stop and leaves
+//   uncertain or declined targets running by design. A listing that cannot
+//   run holds when it was listed at confirmation; one already unverified at
+//   confirmation stays unverified and passes, as in the strict compare.
+//   A process counts as gone only when no process has its PID (`kill -0`,
+//   which sends no signal, finds none), since the listing drops a running
+//   process whose cwd leaves the worktree; a reused PID also holds. A Compose project counts as gone only
 //   when `docker volume ls` runs and lists no volume of the project that the
 //   confirmed manifest did not have and, for a worktree-owned project (reason
 //   exactly `under target`, whose stop deletes its volumes), none of its
@@ -672,7 +669,7 @@ const unmatched = (a, b, identity) => {
   });
 };
 
-const compareRuntime = (section, confirmed, current, identity, label, differences, stopped, verifyGone, stopRemoves) => {
+const compareRuntime = (section, confirmed, current, identity, label, differences, stopped, verifyGone) => {
   const before = confirmed[section];
   const after = current[section];
   if (after.status === "unavailable" || before.status === "unavailable") {
@@ -689,27 +686,13 @@ const compareRuntime = (section, confirmed, current, identity, label, difference
     return;
   }
   for (const item of unmatched(after.items, before.items, identity)) differences.push(`${section}: new or changed ${label(item)}`);
-  const gone = unmatched(before.items, after.items, identity);
-  for (const item of gone) {
+  for (const item of unmatched(before.items, after.items, identity)) {
     const remains = stopped ? verifyGone(item) : null;
     if (stopped && remains === null) stopped.push(label(item));
     else if (stopped) differences.push(`${section}: confirmed ${label(item)} is gone but ${remains}`);
     else differences.push(`${section}: confirmed ${label(item)} is gone or changed`);
   }
-  // After the stop, a confirmed target the stop is expected to remove that
-  // is still listed means the stop did not finish.
-  if (stopped) {
-    for (const item of before.items) {
-      if (!gone.includes(item) && stopRemoves(item)) differences.push(`${section}: confirmed ${label(item)} is still listed after the stop`);
-    }
-  }
 };
-
-// Whether the confirmed runtime stop is expected to remove a listed
-// process: one without a terminal whose cwd or --cwd establishes ownership.
-// Terminal sessions and ambiguous rows stay running by design.
-const PROCESS_OWNERSHIP = new Set(["cwd under target", "--cwd under target"]);
-const stopRemovesProcess = (item) => item.tty === "?" && PROCESS_OWNERSHIP.has(item.reason);
 
 // For a Compose project that is gone, why its stop is not proven complete,
 // or null. The project label still lists its volumes: a volume the
@@ -795,7 +778,6 @@ const compareCommand = (args) => {
     differences,
     stopped,
     processSurvives,
-    stopRemovesProcess,
   );
   compareRuntime(
     "compose", confirmed, current,
@@ -804,7 +786,6 @@ const compareCommand = (args) => {
     differences,
     stopped,
     composeStopIncomplete,
-    () => true,
   );
   const tempIdentity = (temp) => [temp.path, temp.resolved];
   const confirmedTemps = confirmed.temps ?? [];

@@ -1176,37 +1176,34 @@ WRAP
   [[ "${stderr}" == *"compose cannot be listed after the stop, so the stop is unverified"* ]]
 }
 
-@test "--after-stop holds a confirmed target the stop should have removed that is still listed" {
+@test "--after-stop passes a confirmed process and Compose project still listed unchanged" {
   start_in "${worktree}"
   local pid="${pids[0]}"
   printf 'worktree\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
   preview
   [ "${status}" -eq 0 ]
-  # The process has no terminal, as a detached runtime does.
+  # The process has no terminal, as a detached runtime the runtime cleanup
+  # left running (uncertain, declined, or session-owned) does.
   node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); for (const p of m.processes.items) p.tty = "?"; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/detached.json"
-
-  # Neither the process nor the Compose project was stopped.
-  compare "${state}/detached.json" --after-stop
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"processes: confirmed process pid ${pid} "*"is still listed after the stop"* ]]
-  [[ "${stderr}" == *"compose: confirmed compose project worktree "*"is still listed after the stop"* ]]
-
-  # The project is down; the process still runs.
-  : >"${FAKE_DOCKER_PS}"
-  compare "${state}/detached.json" --after-stop
-  [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"is still listed after the stop"* ]]
-  [[ "${stderr}" != *"compose project worktree"*"still listed"* ]]
-
-  # A terminal session stays running by design.
-  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); for (const p of m.processes.items) p.tty = "ttys009"; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/terminal.json"
-  compare "${state}/terminal.json" --after-stop
-  [ "${status}" -eq 0 ]
-
-  kill "${pid}"
-  wait "${pid}" 2>/dev/null || true
   compare "${state}/detached.json" --after-stop
   [ "${status}" -eq 0 ]
+  [[ "${output}" != *"stopped as confirmed"* ]]
+  [[ "${stderr}" != *"still listed"* ]]
+}
+
+@test "a resumed cleanup's --after-stop passes with one confirmed target stopped and another still listed" {
+  start_in "${worktree}"
+  start_in "${worktree}"
+  local stopped="${pids[0]}" running="${pids[1]}"
+  preview
+  [ "${status}" -eq 0 ]
+  # The stop was interrupted after its first process.
+  kill "${stopped}"
+  wait "${stopped}" 2>/dev/null || true
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"process pid ${stopped} "* ]]
+  [[ "${output}" != *"stopped as confirmed"$'\t'"process pid ${running} "* ]]
 }
 
 @test "a reftable repository, with no loose ref files, is not rejected" {
