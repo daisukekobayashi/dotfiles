@@ -276,6 +276,27 @@ test("personal data check rejects the home path", () =>
     assert.ok(!result.stderr.includes(fixture.home), "the check must not print the home path");
   }));
 
+async function assertHomeMarker(fixture, home, written = home) {
+  const notes = path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md");
+  await writeFile(notes, `See ${written}\n`);
+  const env = { SETUP_HOME: home };
+  await assertPersonalFailure(fixture, env, /skills\/gamma\/notes\.md: home path/);
+  const result = runExport(["--profile", "work", "--out", fixture.out, "--agent", written], fixture, env);
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr.trim(), "unsupported skills agent: <home>");
+}
+
+test("export detects and redacts the literal SETUP_HOME spelling", () =>
+  withFixture(async (fixture) => {
+    // A backslash in a POSIX name is literal; Windows accepts mixed separators.
+    const homeName = process.platform === "win32" ? "fixture/home" : "fixture\\home";
+    const nativeHome = `fixture-parent${path.sep}.${path.sep}fixture-home`;
+    for (const home of [nativeHome, `fixture-parent${path.sep}./${homeName}`]) {
+      await mkdir(path.resolve(fixture.root, home), { recursive: true });
+      await assertHomeMarker(fixture, home);
+    }
+  }));
+
 test("personal data check rejects git user.name and user.email case-insensitively", () =>
   withFixture(async (fixture) => {
     await writeFile(fixture.gitConfig, "[user]\n\tname = Fixture Person\n\temail = fixture.person@example.test\n");
@@ -323,6 +344,37 @@ test("SETUP_EXPORT_PERSONAL_MARKERS_FILE overrides the marker file and must exis
     assert.notEqual(missing.status, 0);
     assert.match(missing.stderr, /SETUP_EXPORT_PERSONAL_MARKERS_FILE names a missing file/);
     assert.deepEqual(await readdir(fixture.outParent), []);
+  }));
+
+async function linkToNestedDirectory(root) {
+  const target = path.join(root, "physical", "nested");
+  const link = path.join(root, "fixture-link");
+  await mkdir(target, { recursive: true });
+  await symlink(target, link, process.platform === "win32" ? "junction" : "dir");
+  return `fixture-link${path.sep}..`;
+}
+
+test("export follows links before dot-dot in default and override marker paths", () =>
+  withFixture(async (fixture) => {
+    const base = path.join(fixture.root, "config-root");
+    const linkedParent = await linkToNestedDirectory(base);
+    const shadow = path.join(base, "dotfiles");
+    const physical = path.join(base, "physical", "dotfiles");
+    await mkdir(shadow);
+    await mkdir(physical);
+    await writeFile(path.join(shadow, "export-personal-markers"), "shared rule\n");
+    const xdg = { XDG_CONFIG_HOME: `${base}${path.sep}${linkedParent}` };
+    const absentOut = path.join(fixture.root, "no-marker-bundle");
+    assertOk(runExport(["--profile", "work", "--out", absentOut], fixture, xdg));
+
+    await writeFile(path.join(physical, "export-personal-markers"), "leaf skill\n");
+    for (const env of [
+      xdg,
+      { SETUP_EXPORT_PERSONAL_MARKERS_FILE: `config-root${path.sep}${linkedParent}${path.sep}dotfiles${path.sep}export-personal-markers` },
+    ]) {
+      const result = await assertPersonalFailure(fixture, env, /skills\/gamma\/SKILL\.md: personal marker on line 1/);
+      assert.doesNotMatch(result.stderr, /leaf skill/i);
+    }
   }));
 
 test("export refuses a non-empty output directory without --force", () =>
@@ -811,6 +863,39 @@ test("the default marker file is read from both SETUP_HOME and the OS home", () 
     const result = spawnSync(process.execPath, [skillsRuntime, "export", "--profile", "work", "--out", fixture.out], { cwd: fixture.root, env, encoding: "utf8" });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /skills\/gamma\/SKILL\.md: personal marker on line 1/);
+  }));
+
+test("export follows links before dot-dot in home markers and home marker files", () =>
+  withFixture(async (fixture) => {
+    const linkedParent = await linkToNestedDirectory(fixture.root);
+    const configured = `${linkedParent}${path.sep}fixture-home`;
+    const actual = path.join(fixture.root, "physical", "fixture-home");
+    const shadow = path.join(fixture.root, "fixture-home", ".config", "dotfiles");
+    await mkdir(actual);
+    await mkdir(shadow, { recursive: true });
+    await writeFile(path.join(shadow, "export-personal-markers"), "shared rule\n");
+
+    for (const written of [configured, actual]) {
+      await assertHomeMarker(fixture, configured, written);
+    }
+    const notes = path.join(fixture.dotfiles, "skills", "local", "gamma", "notes.md");
+    await writeFile(notes, "No home path here.\n");
+
+    const homeEnvs = [
+      { SETUP_HOME: configured, XDG_CONFIG_HOME: undefined },
+      { SETUP_HOME: undefined, HOME: configured, XDG_CONFIG_HOME: undefined },
+    ];
+    for (const [index, env] of homeEnvs.entries()) {
+      const absentOut = path.join(fixture.root, `no-home-marker-bundle-${index}`);
+      assertOk(runExport(["--profile", "work", "--out", absentOut], fixture, env));
+    }
+
+    const config = path.join(actual, ".config", "dotfiles");
+    await mkdir(config, { recursive: true });
+    await writeFile(path.join(config, "export-personal-markers"), "leaf skill\n");
+    for (const env of homeEnvs) {
+      await assertPersonalFailure(fixture, env, /skills\/gamma\/SKILL\.md: personal marker on line 1/);
+    }
   }));
 
 test("an empty SETUP_EXPORT_PERSONAL_MARKERS_FILE fails the export", () =>
@@ -1387,6 +1472,11 @@ test("a default marker path that is a broken link fails, and errors never print 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /cannot read the default personal marker file: ENOENT/);
     assert.doesNotMatch(result.stderr, /secret-missing-target|xdg-config/);
+
+    const configLink = path.join(fixture.root, "secret-config-link");
+    await symlink(path.join(fixture.root, "secret-missing-config"), configLink, "dir");
+    result = await assertPersonalFailure(fixture, { XDG_CONFIG_HOME: configLink }, /cannot read the default personal marker file: ENOENT/);
+    assert.doesNotMatch(result.stderr, /secret-config-link|secret-missing-config/);
 
     const overrideDir = path.join(fixture.root, "secret-override-dir");
     await mkdir(overrideDir);

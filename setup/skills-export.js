@@ -458,7 +458,64 @@ class Markers {
         return this.list.reduce((result, marker) => result.replace(marker.pattern, marker.token), text);
     }
 }
-// The homes setup may use: the effective setup home, HOME, USERPROFILE,
+function filesystemRoot(input) {
+    if (process.platform === "win32") {
+        // path.parse treats the extended UNC namespace as the server and share.
+        const extendedShare = /^[\\/]{2}\?[\\/]UNC[\\/][^\\/]+[\\/][^\\/]+(?:[\\/]|$)/i.exec(input);
+        if (extendedShare) {
+            return extendedShare[0];
+        }
+    }
+    return path.parse(input).root;
+}
+// Walk existing entries before interpreting dot-dot, including on Windows
+// where a full path may be normalized before a junction is followed. Only a
+// missing directory entry is absent; failure to resolve a link is an error.
+function existingPhysicalPath(input) {
+    const root = filesystemRoot(input);
+    const base = path.resolve(root || ".");
+    if (!fs.lstatSync(base, { throwIfNoEntry: false })) {
+        return undefined;
+    }
+    let resolved = fs.realpathSync.native(base);
+    let isDirectory = true;
+    const windows = process.platform === "win32";
+    const components = input.slice(root.length).split(windows ? /[\\/]+/ : /\/+/);
+    for (const component of components) {
+        if (!isDirectory) {
+            throw Object.assign(new Error("path continues below a file"), { code: "ENOTDIR" });
+        }
+        if (!component) {
+            continue;
+        }
+        const prefix = resolved.endsWith(path.sep) ? resolved : resolved + path.sep;
+        let next = prefix + component;
+        if (windows && (component === "." || component === "..")) {
+            // Interpret the traversal within the already resolved drive or share.
+            const currentRoot = filesystemRoot(prefix);
+            next = currentRoot + path.win32.join("\\", prefix.slice(currentRoot.length), component).slice(1);
+        }
+        const entry = fs.lstatSync(next, { throwIfNoEntry: false });
+        if (!entry) {
+            return undefined;
+        }
+        if (entry.isSymbolicLink()) {
+            resolved = fs.realpathSync.native(next);
+            isDirectory = fs.statSync(resolved).isDirectory();
+        }
+        else {
+            resolved = windows ? next : path.normalize(next);
+            isDirectory = entry.isDirectory();
+        }
+    }
+    return resolved;
+}
+function appendMarkerPath(directory, relative) {
+    // A bare drive refers to that drive's working directory.
+    const separator = process.platform === "win32" && /^[A-Za-z]:$/.test(directory) ? "" : path.sep;
+    return directory + separator + relative;
+}
+// The homes setup may use: the configured setup home, HOME, USERPROFILE,
 // setup.ps1's CUSTOM_HOME, the OS home, and the account's home directory.
 function homes(context) {
     let accountHome;
@@ -468,27 +525,30 @@ function homes(context) {
     catch {
         accountHome = undefined;
     }
-    return unique([context.home, context.env.HOME, context.env.USERPROFILE, context.env.CUSTOM_HOME, os.homedir(), accountHome].filter((home) => Boolean(home)));
+    return unique([context.env.SETUP_HOME, context.env.HOME, context.env.USERPROFILE, context.env.CUSTOM_HOME, os.homedir(), accountHome].filter((home) => Boolean(home)));
 }
 // Each home is matched as given, trimmed of trailing separators, and through
 // its real path, each with either separator and as escaped in JSON or
 // JavaScript (doubled backslashes, escaped slashes).
 function addHomeMarkers(markers, context) {
     const spellings = [];
-    for (const home of homes(context)) {
+    for (const home of unique([context.home, ...homes(context)])) {
         spellings.push(home, home.replace(/[\\/]+$/, ""));
         try {
-            spellings.push(fs.realpathSync.native(home));
+            const resolved = home === context.env.SETUP_HOME ? existingPhysicalPath(home) : home;
+            if (resolved !== undefined) {
+                spellings.push(fs.realpathSync.native(resolved));
+            }
         }
         catch {
-            // A home that does not exist has no real path.
+            // Keep matching the configured spellings when resolution fails.
         }
     }
     for (const trimmed of unique(spellings)) {
         if (trimmed.length > 2) {
             const slashed = trimmed.split("\\").join("/");
             const backslashed = trimmed.split("/").join("\\");
-            for (const value of unique([slashed, backslashed, backslashed.split("\\").join("\\\\"), slashed.split("/").join("\\/")])) {
+            for (const value of unique([trimmed, slashed, backslashed, backslashed.split("\\").join("\\\\"), slashed.split("/").join("\\/")])) {
                 markers.add("home path", value, "<home>");
             }
         }
@@ -540,7 +600,9 @@ function addConfiguredMarkers(markers, context) {
             markers.add(`git ${key}`, value, "<redacted>");
         }
     }
-    // Errors name only the file's role and the error code, never its path.
+    // Keep directory spellings intact for filesystem lookup. Errors name only
+    // the file's role and the error code, never its path.
+    const defaultFile = path.join("dotfiles", "export-personal-markers");
     let files;
     let required = false;
     if (MARKERS_FILE_ENV in context.env) {
@@ -548,14 +610,15 @@ function addConfiguredMarkers(markers, context) {
         if (!override) {
             (0, skill_profiles_1.fail)(`${MARKERS_FILE_ENV} is set but empty`);
         }
-        files = [path.resolve(override)];
+        files = [override];
         required = true;
     }
     else if (context.env.XDG_CONFIG_HOME && path.isAbsolute(context.env.XDG_CONFIG_HOME)) {
-        files = [path.join(context.env.XDG_CONFIG_HOME, "dotfiles", "export-personal-markers")];
+        files = [appendMarkerPath(context.env.XDG_CONFIG_HOME, defaultFile)];
     }
     else {
-        files = homes(context).map((home) => path.join(home, ".config", "dotfiles", "export-personal-markers"));
+        const relative = path.join(".config", defaultFile);
+        files = homes(context).map((home) => appendMarkerPath(home, relative));
     }
     const role = required ? "override personal marker file" : "default personal marker file";
     for (const file of files) {
@@ -563,22 +626,17 @@ function addConfiguredMarkers(markers, context) {
         // error fails, naming the role and error code but never the path.
         let bytes;
         try {
-            try {
-                fs.lstatSync(file);
-            }
-            catch (error) {
-                if (error.code !== "ENOENT") {
-                    throw error;
-                }
+            const resolved = existingPhysicalPath(file);
+            if (resolved === undefined) {
                 if (required) {
                     (0, skill_profiles_1.fail)(`${MARKERS_FILE_ENV} names a missing file`);
                 }
                 continue;
             }
-            if (!fs.statSync(file).isFile()) {
+            if (!fs.statSync(resolved).isFile()) {
                 (0, skill_profiles_1.fail)(`the ${role} is not a regular file`);
             }
-            bytes = fs.readFileSync(file);
+            bytes = fs.readFileSync(resolved);
         }
         catch (error) {
             const code = error.code;
