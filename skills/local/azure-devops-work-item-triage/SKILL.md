@@ -28,14 +28,28 @@ before step 1.
 2. Fetch the overview data.
    - Prefer repository or project guidance when it defines the query.
    - Otherwise use `az boards query --wiql` for active, relevant Work Items in
-     the current project, selecting `System.State`, `System.WorkItemType`,
-     `System.Tags`, `System.IterationPath`,
-     `Microsoft.VSTS.Common.Severity`, and `Microsoft.VSTS.Common.Priority`
-     with the other fields. Filter with
+     the current project. Use
+     `SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType],
+     [System.Tags], [System.IterationPath], [Microsoft.VSTS.Common.Severity],
+     [Microsoft.VSTS.Common.Priority]`. Filter with
      `[System.TeamProject] = '<project>'` and the resolved project name, never
      `@project`: `az boards query` sends the query without a project context,
      so `@project` matches nothing and returns an empty result without an
      error.
+   - The default SELECT list uses 164 URL-encoded characters including comma
+     separators, within the extension's 800-character field budget. If a known
+     project-defined projection exceeds that budget, report possible omission
+     of trailing fields. Treat unavailable fields needed for triage as
+     unknown and report the limitation.
+   - For `az boards query`, use `--output json` without a CLI `--query` filter.
+     Count the rows in the original JSON array from a successful query before
+     filtering, sorting, or reading relations. At 1,000 or more rows, flag the
+     overview as potentially incomplete in **Current State**. The extension
+     checks the cap between batches, so it can return more than 1,000 rows.
+     If the unfiltered array is unavailable, report that completeness could
+     not be checked in **Current State**. In either case, label the ranking,
+     blocker assessment, and parallel recommendations as provisional for the
+     retrieved candidates. See the [extension source](https://github.com/Azure/azure-devops-cli-extension/blob/3ea8b2f20761f5433edb469c9d55235db37fa7f2/azure-devops/azext_devops/dev/boards/work_item.py#L276-L321).
    - Read each candidate's relations with
      `az boards work-item show --id <id> --expand relations --query "relations[?rel=='System.LinkTypes.Dependency-Reverse' || rel=='System.LinkTypes.Hierarchy-Forward' || rel=='System.LinkTypes.Hierarchy-Reverse' || rel=='ArtifactLink'].{rel: rel, url: url, name: attributes.name}"`,
      which keeps its `Predecessor`, child, and parent links and its artifact
@@ -108,7 +122,7 @@ before step 1.
 **Current State**
 - Lens: <lens>
 - Basis: <the lens's report basis>
-- Candidate Work Items: <count>
+- Candidate Work Items: <count with a completeness warning when applicable>
 - Open PRs: <count>
 - Active worktrees: <count, mapped Work Items>
 - Local branch/state: <short note>
