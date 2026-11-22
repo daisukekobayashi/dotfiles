@@ -906,8 +906,8 @@ LISTING
   check compare "${args[@]}" --worktree "${worktree}" --temp "${forged}" --confirmed "${state}/forged.json"
   [ "${status}" -eq 0 ]
   [[ "${output}" == *'x\x0alocal\x09feat/1-x\x09'"${head}"'\x0alease\x09origin'* ]]
-  ! grep -qE '^(local|lease)'$'\t' <<<"${output}"
   [ "$(grep -c '' <<<"${output}")" -eq 4 ]
+  run ! grep -qE '^(local|lease)'$'\t' <<<"${output}"
 }
 
 @test "--after-stop counts a temporary path as removed only when it is missing" {
