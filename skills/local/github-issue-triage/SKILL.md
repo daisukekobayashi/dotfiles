@@ -53,7 +53,8 @@ before step 1.
    - Read milestones and labels as core feature sources, alongside the docs from step 3.
    - Read severity from severity-like labels (for example `severity:high`, `critical`) and priority from priority-like labels (for example `P1`, `priority:high`); read regressions and release blockers from labels, milestones, and the body.
 7. Identify parallel work candidates.
-   - Build the current wave: actionable issues that have no open blocking issues.
+   - Build the current wave from every actionable issue with no open blockers, including issues provisionally placed as actionable from list data only.
+   - Report the complete wave even when no safe parallel group can be named. Mark current-wave issues whose touched areas were not checked as unverified for parallel work.
    - Within the current wave, group issues as parallel only when their touched areas do not overlap, including shared resources such as schemas, config, migrations, lockfiles, or public interfaces.
    - Also check each candidate's touched areas against the changed files of open PRs, and flag overlaps as conflicts with in-flight work.
    - For other worktrees that may overlap candidates, list changed files with `git -C <path> diff --name-only <default-branch>...HEAD` and `git -C <path> status --short`, and flag overlaps the same way. Skip worktrees with no changes.
@@ -84,10 +85,11 @@ Use this structure:
 | 1 | #<n> <title> | Do next | <why> |
 
 **Parallel Work**
-- Current wave: #<a>, #<b> (<parallel groups, or why they must not run together>)
+- Current wave: <all current-wave issue numbers, or "none">
+- Parallel groups: <verified groups, or "No safe parallel split right now">
+- Unverified for parallel work: <current-wave issue numbers with unchecked touched areas, or "none">
 - Overlaps: <touched-area overlaps between issues or with open PRs or worktrees, or "none">
 - Next wave after #<n> closes: #<c>, #<d>
-- Or: "No safe parallel split right now"
 
 **Next Step**
 - Start with `$github-issue-start #<n>` if the user wants to implement the top recommendation.
