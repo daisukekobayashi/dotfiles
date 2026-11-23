@@ -140,12 +140,25 @@ separate files, so these numbers cover the coordinator alone.
 scripts/delivery-context.sh ~/.claude/projects/PROJECT/SESSION.jsonl
 ```
 
-It prints one JSON object: `peak_tokens` (peak context tokens of the
+If the session also covers other work, run the script on a temporary local
+JSONL copy from the delivery invocation through completion or the checkpoint
+being compared. Keep tool calls with their results and record the bounds.
+The peak can still include context carried into the delivery from earlier
+work. Keep transcripts and temporary copies local.
+
+The script prints one JSON object: `peak_tokens` (peak context tokens of the
 coordinator), `compactions` (compaction count), and `tools` (calls and
 characters by tool kind; writes cost their input, reads and fetches their
 result). Compare `input_chars` for writes and `result_chars` for reads and
 issue fetches. `tests/delivery_context_recipe.bats` covers the
 classification with synthetic transcripts.
+
+When a `Skill` call injects instructions as a separate user message, match
+that message to the call and count the characters of the injected body,
+excluding the wrapper and arguments. Report this count alongside the tool
+counts. The script counts `Skill` tool results, and `peak_tokens` already
+comes from recorded usage. If the injected body is unavailable, record the
+reason and leave the count missing.
 
 Also count missed reviews and decisions by hand: a review the tier selected
 that did not run, or a user decision the coordinator acted on without asking.
@@ -183,15 +196,21 @@ parser:
 
 Before comparing two deliveries, check that they are comparable:
 
-- The skills the session loaded match the revision being measured. Report
-  the revision as verified only when it, or a digest of the skill contents,
-  was recorded at the session's time. Otherwise report it as inferred and list
-  the evidence used, such as the link target, the checkout's reflog, or the
-  install time of a copy.
+- At delivery start, record the revision or content digest of the installed
+  skills the session loads, resolving links to the files actually used. Note
+  any changes to those sources during the run. Report the revision as verified
+  only where contemporaneous evidence establishes what was loaded. Otherwise
+  report it as inferred and list the evidence used, such as the link target,
+  the checkout's reflog, or the install time of a copy.
 - Note reads of the skills under change in the task's own worktree, and the
   same file read twice through different paths, such as `.claude/skills` and
   `skills/local`.
 - The review route matches, such as Codex for local reviews.
+
+To check how the coordinator read references, match reads in the transcript
+to the phase and the phase map in use at the time. Record heading or line
+ranges and flag whole-file reads where the map calls for selected sections.
+A phase entry of `all` allows a whole-file read.
 
 A delivery-skill change can be checked before such a run with a static
 **chars-read proxy**: for each phase in delivery-common's Phase sections, sum
