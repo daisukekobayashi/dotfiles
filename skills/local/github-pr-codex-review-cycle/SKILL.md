@@ -48,8 +48,8 @@ approval for the normal, non-destructive cycle:
 - posting the `@codex review` trigger comment
 - applying worthwhile Codex or Copilot review fixes
 - ordinary commit and normal push for review-follow-up fixes
-- short GitHub replies to the latest AI review threads
-- resolving latest AI review threads with dispositions that clearly close them:
+- short GitHub replies to the AI review items selected in Prepare
+- resolving the threads for those items with dispositions that clearly close them:
   `applied`, `stale`, `duplicate`, or fully answered `explained`
 
 Still stop and ask before:
@@ -70,9 +70,13 @@ Still stop and ask before:
    - On resume, revalidate any supplied PR/head/trigger and follow-up record.
      Reuse verified completed operations and enter the earliest incomplete phase.
      If a trigger already awaits output for the same published head, resume step
-     4 rather than posting another request. If matching output already completed,
-     continue with Prepare or the pending publication/Writeback phase. Evidence
-     for an older head does not satisfy a review of the current head.
+     4 rather than posting another request. When resuming Prepare, use the
+     verified review handoff from step 4. If the record lacks that handoff,
+     recheck the same trigger and published head in step 4 within the existing
+     bound.
+     Continue any verified pending publication/Writeback phase with its
+     prepared record. Evidence for an older head does not satisfy a review of
+     the current head.
 2. Use `github-pr-publish`.
    - Preserve that skill's verification, staging, commit, push, and PR rules.
    - Capture the PR number, PR URL, branch, push remote, commit, and
@@ -87,25 +91,39 @@ Still stop and ask before:
      `updated_at` is later than the trigger comment's `created_at`; an older
      marker belongs to an earlier request. Track only `code_review`; this cycle
      requests no security review.
-   - Review completion requires actual Codex review output after the trigger:
-     a review, review threads, or inline comments; or a marker whose
-     `code_review.status` is `completed` and whose `code_review.commit_sha`
+   - A readable marker completes the review only when its
+     `code_review.status` is `completed` and its `code_review.commit_sha`
      equals the full published head SHA.
    - A marker with `code_review.status` `running`, `null`, or missing, or with
      another `commit_sha`, is not completion; keep waiting.
    - A completed marker with `has_any_findings: false` means no actionable
-     feedback: continue at step 8. With findings, wait for the review threads
-     before step 5.
-   - If no summary comment has the marker or its JSON does not parse, fall back
-     to a review summary/comment that indicates the run finished, and report
-     that completion was inferred without the marker.
+     feedback: continue at step 8. With findings, wait for the matching
+     review threads.
+   - If there is no marker updated after the trigger or its JSON does not
+     parse, fall back to actual submitted Codex review output on this PR.
+     Require a Codex review whose `submitted_at` is later than the trigger's
+     `created_at` and whose `commit_id` (GraphQL `commit.oid`) equals the full
+     published head SHA. Report that completion was verified without the
+     marker. A timestamp, prose summary, or current thread state alone does
+     not establish which head was reviewed.
+   - When proceeding to Prepare, use the same submitted review checks to
+     identify the feedback for the completed review. For each inline item,
+     verify its parent review (`pull_request_review_id` or GraphQL
+     `pullRequestReview`) and its comment and thread IDs. Any original
+     commit SHA supplied for that comment must agree with the published head.
+     Supplement incomplete connector data with read-only REST or GraphQL
+     reads of this PR. Keep waiting if the matching output or its association
+     is missing or ambiguous.
+   - Record a verified review handoff with the repository and PR, full
+     published head SHA, accepted review ID, and accepted inline comment and
+     thread IDs linked to that review when present.
    - Poll the PR comments/reviews/thread state at reasonable intervals and keep
      the user updated during long waits.
-   - If no actual review output appears within a practical bound, report the PR,
-     trigger comment, acknowledgement state, and last checked time. Do not run
-     review follow-up against stale or absent output.
-5. Use only the **Prepare** phase of `github-pr-ai-review-followup` on the
-   latest Codex review feedback.
+   - If the verified output is unavailable within a practical bound, report the
+     PR, trigger comment, acknowledgement state, and last checked time.
+5. Use only the **Prepare** phase of `github-pr-ai-review-followup` with
+   the verified review handoff from step 4.
+   - If Prepare cannot validate the handoff, report the mismatch and stop.
    - Forward any earlier dispositions and assessment defaults the caller supplied.
    - Capture its prepared record, including per-thread dispositions, verification,
      proposed replies, and pending publication. Do not reply or resolve yet,
@@ -144,7 +162,7 @@ Still stop and ask before:
    - Add the published commit to the prepared record.
 7. Use only the **Writeback** phase of `github-pr-ai-review-followup`.
    - Pass the prepared record, publication evidence, and existing authorization
-     for clearly closed latest AI review items under the Approval Model.
+     for clearly closed prepared items under the Approval Model.
    - Delegate target revalidation, replies, resolutions, and writeback verification
      to that phase. Do not reapply fixes or duplicate its writeback procedure.
 8. Verify final PR state when possible.

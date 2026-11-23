@@ -1,0 +1,473 @@
+{
+  "repository": "example-owner/example-repo",
+  "pull_request": 42,
+  "notes": "Every snapshot lists all visible IDs for that read. Resolve IDs through the synthetic artifacts below, using only the artifacts referenced by each snapshot. The first snapshot is the first poll. A missing Prepare decision means Prepare was not entered. Poll snapshots include the final deadline when the scenario needs it.",
+  "artifacts": {
+    "summaries": [
+      {
+        "id": 901,
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "updated_at": "2026-01-01T12:05:05Z",
+        "body": "<!-- codex-pull-request-review-summary -->\nCodex review complete."
+      },
+      {
+        "id": 902,
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "updated_at": "2026-01-01T12:05:05Z",
+        "body": "<!-- codex-pull-request-review-summary -->\nCodex review complete.\n<!-- codex-review-state:v1 {broken -->"
+      },
+      {
+        "id": 903,
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "updated_at": "2026-01-01T12:03:05Z",
+        "body": "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"status\":\"completed\",\"commit_sha\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"has_any_findings\":true}} -->"
+      },
+      {
+        "id": 904,
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "updated_at": "2026-01-01T12:03:05Z",
+        "body": "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"status\":\"completed\",\"commit_sha\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"has_any_findings\":false}} -->"
+      },
+      {
+        "id": 905,
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "updated_at": "2026-01-01T12:05:05Z",
+        "body": "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"status\":\"completed\",\"commit_sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"has_any_findings\":true}} -->"
+      }
+    ],
+    "reviews": [
+      {
+        "id": 701,
+        "state": "COMMENTED",
+        "body": "Codex Review: one inline finding.",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "submitted_at": "2026-01-01T12:05:00Z"
+      },
+      {
+        "id": 702,
+        "state": "COMMENTED",
+        "body": "Codex Review: one inline finding.",
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "submitted_at": "2026-01-01T12:03:00Z"
+      },
+      {
+        "id": 703,
+        "state": "COMMENTED",
+        "body": "Copilot Review: one inline finding.",
+        "user": {
+          "login": "copilot-pull-request-reviewer[bot]",
+          "type": "Bot"
+        },
+        "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "submitted_at": "2026-01-01T12:06:00Z"
+      }
+    ],
+    "review_comments": [
+      {
+        "id": 801,
+        "node_id": "comment-801",
+        "pull_request_review_id": 701,
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "created_at": "2026-01-01T12:05:00Z",
+        "original_commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": "loader.js",
+        "body": "[P2] Preserve the previous file handle on a read error."
+      },
+      {
+        "id": 802,
+        "node_id": "comment-802",
+        "pull_request_review_id": 702,
+        "user": {
+          "login": "chatgpt-codex-connector[bot]",
+          "type": "Bot"
+        },
+        "created_at": "2026-01-01T12:03:00Z",
+        "original_commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "writer.js",
+        "body": "[P2] Preserve the previous record on a write error."
+      },
+      {
+        "id": 803,
+        "node_id": "comment-803",
+        "pull_request_review_id": 703,
+        "user": {
+          "login": "copilot-pull-request-reviewer[bot]",
+          "type": "Bot"
+        },
+        "created_at": "2026-01-01T12:06:00Z",
+        "original_commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "commit_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "parser.js",
+        "body": "[P2] Reject empty input before reading the first token."
+      }
+    ],
+    "threads": [
+      {
+        "id": "thread-801",
+        "comments": [
+          {
+            "id": "comment-801",
+            "database_id": 801
+          }
+        ],
+        "path": "loader.js",
+        "is_resolved": false,
+        "is_outdated": false
+      },
+      {
+        "id": "thread-802",
+        "comments": [
+          {
+            "id": "comment-802",
+            "database_id": 802
+          }
+        ],
+        "path": "writer.js",
+        "is_resolved": false,
+        "is_outdated": false
+      },
+      {
+        "id": "thread-803",
+        "comments": [
+          {
+            "id": "comment-803",
+            "database_id": 803
+          }
+        ],
+        "path": "parser.js",
+        "is_resolved": false,
+        "is_outdated": false
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": 1,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:02:00Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [],
+          "review_ids": [],
+          "review_comment_ids": [],
+          "thread_ids": []
+        },
+        {
+          "checked_at": "2026-01-01T12:05:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [901],
+          "review_ids": [701],
+          "review_comment_ids": [801],
+          "thread_ids": ["thread-801"]
+        },
+        {
+          "checked_at": "2026-01-01T12:10:00Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [901],
+          "review_ids": [701],
+          "review_comment_ids": [801],
+          "thread_ids": ["thread-801"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:10:00Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [901],
+        "review_ids": [701],
+        "review_comment_ids": [801],
+        "thread_ids": ["thread-801"]
+      }
+    },
+    {
+      "case_id": 2,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:02:00Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [],
+          "review_ids": [],
+          "review_comment_ids": [],
+          "thread_ids": []
+        },
+        {
+          "checked_at": "2026-01-01T12:05:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [902],
+          "review_ids": [701],
+          "review_comment_ids": [801],
+          "thread_ids": ["thread-801"]
+        },
+        {
+          "checked_at": "2026-01-01T12:10:00Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [902],
+          "review_ids": [701],
+          "review_comment_ids": [801],
+          "thread_ids": ["thread-801"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:10:00Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [902],
+        "review_ids": [701],
+        "review_comment_ids": [801],
+        "thread_ids": ["thread-801"]
+      }
+    },
+    {
+      "case_id": 3,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:02:00Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [],
+          "review_ids": [],
+          "review_comment_ids": [],
+          "thread_ids": []
+        },
+        {
+          "checked_at": "2026-01-01T12:03:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [],
+          "review_ids": [702],
+          "review_comment_ids": [802],
+          "thread_ids": ["thread-802"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:03:20Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [],
+        "review_ids": [702],
+        "review_comment_ids": [802],
+        "thread_ids": ["thread-802"]
+      }
+    },
+    {
+      "case_id": 4,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:03:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [903],
+          "review_ids": [702],
+          "review_comment_ids": [802],
+          "thread_ids": ["thread-802"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:05:10Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [903],
+        "review_ids": [702,701],
+        "review_comment_ids": [802,801],
+        "thread_ids": ["thread-802","thread-801"]
+      }
+    },
+    {
+      "case_id": 5,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:05:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [904],
+          "review_ids": [701],
+          "review_comment_ids": [801],
+          "thread_ids": ["thread-801"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:05:10Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [904],
+        "review_ids": [701],
+        "review_comment_ids": [801],
+        "thread_ids": ["thread-801"]
+      }
+    },
+    {
+      "case_id": 6,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:05:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [905],
+          "review_ids": [701,702],
+          "review_comment_ids": [801,802],
+          "thread_ids": ["thread-801","thread-802"]
+        },
+        {
+          "checked_at": "2026-01-01T12:10:00Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [905],
+          "review_ids": [701,702],
+          "review_comment_ids": [801,802],
+          "thread_ids": ["thread-801","thread-802"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:10:00Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [905],
+        "review_ids": [701,702],
+        "review_comment_ids": [801,802],
+        "thread_ids": ["thread-801","thread-802"]
+      }
+    },
+    {
+      "case_id": 7,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:03:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [903],
+          "review_ids": [702],
+          "review_comment_ids": [802],
+          "thread_ids": ["thread-802"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:03:20Z",
+        "head_sha": "cccccccccccccccccccccccccccccccccccccccc",
+        "summary_comment_ids": [903],
+        "review_ids": [702],
+        "review_comment_ids": [802],
+        "thread_ids": ["thread-802"]
+      }
+    },
+    {
+      "case_id": 8,
+      "mode": "cycle",
+      "published_head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trigger": {
+        "id": 101,
+        "created_at": "2026-01-01T12:00:00Z",
+        "body": "@codex review",
+        "acknowledged": true
+      },
+      "wait_deadline": "2026-01-01T12:10:00Z",
+      "polls": [
+        {
+          "checked_at": "2026-01-01T12:03:10Z",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "summary_comment_ids": [903],
+          "review_ids": [702],
+          "review_comment_ids": [802],
+          "thread_ids": ["thread-802"]
+        }
+      ],
+      "prepare": {
+        "checked_at": "2026-01-01T12:05:10Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [903],
+        "review_ids": [701],
+        "review_comment_ids": [801],
+        "thread_ids": ["thread-801"]
+      }
+    },
+    {
+      "case_id": 9,
+      "mode": "standalone",
+      "prepare": {
+        "checked_at": "2026-01-01T12:06:10Z",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "summary_comment_ids": [903],
+        "review_ids": [702,701,703],
+        "review_comment_ids": [802,801,803],
+        "thread_ids": ["thread-802","thread-801","thread-803"]
+      }
+    }
+  ]
+}

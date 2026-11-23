@@ -1,0 +1,27 @@
+{
+  "skill_name": "github-pr-codex-review-cycle",
+  "supporting_skills": [
+    "github-pr-ai-review-followup"
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "name": "hosted-review-head-and-prepare",
+      "prompt": "Use the supplied github-pr-ai-review-followup skill alongside the cycle skill. Simulate the read-only decisions of the supplied github-pr-codex-review-cycle and github-pr-ai-review-followup instructions against the fixed GitHub responses in responses.json. In cycle cases, publication and acknowledgement already completed; start at step 4 and apply step 5 and the relevant Prepare selection rules when reached. In the standalone case, start with Prepare and no cycle handoff. Re-read the Prepare snapshot only when Prepare is reached. Do not perform edits or GitHub operations. For each case, output case_id, first non-wait cycle decision (prepare, complete, or unverifiable at the deadline; null for standalone), the review/comment/thread IDs selected by Prepare (empty if none), whether Prepare stopped because it could not validate its inputs, and one sentence citing the relevant supplied instruction and evidence. Record the initial wait when a case includes one. Save the decisions in a JSON report in this workspace.",
+      "expected_output": "A decision for each case, including the consumed review, comment and thread IDs and any validation stop. Only feedback verified for the published head reaches hosted Prepare. Standalone Prepare still selects the latest AI feedback.",
+      "fixture": "files/review-sequence",
+      "files": [
+        "files/review-sequence/responses.json"
+      ],
+      "assertions": [
+        "Cases 1 and 2 initially wait and reach the deadline as unverifiable, with no Prepare feedback selected.",
+        "Case 3 initially waits then advances through fallback and selects review 702, comment 802, thread-802.",
+        "Case 4 advances through the marker and selects only review 702, comment 802, thread-802 after the second review appears.",
+        "Case 5 completes without entering Prepare when the matching marker reports no findings.",
+        "Case 6 waits and reaches the deadline as unverifiable when the readable marker reports another head, with no Prepare feedback selected.",
+        "Cases 7 and 8 enter Prepare then stop validation with no feedback selected.",
+        "Case 9 selects Copilot review 703, comment 803, thread-803 in standalone Prepare."
+      ]
+    }
+  ]
+}
