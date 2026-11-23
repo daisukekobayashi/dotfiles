@@ -851,6 +851,11 @@ test("both worktree cleanup skills run the shared cleanup target checks in one l
     assert.match(step5, /Before the remote check, run `node <cleanup-script> verify-merge --(?:github|azure) [^`]+ < '<pr-json>'`/, cleanup);
     assert.match(step5, /Any non-zero exit stops the whole cleanup before confirmation\./, cleanup);
     assert.match(step5, /A caller's verified merge evidence and Caller preview use the existing lookup by PR (?:number|ID)\. Then run `node <cleanup-script> remote <facts>`, where `<facts>` is `/, cleanup);
+    if (cleanup === "github-worktree-cleanup") {
+      assert.match(step5, /github-source --github [^`]+[\s\S]*gh api --hostname '<host>' --method GET --paginate 'repos\/<base-owner>\/<base-repo>\/pulls' -f 'head=<source-owner>:<branch>'[\s\S]*unique PR number whose source repository, branch and SHA match[\s\S]*verify-merge --github/);
+      assert.match(step5, /gh pr view <number> --json/);
+      assert.match(step5, /gh repo view '<host>\/<base-owner>\/<base-repo>' --json defaultBranchRef/);
+    }
     assert.ok(step5.includes(`\`${provider} --branch <branch> --pr-state `), `${cleanup}: provider facts`);
     assert.ok(step5.includes(`and \`<cleanup-script>\` is ${link}.`), `${cleanup}: script link`);
     assert.ok(step5.endsWith("Exit 0 proposes deleting the remote branch or reports it absent; exit 3 keeps it, so report the reason and continue without it; any other status stops the whole cleanup."), cleanup);

@@ -17,21 +17,34 @@ description: Use when the user says the work is already merged or otherwise comp
 4. If the branch is not merged, its local tip differs from the PR head, or completion is unclear, stop and explain why cleanup is unsafe.
 5. Run the **remote branch deletion check**. Look up the PR for this branch
    (the PR number from the caller's merge evidence when given) with
-   `gh pr view <number-or-branch> --json number,state,headRefName,headRefOid,isCrossRepository,headRepository,headRepositoryOwner,url`,
+   `gh pr view <number> --json number,state,headRefName,headRefOid,isCrossRepository,headRepository,headRepositoryOwner,url`,
    the default branch with `gh repo view --json defaultBranchRef`, whether the
    branch is protected with `gh api --paginate 'repos/<owner>/<repo>/branches?protected=true' --jq '.[].name'`,
    and the other open PRs with `gh pr list --head <branch> --state open --json number`;
    if any lookup fails, stop the whole cleanup. In standalone cleanup, before
    looking up the PR, resolve its host and base repository from the current
-   repository context and identify the source remote from the user-named
-   remote, the exact branch upstream, or the only local remote. Stop if that
-   source is ambiguous, incomplete, or conflicting. Scope the PR lookup
-   with `--repo '<host>/<base-owner>/<base-repo>'`.
+   repository context.
    Before constructing commands, allow only ASCII letters, digits, `.` and `-`
    in the host, those characters and `_` in each repository component, and
    ASCII letters, digits, `/`, `.`, `_`, and `-` in the remote name or private
-   JSON file path. Stop on any other character. Save the PR response to that
-   private file outside the worktree. Before the remote check, run
+   JSON file path. Stop on any other character. Run
+   `node <cleanup-script> github-source --github '<host>' '<base-owner>/<base-repo>' --branch '<branch>'`,
+   adding `--remote '<name>'` only when the user names it. Continue only on
+   exit 0 with one source `<owner>/<repo>` from the selected local remote.
+   When only the branch is given, read its exact local tip and list closed
+   PRs in the resolved base using the source owner returned by the check:
+   `gh api --hostname '<host>' --method GET --paginate 'repos/<base-owner>/<base-repo>/pulls' -f 'head=<source-owner>:<branch>' -f state=closed --jq '.[] | select(.merged_at != null) | {number, ref: .head.ref, sha: .head.sha, repository: .head.repo.full_name}'`.
+   A head filter identifies a branch even when its name is numeric. Use only
+   a unique PR number whose source repository, branch and SHA match the local
+   evidence. Compare the repository with case ignored and the branch and SHA
+   exactly. If that does not identify one PR, stop and report that an
+   explicit PR number is needed. Require a positive decimal PR number. Pass
+   `--repo '<host>/<base-owner>/<base-repo>'` to the PR and open-PR lookups above.
+   Read the default branch with
+   `gh repo view '<host>/<base-owner>/<base-repo>' --json defaultBranchRef`.
+   For the protection lookup, use that base repository in the API path and
+   pass `--hostname '<host>'`.
+   Save the PR response to a private file outside the worktree. Before the remote check, run
    `node <cleanup-script> verify-merge --github '<host>' '<base-owner>/<base-repo>' --branch '<branch>' < '<pr-json>'`,
    adding `--remote '<name>'` before the redirection only when the user names it.
    Any non-zero exit stops the whole cleanup before confirmation. The check

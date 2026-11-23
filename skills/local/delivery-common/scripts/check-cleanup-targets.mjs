@@ -2,6 +2,7 @@
 // Check the cleanup targets for the worktree cleanup skills.
 //
 // Usage:
+//   node check-cleanup-targets.mjs github-source --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>]
 //   node check-cleanup-targets.mjs verify-merge --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>] < <pr-json>
 //   node check-cleanup-targets.mjs verify-merge --azure <source-org> <source-project> <source-repo> --source-repository-id <id> --branch <branch> [--remote <name>] < <pr-json>
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
@@ -30,6 +31,10 @@
 // <targets>: `--worktree <path>` or `--no-worktree`, and `--temp <path>` once
 // per run-owned temporary file the caller found from launch information; a
 // repeated --temp path is a usage error.
+//
+// github-source
+//   Prints the selected GitHub source repository as <owner>/<repo> for
+//   standalone PR lookup. Uses only local Git configuration and URLs.
 //
 // verify-merge
 //   The standalone merge evidence gate. Reads the provider PR response on
@@ -178,7 +183,8 @@ const pushTargetScript = path.join(here, "check-push-target.mjs");
 const runtimeScripts = path.join(here, "..", "..", "worktree-runtime-cleanup", "scripts");
 
 const USAGE = [
-  "usage: check-cleanup-targets.mjs verify-merge --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>] < <pr-json>",
+  "usage: check-cleanup-targets.mjs github-source --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>]",
+  "       check-cleanup-targets.mjs verify-merge --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>] < <pr-json>",
   "       check-cleanup-targets.mjs verify-merge --azure <source-org> <source-project> <source-repo> --source-repository-id <id> --branch <branch> [--remote <name>] < <pr-json>",
   "       check-cleanup-targets.mjs remote <facts> [--preview]",
   "       check-cleanup-targets.mjs local <facts>",
@@ -299,12 +305,17 @@ const foldName = (name) => name.normalize("NFKC").toLowerCase();
 // Branch names that a case-insensitive ref store could treat as one.
 const sameBranchName = (a, b) => foldName(a) === foldName(b);
 
-// Resolves the remote by the push target rule; returns the remote, or null
-// with the reason.
-const resolveRemote = (facts, { quiet = false } = {}) => {
+const runPushTargetCheck = (facts, literalAzureRepo = false) => {
   const args = [pushTargetScript, "resolve", `--${facts.provider}`, ...facts.repository];
   if (facts.remote !== undefined) args.push("--remote", facts.remote);
-  const result = spawnSync(process.execPath, args, { encoding: "utf8" });
+  if (literalAzureRepo) args.push("--azure-literal-repo-name");
+  return spawnSync(process.execPath, args, { encoding: "utf8" });
+};
+
+// Resolves the remote by the push target rule; returns the remote, or null
+// with the reason.
+const resolveRemote = (facts, { quiet = false, literalAzureRepo = false } = {}) => {
+  const result = runPushTargetCheck(facts, literalAzureRepo);
   const stderr = (result.stderr ?? "").trim();
   if (result.status === 0) {
     const [remote, head] = result.stdout.split("\n");
@@ -488,6 +499,36 @@ const sourceRemote = (branch, named) => {
   return remotes[0];
 };
 
+const validGithubRepository = (github) =>
+  github !== undefined && GITHUB_HOST.test(github[0]) && GITHUB_REPOSITORY.test(github[1]);
+
+const githubSourceCommand = (args) => {
+  const options = parseOptions(args, { "--github": 2, "--branch": 1, "--remote": 1 });
+  const repository = options["--github"];
+  const branch = options["--branch"]?.[0];
+  const named = options["--remote"]?.[0];
+  if (!validGithubRepository(repository) || !branch || !SAFE_NAME.test(branch) ||
+      (named !== undefined && !SAFE_NAME.test(named))) {
+    usage("github-source requires a valid GitHub base repository, safe branch and optional safe remote");
+  }
+  let remote = sourceRemote(branch, named);
+  if (remote === undefined) {
+    const remotes = git(["remote"]).trimEnd().split("\n");
+    if (remotes.length !== 1 || !SAFE_NAME.test(remotes[0])) {
+      mergeEvidenceFailure("select one unambiguous local source remote before PR lookup");
+    }
+    [remote] = remotes;
+  }
+  // The named GitHub resolver derives the repository from all the remote's
+  // effective URLs on the selected host. The base only scopes the host.
+  const result = runPushTargetCheck({ provider: "github", repository, remote });
+  if (result.status === 3) mergeEvidenceFailure("the selected remote does not identify one GitHub source repository");
+  if (result.status !== 0 || result.stderr) cannotRun("could not read the GitHub source repository");
+  const [resolved, source] = result.stdout.split("\n");
+  if (resolved !== remote || !GITHUB_REPOSITORY.test(source ?? "")) cannotRun("could not read the GitHub source repository");
+  process.stdout.write(`${source}\n`);
+};
+
 const pullRequest = () => {
   let pr;
   try {
@@ -531,7 +572,7 @@ const verifyMergeCommand = (args) => {
     usage("verify-merge requires a safe branch and, when given, a safe remote");
   }
   if (Boolean(github) === Boolean(azure) ||
-      (github && (!GITHUB_HOST.test(github[0]) || !GITHUB_REPOSITORY.test(github[1]) || expectedAzureId !== undefined)) ||
+      (github && (!validGithubRepository(github) || expectedAzureId !== undefined)) ||
       (azure && (!azure.every((part) => AZURE_COMPONENT.test(part)) || !isRepositoryId(expectedAzureId)))) {
     usage("verify-merge requires a valid GitHub base repository or Azure DevOps source repository and ID");
   }
@@ -561,7 +602,11 @@ const verifyMergeCommand = (args) => {
     repository = azure;
     head = pr.lastMergeSourceCommit?.commitId;
   }
-  if (!resolveRemote({ provider: github ? "github" : "azure", repository, remote }, { quiet: true }).remote) {
+  const resolved = resolveRemote(
+    { provider: github ? "github" : "azure", repository, remote },
+    { quiet: true, literalAzureRepo: Boolean(azure) },
+  );
+  if (!resolved.remote) {
     mergeEvidenceFailure("the PR source repository does not match one exact local source remote");
   }
   const local = localRef(branch);
@@ -946,6 +991,13 @@ const compareCommand = (args) => {
 };
 
 const [subcommand, ...rest] = process.argv.slice(2);
-const subcommands = { "verify-merge": verifyMergeCommand, remote: remoteCommand, local: localCommand, manifest: manifestCommand, compare: compareCommand };
+const subcommands = {
+  "github-source": githubSourceCommand,
+  "verify-merge": verifyMergeCommand,
+  remote: remoteCommand,
+  local: localCommand,
+  manifest: manifestCommand,
+  compare: compareCommand,
+};
 if (!Object.hasOwn(subcommands, subcommand ?? "")) usage(subcommand === undefined ? "" : `unknown subcommand: ${JSON.stringify(subcommand)}`);
 subcommands[subcommand](rest);

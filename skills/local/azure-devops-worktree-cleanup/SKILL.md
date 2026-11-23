@@ -49,7 +49,8 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    remote from the user-named remote, the exact branch upstream, or the only
    local remote before looking up the PR. Stop on an ambiguous, incomplete,
    or conflicting source. Use the accepted remote URL forms in the context
-   reference to get its organization, project, and repository. Before
+   reference to get its organization, project, and repository. Keep a final
+   `.git` in the repository component as part of its name. Before
    constructing commands, require ASCII letters, digits, `.`, `_`, and `-`
    in the organization, allow those characters and spaces in project and
    repository names, require decimal digits in the PR ID, and require ASCII

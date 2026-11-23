@@ -10,7 +10,7 @@
 //
 // Usage:
 //   node check-push-target.mjs resolve --github <host> <owner>/<repo> [--remote <name>]
-//   node check-push-target.mjs resolve --azure <org> <project> <repo> [--remote <name>]
+//   node check-push-target.mjs resolve --azure <org> <project> <repo> [--remote <name>] [--azure-literal-repo-name]
 //   node check-push-target.mjs pre --branch <branch> --remote <remote> --base <base>
 //   node check-push-target.mjs post --branch <branch> --remote <remote>
 //
@@ -43,7 +43,9 @@
 //   Azure URLs: exactly the accepted remote URL shapes in
 //   azure-devops-common/references/context.md, after decoding percent-encoding
 //   and ignoring letter case, the `user@` part, and a trailing `.git` or `/`.
-//   <org>, <project>, and <repo> are decoded the same way.
+//   <org>, <project>, and <repo> are decoded the same way. The standalone
+//   Azure merge evidence check passes --azure-literal-repo-name to keep
+//   a repository name ending in .git distinct from the name without .git.
 //
 // pre
 //   Reads `branch.<branch>.remote` and `branch.<branch>.merge` with
@@ -80,7 +82,7 @@ const SAFE_REPO = /^[A-Za-z0-9._-]+$/;
 
 const USAGE = [
   "usage: check-push-target.mjs resolve --github <host> <owner>/<repo> [--remote <name>]",
-  "       check-push-target.mjs resolve --azure <org> <project> <repo> [--remote <name>]",
+  "       check-push-target.mjs resolve --azure <org> <project> <repo> [--remote <name>] [--azure-literal-repo-name]",
   "       check-push-target.mjs pre --branch <branch> --remote <remote> --base <base>",
   "       check-push-target.mjs post --branch <branch> --remote <remote>",
 ].join("\n");
@@ -201,10 +203,11 @@ const decode = (text) => {
 
 // Returns the lower-cased, decoded "org/project/repo" an Azure URL names, or
 // null. Accepts exactly the shapes in azure-devops-common context.md.
-const parseAzure = (url) => {
+const parseAzure = (url, literalRepoName) => {
   const parts = splitUrl(url);
   if (!parts) return null;
-  const segments = stripSuffix(parts.path).split("/");
+  const repositoryPath = literalRepoName ? parts.path.replace(/\/+$/, "") : stripSuffix(parts.path);
+  const segments = repositoryPath.split("/");
   let named;
   if (parts.scheme === "https" && parts.host === "dev.azure.com" && segments.length === 4 && segments[2].toLowerCase() === "_git") {
     named = [segments[0], segments[1], segments[3]];
@@ -237,10 +240,12 @@ const githubRepoOf = (urls, host) => {
 };
 
 const resolve = (args) => {
-  const options = parseOptions(args, { "--github": 2, "--azure": 3, "--remote": 1 });
+  const options = parseOptions(args, { "--github": 2, "--azure": 3, "--remote": 1, "--azure-literal-repo-name": 0 });
   const github = options["--github"];
   const azure = options["--azure"];
   if (Boolean(github) === Boolean(azure)) usage("resolve needs exactly one of --github or --azure");
+  const literalRepoName = options["--azure-literal-repo-name"] !== undefined;
+  if (github && literalRepoName) usage("--azure-literal-repo-name requires --azure");
   const named = options["--remote"]?.[0];
   if (named !== undefined) requireSafe("remote", named);
 
@@ -264,7 +269,7 @@ const resolve = (args) => {
   if (named !== undefined) {
     if (!remotes.includes(named)) fail([`remote not found: ${JSON.stringify(named)}`]);
     if (azure) {
-      if (!remoteUrls(named).every((url) => parseAzure(url) === expected)) {
+      if (!remoteUrls(named).every((url) => parseAzure(url, literalRepoName) === expected)) {
         fail([`remote ${JSON.stringify(named)} does not name ${expected} in its fetch and every push URL`]);
       }
       process.stdout.write(`${named}\n`);
@@ -285,7 +290,7 @@ const resolve = (args) => {
   const urls = remoteUrls(remote);
   const matches = github
     ? githubRepoOf(urls, host)?.toLowerCase() === expected.toLowerCase()
-    : urls.every((url) => parseAzure(url) === expected);
+    : urls.every((url) => parseAzure(url, literalRepoName) === expected);
   if (!matches) fail([`remote ${JSON.stringify(remote)} does not name ${github ? `${host}/${expected}` : expected} in its fetch and every push URL`, ...candidates]);
   process.stdout.write(github ? `${remote}\n${expected}\n` : `${remote}\n`);
 };
