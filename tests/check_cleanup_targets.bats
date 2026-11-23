@@ -1566,11 +1566,11 @@ volume_removals() {
 }
 
 @test "Compose volume executor removes only approved managed volumes" {
-  fake_compose_stack $'volumes:\n  data:\n  keep:\n    name: worktree_external\n    external: true\n  other:\n    name: other_data'
-  printf 'worktree\tworktree_data\nworktree\tworktree_external\nworktree\tworktree_unknown\nother\tother_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  fake_compose_stack $'volumes:\n  data: {external: false}\n  keep:\n    name: worktree_external\n    external: true\n  shared_data: {external: true}\n  shared_alias: {name: shared_data}\n  other:\n    name: other_data'
+  printf 'worktree\tworktree_data\nworktree\tworktree_external\nworktree\tworktree_unknown\nworktree\tshared_data\nother\tother_data\n' >"${FAKE_DOCKER_VOLUMES}"
   preview
   [ "${status}" -eq 0 ]
-  [[ "${output}" == *"delete volumes worktree_data"$'\t'"retain volumes worktree_external,worktree_unknown"* ]]
+  [[ "${output}" == *"delete volumes worktree_data"$'\t'"retain volumes shared_data,worktree_external,worktree_unknown"* ]]
   [ -z "$(volume_removals)" ]
 
   run_volume_cleanup apply "${state}/preview.json" "${worktree}"
@@ -1582,7 +1582,7 @@ volume_removals() {
   run_volume_cleanup apply "${state}/preview.json" "${worktree}"
   [ "${status}" -eq 0 ]
   [ "$(volume_removals)" = 'volume rm -- worktree_data' ]
-  [[ "$(cat "${FAKE_DOCKER_VOLUMES}")" == *worktree_external*worktree_unknown*other_data ]]
+  [[ "$(cat "${FAKE_DOCKER_VOLUMES}")" == *worktree_external*worktree_unknown*shared_data*other_data ]]
   compare "${state}/preview.json" --after-stop
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"stopped as confirmed"$'\t'"compose project worktree "* ]]
@@ -1596,7 +1596,7 @@ volume_removals() {
   [ "${status}" -eq 0 ]
   : >"${FAKE_DOCKER_PS}"
 
-  printf 'volumes:\n  data:\n    external: true\n    name: worktree_data\n' >"${worktree}/compose.yaml"
+  printf 'volumes:\n  data:\n  worktree_data: {external: true}\n' >"${worktree}/compose.yaml"
   compare "${state}/preview.json" --resume-stop
   [ "${status}" -eq 3 ]
   [[ "${stderr}" == *"Compose volume eligibility changed"* ]]
@@ -1641,6 +1641,8 @@ volume_removals() {
     $'services:\n  fixture:\n    extends: another\nvolumes:\n  data:' \
     $'volumes:\n  data: {name: "${VOLUME_NAME}"}' \
     $'volumes:\n  data:\n  duplicate: {name: worktree_data, external: true}' \
+    $'volumes:\n  data:\n  shared: {external: {name: worktree_data}}' \
+    $'volumes:\n  data:\n  shared: {external: "true"}' \
     $'volumes:\n  data: {external: true}\n  data:' \
     $'volumes: !reset\n  data:' \
     $'volumes:\n  data:\n---\nvolumes:\n  data:' \

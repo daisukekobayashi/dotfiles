@@ -125,11 +125,16 @@ const managedNames = (project, dir, files) => {
     if (!VOLUME.test(key) || (volume !== null && !(volume instanceof Map))) {
       throw new Error("Compose volume declaration is unsupported");
     }
-    const name = volume?.has("name") ? volume.get("name") : project + "_" + key;
+    const external = volume?.has("external") ? volume.get("external") : false;
+    if (typeof external !== "boolean") throw new Error("Compose volume external flag is unsupported");
+    // Compose defaults external volumes to their key and prefixes managed
+    // volume keys with the project name.
+    const defaultName = external ? key : project + "_" + key;
+    const name = volume?.has("name") ? volume.get("name") : defaultName;
     if (typeof name !== "string" || !VOLUME.test(name)) throw new Error("Compose volume name is not static");
     // Multiple declarations can refer to one name; none of them grant
     // removal in that case. An unspecified external flag means managed.
-    names.set(name, !names.has(name) && (!volume?.has("external") || volume.get("external") === false));
+    names.set(name, !names.has(name) && !external);
   }
   return new Set([...names].filter(([, managed]) => managed).map(([name]) => name));
 };
