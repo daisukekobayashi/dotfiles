@@ -49,6 +49,25 @@ the line before the next heading of the same or higher level. A section that a
 listed section links to by its heading anchor joins the list. Read Delivery
 Completion's Bounds whenever a phase stops or stalls.
 
+When entering either phase below, run the corresponding command if its
+reference reads are still due in this context. Resolve `<script>` from this
+skill's directory as [`read-phase-sections.mjs`](scripts/read-phase-sections.mjs).
+
+```text
+node "<script>" -- "Prepare and dispatch"
+node "<script>" -- "Shared understanding and preflight"
+```
+
+For preflight, append `--after-prepare` when the complete preparation output
+is still in context and the skill files are unchanged since that read. The
+flag skips sections covered by that output.
+
+The helper starts with the row's entries, using the full reference for `all`.
+It follows heading links within `references/` until all their targets are
+covered.
+If the command is unavailable or fails, locate and read every required
+heading directly before continuing.
+
 | Phase | Sections |
 | --- | --- |
 | Prepare and dispatch | Worker Dialogue: Assign the worker; Delivery Completion: Progress record |
