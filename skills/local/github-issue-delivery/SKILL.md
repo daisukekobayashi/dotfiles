@@ -41,11 +41,12 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
 ## Prepare and Coordinate
 
 1. Resolve issue numbers, repository instructions, dirty state, and existing
-   worktrees/PRs. Require at least one actual issue target. Check that the
-   component skills and the local reviewers, including `change-security-review`,
-   are available. The normal installation is `base,github`; the GitHub profile
-   alone does not supply the preflight and review skills. A missing one stops
-   under [Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites).
+   worktrees/PRs. Require at least one actual issue target. Check component
+   skills and identify available local reviewers, including
+   `change-security-review`. The normal installation is `base,github`. The
+   `base` profile supplies the preflight and review skills. Apply
+   [Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites)
+   when an affected target's phase requires an unavailable skill.
 2. Use `github-issue-start` with the per-issue workflow below as its
    implementation brief, under
    [Worker Dialogue](../delivery-common/references/worker-dialogue.md)'s Assign
@@ -89,6 +90,12 @@ Run the local reviews the
 [Risk Tier](../delivery-common/references/risk-tier.md#tier-procedure) selects
 under [Local Review](../delivery-common/references/local-review.md): the initial
 full review, Assess findings, and Repeat and advance.
+For any unavailable reviewer required by the target's current procedure,
+including one newly selected after implementation, apply
+[Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites).
+Complete the required review coverage under
+[Repeat and advance](../delivery-common/references/local-review.md#repeat-and-advance)
+before publication.
 
 ### 3. Publish and complete hosted Codex review
 
