@@ -977,10 +977,23 @@ test("a missing prerequisite has one home that delivery links", async () => {
 
   const localReview = flat(await readText(path.join(localRoot, "delivery-common", "references", "local-review.md")));
   assert.match(localReview, /is a missing prerequisite under \[Missing Prerequisites\]\(\.\.\/SKILL\.md#missing-prerequisites\)/);
+  const missingPrerequisites = "[Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites)";
+  const repeatAndAdvance = "[Repeat and advance](../delivery-common/references/local-review.md#repeat-and-advance)";
   for (const delivery of ["github-issue-delivery", "azure-devops-work-item-delivery"]) {
-    const skill = flat(await readText(path.join(localRoot, delivery, "SKILL.md")));
-    assert.ok(skill.includes("[Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites)"), `${delivery}: links Missing Prerequisites`);
-    assert.doesNotMatch(skill, /silently installing|rather than installing|skipping (a )?required phases?/, `${delivery} restates the missing-prerequisite rule`);
+    const skill = await readText(path.join(localRoot, delivery, "SKILL.md"));
+    const prepare = flat(skill.match(/\n## Prepare and Coordinate\n\n1\. [\s\S]*?(?=\n2\.)/)?.[0]);
+    const review = flat(skill.match(/\n### 2\. Run local reviews[\s\S]*?(?=\n### 3\.)/)?.[0]);
+    assert.ok(prepare, `${delivery}: missing preparation step`);
+    assert.match(prepare, /identify available local reviewers, including `change-security-review`\./, delivery);
+    assert.ok(prepare.includes(`Apply ${missingPrerequisites} when an affected target's phase requires an unavailable skill.`),
+      `${delivery}: apply Missing Prerequisites when the phase requires the skill`);
+    assert.ok(review, `${delivery}: missing local review step`);
+    assert.ok(review.includes("For any unavailable reviewer required by the target's current procedure, " +
+      `including one newly selected after implementation, apply ${missingPrerequisites}.`),
+      `${delivery}: apply Missing Prerequisites to reviewers required by the current procedure`);
+    assert.ok(review.includes(`Complete the required review coverage under ${repeatAndAdvance} before publication.`),
+      `${delivery}: complete required reviews before publication`);
+    assert.doesNotMatch(flat(skill), /silently installing|rather than installing|skipping (a )?required phases?/, `${delivery} restates the missing-prerequisite rule`);
   }
 });
 

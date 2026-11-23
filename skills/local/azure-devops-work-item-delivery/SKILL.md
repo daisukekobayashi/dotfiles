@@ -50,10 +50,10 @@ cycle.
 
 1. Resolve the requested IDs, organization, project, repository, instructions,
    dirty state, and matching worktrees/PRs. Require at least one actual Work
-   Item. Check component skills and the local reviewers, including
-   `change-security-review`, before starting. The normal installation is
-   `base,azure-devops`; a missing one stops under
-   [Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites).
+   Item. Check component skills and identify available local reviewers, including
+   `change-security-review`. The normal installation is `base,azure-devops`. Apply
+   [Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites)
+   when an affected target's phase requires an unavailable skill.
 2. Use `azure-devops-work-item-start` with the per-item workflow below as its
    implementation brief, under
    [Worker Dialogue](../delivery-common/references/worker-dialogue.md)'s Assign
@@ -90,6 +90,12 @@ Run the local reviews the
 [Risk Tier](../delivery-common/references/risk-tier.md#tier-procedure) selects
 under [Local Review](../delivery-common/references/local-review.md): the initial
 full review, Assess findings, and Repeat and advance.
+For any unavailable reviewer required by the target's current procedure,
+including one newly selected after implementation, apply
+[Missing Prerequisites](../delivery-common/SKILL.md#missing-prerequisites).
+Complete the required review coverage under
+[Repeat and advance](../delivery-common/references/local-review.md#repeat-and-advance)
+before publication.
 
 ### 3. Publish the PR
 
