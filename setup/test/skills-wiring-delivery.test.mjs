@@ -847,7 +847,10 @@ test("both worktree cleanup skills run the shared cleanup target checks in one l
     const step7to10 = skill.match(/ 7\. (Remove the local worktree first[\s\S]*?) ## Caller preview /)?.[1];
     assert.ok(step5 && step6 && step7to10, `${cleanup}: missing step 5, 6, or 7-10`);
 
-    assert.match(step5, /if any lookup fails, stop the whole cleanup\. Then run `node <cleanup-script> remote <facts>`, where `<facts>` is `/, cleanup);
+    assert.match(step5, /if any lookup fails, stop the whole cleanup\. In standalone cleanup,/, cleanup);
+    assert.match(step5, /Before the remote check, run `node <cleanup-script> verify-merge --(?:github|azure) [^`]+ < '<pr-json>'`/, cleanup);
+    assert.match(step5, /Any non-zero exit stops the whole cleanup before confirmation\./, cleanup);
+    assert.match(step5, /A caller's verified merge evidence and Caller preview use the existing lookup by PR (?:number|ID)\. Then run `node <cleanup-script> remote <facts>`, where `<facts>` is `/, cleanup);
     assert.ok(step5.includes(`\`${provider} --branch <branch> --pr-state `), `${cleanup}: provider facts`);
     assert.ok(step5.includes(`and \`<cleanup-script>\` is ${link}.`), `${cleanup}: script link`);
     assert.ok(step5.endsWith("Exit 0 proposes deleting the remote branch or reports it absent; exit 3 keeps it, so report the reason and continue without it; any other status stops the whole cleanup."), cleanup);

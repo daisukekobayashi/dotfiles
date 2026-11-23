@@ -15,7 +15,41 @@ description: Use when the user says the work is already merged or otherwise comp
 2. Detect whether the target checkout has an associated git worktree and record the path if present.
 3. Verify that cleanup is safe from the PR's merge evidence, never from the local default branch, which can lag its remote: the local branch counts as merged only when step 5's PR lookup reports `MERGED` and the local branch tip equals its `headRefOid`, for any merge method. Step 6's manifest checks this and exits 3 with the reason otherwise.
 4. If the branch is not merged, its local tip differs from the PR head, or completion is unclear, stop and explain why cleanup is unsafe.
-5. Run the **remote branch deletion check**. Look up the PR for this branch (the PR number from the caller's merge evidence when given) with `gh pr view <number-or-branch> --json number,state,headRefOid,isCrossRepository,headRepository,headRepositoryOwner,url`, the default branch with `gh repo view --json defaultBranchRef`, whether the branch is protected with `gh api --paginate 'repos/<owner>/<repo>/branches?protected=true' --jq '.[].name'`, and the other open PRs with `gh pr list --head <branch> --state open --json number`; if any lookup fails, stop the whole cleanup. Then run `node <cleanup-script> remote <facts>`, where `<facts>` is `--github '<host>' '<owner>/<repo>' --branch <branch> --pr-state <state> --pr-head <headRefOid> --cross-repo <isCrossRepository> --default-branch '<default branch>' --protected <true|false> --open-prs <other open PRs>` with the PR URL's host and its head repository, plus `--remote '<name>'` when the user names one, writing each value into the command only when it uses solely ASCII letters, digits, `/`, `:`, `.`, `_`, and `-` (otherwise stop and report), and `<cleanup-script>` is [`check-cleanup-targets.mjs`](../delivery-common/scripts/check-cleanup-targets.mjs) resolved from this skill's directory. Exit 0 proposes deleting the remote branch or reports it absent; exit 3 keeps it, so report the reason and continue without it; any other status stops the whole cleanup.
+5. Run the **remote branch deletion check**. Look up the PR for this branch
+   (the PR number from the caller's merge evidence when given) with
+   `gh pr view <number-or-branch> --json number,state,headRefName,headRefOid,isCrossRepository,headRepository,headRepositoryOwner,url`,
+   the default branch with `gh repo view --json defaultBranchRef`, whether the
+   branch is protected with `gh api --paginate 'repos/<owner>/<repo>/branches?protected=true' --jq '.[].name'`,
+   and the other open PRs with `gh pr list --head <branch> --state open --json number`;
+   if any lookup fails, stop the whole cleanup. In standalone cleanup, before
+   looking up the PR, resolve its host and base repository from the current
+   repository context and identify the source remote from the user-named
+   remote, the exact branch upstream, or the only local remote. Stop if that
+   source is ambiguous, incomplete, or conflicting. Scope the PR lookup
+   with `--repo '<host>/<base-owner>/<base-repo>'`.
+   Before constructing commands, allow only ASCII letters, digits, `.` and `-`
+   in the host, those characters and `_` in each repository component, and
+   ASCII letters, digits, `/`, `.`, `_`, and `-` in the remote name or private
+   JSON file path. Stop on any other character. Save the PR response to that
+   private file outside the worktree. Before the remote check, run
+   `node <cleanup-script> verify-merge --github '<host>' '<base-owner>/<base-repo>' --branch '<branch>' < '<pr-json>'`,
+   adding `--remote '<name>'` before the redirection only when the user names it.
+   Any non-zero exit stops the whole cleanup before confirmation. The check
+   binds the PR source to the user-named remote, the exact branch upstream,
+   or the only local remote independently of the PR response. Use the same
+   response for all PR facts without printing its raw JSON. A verified fork
+   may establish local merge evidence, and its remote branch is kept. A
+   caller's verified merge evidence and Caller preview use the existing
+   lookup by PR number. Then run `node <cleanup-script> remote <facts>`, where
+   `<facts>` is `--github '<host>' '<owner>/<repo>' --branch <branch> --pr-state <state> --pr-head <headRefOid> --cross-repo <isCrossRepository> --default-branch '<default branch>' --protected <true|false> --open-prs <other open PRs>`
+   with the PR URL's host and its head repository, plus `--remote '<name>'`
+   when the user names one, writing each value into the command only when it
+   uses solely ASCII letters, digits, `/`, `:`, `.`, `_`, and `-` (otherwise
+   stop and report), and `<cleanup-script>` is
+   [`check-cleanup-targets.mjs`](../delivery-common/scripts/check-cleanup-targets.mjs)
+   resolved from this skill's directory. Exit 0 proposes deleting the remote
+   branch or reports it absent; exit 3 keeps it, so report the reason and
+   continue without it; any other status stops the whole cleanup.
 6. Build the **cleanup target manifest** and require explicit confirmation of it: run `node <cleanup-script> manifest <facts> --worktree '<path>' --out '<file>'` (`--no-worktree` when there is none), adding `--temp '<path>'` for each run-owned temporary file `../worktree-runtime-cleanup/SKILL.md` identifies, with `<file>` a new path in agent-work storage or `/tmp` outside the worktree, and show the targets it prints, including any `unverified` section; any non-zero status stops the cleanup. Under a caller's combined confirmation, skip this build: the Caller preview manifest is the confirmed manifest. A caller's combined confirmation from Caller preview counts only when the user gave it in their own message and explicitly accepted these resources, and they match the preview as Caller preview defines; otherwise show them and ask again.
 7. Remove the local worktree first when one exists. If you are inside it, change to a safe location before removal.
    - On a fresh cleanup, where no part of the confirmed runtime stop has run, before any removal, run `node <cleanup-script> compare <facts> <targets> --confirmed '<file>'` with step 5's facts, the same `--worktree` or `--no-worktree` and `--temp` targets as the confirmed manifest, and that manifest. Exit 0 continues; exit 3 means the targets changed, so remove nothing and confirm the new targets at step 6; any other status stops the cleanup.

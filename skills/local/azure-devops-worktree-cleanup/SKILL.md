@@ -39,13 +39,34 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    commit, or completion is unclear, stop and explain why cleanup is unsafe.
 5. Run the **remote branch deletion check**. Look up the PR for this branch
    (the PR id from the caller's merge evidence when given) with
-   `az repos pr show --id <id> --query "{status: status, head: lastMergeSourceCommit.commitId, fork: forkSource}"`,
+   `az repos pr show --id <id> --query "{status: status, sourceRefName: sourceRefName, lastMergeSourceCommit: {commitId: lastMergeSourceCommit.commitId}, repository: {id: repository.id}, forkSource: forkSource}"`,
    the default branch with `az repos show --repository '<repo>' --query defaultBranch`,
    whether the branch has branch policies with
    `az repos policy list --repository-id <repo id> --branch refs/heads/<branch>`,
    and the other active PRs with
    `az repos pr list --source-branch <branch> --status active`; if any lookup
-   fails, stop the whole cleanup. Then run
+   fails, stop the whole cleanup. In standalone cleanup, resolve the source
+   remote from the user-named remote, the exact branch upstream, or the only
+   local remote before looking up the PR. Stop on an ambiguous, incomplete,
+   or conflicting source. Use the accepted remote URL forms in the context
+   reference to get its organization, project, and repository. Before
+   constructing commands, require ASCII letters, digits, `.`, `_`, and `-`
+   in the organization, allow those characters and spaces in project and
+   repository names, require decimal digits in the PR ID, and require ASCII
+   letters, digits, `/`, `.`, `_`, and `-` in the remote name or private JSON
+   path. Stop on any other character. Read the source repository ID with
+   `az repos show --organization 'https://dev.azure.com/<source-org>' --project '<source-project>' --repository '<source-repo>' --query id --output tsv`.
+   Require the repository ID from that lookup to be a UUID before building
+   the verification command. Scope the PR lookup to the resolved PR
+   organization with `--organization` and `--output json`, save its response
+   to a private file outside the worktree, and use the same response for all
+   PR facts. Do not print the raw JSON. Before the remote check, run
+   `node <cleanup-script> verify-merge --azure '<source-org>' '<source-project>' '<source-repo>' --source-repository-id '<source-id>' --branch '<branch>' < '<pr-json>'`,
+   adding `--remote '<name>'` before the redirection only when the user
+   names it. Any non-zero exit stops the whole cleanup before confirmation.
+   A verified fork may establish local merge evidence; its remote branch is
+   kept. A caller's verified merge evidence and Caller preview use the
+   existing lookup by PR ID. Then run
    `node <cleanup-script> remote <facts>`, where `<facts>` is
    `--azure '<org>' '<project>' '<repo>' --branch <branch> --pr-state <status> --pr-head <lastMergeSourceCommit> --cross-repo <true when forkSource is set> --default-branch '<default branch>' --protected <true when any policy applies> --open-prs <other active PRs>`
    with the default branch without `refs/heads/`, plus `--remote '<name>'`
