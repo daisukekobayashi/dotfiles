@@ -84,6 +84,34 @@ check() {
   run --separate-stderr node "${script}" "$@"
 }
 
+github_merge_response() {
+  local owner="$1" branch="$2" sha="$3" status="$4" fork="$5"
+  cat >"${state}/pr.json" <<JSON
+{"state":"${status}","headRefName":"${branch}","headRefOid":"${sha}",
+ "headRepositoryOwner":{"login":"${owner}"},"headRepository":{"name":"repo"},
+ "isCrossRepository":${fork},"url":"https://github.com/owner/repo/pull/1"}
+JSON
+}
+
+verify_github_merge() {
+  check verify-merge --github github.com owner/repo --branch feat/1-x "$@" <"${state}/pr.json"
+}
+
+azure_merge_response() {
+  local branch="$1" sha="$2" status="$3" fork="$4"
+  cat >"${state}/pr.json" <<JSON
+{"status":"${status}","sourceRefName":"${branch}",
+ "lastMergeSourceCommit":{"commitId":"${sha}"},
+ "repository":{"id":"11111111-1111-1111-1111-111111111111"},"forkSource":${fork}}
+JSON
+}
+
+verify_azure_merge() {
+  local project="$1" id="$2"
+  shift 2
+  check verify-merge --azure org "${project}" repo --source-repository-id "${id}" --branch feat/1-x "$@" <"${state}/pr.json"
+}
+
 # Runs `remote` with the default facts, overriding or adding any given
 # `--name value`.
 remote_with() {
@@ -164,6 +192,214 @@ start_in() {
   remote_with
   [ "${status}" -eq 0 ]
   [ "${output}" = "proposed"$'\t'"origin"$'\t'"${head}" ]
+}
+
+@test "standalone GitHub merge proof requires the exact source ref, state and local tip" {
+  git branch feat/1-x "${head}"
+  github_merge_response owner feat/1-x "${head}" MERGED false
+  verify_github_merge
+  [ "${status}" -eq 0 ]
+  [ -z "${output}" ]
+
+  github_merge_response owner feat/other "${head}" MERGED false
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"not merged from the exact source branch"* ]]
+  # The legacy local recheck only sees the state and SHA, not the source ref.
+  local -a args
+  mapfile -t args < <(facts)
+  check local "${args[@]}"
+  [ "${status}" -eq 0 ]
+  [ "${output}" = $'proposed\t'"${head}" ]
+
+  github_merge_response owner feat/1-x "${head}" OPEN false
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+
+  github_merge_response owner feat/1-x "$(git rev-parse HEAD^)" MERGED false
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"does not match the exact local branch tip"* ]]
+}
+
+@test "standalone GitHub merge proof binds a fork to the selected local source remote" {
+  git branch feat/1-x "${head}"
+  git remote add fork git@github.com:fork-owner/repo.git
+  github_merge_response fork-owner feat/1-x "${head}" MERGED true
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+  verify_github_merge --remote origin
+  [ "${status}" -eq 3 ]
+  verify_github_merge --remote fork
+  [ "${status}" -eq 0 ]
+
+  git config branch.feat/1-x.remote fork
+  git config branch.feat/1-x.merge refs/heads/feat/1-x
+  verify_github_merge
+  [ "${status}" -eq 0 ]
+  verify_github_merge --remote origin
+  [ "${status}" -eq 3 ]
+
+  remote_with --cross-repo true
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"head repository is a fork"* ]]
+
+  git remote set-url --push fork git@github.com:owner/repo.git
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+}
+
+@test "standalone GitHub fork lookup scopes the owner-qualified numeric branch to the base" {
+  git branch 42 "${head}"
+  git remote add fork git@github.com:fork-owner/repo.git
+  check github-source --github github.com owner/repo --branch 42
+  [ "${status}" -eq 3 ]
+
+  git config branch.42.remote fork
+  git config branch.42.merge refs/heads/42
+  check github-source --github github.com owner/repo --branch 42
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "fork-owner/repo" ]
+  local source="${output}" number
+
+  github_merge_response fork-owner 42 "${head}" MERGED true
+  export FIXTURE_PR="${state}/pr.json" FIXTURE_SHA="${head}"
+  cat >"${root}/bin/gh" <<'GH'
+#!/usr/bin/env bash
+case "$*" in
+  "api --hostname github.com --method GET --paginate repos/owner/repo/pulls -f head=fork-owner:42 -f state=closed --jq .[] "*)
+    printf '{"number":17,"ref":"42","sha":"%s","repository":"fork-owner/repo"}\n' "${FIXTURE_SHA}"
+    ;;
+  "pr view 17 --repo github.com/owner/repo --json number,state,headRefName,headRefOid,isCrossRepository,headRepository,headRepositoryOwner,url")
+    cat "${FIXTURE_PR}"
+    ;;
+  *) exit 1 ;;
+esac
+GH
+  chmod +x "${root}/bin/gh"
+  run gh api --hostname github.com --method GET --paginate repos/owner/repo/pulls \
+    -f "head=${source%%/*}:42" -f state=closed \
+    --jq '.[] | select(.merged_at != null) | {number, ref: .head.ref, sha: .head.sha, repository: .head.repo.full_name}'
+  [ "${status}" -eq 0 ]
+  [ "${output}" = "{\"number\":17,\"ref\":\"42\",\"sha\":\"${head}\",\"repository\":\"${source}\"}" ]
+  number="$(node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).number' <<<"${output}")"
+
+  run gh pr view "${number}" --repo github.com/owner/repo \
+    --json number,state,headRefName,headRefOid,isCrossRepository,headRepository,headRepositoryOwner,url
+  [ "${status}" -eq 0 ]
+  check verify-merge --github github.com owner/repo --branch 42 <<<"${output}"
+  [ "${status}" -eq 0 ]
+
+  git remote set-url --push fork git@github.com:owner/repo.git
+  check github-source --github github.com owner/repo --branch 42
+  [ "${status}" -eq 3 ]
+  [ -z "${output}" ]
+}
+
+@test "standalone GitHub merge proof rejects incomplete or contradictory repository evidence" {
+  git branch feat/1-x "${head}"
+  printf '%s' '{"state":"MERGED","headRefName":"feat/1-x"}' >"${state}/pr.json"
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"does not identify its source repository"* ]]
+
+  github_merge_response owner feat/1-x "${head}" MERGED true
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"fork metadata does not match the lookup"* ]]
+
+  github_merge_response owner feat/1-x "${head}" MERGED false
+  check verify-merge --github example.com owner/repo --branch feat/1-x <"${state}/pr.json"
+  [ "${status}" -eq 3 ]
+
+  git config branch.feat/1-x.remote origin
+  verify_github_merge
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"does not establish one exact source remote"* ]]
+
+  local real_git
+  real_git="$(command -v git)"
+  cat >"${root}/bin/git" <<GIT
+#!/usr/bin/env bash
+if [[ "\$*" == 'config --null --get-all branch.feat/1-x.remote' ]]; then
+  echo "failed config lookup" >&2
+  exit 1
+fi
+exec "${real_git}" "\$@"
+GIT
+  chmod +x "${root}/bin/git"
+  verify_github_merge
+  [ "${status}" -eq 1 ]
+  [ "${stderr}" = "check could not run: could not read the local branch upstream" ]
+}
+
+@test "standalone Azure DevOps merge proof requires the exact ref, repository ID and local tip" {
+  git branch feat/1-x "${head}"
+  git remote set-url origin git@ssh.dev.azure.com:v3/org/project/repo
+  local id=11111111-1111-1111-1111-111111111111
+  azure_merge_response refs/heads/feat/1-x "${head}" completed null
+  verify_azure_merge project "${id}"
+  [ "${status}" -eq 0 ]
+  [ -z "${output}" ]
+  verify_azure_merge other-project "${id}"
+  [ "${status}" -eq 3 ]
+  verify_azure_merge project 22222222-2222-2222-2222-222222222222
+  [ "${status}" -eq 3 ]
+
+  azure_merge_response refs/heads/feat/other "${head}" completed null
+  verify_azure_merge project "${id}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"not completed from the exact source ref"* ]]
+  azure_merge_response refs/heads/feat/1-x "${head}" active null
+  verify_azure_merge project "${id}"
+  [ "${status}" -eq 3 ]
+  azure_merge_response refs/heads/feat/1-x "$(git rev-parse HEAD^)" completed null
+  verify_azure_merge project "${id}"
+  [ "${status}" -eq 3 ]
+}
+
+@test "standalone Azure DevOps merge proof uses the fork source repository ID" {
+  git branch feat/1-x "${head}"
+  git remote set-url origin git@ssh.dev.azure.com:v3/org/project/repo
+  git remote add fork git@ssh.dev.azure.com:v3/org/fork-project/repo
+  git config branch.feat/1-x.remote fork
+  git config branch.feat/1-x.merge refs/heads/feat/1-x
+  local fork_id=22222222-2222-2222-2222-222222222222
+  azure_merge_response refs/heads/feat/1-x "${head}" completed "{\"name\":\"refs/heads/feat/1-x\",\"repository\":{\"id\":\"${fork_id}\"}}"
+  verify_azure_merge fork-project "${fork_id}"
+  [ "${status}" -eq 0 ]
+  verify_azure_merge fork-project 11111111-1111-1111-1111-111111111111
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"does not identify the expected source repository"* ]]
+
+  azure_merge_response refs/heads/feat/1-x "${head}" completed "{\"name\":\"refs/heads/feat/other\",\"repository\":{\"id\":\"${fork_id}\"}}"
+  verify_azure_merge fork-project "${fork_id}"
+  [ "${status}" -eq 3 ]
+
+  azure_merge_response refs/heads/feat/1-x "${head}" completed '{}'
+  verify_azure_merge fork-project "${fork_id}"
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"does not identify the expected source repository"* ]]
+}
+
+@test "standalone Azure DevOps merge proof keeps a literal .git repository suffix" {
+  git branch feat/1-x "${head}"
+  local literal_id=11111111-1111-1111-1111-111111111111
+  local url
+  for url in 'https://dev.azure.com/org/project/_git/repo.git' 'git@ssh.dev.azure.com:v3/org/project/repo%2Egit'; do
+    git remote set-url origin "${url}"
+    azure_merge_response refs/heads/feat/1-x "${head}" completed null
+    check verify-merge --azure org project repo.git --source-repository-id "${literal_id}" --branch feat/1-x <"${state}/pr.json"
+    [ "${status}" -eq 0 ]
+
+    # Simulate a closed PR from the distinct repository without the suffix.
+    sed 's/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222/' \
+      "${state}/pr.json" >"${state}/other-pr.json"
+    check verify-merge --azure org project repo --source-repository-id 22222222-2222-2222-2222-222222222222 \
+      --branch feat/1-x <"${state}/other-pr.json"
+    [ "${status}" -eq 3 ]
+    [[ "${stderr}" == *"does not match one exact local source remote"* ]]
+  done
 }
 
 @test "remote keeps the branch for each unmet deletion condition" {

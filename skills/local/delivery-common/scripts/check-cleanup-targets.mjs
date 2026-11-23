@@ -2,6 +2,9 @@
 // Check the cleanup targets for the worktree cleanup skills.
 //
 // Usage:
+//   node check-cleanup-targets.mjs github-source --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>]
+//   node check-cleanup-targets.mjs verify-merge --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>] < <pr-json>
+//   node check-cleanup-targets.mjs verify-merge --azure <source-org> <source-project> <source-repo> --source-repository-id <id> --branch <branch> [--remote <name>] < <pr-json>
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
 //   node check-cleanup-targets.mjs local <facts>
 //   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]
@@ -28,6 +31,19 @@
 // <targets>: `--worktree <path>` or `--no-worktree`, and `--temp <path>` once
 // per run-owned temporary file the caller found from launch information; a
 // repeated --temp path is a usage error.
+//
+// github-source
+//   Prints the selected GitHub source repository as <owner>/<repo> for
+//   standalone PR lookup. Uses only local Git configuration and URLs.
+//
+// verify-merge
+//   The standalone merge evidence gate. Reads the provider PR response on
+//   stdin. Selects the source remote independently from the named remote,
+//   the branch's exact upstream, or the only remote. A conflicting or
+//   incomplete upstream holds. Azure's source repository and ID must come
+//   from the selected remote and a separate repository lookup.
+//   Succeeds only for the exact source repository, ref, merged state, and
+//   local tip, even if the remote branch was already deleted. Prints nothing.
 //
 // remote
 //   The **remote branch deletion check**. The branch is kept when the PR's
@@ -155,6 +171,11 @@ import { fileURLToPath } from "node:url";
 // imported; keep the two in step.
 const SAFE_NAME = /^[A-Za-z0-9/._][A-Za-z0-9/._-]*$/;
 const SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const REPOSITORY_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+const GITHUB_HOST = /^[A-Za-z0-9.-]+$/;
+const GITHUB_REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+$/;
+const GITHUB_PR_URL = /^https:\/\/([A-Za-z0-9.-]+)\/([^/]+\/[^/]+)\/pull\/[1-9][0-9]*$/;
+const AZURE_COMPONENT = /^(?=.*[A-Za-z0-9])[A-Za-z0-9. _-]+$/;
 const MANIFEST_VERSION = 2;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -162,7 +183,10 @@ const pushTargetScript = path.join(here, "check-push-target.mjs");
 const runtimeScripts = path.join(here, "..", "..", "worktree-runtime-cleanup", "scripts");
 
 const USAGE = [
-  "usage: check-cleanup-targets.mjs remote <facts> [--preview]",
+  "usage: check-cleanup-targets.mjs github-source --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>]",
+  "       check-cleanup-targets.mjs verify-merge --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>] < <pr-json>",
+  "       check-cleanup-targets.mjs verify-merge --azure <source-org> <source-project> <source-repo> --source-repository-id <id> --branch <branch> [--remote <name>] < <pr-json>",
+  "       check-cleanup-targets.mjs remote <facts> [--preview]",
   "       check-cleanup-targets.mjs local <facts>",
   "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]",
   "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--after-stop]",
@@ -281,12 +305,17 @@ const foldName = (name) => name.normalize("NFKC").toLowerCase();
 // Branch names that a case-insensitive ref store could treat as one.
 const sameBranchName = (a, b) => foldName(a) === foldName(b);
 
-// Resolves the remote by the push target rule; returns the remote, or null
-// with the reason.
-const resolveRemote = (facts) => {
+const runPushTargetCheck = (facts, literalAzureRepo = false) => {
   const args = [pushTargetScript, "resolve", `--${facts.provider}`, ...facts.repository];
   if (facts.remote !== undefined) args.push("--remote", facts.remote);
-  const result = spawnSync(process.execPath, args, { encoding: "utf8" });
+  if (literalAzureRepo) args.push("--azure-literal-repo-name");
+  return spawnSync(process.execPath, args, { encoding: "utf8" });
+};
+
+// Resolves the remote by the push target rule; returns the remote, or null
+// with the reason.
+const resolveRemote = (facts, { quiet = false, literalAzureRepo = false } = {}) => {
+  const result = runPushTargetCheck(facts, literalAzureRepo);
   const stderr = (result.stderr ?? "").trim();
   if (result.status === 0) {
     const [remote, head] = result.stdout.split("\n");
@@ -295,8 +324,11 @@ const resolveRemote = (facts) => {
     // so bind it to the PR head repository here.
     if (facts.remote === undefined || facts.provider === "azure") return { remote };
     if (head?.toLowerCase() === facts.repository[1].toLowerCase()) return { remote };
+    if (quiet) return { remote: null };
     return { remote: null, reason: `remote ${JSON.stringify(remote)} names ${head || "no repository"}, not the PR head repository ${facts.repository[1]}` };
   }
+  if (quiet && result.status !== 3) return cannotRun("could not verify the source remote");
+  if (quiet) return { remote: null };
   if (result.status === 3) return { remote: null, reason: `no remote resolved by the push target rule: ${stderr}` };
   if (result.status === 2) usage(`check-push-target.mjs: ${stderr}`);
   return cannotRun(`check-push-target.mjs exited ${result.status ?? result.signal}: ${stderr || result.error?.message || ""}`);
@@ -443,6 +475,144 @@ const localCommand = (args) => {
   const result = checkLocal(facts, { preview: false });
   process.stdout.write(`${describeLocal(result)}\n`);
   if (result.status === "unmerged") fail([`local branch refs/heads/${facts.branch} cannot be deleted: ${result.reason}`]);
+};
+
+const mergeEvidenceFailure = (reason) => fail([`standalone cleanup could not verify the merged PR: ${reason}`]);
+
+const configValues = (key) => {
+  const { status, stdout, stderr } = spawnSync("git", ["config", "--null", "--get-all", key], { encoding: "utf8" });
+  if (status === 1 && !stdout && !stderr) return [];
+  if (status !== 0 || stderr || !stdout.endsWith("\0")) return cannotRun("could not read the local branch upstream");
+  return stdout.split("\0").slice(0, -1);
+};
+
+// An exact upstream can still identify the source after the host deletes it.
+// Never select a remote based on the repository in the PR response.
+const sourceRemote = (branch, named) => {
+  const remotes = configValues(`branch.${branch}.remote`);
+  const refs = configValues(`branch.${branch}.merge`);
+  if (remotes.length === 0 && refs.length === 0) return named;
+  if (remotes.length !== 1 || refs.length !== 1 || !SAFE_NAME.test(remotes[0]) ||
+      remotes[0] === "." || refs[0] !== `refs/heads/${branch}` || (named !== undefined && named !== remotes[0])) {
+    mergeEvidenceFailure("the named remote or branch upstream does not establish one exact source remote");
+  }
+  return remotes[0];
+};
+
+const validGithubRepository = (github) =>
+  github !== undefined && GITHUB_HOST.test(github[0]) && GITHUB_REPOSITORY.test(github[1]);
+
+const githubSourceCommand = (args) => {
+  const options = parseOptions(args, { "--github": 2, "--branch": 1, "--remote": 1 });
+  const repository = options["--github"];
+  const branch = options["--branch"]?.[0];
+  const named = options["--remote"]?.[0];
+  if (!validGithubRepository(repository) || !branch || !SAFE_NAME.test(branch) ||
+      (named !== undefined && !SAFE_NAME.test(named))) {
+    usage("github-source requires a valid GitHub base repository, safe branch and optional safe remote");
+  }
+  let remote = sourceRemote(branch, named);
+  if (remote === undefined) {
+    const remotes = git(["remote"]).trimEnd().split("\n");
+    if (remotes.length !== 1 || !SAFE_NAME.test(remotes[0])) {
+      mergeEvidenceFailure("select one unambiguous local source remote before PR lookup");
+    }
+    [remote] = remotes;
+  }
+  // The named GitHub resolver derives the repository from all the remote's
+  // effective URLs on the selected host. The base only scopes the host.
+  const result = runPushTargetCheck({ provider: "github", repository, remote });
+  if (result.status === 3) mergeEvidenceFailure("the selected remote does not identify one GitHub source repository");
+  if (result.status !== 0 || result.stderr) cannotRun("could not read the GitHub source repository");
+  const [resolved, source] = result.stdout.split("\n");
+  if (resolved !== remote || !GITHUB_REPOSITORY.test(source ?? "")) cannotRun("could not read the GitHub source repository");
+  process.stdout.write(`${source}\n`);
+};
+
+const pullRequest = () => {
+  let pr;
+  try {
+    pr = JSON.parse(readFileSync(0, "utf8"));
+  } catch {
+    return mergeEvidenceFailure("the PR response is not a JSON object");
+  }
+  if (!pr || typeof pr !== "object" || Array.isArray(pr)) {
+    return mergeEvidenceFailure("the PR response is not a JSON object");
+  }
+  return pr;
+};
+
+const githubSource = (pr, [host, base]) => {
+  const owner = pr.headRepositoryOwner?.login;
+  const name = pr.headRepository?.name;
+  if (typeof owner !== "string" || typeof name !== "string" || !GITHUB_REPOSITORY.test(`${owner}/${name}`)) {
+    return mergeEvidenceFailure("the GitHub PR does not identify its source repository");
+  }
+  const source = `${owner}/${name}`;
+  const prUrl = typeof pr.url === "string" ? pr.url.match(GITHUB_PR_URL) : null;
+  if (prUrl?.[1].toLowerCase() !== host.toLowerCase() || prUrl?.[2].toLowerCase() !== base.toLowerCase() ||
+      pr.isCrossRepository !== (base.toLowerCase() !== source.toLowerCase())) {
+    return mergeEvidenceFailure("the GitHub PR repository or fork metadata does not match the lookup");
+  }
+  return [host, source];
+};
+
+const isRepositoryId = (id) => typeof id === "string" && REPOSITORY_ID.test(id);
+
+const verifyMergeCommand = (args) => {
+  const options = parseOptions(args, {
+    "--github": 2, "--azure": 3, "--source-repository-id": 1, "--branch": 1, "--remote": 1,
+  });
+  const github = options["--github"];
+  const azure = options["--azure"];
+  const expectedAzureId = options["--source-repository-id"]?.[0];
+  const branch = options["--branch"]?.[0];
+  const named = options["--remote"]?.[0];
+  if (!branch || !SAFE_NAME.test(branch) || (named !== undefined && !SAFE_NAME.test(named))) {
+    usage("verify-merge requires a safe branch and, when given, a safe remote");
+  }
+  if (Boolean(github) === Boolean(azure) ||
+      (github && (!validGithubRepository(github) || expectedAzureId !== undefined)) ||
+      (azure && (!azure.every((part) => AZURE_COMPONENT.test(part)) || !isRepositoryId(expectedAzureId)))) {
+    usage("verify-merge requires a valid GitHub base repository or Azure DevOps source repository and ID");
+  }
+  const remote = sourceRemote(branch, named);
+  const pr = pullRequest();
+  let repository;
+  let head;
+  if (github) {
+    if (pr.state !== "MERGED" || pr.headRefName !== branch) {
+      mergeEvidenceFailure("the GitHub PR is not merged from the exact source branch");
+    }
+    repository = githubSource(pr, github);
+    head = pr.headRefOid;
+  } else {
+    if (pr.status !== "completed" || pr.sourceRefName !== `refs/heads/${branch}`) {
+      mergeEvidenceFailure("the Azure DevOps PR is not completed from the exact source ref");
+    }
+    const targetId = pr.repository?.id;
+    const isFork = pr.forkSource != null;
+    const sourceId = isFork ? pr.forkSource?.repository?.id : targetId;
+    if (!Object.hasOwn(pr, "forkSource") || !isRepositoryId(targetId) || !isRepositoryId(sourceId) ||
+        (pr.forkSource?.name != null && pr.forkSource.name !== pr.sourceRefName) ||
+        (isFork && sourceId.toLowerCase() === targetId.toLowerCase()) ||
+        sourceId.toLowerCase() !== expectedAzureId.toLowerCase()) {
+      mergeEvidenceFailure("the Azure DevOps PR does not identify the expected source repository");
+    }
+    repository = azure;
+    head = pr.lastMergeSourceCommit?.commitId;
+  }
+  const resolved = resolveRemote(
+    { provider: github ? "github" : "azure", repository, remote },
+    { quiet: true, literalAzureRepo: Boolean(azure) },
+  );
+  if (!resolved.remote) {
+    mergeEvidenceFailure("the PR source repository does not match one exact local source remote");
+  }
+  const local = localRef(branch);
+  if (typeof head !== "string" || !SHA.test(head) || !local || local.held || local.symref || local.sha !== head) {
+    mergeEvidenceFailure("the PR source commit does not match the exact local branch tip");
+  }
 };
 
 const realpathOrNull = (target) => {
@@ -821,6 +991,13 @@ const compareCommand = (args) => {
 };
 
 const [subcommand, ...rest] = process.argv.slice(2);
-const subcommands = { remote: remoteCommand, local: localCommand, manifest: manifestCommand, compare: compareCommand };
+const subcommands = {
+  "github-source": githubSourceCommand,
+  "verify-merge": verifyMergeCommand,
+  remote: remoteCommand,
+  local: localCommand,
+  manifest: manifestCommand,
+  compare: compareCommand,
+};
 if (!Object.hasOwn(subcommands, subcommand ?? "")) usage(subcommand === undefined ? "" : `unknown subcommand: ${JSON.stringify(subcommand)}`);
 subcommands[subcommand](rest);
