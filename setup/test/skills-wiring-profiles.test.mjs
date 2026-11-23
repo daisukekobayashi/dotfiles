@@ -399,7 +399,7 @@ test("triage skills rank through the shared lenses without restating them", asyn
     assert.match(skill, /\*\*Current State\*\*\n- Lens: <lens>\n- Basis: <the lens's report basis>\n/, triage);
     assert.match(skill, /If product intent or the lens basis is unclear/, triage);
     assert.match(skill, /\n\d\. Classify (?:each open issue|Work Items|candidate issues)/, `${triage} lost its classification step`);
-    assert.match(skill, /- Build the current wave: actionable/, `${triage} lost its parallel wave step`);
+    assert.match(skill, /- Build the current wave(?::| from every) actionable\b/, `${triage} lost its parallel wave step`);
     assert.doesNotMatch(
       skill,
       /unblock later work|Prefer unblocking work|moderate blast radius|thin vertical|Deferred foundation|Valid lenses|policy-setting/,
