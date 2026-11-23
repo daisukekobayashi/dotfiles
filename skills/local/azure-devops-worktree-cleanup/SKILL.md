@@ -62,7 +62,7 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    organization with `--organization` and `--output json`, save its response
    to a private file outside the worktree, and use the same response for all
    PR facts. Do not print the raw JSON. Before the remote check, run
-   `node <cleanup-script> verify-merge --azure '<source-org>' '<source-project>' '<source-repo>' --source-repository-id '<source-id>' --branch '<branch>' < '<pr-json>'`,
+   `node <cleanup-script> verify-merge --azure '<source-org>' '<source-project>' '<source-repo>' --source-repository-id '<source-id>' --branch <branch> < '<pr-json>'`,
    adding `--remote '<name>'` before the redirection only when the user
    names it. Any non-zero exit stops the whole cleanup before confirmation.
    A verified fork may establish local merge evidence; its remote branch is

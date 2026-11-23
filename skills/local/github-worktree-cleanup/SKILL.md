@@ -28,7 +28,7 @@ description: Use when the user says the work is already merged or otherwise comp
    in the host, those characters and `_` in each repository component, and
    ASCII letters, digits, `/`, `.`, `_`, and `-` in the remote name or private
    JSON file path. Stop on any other character. Run
-   `node <cleanup-script> github-source --github '<host>' '<base-owner>/<base-repo>' --branch '<branch>'`,
+   `node <cleanup-script> github-source --github '<host>' '<base-owner>/<base-repo>' --branch <branch>`,
    adding `--remote '<name>'` only when the user names it. Continue only on
    exit 0 with one source `<owner>/<repo>` from the selected local remote.
    When only the branch is given, read its exact local tip and list closed
@@ -45,7 +45,7 @@ description: Use when the user says the work is already merged or otherwise comp
    For the protection lookup, use that base repository in the API path and
    pass `--hostname '<host>'`.
    Save the PR response to a private file outside the worktree. Before the remote check, run
-   `node <cleanup-script> verify-merge --github '<host>' '<base-owner>/<base-repo>' --branch '<branch>' < '<pr-json>'`,
+   `node <cleanup-script> verify-merge --github '<host>' '<base-owner>/<base-repo>' --branch <branch> < '<pr-json>'`,
    adding `--remote '<name>'` before the redirection only when the user names it.
    Any non-zero exit stops the whole cleanup before confirmation. The check
    binds the PR source to the user-named remote, the exact branch upstream,
