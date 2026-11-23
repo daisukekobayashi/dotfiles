@@ -58,8 +58,13 @@ node "<script>" -- "Prepare and dispatch"
 node "<script>" -- "Shared understanding and preflight"
 ```
 
-The output includes the row's entries and the headings directly linked from
-its named sections within `references/`. `all` prints the whole reference.
+For preflight, append `--after-prepare` when the complete preparation output
+is still in context and the skill files are unchanged since that read. The
+flag skips sections covered by that output.
+
+The helper starts with the row's entries, using the full reference for `all`.
+It follows heading links within `references/` until all their targets are
+covered.
 If the command is unavailable or fails, locate and read every required
 heading directly before continuing.
 

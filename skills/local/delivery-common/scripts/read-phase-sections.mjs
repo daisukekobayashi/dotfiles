@@ -51,8 +51,13 @@ function findSection(document, name, byAnchor = false) {
   return { document, ...matches[0] };
 }
 
-function renderPhase(phase) {
-  const skill = readDocument("SKILL.md");
+function isCovered(target, sections) {
+  return sections.some(({ document, start, end }) => document === target.document
+    && start <= target.start && end >= target.end);
+}
+
+function selectSections(phase, reference) {
+  const skill = reference("SKILL.md");
   const table = findSection(skill, "Phase sections");
   const rows = skill.prose.slice(table.start, table.end)
     .map((line) => line.match(/^\| ([^|]+?) \| (.+) \|$/))
@@ -61,13 +66,7 @@ function renderPhase(phase) {
 
   const referenceLinks = [...skill.prose.slice(0, table.start).join("\n")
     .matchAll(/\[([^\]\n]+)\]\((references\/[a-z0-9-]+\.md)\)/g)];
-  const documents = new Map();
-  function reference(file) {
-    if (!documents.has(file)) documents.set(file, readDocument(file));
-    return documents.get(file);
-  }
-
-  const listed = rows[0][2].split("; ").flatMap((group) => {
+  const selected = rows[0][2].split("; ").flatMap((group) => {
     const [, label, selection] = group.match(/^([^:]+): (.+)$/) ?? [];
     const files = new Set(referenceLinks.filter((link) => link[1] === label).map((link) => link[2]));
     if (files.size !== 1) throw new Error(`Expected one reference link for ${JSON.stringify(label ?? group)}`);
@@ -76,33 +75,42 @@ function renderPhase(phase) {
     return selection.split(", ").map((title) => findSection(document, title));
   });
 
-  const selected = [...listed];
-  for (const { document, title, start, end } of listed) {
-    if (!title) continue;
+  // Appended sections are visited too. Covered targets stop cycles.
+  for (const { document, start, end } of selected) {
     const prose = document.prose.slice(start, end).join("\n").replace(/(`+)[^\n]*?\1/g, "");
     for (const [, file, anchor] of prose.matchAll(/\]\((?:([a-z0-9-]+\.md))?#([a-z0-9_-]+)\)/g)) {
       const target = findSection(file ? reference(`references/${file}`) : document, anchor, true);
-      const covered = selected.some((section) => section.document === target.document
-        && section.start <= target.start && section.end >= target.end);
-      if (!covered) selected.push(target);
+      if (!isCovered(target, selected)) selected.push(target);
     }
   }
+  return selected;
+}
 
-  return selected.map(({ document, title, start, end }) => {
+function renderSections(sections) {
+  return sections.map(({ document, title, start, end }) => {
     const label = title ? `${document.file}#${title}` : document.file;
     const body = title ? document.lines.slice(start, end).join("\n").trimEnd() : document.text.trimEnd();
     return `<!-- ${label} -->\n${body}`;
   }).join("\n\n");
 }
 
-const [marker, phase, ...rest] = process.argv.slice(2);
-if (marker !== "--" || !phases.includes(phase) || rest.length) {
-  process.stderr.write(`usage: read-phase-sections.mjs -- ${phases.map((name) => JSON.stringify(name)).join(" | ")}\n`);
+const [marker, phase, flag, ...rest] = process.argv.slice(2);
+const afterPrepare = phase === phases[1] && flag === "--after-prepare";
+if (marker !== "--" || !phases.includes(phase) || (flag !== undefined && !afterPrepare) || rest.length) {
+  process.stderr.write(`usage: read-phase-sections.mjs -- "${phases[0]}" | "${phases[1]}" [--after-prepare]\n`);
   process.exit(2);
 }
 
 try {
-  process.stdout.write(`${renderPhase(phase)}\n`);
+  const documents = new Map();
+  const reference = (file) => {
+    if (!documents.has(file)) documents.set(file, readDocument(file));
+    return documents.get(file);
+  };
+  const required = selectSections(phase, reference);
+  const prepared = afterPrepare ? selectSections(phases[0], reference) : [];
+  const additional = required.filter((section) => !isCovered(section, prepared));
+  process.stdout.write(`${renderSections(additional)}\n`);
 } catch (error) {
   process.stderr.write(`read-phase-sections: ${error.message}\n`);
   process.exitCode = 3;
