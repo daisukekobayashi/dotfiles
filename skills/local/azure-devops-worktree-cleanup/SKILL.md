@@ -103,10 +103,11 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      cleanup.
    - On a resumed cleanup, where any part of the confirmed runtime stop already
      ran, skip that strict compare: before any further stop or removal, run the
-     same compare with `--after-stop` and the same exit handling, then finish
-     the stop below.
+     same compare with `--resume-stop` and the same exit handling. This permits
+     outstanding, still-eligible confirmed volume removals.
    - Before removal, follow `../worktree-runtime-cleanup/SKILL.md` for the
-     worktree path, after that compare. If that file is absent, say so in the
+     worktree path and pass it the same confirmed manifest, after that compare.
+     If that file is absent, say so in the
      summary.
    - After the confirmed runtime stop, run the same compare with `--after-stop`
      right before `git worktree remove`. It expects confirmed processes, Compose
@@ -117,12 +118,9 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      targets at step 6, and any other status stops the cleanup. The last
      compare's `local` and `lease` lines decide steps 8 and 9: use each only
      when that compare exited 0 and printed exactly one such line, and the
-     `local` line only when it names the step 1 branch. A remaining volume of a
-     worktree-owned Compose project holds it even when it is an external volume
-     the stop keeps by design, since the check never evaluates the checkout's
-     Compose configuration: confirm the targets again at step 6, where the
-     rebuilt manifest no longer lists the project, and continue with the volume
-     in place. A confirmed process gone from the listing holds while any process
+     `local` line only when it names the step 1 branch. Confirmed volume removals must be complete. Volumes
+     listed for retention may remain. A legacy inventory-only manifest needs
+     a fresh preview and confirmation at step 6. A confirmed process gone from the listing holds while any process
      has its PID, even a reused one, and a listing that cannot run holds when it
      was listed at confirmation, while one already unverified then stays
      unverified and continues. A confirmed target still listed unchanged passes:

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, lstat, mkdir, readdir, readlink, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, readdir, readlink, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -502,6 +502,33 @@ test("project scope --copy installs marked copies without attempting links", asy
       assert.match(marker.files["SKILL.md"], /^[a-f0-9]{64}$/);
       assert.ok(result.stderr.includes(`Copied skill directory: ${entry}; rerun setup to refresh copies.`), result.stderr);
     }
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test("project scope --copy installs the self-contained Compose volume cleanup", async () => {
+  const fixture = await createFixture();
+  try {
+    const skill = "worktree-runtime-cleanup";
+    const source = path.join(fixture.dotfiles, "skills", "local", skill);
+    await cp(path.join(repoRoot, "skills", "local", skill), source, { recursive: true });
+    await writeFile(path.join(fixture.dotfiles, "skills", "profiles", "cleanup.json"),
+      JSON.stringify({ description: "Cleanup", external: [], local: [skill] }));
+    const result = runSkillsRejectingSymlinks(
+      ["--scope", "project", "--profile", "cleanup", "--agent", "codex", "--copy"], fixture, { cwd: fixture.project },
+    );
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    await rm(source, { recursive: true });
+
+    const deployed = path.join(fixture.project, ".agents", "skills", skill, "scripts", "remove-compose-volumes.mjs");
+    const help = spawnSync(process.execPath, [deployed], {
+      cwd: fixture.project,
+      env: { ...fixture.env, NODE_PATH: "", NODE_OPTIONS: "" },
+      encoding: "utf8",
+    });
+    assert.equal(help.status, 1, help.stderr);
+    assert.match(help.stderr, /^Compose volume cleanup: usage: remove-compose-volumes\.mjs/);
   } finally {
     await fixture.cleanup();
   }

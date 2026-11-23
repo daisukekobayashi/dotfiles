@@ -34,16 +34,52 @@ EOF
   # docker reads Compose containers and volumes from fixture files.
   export FAKE_DOCKER_PS="${root}/docker-ps"
   export FAKE_DOCKER_VOLUMES="${root}/docker-volumes"
+  export FAKE_DOCKER_CALLS="${root}/docker-calls"
   : >"${FAKE_DOCKER_PS}"
   : >"${FAKE_DOCKER_VOLUMES}"
+  : >"${FAKE_DOCKER_CALLS}"
   cat >"${root}/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 [ -z "${FAKE_DOCKER_FAIL:-}" ] || { echo "Cannot connect to the Docker daemon" >&2; exit 1; }
+printf '%s\n' "$*" >>"${FAKE_DOCKER_CALLS}"
 case "$1 $2" in
-  "ps -a") cat "${FAKE_DOCKER_PS}" ;;
+  "info --format") printf '%s\n' "${FAKE_DOCKER_DAEMON:-fixture-daemon}" ;;
+  "ps -a")
+    if [[ "$4" == label=com.docker.compose.project=* ]]; then
+      project="${4#label=com.docker.compose.project=}"
+      if [ "$6" = '{{.ID}}' ]; then
+        awk -F'\t' -v p="${project}" '$1 == p { print "container-id" }' "${FAKE_DOCKER_PS}"
+      else
+        awk -F'\t' -v p="${project}" -v files="${FAKE_DOCKER_CONFIG_FILES:-}" '
+          $1 == p { printf "\"%s\"\t\"%s\"\n", $2, (files == "" ? $2 "/compose.yaml" : files) }
+        ' "${FAKE_DOCKER_PS}"
+      fi
+    else
+      cat "${FAKE_DOCKER_PS}"
+    fi
+    ;;
   "volume ls")
-    project="${4#label=com.docker.compose.project=}"
-    awk -F'\t' -v p="${project}" '$1 == p { print $2 }' "${FAKE_DOCKER_VOLUMES}"
+    if [ "$3" = --filter ]; then
+      project="${4#label=com.docker.compose.project=}"
+      awk -F'\t' -v p="${project}" '$1 == p { print $2 }' "${FAKE_DOCKER_VOLUMES}"
+    else
+      [ -z "${FAKE_DOCKER_GLOBAL_LOOKUP_FAIL:-}" ] || exit 1
+      cut -f2 "${FAKE_DOCKER_VOLUMES}"
+    fi
+    ;;
+  "volume inspect")
+    [ "$#" = 4 ] && [ "$3" = -- ] || exit 1
+    [ "$4" != "${FAKE_DOCKER_INSPECT_FAIL:-}" ] || exit 1
+    project="$(awk -F'\t' -v n="$4" '$2 == n { print $1 }' "${FAKE_DOCKER_VOLUMES}")"
+    [ -n "${project}" ] || exit 1
+    printf '[{"Name":"%s","Driver":"local","CreatedAt":"%s","Labels":{"com.docker.compose.project":"%s"}}]\n' \
+      "$4" "${FAKE_DOCKER_CREATED_AT:-2026-01-01T00:00:00Z}" "${project}"
+    ;;
+  "volume rm")
+    [ "$#" = 4 ] && [ "$3" = -- ] || exit 1
+    [ "$4" != "${FAKE_DOCKER_RM_FAIL:-}" ] || exit 1
+    awk -F'\t' -v n="$4" '$2 != n' "${FAKE_DOCKER_VOLUMES}" >"${FAKE_DOCKER_VOLUMES}.next"
+    mv "${FAKE_DOCKER_VOLUMES}.next" "${FAKE_DOCKER_VOLUMES}"
     ;;
   *) echo "unexpected docker $*" >&2; exit 1 ;;
 esac
@@ -63,6 +99,7 @@ EOF
 
   worktree="${root}/worktree"
   mkdir -p "${worktree}"
+  printf 'volumes:\n  data:\n' >"${worktree}/compose.yaml"
   state="${root}/state"
   mkdir -p "${state}"
   pids=()
@@ -505,9 +542,9 @@ GIT
   [ "${status}" -eq 0 ]
   [[ "${output}" == *"worktree"$'\t'"${worktree}"* ]]
   [[ "${output}" == *"remote branch"$'\t'"delete origin refs/heads/feat/1-x at ${head}"* ]]
-  [[ "${output}" == *"compose project"$'\t'"wt"$'\t'"working_dir ${worktree}"$'\t'"volumes wt_data"* ]]
+  [[ "${output}" == *"compose project"$'\t'"wt"$'\t'"working_dir ${worktree}"$'\t'"delete volumes -"$'\t'"retain volumes wt_data"* ]]
   [[ "${output}" == *"temporary path"$'\t'"${root}/run.pid"* ]]
-  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (m.version !== 2 || m.preview !== false || m.compose.items[0].volumes[0] !== "wt_data") process.exit(1)' "${state}/step6.json"
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (m.version !== 3 || m.preview !== false || m.compose.items[0].volumes[0] !== "wt_data") process.exit(1)' "${state}/step6.json"
 }
 
 @test "manifest refuses an output path inside the worktree or at a symlink" {
@@ -653,7 +690,7 @@ GIT
   node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); m.version = 1; delete m.local; fs.writeFileSync(process.argv[2], JSON.stringify(m))' "${state}/preview.json" "${state}/v1.json"
   compare "${state}/v1.json"
   [ "${status}" -eq 2 ]
-  [[ "${stderr}" == *"not a version 2 cleanup target manifest"* ]]
+  [[ "${stderr}" == *"not a version 3 cleanup target manifest"* ]]
 }
 
 @test "a named GitHub remote must name the PR head repository" {
@@ -1178,10 +1215,9 @@ LISTING
   : >"${FAKE_DOCKER_PS}"
   compare "${state}/preview.json" --after-stop
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"compose: confirmed compose project worktree"*"is gone but its volumes remain: worktree_data; one may be an external volume the stop keeps by design, so confirm the targets again at step 6 to continue with it in place"* ]]
+  [[ "${stderr}" == *"compose: confirmed compose project worktree"*"is gone but confirmed volumes remain: worktree_data"* ]]
 
-  # An external volume kept by design: the fresh confirmation's manifest no
-  # longer lists the project, so the cleanup continues with the volume.
+  # A new preview after the stack has gone no longer offers it for cleanup.
   local -a args
   mapfile -t args < <(facts)
   check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/fresh.json"
@@ -1510,5 +1546,196 @@ WRAP
   printf 'worktree\tworktree_data\nworktree\tworktree_new\n' >"${FAKE_DOCKER_VOLUMES}"
   compare "${state}/preview.json" --after-stop
   [ "${status}" -eq 3 ]
-  [[ "${stderr}" == *"it has new volumes: worktree_new; and its volumes remain: worktree_data; one may be an external volume"* ]]
+  [[ "${stderr}" == *"it has new volumes: worktree_new; and confirmed volumes remain: worktree_data"* ]]
+}
+
+# These cases exercise Compose behavior through the real executor and compare
+# entry points, with deterministic process and Docker inventories.
+fake_compose_stack() {
+  printf '#!/usr/bin/env bash\nexit 0\n' >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh"
+  printf 'worktree\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  printf '%s\n' "$1" >"${worktree}/compose.yaml"
+}
+
+run_volume_cleanup() {
+  run --separate-stderr node "${root}/skills/worktree-runtime-cleanup/scripts/remove-compose-volumes.mjs" "$@"
+}
+
+volume_removals() {
+  sed -n '/^volume rm/p' "${FAKE_DOCKER_CALLS}"
+}
+
+@test "Compose volume executor removes only approved managed volumes" {
+  fake_compose_stack $'volumes:\n  data:\n  keep:\n    name: worktree_external\n    external: true\n  other:\n    name: other_data'
+  printf 'worktree\tworktree_data\nworktree\tworktree_external\nworktree\tworktree_unknown\nother\tother_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"delete volumes worktree_data"$'\t'"retain volumes worktree_external,worktree_unknown"* ]]
+  [ -z "$(volume_removals)" ]
+
+  run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"still has containers"* ]]
+  [ -z "$(volume_removals)" ]
+  : >"${FAKE_DOCKER_PS}"
+
+  run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 0 ]
+  [ "$(volume_removals)" = 'volume rm -- worktree_data' ]
+  [[ "$(cat "${FAKE_DOCKER_VOLUMES}")" == *worktree_external*worktree_unknown*other_data ]]
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"stopped as confirmed"$'\t'"compose project worktree "* ]]
+  run ! grep -q '^compose ' "${FAKE_DOCKER_CALLS}"
+}
+
+@test "Compose volume executor refuses new and changed or unverified targets" {
+  fake_compose_stack '{"name":"worktree","volumes":{"data":{"name":"worktree_data"}}}'
+  printf 'worktree\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  : >"${FAKE_DOCKER_PS}"
+
+  printf 'volumes:\n  data:\n    external: true\n    name: worktree_data\n' >"${worktree}/compose.yaml"
+  compare "${state}/preview.json" --resume-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"Compose volume eligibility changed"* ]]
+  run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"Compose volume eligibility changed"* ]]
+  printf 'volumes:\n  data:\n' >"${worktree}/compose.yaml"
+
+  printf 'worktree\tworktree_added\n' >>"${FAKE_DOCKER_VOLUMES}"
+  run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"new Compose volumes"* ]]
+  printf 'other\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"ownership or identity cannot be verified"* ]]
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"ownership or identity cannot be verified"* ]]
+
+  printf 'worktree\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  FAKE_DOCKER_CREATED_AT=2026-02-01T00:00:00Z run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"volume worktree_data changed since confirmation"* ]]
+  FAKE_DOCKER_GLOBAL_LOOKUP_FAIL=1 run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"Docker volume listing failed"* ]]
+  FAKE_DOCKER_INSPECT_FAIL=worktree_data run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"Docker volume inspection failed"* ]]
+  FAKE_DOCKER_DAEMON=other-fixture-daemon run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"Docker daemon changed since confirmation"* ]]
+  [ -z "$(volume_removals)" ]
+}
+
+@test "Compose volume executor keeps volumes when a static local declaration is unverified" {
+  printf 'worktree\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  local config
+  for config in \
+    $'include: []\nvolumes:\n  data:' \
+    $'services:\n  fixture:\n    extends: another\nvolumes:\n  data:' \
+    $'volumes:\n  data: {name: "${VOLUME_NAME}"}' \
+    $'volumes:\n  data:\n  duplicate: {name: worktree_data, external: true}' \
+    $'volumes:\n  data: {external: true}\n  data:' \
+    $'volumes: !reset\n  data:' \
+    $'volumes:\n  data:\n---\nvolumes:\n  data:' \
+    $'volumes:\n  data: {';
+  do
+    fake_compose_stack "${config}"
+    preview
+    [ "${status}" -eq 0 ]
+    [[ "${output}" == *"delete volumes -"$'\t'"retain volumes worktree_data"* ]]
+  done
+
+  fake_compose_stack $'volumes:\n  data:'
+  FAKE_DOCKER_CONFIG_FILES="${worktree}/compose.yaml,${worktree}/override.yaml" preview
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"delete volumes -"$'\t'"retain volumes worktree_data"* ]]
+
+  printf '%262145s' '' >"${worktree}/compose.yaml"
+  preview
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"delete volumes -"$'\t'"retain volumes worktree_data"* ]]
+  [ -z "$(volume_removals)" ]
+  run ! grep -q '^compose ' "${FAKE_DOCKER_CALLS}"
+}
+
+@test "Compose volume executor resumes an approved partial removal" {
+  fake_compose_stack '{"name":"worktree","volumes":{"first":{"name":"worktree_a"},"second":{"name":"worktree_b"}}}'
+  printf 'worktree\tworktree_a\nworktree\tworktree_b\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  : >"${FAKE_DOCKER_PS}"
+  FAKE_DOCKER_RM_FAIL=worktree_b run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [ "$(volume_removals)" = $'volume rm -- worktree_a\nvolume rm -- worktree_b' ]
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"confirmed volumes remain: worktree_b"* ]]
+
+  compare "${state}/preview.json" --resume-stop
+  [ "${status}" -eq 0 ]
+  : >"${FAKE_DOCKER_CALLS}"
+  run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 0 ]
+  [ "$(volume_removals)" = 'volume rm -- worktree_b' ]
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 0 ]
+}
+
+@test "Compose volume executor requires a new preview for an old inventory-only manifest" {
+  fake_compose_stack '{"name":"worktree","volumes":{"data":{"name":"worktree_data"}}}'
+  printf 'worktree\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  node -e 'const fs = require("fs"); const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); m.version = 2; fs.writeFileSync(process.argv[1], JSON.stringify(m))' "${state}/preview.json"
+  compare
+  [ "${status}" -eq 2 ]
+  [[ "${stderr}" == *"preview and confirm again"* ]]
+  run_volume_cleanup apply "${state}/preview.json" "${worktree}"
+  [ "${status}" -eq 1 ]
+  [[ "${stderr}" == *"preview and confirm volumes again"* ]]
+  [ -z "$(volume_removals)" ]
+}
+
+@test "Compose volume executor preserves standalone exact selection through a symlink" {
+  printf 'chosen\tchosen_a\nchosen\tchosen_b\nother\tother_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  ln -s "${root}/skills/worktree-runtime-cleanup" "${root}/installed-runtime-skill"
+  local installed="${root}/installed-runtime-skill/scripts/remove-compose-volumes.mjs"
+  run --separate-stderr node "${installed}" preview chosen - "${state}/chosen.json" chosen_b
+  [ "${status}" -eq 0 ]
+  [ "${output}" = $'Delete: chosen_b\nRetain: chosen_a' ]
+
+  run --separate-stderr node "${installed}" apply "${state}/chosen.json" other
+  [ "${status}" -eq 1 ]
+  [ -z "$(volume_removals)" ]
+  run --separate-stderr node "${installed}" apply "${state}/chosen.json" chosen
+  [ "${status}" -eq 0 ]
+  [ "$(volume_removals)" = 'volume rm -- chosen_b' ]
+  run ! grep -q '^compose ' "${FAKE_DOCKER_CALLS}"
+}
+
+@test "Compose volume executor unavailable leaves volumes and does not block Git-only checks" {
+  fake_compose_stack $'volumes:\n  data:'
+  printf 'worktree\tworktree_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  preview
+  [ "${status}" -eq 0 ]
+  cp "${state}/preview.json" "${state}/confirmed.json"
+  mv "${root}/skills/worktree-runtime-cleanup/scripts/remove-compose-volumes.mjs" "${root}/removed-helper.mjs"
+
+  remote_with
+  [ "${status}" -eq 0 ]
+  preview
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"delete volumes -"$'\t'"retain volumes worktree_data"* ]]
+  : >"${FAKE_DOCKER_PS}"
+  compare "${state}/confirmed.json" --after-stop
+  [ "${status}" -eq 3 ]
+  [[ "${stderr}" == *"runtime volume helper unavailable"* ]]
+  [ -z "$(volume_removals)" ]
 }

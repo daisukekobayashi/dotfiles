@@ -162,28 +162,60 @@ by a tool timeout may never reach its `down` trap.
      `-`), whose owner cannot be determined from Docker state.
      This discovers Compose stacks only; native processes still require known
      launch context.
-2. If nothing is listed, report that and continue with temporary-file cleanup.
-3. Show the listed stacks (project, running/total, `working_dir`, reason) and
+2. Show the listed stacks (project, running/total, `working_dir`, reason) and
    get explicit confirmation for each project to stop.
    - When the target is a primary checkout (the one that owns `.git`) or the
      list came from `--stale`, the stacks may belong to other sessions: list
      them and let the user choose, with no pre-selected default.
    - A stack is worktree-owned when the target is a linked worktree, the list
      came from a path, and the reason is exactly `under target`. For these,
-     also preview the volumes from
-     `docker volume ls --filter label=com.docker.compose.project=<project>`;
-     the confirmation covers deleting them, because they are unreachable once
-     the worktree is gone.
-4. Run `docker compose -p <project> down --remove-orphans` for each confirmed
-   project, adding `--volumes` for worktree-owned stacks. For other stacks,
-   volumes stay; add `--volumes` only when the user asks to delete data.
-   Volumes marked `external` survive `--volumes` either way.
-   - A volume-only project has nothing to bring down. Delete its volumes only
-     when the user chooses that project: preview the names from
-     `docker volume ls --filter label=com.docker.compose.project=<project>`,
-     then run `docker volume rm` on exactly those names.
-5. Re-run the same `list-stacks.sh` command and report what stopped and what
-   remains.
+     offer an exact volume deletion preview. For other stacks, offer it only
+     when the user asks to delete their volume data.
+   - When a provider passes a confirmed cleanup target manifest, use it as
+     the confirmation for the stacks and the volumes marked for deletion.
+     Keep using that same manifest on resume, even when its stack is gone
+     and only its confirmed volume removals remain.
+   - For standalone cleanup, run
+     `node <volume-script> preview '<project>' '<working_dir>' '<file>'`,
+     where `<volume-script>` is
+     [`scripts/remove-compose-volumes.mjs`](scripts/remove-compose-volumes.mjs)
+     and the file is a new absolute path under private agent-work storage
+     outside the worktree. Show the delete and retain lists and confirm the
+     exact delete names. To offer only a subset, repeat the preview with a
+     new file and the selected volume names as separate arguments.
+   - For a volume-only project, offer no default. When the user explicitly
+     selects it, pass `-` for `working_dir` to preview project-labeled
+     volumes and confirm their names. Show that the working directory is
+     unknown and omit any volume already known to be external. The project
+     label establishes membership in the selected project.
+   - With no listed stacks and no outstanding confirmed volume removals,
+     continue with temporary-file cleanup.
+3. From each confirmed stack's working directory and with its known Compose
+   invocation, run `docker compose -p <project> down --remove-orphans` with
+   volumes left in place. A volume-only or already stopped project needs no
+   stack stop. If a required stop fails, keep the volumes and report the
+   blocker.
+4. When the confirmation lists volume removals and the containers are gone, run
+   `node <volume-script> apply '<confirmed-file>' '<worktree>'` with the
+   same provider-confirmed manifest and exact worktree path, or pass the
+   standalone confirmation and its project name instead. Supply each
+   argument separately and use only the confirmation the user accepted.
+   On Windows, run the apply step through WSL so the confirmation file's
+   ownership and private mode can be checked.
+   The script checks the approved names against current project membership,
+   Docker daemon and volume identity, then removes eligible names one at a
+   time. For a normal stack, the bundled YAML parser checks the single local
+   configuration file recorded by its containers. Volumes stay when a
+   direct non-external declaration and exact name cannot be verified.
+   Multiple configurations, Compose includes or extends, and ambiguous YAML
+   or interpolated volume names give no deletion candidates.
+   A changed lookup, newly discovered project volume or
+   failed removal stops the cleanup. The script skips only names already
+   verified absent, and reports each successful removal. Use the same
+   approval to retry confirmed work after an interruption. A legacy
+   inventory-only manifest needs a fresh preview.
+5. Re-run the same `list-stacks.sh` command and report stopped, retained,
+   remaining and unverified targets.
 
 ## Temporary Runtime Files
 

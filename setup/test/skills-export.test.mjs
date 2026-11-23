@@ -130,6 +130,40 @@ function assertOk(result) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
 }
 
+test("cleanup YAML runtime matches the pinned npm package", () => {
+  assertOk(spawnSync(process.execPath, [path.join(repoRoot, "setup", "sync-cleanup-yaml.mjs"), "--check"], {
+    encoding: "utf8",
+  }));
+});
+
+test("exported Compose volume cleanup loads its bundled YAML runtime", () =>
+  withFixture(async (fixture) => {
+    const skill = "worktree-runtime-cleanup";
+    const source = path.join(fixture.dotfiles, "skills", "local", skill);
+    await cp(path.join(repoRoot, "skills", "local", skill), source, { recursive: true });
+    await writeProfile(fixture.dotfiles, "cleanup", { description: "Cleanup", external: [], local: [skill] });
+    assertOk(runExport(["--profile", "cleanup", "--out", fixture.out], fixture));
+    await rm(source, { recursive: true });
+
+    const deployed = path.join(fixture.out, "skills", skill);
+    const manifest = await readManifest(fixture.out);
+    assert.ok(manifest.files.includes("skills/worktree-runtime-cleanup/vendor/yaml/LICENSE"));
+    const helper = path.join(deployed, "scripts", "remove-compose-volumes.mjs");
+    const options = {
+      cwd: fixture.out,
+      env: { ...fixture.env, NODE_PATH: "", NODE_OPTIONS: "" },
+      encoding: "utf8",
+    };
+    const result = spawnSync(process.execPath, [helper], options);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /^Compose volume cleanup: usage: remove-compose-volumes\.mjs/);
+    if (process.platform === "win32") {
+      const apply = spawnSync(process.execPath, [helper, "apply", path.join(fixture.out, "confirmation.json"), "fixture"], options);
+      assert.equal(apply.status, 1, apply.stderr);
+      assert.match(apply.stderr, /requires POSIX confirmation checks; run cleanup through WSL/);
+    }
+  }));
+
 test("export resolves profiles and writes skills, rules, README, and manifest", () =>
   withFixture(async (fixture) => {
     const result = runExport(["--profile", "work", "--out", fixture.out], fixture);
