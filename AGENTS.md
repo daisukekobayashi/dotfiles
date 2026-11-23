@@ -43,6 +43,7 @@ matches and no `add` entry matches is a `REVIEW.md` failure.
 - add `skills/local/worktree-runtime-cleanup/SKILL.md`
 - add `skills/local/beads-merge-cleanup/SKILL.md`
 - add `skills/local/github-pr-*/SKILL.md`
+- add `skills/local/github-pr-codex-review-cycle/evals/evals.json`
 - add `skills/local/github-pr-review-request/references/*.md`
 - add `skills/local/azure-devops-pr-*/SKILL.md`
 - add `skills/local/azure-devops-common/**`

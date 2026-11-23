@@ -20,12 +20,36 @@ test("Codex review cycle detects completion from the review-state marker", async
   assert.match(wait, /`<!-- codex-review-state:v1 \{\.\.\.\} -->`/);
   assert.match(wait, /`updated_at` is later than the trigger comment's `created_at`/);
   assert.match(wait, /Track only `code_review`/);
-  assert.match(wait, /`code_review\.status` is `completed` and whose `code_review\.commit_sha`\s+equals the full published head SHA/);
+  assert.match(wait, /`code_review\.status` is `completed` and its `code_review\.commit_sha`\s+equals the full published head SHA/);
   assert.match(wait, /`running`, `null`, or missing, or with\s+another `commit_sha`, is not completion; keep waiting/);
   assert.match(wait, /`has_any_findings: false` means no actionable\s+feedback: continue at step 8/);
-  assert.match(wait, /does not parse, fall back[\s\S]*report\s+that completion was inferred without the marker/);
-  assert.doesNotMatch(wait, /review threads, inline comments, or a review summary\/comment that indicates/);
   assert.match(cycle, /^8\. Verify final PR state when possible\.\n   - Re-read thread state after writeback\./m);
+});
+
+test("Codex review cycle hands off feedback verified for the published head", async () => {
+  const cycle = await localSkill("github-pr-codex-review-cycle", "SKILL.md");
+  const wait = flatText(cycle.match(/\n4\. Wait for Codex review completion\.\n[\s\S]*?(?=\n5\. )/)?.[0] ?? "");
+  const fallback = wait.match(/If there is no marker.*?(?= - )/)?.[0];
+
+  assert.ok(fallback, "missing marker fallback");
+  assert.match(fallback, /after the trigger or its JSON does not parse/);
+  assert.match(fallback, /actual submitted Codex review output on this PR/);
+  assert.match(fallback, /`submitted_at` is later than the trigger's `created_at` and whose `commit_id` \(GraphQL `commit.oid`\) equals the full published head SHA/);
+  assert.match(wait, /verify its parent review .* and its comment and thread IDs/);
+  assert.match(wait, /Record a verified review handoff with the repository and PR, full published head SHA, accepted review ID, and accepted inline comment and thread IDs linked to that review/);
+  assert.match(flatText(cycle), /When resuming Prepare, use the verified review handoff from step 4\. If the record lacks that handoff, recheck the same trigger and published head in step 4 within the existing bound\./);
+  assert.match(flatText(cycle), /Use only the \*\*Prepare\*\* phase of `github-pr-ai-review-followup` with the verified review handoff from step 4\./);
+});
+
+test("AI review follow-up validates cycle feedback before the standalone selection branch", async () => {
+  const followup = await localSkill("github-pr-ai-review-followup", "SKILL.md");
+  const prepare = sectionOf(followup, "Prepare") ?? "";
+  const select = flatText(prepare.match(/\n4\. Select the feedback to process\.\n[\s\S]*?(?=\n5\. )/)?.[0] ?? "");
+
+  assert.match(select, /With a verified review handoff .*re-read the current PR head and the supplied review, comment, and thread evidence before classifying feedback or making fixes, including on resume/);
+  assert.match(select, /Confirm that the repository and PR, full head SHA, review's Codex authorship and reviewed commit, and the accepted IDs and their relationships still match/);
+  assert.match(select, /If the handoff cannot be validated, stop and report the missing or changed evidence\. Process only the feedback in the validated handoff\./);
+  assert.match(select, /Without a cycle handoff, identify the latest Copilot or Codex review feedback\./);
 });
 
 test("Codex review cycle pushes review fixes to the publication remote", async () => {

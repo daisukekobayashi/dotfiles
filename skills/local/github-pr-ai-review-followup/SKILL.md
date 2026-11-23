@@ -24,13 +24,28 @@ This skill does not commit or push; the user or an orchestration skill owns publ
 1. Resolve the current-repo PR from a provided number/URL or the current branch; ask if ambiguous.
 2. Fetch PR metadata and AI review comments with the GitHub plugin.
 3. When inline context, resolution state, stale/outdated state, or GitHub writeback matters, follow `github:gh-address-comments`; flat comment reads are insufficient.
-4. Identify the latest Copilot or Codex review feedback. If the source is ambiguous, say so instead of guessing. When the caller supplies earlier dispositions or assessment defaults, apply them; an item already dispositioned earlier is a `duplicate` of that item unless new evidence changes the assessment.
+4. Select the feedback to process.
+   - With a verified review handoff from the Codex review cycle, re-read the
+     current PR head and the supplied review, comment, and thread evidence
+     before classifying feedback or making fixes, including on resume.
+     Confirm that the repository and PR, full head SHA, review's Codex
+     authorship and reviewed commit, and the accepted IDs and their
+     relationships still match, including any inline item's original commit.
+     Use read-only REST or GraphQL reads if the
+     connector omits required fields. If the handoff cannot be validated,
+     stop and report the missing or changed evidence. Process only the
+     feedback in the validated handoff.
+   - Without a cycle handoff, identify the latest Copilot or Codex review
+     feedback. If the source is ambiguous, say so instead of guessing.
+   - Apply any earlier dispositions or assessment defaults from the caller.
+     An item already dispositioned is a `duplicate` of that item unless new
+     evidence changes the assessment.
 5. Split feedback into actionable, explanation-only, pre-existing, stale/resolved/duplicate/non-actionable, and ambiguous/conflicting/risky items. Classify `pre-existing` under [Triage classes](../delivery-common/references/local-review.md#triage-classes); for a PR, the merge-base is that of its head and base branch.
 6. Apply only the worthwhile local fixes. Skip speculative churn, style-only noise, and anything likely to cause regression. Defer minor and pre-existing items by default; a `material` item under [Triage classes](../delivery-common/references/local-review.md#triage-classes) is never minor. When fixing an item, fix other instances of the same bug class in the PR diff in the same round.
 7. Run the smallest relevant verification for local fixes and record its result.
    If it fails or cannot run, report the cause and leave the fixes unpublished;
    do not represent them as verified or ready for writeback.
-8. Assign a disposition to every latest AI feedback item, even when no code changed.
+8. Assign a disposition to every selected AI feedback item, even when no code changed.
    Also give every item a triage class under
    [Triage classes](../delivery-common/references/local-review.md#triage-classes),
    whatever its disposition.
