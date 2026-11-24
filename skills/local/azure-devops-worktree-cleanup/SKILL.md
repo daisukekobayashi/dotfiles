@@ -16,6 +16,13 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
 ## Workflow
 
 1. Resolve the cleanup target.
+   - To resume a standalone cleanup interrupted after `git worktree remove`
+     and before step 8, recover the original branch, exact PR, confirmed
+     manifest, and explicit confirmation. Use a surviving checkout of the
+     same local repository and the original runtime environment. Use that
+     branch as the target and look up that exact PR in step 5. If the original
+     context or confirmation cannot be established, stop and ask for a fresh
+     confirmation.
    - Prefer an explicitly named branch.
    - Otherwise use the current feature branch.
    - If the current branch is the default branch and no target is specified,
@@ -92,8 +99,24 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    combined confirmation from Caller preview counts only when the user gave it
    in their own message and explicitly accepted these resources, and they match
    the preview as Caller preview defines; otherwise show them and ask again.
+   For this post-removal standalone resume, skip both building a new manifest
+   and asking again only when the original confirmation still applies. Use the
+   original confirmed file in step 7.
 7. Remove the local worktree first when one exists. If you are inside it, change
    to a safe location before removal.
+   - For the post-removal standalone resume, use the fresh step 5 facts and
+     the original confirmed worktree path and manifest. Run
+     `node <cleanup-script> compare <facts> --worktree '<confirmed canonical path>' --confirmed '<file>' --after-worktree-removal`
+     with the same `--temp` targets. The compare verifies the path and Git
+     registration are gone, and requires verifiable runtime listings at
+     confirmation and now. It checks for remaining processes, Compose projects
+     or volumes due for removal, and other changes before issuing branch
+     authorization. Exit 0 continues directly to step 8 using the new compare
+     output. Exit 3 requires a new confirmation at step 6; any other status
+     stops the cleanup. Do not use an earlier compare's output or repeat the
+     runtime stop or worktree removal on this path. For an interrupted
+     cleanup dispatched by a delivery workflow, return to the caller for
+     its reconfirmation procedure.
    - On a fresh cleanup, where no part of the confirmed runtime stop has run,
      before any removal, run `node <cleanup-script> compare <facts> <targets>
      --confirmed '<file>'` with step 5's facts, the same `--worktree` or

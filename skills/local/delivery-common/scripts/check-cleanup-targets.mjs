@@ -8,7 +8,7 @@
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
 //   node check-cleanup-targets.mjs local <facts>
 //   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]
-//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop]
+//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal]
 //
 // <facts> are the provider facts the caller looked up; the script makes no
 // gh, az, or API call. Every one is required:
@@ -134,6 +134,14 @@
 //   could not run there either. On a match it prints the targets, for a
 //   proposed local branch `local <branch> <sha>`, the SHA to delete it at, and
 //   for a proposed remote branch `lease <remote> <sha>`.
+//   --after-worktree-removal resumes standalone cleanup before local branch
+//   deletion. Use the original confirmed manifest and its exact canonical
+//   --worktree path, from the original repository with fresh facts from the
+//   same PR. The path and registration must both be gone, and the branch must
+//   still be eligible locally. Runtime listings at confirmation and now must
+//   be verifiable. The current path-scoped listings must be empty, and the
+//   checks for confirmed PIDs, Compose projects and volumes, temporary paths
+//   and branch targets still apply. A Caller preview does not qualify.
 //
 // Every displayed value, such as a path or command, is printed with control
 // characters encoded as \xNN, so no target can print a line of its own; the
@@ -189,7 +197,7 @@ const USAGE = [
   "       check-cleanup-targets.mjs remote <facts> [--preview]",
   "       check-cleanup-targets.mjs local <facts>",
   "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]",
-  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop]",
+  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal]",
   "facts: (--github <host> <owner>/<repo> | --azure <org> <project> <repo>) --branch <branch>",
   "       --pr-state <state> --pr-head <sha> --cross-repo true|false --default-branch <branch>",
   "       --protected true|false --open-prs <n> [--remote <name>]",
@@ -392,14 +400,21 @@ const git = (args) => {
   return result.stdout;
 };
 
-// Runs git and returns { status, stdout }; a status other than those
+// Runs git and returns { status, stdout, stderr }; a status other than those
 // `allowed` means the check cannot run.
 const gitStatus = (args, allowed) => {
   const result = spawnSync("git", args, { encoding: "utf8" });
   if (!allowed.includes(result.status)) {
     return cannotRun(`git ${args.join(" ")} exited ${result.status ?? result.signal}: ${(result.stderr || result.error?.message || "").toString().trim()}`);
   }
-  return { status: result.status, stdout: result.stdout };
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+};
+
+const worktreeFields = () => {
+  const z = gitStatus(["worktree", "list", "--porcelain", "-z"], [0, 129]);
+  if (z.status === 0) return { fields: z.stdout.split("\0"), nul: true, stderr: z.stderr };
+  const lines = gitStatus(["worktree", "list", "--porcelain"], [0]);
+  return { fields: lines.stdout.split("\n"), nul: false, stderr: lines.stderr };
 };
 
 // Looks up refs/heads/<branch> as git enumerates it. Returns { sha, symref }
@@ -412,13 +427,12 @@ const gitStatus = (args, allowed) => {
 // line output counts only when every line is a known field, so a path that
 // breaks a line holds the deletion.
 const checkedOutBranches = () => {
-  const z = gitStatus(["worktree", "list", "--porcelain", "-z"], [0, 129]);
-  const fields = z.status === 0 ? z.stdout.split("\0") : git(["worktree", "list", "--porcelain"]).split("\n");
+  const { fields, nul } = worktreeFields();
   const known = /^(?:worktree .+|HEAD [0-9a-f]+|branch refs\/.+|detached|bare|locked(?: .*)?|prunable(?: .*)?|)$/;
   const branches = [];
   let worktree = null;
   for (const field of fields) {
-    if (z.status !== 0 && !known.test(field)) return `git worktree list printed a line that cannot be parsed: ${field}`;
+    if (!nul && !known.test(field)) return `git worktree list printed a line that cannot be parsed: ${field}`;
     if (field.startsWith("worktree ")) worktree = field.slice("worktree ".length);
     else if (field.startsWith("branch ")) branches.push([worktree, field.slice("branch ".length)]);
   }
@@ -640,13 +654,13 @@ const resolveTemp = (given) => {
   return cannotRun(`cannot resolve --temp ${given}: a dangling symbolic link occupies the path`);
 };
 
-const readTargets = (options) => {
+const readTargets = (options, afterWorktreeRemoval = false) => {
   const worktreeOption = options["--worktree"];
   if (Boolean(worktreeOption) === Boolean(options["--no-worktree"])) usage("exactly one of --worktree or --no-worktree is required");
   let worktree = null;
   if (worktreeOption) {
     if (!path.isAbsolute(worktreeOption[0])) usage(`--worktree is not an absolute path: ${JSON.stringify(worktreeOption[0])}`);
-    worktree = realpathOrNull(worktreeOption[0]);
+    worktree = afterWorktreeRemoval ? worktreeOption[0] : realpathOrNull(worktreeOption[0]);
     if (!worktree) usage(`--worktree not found: ${JSON.stringify(worktreeOption[0])}`);
   }
   const seen = new Set();
@@ -657,6 +671,46 @@ const readTargets = (options) => {
     return { path: given, resolved: resolveTemp(given) };
   });
   return { worktree, temps };
+};
+
+// The approved path is already canonical. A missing or redirected parent,
+// a dangling symlink at the target, and a failed lookup do not prove removal.
+const checkWorktreePathAbsent = (worktree) => {
+  const parent = path.dirname(worktree);
+  try {
+    if (realpathSync(parent) !== parent) fail([`the confirmed worktree parent changed: ${parent}`]);
+  } catch (error) {
+    return cannotRun(`cannot resolve the confirmed worktree parent ${parent}: ${error.message}`);
+  }
+  try {
+    lstatSync(worktree);
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    return cannotRun(`cannot check the confirmed worktree path ${worktree}: ${error.message}`);
+  }
+  fail([`the confirmed worktree path still exists: ${worktree}`]);
+};
+
+const checkWorktreeUnregistered = (worktree, branch) => {
+  const { fields, stderr } = worktreeFields();
+  const validField = /^(?:worktree .+|HEAD [0-9a-f]+|branch refs\/.+|detached|bare|locked(?: .*)?|prunable(?: .*)?|)$/s;
+  if (stderr?.trim() || !fields[0]?.startsWith("worktree ") ||
+      fields.at(-2) !== "" || fields.at(-1) !== "" ||
+      fields.some((field) => !validField.test(field))) {
+    cannotRun("git worktree list did not give a complete worktree inventory");
+  }
+  for (const field of fields) {
+    if (field.startsWith("worktree ")) {
+      const registered = field.slice("worktree ".length);
+      if (!path.isAbsolute(registered)) cannotRun("git worktree list included a non-absolute or quoted path");
+      if (foldName(path.normalize(registered)) === foldName(worktree)) {
+        fail([`the confirmed worktree path is still registered: ${worktree}`]);
+      }
+    }
+    if (field.startsWith("branch ") && sameBranchName(field.slice("branch ".length), `refs/heads/${branch}`)) {
+      fail([`the confirmed branch is checked out in a worktree: ${branch}`]);
+    }
+  }
 };
 
 // Runs a read-only listing script of worktree-runtime-cleanup and returns its
@@ -895,6 +949,15 @@ const composeStopIncomplete = (item, resume) => {
   return reasons.length > 0 ? reasons.join("; and ") : null;
 };
 
+// A Compose project with containers can disappear from the path-scoped
+// listing when its working_dir label changes. Recheck confirmed names as well.
+const composeWorktreeRemovalIncomplete = (item) => {
+  const containers = runLookup("docker ps", "docker", ["ps", "-a", "--filter", `label=com.docker.compose.project=${item.project}`, "--format", "{{.ID}}"]);
+  if (containers.unavailable) return `its containers cannot be verified: ${containers.unavailable}`;
+  if (containers.stdout.trim() !== "") return "it still has containers";
+  return composeStopIncomplete(item, false);
+};
+
 // For a process that is gone from the listing, why it may still run, or
 // null. The listing covers only processes tied to the worktree, so a process
 // whose cwd moved away drops out while it keeps running: it is gone only when
@@ -912,15 +975,27 @@ const processSurvives = (item) => {
 };
 
 const compareCommand = (args) => {
-  const options = parseOptions(args, { ...FACTS, ...TARGETS, "--confirmed": 1, "--resume-stop": 0, "--after-stop": 0 });
+  const options = parseOptions(args, {
+    ...FACTS, ...TARGETS, "--confirmed": 1, "--resume-stop": 0, "--after-stop": 0, "--after-worktree-removal": 0,
+  });
   const resumeStop = Boolean(options["--resume-stop"]);
-  if (resumeStop && options["--after-stop"]) usage("choose one runtime comparison mode");
-  // In either stop mode, confirmed and now absent runtimes are expected.
-  const stopped = resumeStop || options["--after-stop"] ? [] : null;
+  const afterStop = Boolean(options["--after-stop"]);
+  const afterWorktreeRemoval = Boolean(options["--after-worktree-removal"]);
+  const modes = [resumeStop, afterStop, afterWorktreeRemoval].filter(Boolean);
+  if (modes.length > 1) usage("choose one runtime comparison mode");
+  // In a stop or removal mode, confirmed and now absent runtimes are expected.
+  const stopped = modes.length > 0 ? [] : null;
   if (!options["--confirmed"]) usage("missing --confirmed");
   const facts = readFacts(options);
-  const targets = readTargets(options);
+  const targets = readTargets(options, afterWorktreeRemoval);
   const confirmed = readConfirmed(options["--confirmed"][0]);
+  if (afterWorktreeRemoval) {
+    if (confirmed.preview !== false) fail(["worktree removal resume requires the original standalone confirmation"]);
+    if (!targets.worktree || path.normalize(targets.worktree) !== targets.worktree || targets.worktree !== confirmed.worktree) {
+      fail(["worktree removal resume requires the exact confirmed worktree path"]);
+    }
+    checkWorktreePathAbsent(targets.worktree);
+  }
   const current = buildManifest(facts, targets, { preview: false });
 
   const differences = [];
@@ -931,7 +1006,9 @@ const compareCommand = (args) => {
   let localDeleted = false;
   const localBefore = confirmed.local ?? {};
   const localAfter = current.local;
-  if (localAfter.status === "absent" && localBefore.status === "proposed") {
+  if (afterWorktreeRemoval && localAfter.status !== "proposed") {
+    differences.push(`the confirmed local branch must still be eligible for deletion: ${localAfter.reason ?? localAfter.status}`);
+  } else if (localAfter.status === "absent" && localBefore.status === "proposed") {
     localDeleted = true;
   } else if (localAfter.status === "unmerged") {
     differences.push(`local branch refs/heads/${current.branch} cannot be deleted: ${localAfter.reason}`);
@@ -952,6 +1029,15 @@ const compareCommand = (args) => {
     differences.push(`remote branch: confirmed ${JSON.stringify(describeRemote(before))}, now ${JSON.stringify(describeRemote(after))}${after.reason ? ` (${after.reason})` : ""}`);
   }
 
+  if (afterWorktreeRemoval) {
+    for (const section of ["processes", "compose"]) {
+      if (confirmed[section].status !== "ok" || current[section].status !== "ok") {
+        differences.push(`${section}: worktree removal resume requires verified listings at confirmation and now`);
+      } else if (current[section].items.length > 0) {
+        differences.push(`${section}: resources are still listed under the removed worktree`);
+      }
+    }
+  }
   compareRuntime(
     "processes", confirmed, current,
     (item) => [item.pid, item.started, item.cwd],
@@ -966,9 +1052,9 @@ const compareCommand = (args) => {
     (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${JSON.stringify(item.volumes)}`,
     differences,
     stopped,
-    (item) => composeStopIncomplete(item, resumeStop),
+    (item) => afterWorktreeRemoval ? composeWorktreeRemovalIncomplete(item) : composeStopIncomplete(item, resumeStop),
   );
-  if (options["--after-stop"]) {
+  if (afterStop) {
     for (const item of confirmed.compose.items) {
       if (item.deleteVolumes.length > 0 && current.compose.items.some((live) => live.project === item.project)) {
         differences.push(`compose project ${item.project} still has containers and confirmed volume removals`);
@@ -998,7 +1084,12 @@ const compareCommand = (args) => {
   for (const temp of removedTemps) stopped.push(`temporary path ${temp.path}`);
 
   if (differences.length > 0) fail(["the cleanup targets differ from the confirmed manifest:", ...differences]);
-  process.stdout.write(formatTargets(current));
+  if (afterWorktreeRemoval) {
+    checkWorktreeUnregistered(targets.worktree, facts.branch);
+    checkWorktreePathAbsent(targets.worktree);
+  }
+  process.stdout.write(formatTargets(afterWorktreeRemoval ? { ...current, worktree: null } : current));
+  if (afterWorktreeRemoval) process.stdout.write(row("worktree already removed", targets.worktree) + "\n");
   const stopLabel = resumeStop ? "matched for resume" : "stopped as confirmed";
   for (const item of stopped ?? []) process.stdout.write(row(stopLabel, item) + "\n");
   if (localDeleted) process.stdout.write(`${row(`local branch already deleted: refs/heads/${current.branch}`)}\n`);
