@@ -8,7 +8,7 @@
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
 //   node check-cleanup-targets.mjs local <facts>
 //   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]
-//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--after-stop]
+//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop]
 //
 // <facts> are the provider facts the caller looked up; the script makes no
 // gh, az, or API call. Every one is required:
@@ -69,8 +69,8 @@
 //   Builds the **cleanup target manifest**: the worktree, the local branch
 //   result, the remote branch result, processes from
 //   `list-processes.sh <worktree>`, Compose projects from
-//   `list-stacks.sh <worktree>` with their volumes from
-//   `docker volume ls`, and the temporary paths with their resolved targets.
+//   `list-stacks.sh <worktree>` with volumes marked for deletion or retention,
+//   and the temporary paths with their resolved targets.
 //   The listings are the read-only scripts of worktree-runtime-cleanup, run
 //   from this skill tree. A lookup that exits non-zero or writes to stderr
 //   cannot run; it never counts as an empty listing. The manifest also
@@ -104,7 +104,8 @@
 //   Builds the manifest again, after the merge, and compares it with the
 //   confirmed manifest (the Caller preview when the confirmation was combined,
 //   otherwise the manifest the user confirmed). Processes are compared by PID,
-//   start time, and cwd; Compose projects by name, working_dir, and volumes;
+//   start time, and cwd; Compose projects by name, working_dir, ownership,
+//   volume inventory and deletion plan;
 //   temporary paths by path and resolved target; each list as a multiset of
 //   identity tuples;
 //   the local branch by status and SHA; the rest, including the PR head
@@ -112,7 +113,7 @@
 //   branch that no longer exists, reported as already deleted by the host, and
 //   a confirmed local branch that no longer exists, reported as already
 //   deleted. A local branch that is `unmerged` now is a difference. With
-//   --after-stop, run after the confirmed runtime stop, a confirmed process,
+//   --resume-stop before resuming, or --after-stop after the stop, a confirmed process,
 //   Compose project, or temporary path that is gone is also expected and
 //   printed as `stopped as confirmed`; a new or changed item is still a
 //   difference, while a confirmed item still listed unchanged passes, since
@@ -122,16 +123,12 @@
 //   confirmation stays unverified and passes, as in the strict compare.
 //   A process counts as gone only when no process has its PID (`kill -0`,
 //   which sends no signal, finds none), since the listing drops a running
-//   process whose cwd leaves the worktree; a reused PID also holds. A Compose project counts as gone only
-//   when `docker volume ls` runs and lists no volume of the project that the
-//   confirmed manifest did not have and, for a worktree-owned project (reason
-//   exactly `under target`, whose stop deletes its volumes), none of its
-//   confirmed volumes. An external volume the stop keeps by design also holds
-//   here, since Docker records no external flag and the check never evaluates
-//   the checkout's Compose configuration; a manifest rebuilt after the stop no
-//   longer lists the project, so the user's fresh confirmation continues with
-//   the volume in place. A temporary path counts as gone only when `lstat`
-//   finds no entry at the path. Without --after-stop, a
+//   process whose cwd leaves the worktree; a reused PID also holds. A Compose
+//   project counts as gone only when its volume inventory is verifiable and
+//   no new volume exists. --resume-stop permits outstanding confirmed volumes
+//   whose identities and eligibility match. --after-stop requires confirmed
+//   removals to be absent but permits intentional keeps. A temporary path
+//   counts as gone only when `lstat` finds no entry. Without either stop mode, a
 //   confirmed item that is gone is a difference. A listing that cannot run is
 //   a difference for a Caller preview, and for any other manifest unless it
 //   could not run there either. On a match it prints the targets, for a
@@ -165,7 +162,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Same pattern as check-branch-name.mjs, which exits on load and so cannot be
 // imported; keep the two in step.
@@ -176,11 +173,14 @@ const GITHUB_HOST = /^[A-Za-z0-9.-]+$/;
 const GITHUB_REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+$/;
 const GITHUB_PR_URL = /^https:\/\/([A-Za-z0-9.-]+)\/([^/]+\/[^/]+)\/pull\/[1-9][0-9]*$/;
 const AZURE_COMPONENT = /^(?=.*[A-Za-z0-9])[A-Za-z0-9. _-]+$/;
-const MANIFEST_VERSION = 2;
+// The runtime executor reads this format. Keep Git-only checks usable when
+// the runtime skill is unavailable.
+const MANIFEST_VERSION = 3;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pushTargetScript = path.join(here, "check-push-target.mjs");
 const runtimeScripts = path.join(here, "..", "..", "worktree-runtime-cleanup", "scripts");
+let volumeTools;
 
 const USAGE = [
   "usage: check-cleanup-targets.mjs github-source --github <host> <base-owner>/<base-repo> --branch <branch> [--remote <name>]",
@@ -189,7 +189,7 @@ const USAGE = [
   "       check-cleanup-targets.mjs remote <facts> [--preview]",
   "       check-cleanup-targets.mjs local <facts>",
   "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]",
-  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--after-stop]",
+  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop]",
   "facts: (--github <host> <owner>/<repo> | --azure <org> <project> <repo>) --branch <branch>",
   "       --pr-state <state> --pr-head <sha> --cross-repo true|false --default-branch <branch>",
   "       --protected true|false --open-prs <n> [--remote <name>]",
@@ -704,12 +704,18 @@ const listCompose = (worktree) => {
   for (const [project, counts, workingDir, ...reason] of listing.rows) {
     const volumes = runLookup("docker volume ls", "docker", ["volume", "ls", "--filter", `label=com.docker.compose.project=${project}`, "--format", "{{.Name}}"]);
     if (volumes.unavailable) return { status: "unavailable", reason: volumes.unavailable, items: [] };
+    const names = volumes.stdout.split("\n").filter(Boolean).sort();
+    const cause = reason.join("\t");
+    const plan = cause === "under target" ? volumeTools?.planVolumeRemoval(project, workingDir, names) : null;
     items.push({
       project,
       counts,
       working_dir: workingDir,
-      reason: reason.join("\t"),
-      volumes: volumes.stdout.split("\n").filter((line) => line !== "").sort(),
+      reason: cause,
+      volumes: names,
+      daemon: plan?.daemon ?? null,
+      configFiles: plan?.configFiles ?? [],
+      deleteVolumes: plan?.deleteVolumes ?? [],
     });
   }
   return { status: "ok", items };
@@ -752,7 +758,10 @@ const formatTargets = (manifest) => {
     lines.push(row("process", `pid ${item.pid}`, `started ${item.started}`, `cwd ${item.cwd}`, item.reason, item.command));
   }
   for (const item of manifest.compose.items) {
-    lines.push(row("compose project", item.project, `working_dir ${item.working_dir}`, `volumes ${item.volumes.join(",") || "-"}`, item.reason));
+    const deletion = item.deleteVolumes.map(({ name }) => name);
+    const retained = item.volumes.filter((name) => !deletion.includes(name));
+    lines.push(row("compose project", item.project, `working_dir ${item.working_dir}`,
+      `delete volumes ${deletion.join(",") || "-"}`, `retain volumes ${retained.join(",") || "-"}`, item.reason));
   }
   for (const section of unavailableSections(manifest)) {
     lines.push(row(section, `unverified: ${manifest[section].reason}`));
@@ -822,7 +831,7 @@ const readConfirmed = (file) => {
   } catch (error) {
     return usage(`cannot read the confirmed manifest ${JSON.stringify(file)}: ${error.message}`);
   }
-  if (manifest?.version !== MANIFEST_VERSION) usage(`not a version ${MANIFEST_VERSION} cleanup target manifest: ${JSON.stringify(file)}`);
+  if (manifest?.version !== MANIFEST_VERSION) usage(`not a version ${MANIFEST_VERSION} cleanup target manifest; preview and confirm again`);
   return manifest;
 };
 
@@ -864,24 +873,25 @@ const compareRuntime = (section, confirmed, current, identity, label, difference
   }
 };
 
-// For a Compose project that is gone, why its stop is not proven complete,
-// or null. The project label still lists its volumes: a volume the
-// confirmed manifest did not have is a new target, and for a worktree-owned
-// project (reason exactly `under target`), whose stop deletes its volumes, a
-// confirmed volume that remains means the stop did not finish. Projects with
-// another reason keep their volumes by design.
-const composeStopIncomplete = (item) => {
+// A confirmed project may be gone while its volume cleanup is in progress.
+// New project members hold, but intentional keeps may outlive the stack.
+const composeStopIncomplete = (item, resume) => {
   const volumes = runLookup("docker volume ls", "docker", ["volume", "ls", "--filter", `label=com.docker.compose.project=${item.project}`, "--format", "{{.Name}}"]);
   if (volumes.unavailable) return `its volumes cannot be verified: ${volumes.unavailable}`;
   const listed = volumes.stdout.split("\n").filter((line) => line !== "");
   const added = listed.filter((volume) => !item.volumes.includes(volume));
-  const remaining = item.reason === "under target" ? item.volumes.filter((volume) => listed.includes(volume)) : [];
-  // Docker records no external flag, and this check never evaluates the
-  // checkout's Compose configuration, so an external volume that the stop
-  // keeps by design also holds here, and the user confirms fresh targets.
+  let remaining = [];
+  try {
+    if (item.deleteVolumes.length > 0) {
+      if (!volumeTools) return "its confirmed volume removals cannot be verified: runtime volume helper unavailable";
+      remaining = volumeTools.remainingVolumeRemovals(item, { verifyEligibility: resume });
+    }
+  } catch (error) {
+    return `its volume removal targets cannot be verified: ${error.message}`;
+  }
   const reasons = [];
   if (added.length > 0) reasons.push(`it has new volumes: ${added.join(", ")}`);
-  if (remaining.length > 0) reasons.push(`its volumes remain: ${remaining.join(", ")}; one may be an external volume the stop keeps by design, so confirm the targets again at step 6 to continue with it in place`);
+  if (!resume && remaining.length > 0) reasons.push(`confirmed volumes remain: ${remaining.map(({ name }) => name).join(", ")}`);
   return reasons.length > 0 ? reasons.join("; and ") : null;
 };
 
@@ -902,10 +912,11 @@ const processSurvives = (item) => {
 };
 
 const compareCommand = (args) => {
-  const options = parseOptions(args, { ...FACTS, ...TARGETS, "--confirmed": 1, "--after-stop": 0 });
-  // After the confirmed runtime stop, a confirmed runtime resource that is
-  // gone is expected and collected here instead of counting as a difference.
-  const stopped = options["--after-stop"] ? [] : null;
+  const options = parseOptions(args, { ...FACTS, ...TARGETS, "--confirmed": 1, "--resume-stop": 0, "--after-stop": 0 });
+  const resumeStop = Boolean(options["--resume-stop"]);
+  if (resumeStop && options["--after-stop"]) usage("choose one runtime comparison mode");
+  // In either stop mode, confirmed and now absent runtimes are expected.
+  const stopped = resumeStop || options["--after-stop"] ? [] : null;
   if (!options["--confirmed"]) usage("missing --confirmed");
   const facts = readFacts(options);
   const targets = readTargets(options);
@@ -951,12 +962,19 @@ const compareCommand = (args) => {
   );
   compareRuntime(
     "compose", confirmed, current,
-    (item) => [item.project, item.working_dir, item.volumes],
+    (item) => [item.project, item.working_dir, item.reason, item.volumes, item.daemon, item.configFiles, item.deleteVolumes],
     (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${JSON.stringify(item.volumes)}`,
     differences,
     stopped,
-    composeStopIncomplete,
+    (item) => composeStopIncomplete(item, resumeStop),
   );
+  if (options["--after-stop"]) {
+    for (const item of confirmed.compose.items) {
+      if (item.deleteVolumes.length > 0 && current.compose.items.some((live) => live.project === item.project)) {
+        differences.push(`compose project ${item.project} still has containers and confirmed volume removals`);
+      }
+    }
+  }
   const tempIdentity = (temp) => [temp.path, temp.resolved];
   const confirmedTemps = confirmed.temps ?? [];
   // After the stop, a temporary path that no longer resolves stands for the
@@ -981,7 +999,8 @@ const compareCommand = (args) => {
 
   if (differences.length > 0) fail(["the cleanup targets differ from the confirmed manifest:", ...differences]);
   process.stdout.write(formatTargets(current));
-  for (const item of stopped ?? []) process.stdout.write(`${row("stopped as confirmed", item)}\n`);
+  const stopLabel = resumeStop ? "matched for resume" : "stopped as confirmed";
+  for (const item of stopped ?? []) process.stdout.write(row(stopLabel, item) + "\n");
   if (localDeleted) process.stdout.write(`${row(`local branch already deleted: refs/heads/${current.branch}`)}\n`);
   if (hostDeleted) process.stdout.write(`${row(`remote branch already deleted by the host: ${after.remote} refs/heads/${current.branch}`)}\n`);
   // The authorization lines come last; branch, remote, and SHA are checked
@@ -1000,4 +1019,13 @@ const subcommands = {
   compare: compareCommand,
 };
 if (!Object.hasOwn(subcommands, subcommand ?? "")) usage(subcommand === undefined ? "" : `unknown subcommand: ${JSON.stringify(subcommand)}`);
+if (subcommand === "manifest" || subcommand === "compare") {
+  try {
+    const helper = await import(pathToFileURL(path.join(runtimeScripts, "remove-compose-volumes.mjs")).href);
+    if (helper.CLEANUP_MANIFEST_VERSION === MANIFEST_VERSION) volumeTools = helper;
+  } catch {
+    // An absent or incomplete runtime skill gives no deletion candidates.
+    // A previously confirmed deletion holds when it can no longer be checked.
+  }
+}
 subcommands[subcommand](rest);
