@@ -226,8 +226,8 @@ follows the retry rule in [Check a handoff](#check-a-handoff).
 Use the ordinary worker check for drafts and delegated phase status reports
 and for verified legacy dispatches. Legacy reports that lack a classification
 leave that coverage unknown. The caller chooses the mode from its own record.
-For hosted fixes, use the strict mode on the separate report described under
-**Hosted fix verification evidence** below.
+For new or unpublished hosted fixes, use the strict mode on the separate
+report described under **Hosted fix verification evidence** below.
 
 ## Hosted fix verification evidence
 
@@ -235,10 +235,15 @@ For hosted fixes, use the strict mode on the separate report described under
    ordinary v1 worker reports in the private records directory for the round.
    Use `rh<n>-prepare-verification-a<attempt>.md` and
    `rh<n>-settled-verification-a<attempt>.md`, taking a fresh attempt when
-   reissuing. Record the expected path, attempt, exact task, PR and worktree,
-   base, pre-checkpoint HEAD, round `h<n>`, and strict mode before dispatch.
-   Use the local worktree HEAD the caller confirms for the evidence's
-   `Head`. The outer hosted report's `Head` describes the remote end state.
+   reissuing. Record the expected path, attempt, task, worktree, base, round
+   `h<n>`, and strict mode before dispatch. Bind the assignment to the real
+   PR, reviewed head and local pre-checkpoint HEAD before Prepare can edit
+   or issue verification. Verify an existing binding against the live target.
+   For a first publication or other unbound assignment, use the coordinator
+   continuation described under **Bind the hosted Prepare target** in
+   [Phase Delegation](phase-delegation.md). The evidence report's `Head`
+   is the checked local pre-checkpoint HEAD. The outer hosted report's `Head`
+   describes the remote end state.
 2. At each verification stage, identify the input using
    [Keys](optional-workflows.md#keys) and the exact files in scope. In the
    evidence report's `Target`, include the task, PR, worktree and input key
@@ -263,10 +268,13 @@ For hosted fixes, use the strict mode on the separate report described under
    only through the same uninterrupted verification and checkpoint, and
    recheck after any interruption or change before the checkpoint.
 4. Before staging, check the separate settled report and make it the
-   authoritative verification in the fix record. Use its required outcome,
-   actual rows, optional result, coverage limits and input in both that
-   record and the affected replies. Keep replies and dispositions tied to
-   the settled changes. Remove provisional claims that are no longer supported,
+   authoritative verification in the private fix record. Keep its required
+   outcome, actual rows, optional result, coverage limits and input there.
+   Draft affected public replies from a safe, minimized summary of the
+   relevant outcomes under the follow-up skill's Writeback rules. Keep
+   complete commands, output, inputs, paths, and diagnostic details private.
+   Keep replies and dispositions tied to the settled changes. Remove
+   provisional claims that are no longer supported,
    including when all fixes are dropped. In that case clear provisional
    verification and use only claims supported by the unchanged PR head.
    Stage only the verified changes and check that the staged edits match
@@ -280,6 +288,25 @@ For hosted fixes, use the strict mode on the separate report described under
    against the binding. Keep affected items pending if the binding cannot
    be confirmed. The outer phase report carries status and the reference to
    the checked evidence for the appropriate stage.
+
+### Pending published fixes from a legacy dispatch
+
+Select the evidence mode from the coordinator's own checked dispatch and
+publication records. Use the legacy mode only when those records positively
+establish a pre-upgrade dispatch, successful required checks on its fixes,
+verified publication of the fix commit, and pending Writeback for the same
+repository, PR, and feedback items. Recheck the preserved report in its
+original mode with any recorded hash. Match the current remote PR head to the
+verified fix commit and recheck the current fixes and thread scope before
+continuing Writeback.
+
+Missing labels, a missing or failed strict check, and a supplied claim of
+legacy status provide no such provenance. Use current strict evidence for
+new work and before publishing any remaining fixes. Leave fix-dependent items
+pending when provenance, required checks, publication, or current identity
+cannot be confirmed. Legacy classification stays unknown. Resume with the
+previously verified result and a safe public summary without making a new
+claim about what ran or creating evidence for the earlier uncommitted input.
 
 ## Codex route
 

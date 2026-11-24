@@ -74,9 +74,11 @@ Still stop and ask before:
      verified review handoff from step 4. If the record lacks that handoff,
      recheck the same trigger and published head in step 4 within the existing
      bound.
-     Continue any verified pending publication/Writeback phase with its
-     prepared record. Evidence for an older head does not satisfy a review of
-     the current head.
+     Continue verified pending publication or Writeback with its prepared
+     record. For delivery fixes already published, select the evidence mode
+     under [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence)
+     and resume pending Writeback at step 7 when the recorded evidence holds.
+     Evidence for an older head does not satisfy a review of the current head.
 2. Use `github-pr-publish`.
    - Preserve that skill's verification, staging, commit, push, and PR rules.
    - Capture the PR number, PR URL, branch, push remote, commit, and
@@ -125,7 +127,13 @@ Still stop and ask before:
    the verified review handoff from step 4.
    - If Prepare cannot validate the handoff, report the mismatch and stop.
    - Forward any earlier dispositions and assessment defaults the caller supplied.
-   - For delivery fixes, forward the assigned Prepare evidence brief under
+   - In delivery, require the coordinator's checked Prepare evidence binding
+     for this repository, PR, reviewed head and worktree before calling Prepare.
+     If the verified review needs Prepare and its assignment is unbound, pause
+     and return a coordinator binding request with the actual target and the
+     saved publication, trigger and review records. Continue the same attempt
+     here once the coordinator binds that identity. Reuse a matching recorded
+     binding when resuming. Forward the bound brief to Prepare under
      [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence).
    - Capture its prepared record, including per-thread dispositions, required
      verification, proposed replies, and pending publication. Do not reply or resolve yet,

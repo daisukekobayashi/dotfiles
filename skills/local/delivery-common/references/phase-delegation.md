@@ -64,7 +64,8 @@ the component skill's unchanged final report or output. Its Completion is:
 - `complete` when the call finished;
 - `question` before any action that its forwarded approvals do not cover, and
   for a preview that returns targets, which asks for the combined
-  confirmation;
+  confirmation. An unbound hosted Prepare instead returns a coordinator
+  request under [Bind the hosted Prepare target](#bind-the-hosted-prepare-target);
 - `blocked` with the blocker and the last state it checked.
 
 The summary's labels carry what the next step needs:
@@ -114,6 +115,31 @@ assessment. It continues the same agent with the answer, quoting the user's
 reply verbatim as the approval for that action alone. The preview's answer
 goes to the cleanup agent after the merge instead. The component skill's own
 checks, such as the cleanup comparison, still run before the agent acts.
+
+## Bind the hosted Prepare target
+
+If the worker has a verified review handoff that needs Prepare and no
+current checked evidence binding, pause before Prepare. In the ordinary
+phase report return `question` with a request for coordinator binding and
+the repository, PR, source branch, verified reviewed head, local worktree
+and pre-checkpoint HEAD. Carry the existing publication, trigger and review
+record references. A verified no-actionable-feedback result bypasses Prepare
+and needs no evidence binding.
+
+The coordinator checks the PR and current remote source head independently.
+Match the repository, source branch and head to the retained verified
+review handoff, and match the local worktree, branch and HEAD to that target.
+Confirm the recorded attempt and report assignments or assign their
+paths now. Record the checked identity in the private dispatch record under
+[Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence).
+On mismatch, stop before Prepare and report the discrepancy.
+
+Continue the same agent and attempt at Prepare with the binding. This is a
+coordinator check and uses the existing approval. Preserve completed
+publication and any recorded trigger and review outcome. On resume use a
+matching recorded binding, or finish a pending binding from those verified
+records and continue the earliest incomplete step. Avoid repeating publication
+or posting another review trigger to obtain a binding.
 
 ## Report path
 

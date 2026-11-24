@@ -1201,7 +1201,8 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
   const raw = await read("delivery-common", "references", "phase-delegation.md");
   const home = flat(raw);
   const headings = raw.match(/^## .+$/gm).map((h) => h.slice(3));
-  assert.deepEqual(headings, ["Choose the agent", "Brief the agent", "Return to the coordinator", "Report path", "Resume a delegated phase"]);
+  assert.deepEqual(headings, ["Choose the agent", "Brief the agent", "Return to the coordinator",
+    "Bind the hosted Prepare target", "Report path", "Resume a delegated phase"]);
 
   for (const rule of [
     // Every post-implementation component call is delegated, and the coordinator keeps the user dialogue.
@@ -1216,7 +1217,7 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     /The brief carries the user's actual request, the existing approvals, the exact target/,
     /Include \[Foreground Checks\]\(\.\.\/SKILL\.md#foreground-checks\)/,
     /appends the intent and outcome entries of each external action it takes to the task's `log\.md` under Delivery Completion's \[Progress record\]\(completion\.md#progress-record\), and never writes `state\.md`\./,
-    /`question` before any action that its forwarded approvals do not cover, and for a preview that returns targets, which asks for the combined confirmation;/,
+    /`question` before any action that its forwarded approvals do not cover, and for a preview that returns targets, which asks for the combined confirmation\. An unbound hosted Prepare instead returns a coordinator request/,
     // The v1 summary carries each phase result in fixed labels; the checker stays unchanged.
     /- Target: the worktree, branch, and task, and the PR's URL and ID once a PR exists\./,
     /- Verification: one line each for the component skill's status, such as the cycle's status or the publish result, and for a hosted round the published head and the head the hosted review covered\./,
@@ -1675,7 +1676,7 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     const fixEvidence = await write("hosted-fix-evidence", worker({
       Target: `worktree, branch, task, PR, verification:${head}:${"1".repeat(40)}`,
       Round: "h1", Completion: "complete",
-      Verification: "\n  - [changed path run] npm test -- feature.test.mjs -> passed",
+      Verification: "\n  - [changed path run] npm test -- feature.test.mjs -> passed, private diagnostic at /tmp/example-fixture/run.log",
       "Optional workflows": "verify-app: stopped: time bound",
     }));
     const outerStatus = await write("hosted-outer-status", worker({
@@ -1685,12 +1686,21 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     const runHosted = (file, expectedHead, extra = []) => spawnSync(process.execPath, [script, "--kind", "worker",
       "--base", base, "--head", expectedHead, "--round", "h1", "--report", file, ...extra], { encoding: "utf8" });
     assert.equal(runHosted(fixEvidence, head, [strict]).status, 0);
+    assert.match(runHosted(fixEvidence, head, [strict, "--show"]).stdout, /private diagnostic at \/tmp\/example-fixture\/run\.log/);
     const fixHash = createHash("sha256").update(await readFile(fixEvidence)).digest("hex");
     assert.equal(runHosted(fixEvidence, head, [strict, "--sha256", fixHash]).status, 0);
     assert.match(runHosted(fixEvidence, published, [strict, "--sha256", fixHash]).stderr, /Head is not/);
     assert.equal(runHosted(outerStatus, published).status, 0);
     assert.match(runHosted(outerStatus, published, [strict]).stderr, /invalid classified Verification row/);
     assert.match(runHosted(outerStatus, published, [strict, "--sha256", fixHash]).stderr, /report changed/);
+    const publishedLegacyEvidence = await write("published-legacy-verification", worker({
+      Head: published, Round: "h1", Verification: "required checks passed",
+    }));
+    const publishedLegacyHash = createHash("sha256").update(await readFile(publishedLegacyEvidence)).digest("hex");
+    assert.equal(runHosted(publishedLegacyEvidence, published, ["--sha256", publishedLegacyHash]).status, 0);
+    assert.match(runHosted(publishedLegacyEvidence, head, ["--sha256", publishedLegacyHash]).stderr, /Head is not/);
+    assert.match(runHosted(publishedLegacyEvidence, published, [strict, "--sha256", publishedLegacyHash]).stderr,
+      /Verification must list classified checks/);
     for (const [name, line] of [
       ["unknown", "  - [verified] npm test -> passed"],
       ["unchecked", "  - npm test -> passed"],
@@ -1727,12 +1737,12 @@ test("shared and hosted delivery route classified verification and optional stat
   assert.match(localReview, /Use \[Project verification\]\(worker-dialogue\.md#project-verification\) and \[Classified verification\]\(report-handoff\.md#classified-verification\) before the fix checkpoint/);
   assert.match(phase, /reference the applicable separate evidence report by path and SHA-256\. Use the ordinary v1 check for this outer status report/);
   assert.match(handoff, /the coordinator assigns separate ordinary v1 worker reports/);
-  assert.match(handoff, /record the expected path, attempt, exact task, PR and worktree, base, pre-checkpoint HEAD, round `h<n>`, and strict mode before dispatch/i);
+  assert.match(handoff, /record the expected path, attempt, task, worktree, base, round `h<n>`, and strict mode before dispatch\. Bind the assignment to the real PR, reviewed head and local pre-checkpoint HEAD before Prepare can edit or issue verification/i);
   assert.match(handoff, /worker handoff check with `--require-verification-labels` and `--show` against the assigned path, expected base, pre-checkpoint HEAD and round/);
   assert.match(handoff, /pass `--sha256` with the same strict mode and identity on recheck.*An outer status report cannot replace missing or invalid evidence/);
   assert.match(handoff, /Reuse Prepare's required checks only if its strict report and recorded hash validate for the same input key and scope/);
   assert.match(handoff, /If key capture is unavailable, record the optional skip and use fresh required checks/);
-  assert.match(handoff, /make it the authoritative verification in the fix record\. Use its required outcome, actual rows, optional result, coverage limits and input in both that record and the affected replies/);
+  assert.match(handoff, /make it the authoritative verification in the private fix record\. Keep its required outcome, actual rows, optional result, coverage limits and input there\. Draft affected public replies from a safe, minimized summary/);
   assert.match(handoff, /Remove provisional claims that are no longer supported, including when all fixes are dropped/);
   assert.match(handoff, /Keep the evidence's pre-checkpoint HEAD and hash in that binding\. Writeback and the coordinator use that same settled record and evidence/);
   assert.match(phase, /For hosted fix evidence, recheck the recorded mode, identity, hash, and any published-head binding/);
@@ -1746,6 +1756,50 @@ test("shared and hosted delivery route classified verification and optional stat
   assert.match(cycle, /Optional verification status is reported separately and does not gate publication/);
   assert.match(cycle, /confirm the PR's remote head equals that commit and bind the settled verification evidence to it before Writeback/);
   assert.match(cycle, /worthwhile fixes were handled, required verification passed/);
+});
+
+test("delivery binds the hosted Prepare target once and resumes only verified legacy Writeback", async () => {
+  const root = path.join(repoRoot, "skills", "local");
+  const read = async (file) => flat(await readText(path.join(root, file)));
+  const [phase, handoff, followup, cycle] = await Promise.all([
+    read("delivery-common/references/phase-delegation.md"),
+    read("delivery-common/references/report-handoff.md"),
+    read("github-pr-ai-review-followup/SKILL.md"),
+    read("github-pr-codex-review-cycle/SKILL.md"),
+  ]);
+  assert.match(phase, /verified review handoff that needs Prepare and no current checked evidence binding, pause before Prepare/);
+  assert.match(phase, /A verified no-actionable-feedback result bypasses Prepare and needs no evidence binding/);
+  assert.match(phase, /The coordinator checks the PR and current remote source head independently\. Match the repository, source branch and head to the retained verified review handoff, and match the local worktree, branch and HEAD to that target/);
+  assert.match(phase, /Continue the same agent and attempt at Prepare with the binding\. This is a coordinator check and uses the existing approval/);
+  assert.match(phase, /On resume use a matching recorded binding, or finish a pending binding from those verified records and continue the earliest incomplete step\. Avoid repeating publication or posting another review trigger to obtain a binding/);
+  assert.match(cycle, /If the verified review needs Prepare and its assignment is unbound, pause and return a coordinator binding request with the actual target and the saved publication, trigger and review records/);
+  assert.match(cycle, /Continue the same attempt here once the coordinator binds that identity\. Reuse a matching recorded binding when resuming/);
+  assert.match(followup, /For delivery Prepare, require the coordinator's checked \[hosted fix verification binding\]/);
+  assert.match(followup, /to the current PR, reviewed head and worktree before editing or running verification/);
+  assert.match(handoff, /from the coordinator's own checked dispatch and publication records/);
+  assert.match(handoff, /pre-upgrade dispatch, successful required checks on its fixes, verified publication of the fix commit, and pending Writeback for the same repository, PR, and feedback items/);
+  assert.match(handoff, /Recheck the preserved report in its original mode with any recorded hash\. Match the current remote PR head to the verified fix commit and recheck the current fixes and thread scope/);
+  assert.match(handoff, /Missing labels, a missing or failed strict check, and a supplied claim of legacy status provide no such provenance/);
+  assert.match(handoff, /Use current strict evidence for new work and before publishing any remaining fixes\. Leave fix-dependent items pending when provenance, required checks, publication, or current identity cannot be confirmed\. Legacy classification stays unknown/);
+  assert.match(handoff, /without making a new claim about what ran or creating evidence for the earlier uncommitted input/);
+  assert.match(cycle, /resume pending Writeback at step 7 when the recorded evidence holds/);
+  assert.match(followup, /Continue legacy pending Writeback only under that section's positively verified legacy route/);
+});
+
+test("public reply boundaries keep raw verification evidence private through Writeback", async () => {
+  const local = path.join(repoRoot, "skills", "local");
+  const handoff = flat(await readText(path.join(local, "delivery-common/references/report-handoff.md")));
+  const followup = flat(await readText(path.join(local, "github-pr-ai-review-followup/SKILL.md")));
+  assert.match(handoff, /Draft affected public replies from a safe, minimized summary of the relevant outcomes under the follow-up skill's Writeback rules\. Keep complete commands, output, inputs, paths, and diagnostic details private/);
+  assert.match(followup, /Draft replies under \[Public replies\]\(#public-replies\)/);
+  assert.match(followup, /Check each final outgoing body under \[Public replies\]\(#public-replies\) immediately before sending, including on direct, standalone, and legacy Writeback/);
+  assert.match(followup, /Keep complete commands, results, diagnostics, inputs and evidence in private records/);
+  assert.match(followup, /With unknown classification, report only the known outcome/);
+  assert.match(followup, /Leave out raw tool output, private artifacts, paths, URLs, identifiers, keys and sensitive data from the verification summary/);
+  assert.match(followup, /Check the entire outgoing body for private details and unsupported claims, including earlier proposed text/);
+  assert.match(followup, /Omit unsafe detail or leave the affected item pending/);
+  assert.match(followup, /Verification: <safe outcome summary>/);
+  assert.doesNotMatch(followup, /Verification: <command or not run reason>/);
 });
 
 test("delivery preflight runs architect, then arena at High tier, as registered optional workflows", async () => {
