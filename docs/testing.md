@@ -33,7 +33,7 @@ When `pwsh` is installed (mise installs `powershell` on Linux, WSL, and macOS),
 Static checks:
 
 ```bash
-shellcheck -S warning setup.sh lib/common.sh setup/*.sh tests/setup_suite.bash tests/helpers/*.bash tests/*.bats
+shellcheck -S warning setup.sh lib/common.sh setup/*.sh scripts/delivery-context.sh tests/setup_suite.bash tests/helpers/*.bash tests/*.bats
 bash -n setup.sh lib/common.sh setup/*.sh tests/setup_suite.bash tests/helpers/*.bash
 ```
 

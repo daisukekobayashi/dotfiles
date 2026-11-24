@@ -6,6 +6,7 @@
 npm --prefix setup ci              # restore dependencies in a fresh worktree
 npm --prefix setup test
 scripts/check-skills-build.sh
+shellcheck -S warning setup.sh lib/common.sh setup/*.sh scripts/delivery-context.sh tests/setup_suite.bash tests/helpers/*.bash tests/*.bats
 bats tests
 bats tests/compose_rules.bats      # one file
 ```
