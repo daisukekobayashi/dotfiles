@@ -1377,7 +1377,7 @@ test("review and worker reports hand off through a file and a fixed summary", as
 });
 
 test("check-report-handoff accepts a complete report and rejects incomplete ones", async () => {
-  const { mkdir, mkdtemp, readFile, realpath, writeFile, chmod, rm } = await import("node:fs/promises");
+  const { appendFile, mkdir, mkdtemp, readFile, realpath, writeFile, chmod, rm } = await import("node:fs/promises");
   const os = await import("node:os");
   const { spawnSync } = await import("node:child_process");
   const script = path.join(repoRoot, "skills", "local", "delivery-common", "scripts", "check-report-handoff.mjs");
@@ -1647,9 +1647,64 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.match(runWorker(await write("worker-su-blank", worker({ Overview: "" })), ["--draft", "su"]).stderr, /empty Overview/);
     assert.match(runWorker(await write("worker-pf-blank", worker({ Tier: "" })), ["--draft", "preflight"]).stderr, /empty Tier/);
 
+    const strict = "--require-verification-labels";
+    const labelled = await write("worker-labelled", worker({ Verification: "\n"
+      + "  - [changed path run] npm test -> failed assertion\n"
+      + "  - [proxy only] node --check app.mjs -> passed\n"
+      + "  - [not run] browser test -> runtime unavailable" }));
+    assert.equal(runWorker(labelled, [strict]).status, 0);
+    assert.equal(runWorker(labelled).status, 0, "the v1 reader also accepts a classified report");
+    const labelledHash = createHash("sha256").update(await readFile(labelled)).digest("hex");
+    assert.equal(runWorker(labelled, [strict, "--sha256", labelledHash]).status, 0);
+    await appendFile(labelled, "\n");
+    assert.match(runWorker(labelled, [strict, "--sha256", labelledHash]).stderr, /report changed/);
+
+    const old = await write("worker-old-verification", worker());
+    const oldHash = createHash("sha256").update(await readFile(old)).digest("hex");
+    assert.equal(runWorker(old, ["--sha256", oldHash]).status, 0);
+    assert.match(runWorker(old, [strict, "--sha256", oldHash]).stderr, /invalid classified Verification row/);
+    assert.equal(runWorker(old, ["--draft", "preflight", strict]).status, 2);
+    const phase = await write("worker-phase-status", worker({ Verification: "published head matches" }));
+    assert.equal(runWorker(phase).status, 0);
+    assert.match(runWorker(phase, [strict]).stderr, /Verification must list classified checks/);
+    for (const [name, line] of [
+      ["unknown", "  - [verified] npm test -> passed"],
+      ["unchecked", "  - npm test -> passed"],
+      ["empty-check", "  - [proxy only]  -> passed"],
+      ["empty-reason", "  - [not run] browser test ->  "],
+      ["control", "  - [proxy only] check\t -> passed"],
+    ]) {
+      const file = await write(`worker-labelled-${name}`, worker({ Verification: `\n${line}` }));
+      assert.match(runWorker(file, [strict]).stderr, /invalid classified Verification row/, name);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("shared and hosted delivery route classified verification and optional status by phase", async () => {
+  const local = path.join(repoRoot, "skills", "local");
+  const read = async (file) => flat(await readText(path.join(local, file)));
+  const ref = (name) => read(`delivery-common/references/${name}.md`);
+  const [dialogue, optional, localReview, handoff, completion, phase, followup, cycle] = await Promise.all([
+    ref("worker-dialogue"), ref("optional-workflows"), ref("local-review"), ref("report-handoff"),
+    ref("completion"), ref("phase-delegation"), read("github-pr-ai-review-followup/SKILL.md"),
+    read("github-pr-codex-review-cycle/SKILL.md"),
+  ]);
+  assert.match(dialogue, /Use the shared \[phase-input key script\]\(optional-workflows\.md#keys\) for both entries/);
+  assert.match(dialogue, /Use an established project rule or an explicit user choice to select one candidate/);
+  assert.match(dialogue, /record `not run: no project verification skill`/);
+  assert.match(dialogue, /the worktree changes the procedure or its helpers\. Existing authorizations govern tool use/);
+  assert.match(optional, /\| `verify-<app>` \| Implementation and fix verification .* \| All tiers \| 15 minutes per invocation including setup, execution, evidence, and owned cleanup \| Phase input: `verification`/);
+  assert.match(optional, /has no `\[optional O<n>\]` pair or intent, consumes no allowance, and does not increment the run count/);
+  assert.match(handoff, /\`--require-verification-labels\` on the first check and every hash recheck/);
+  assert.match(handoff, /ordinary worker check for drafts and delegated phase status reports and for verified legacy dispatches/);
+  assert.match(completion, /skip before key capture/);
+  assert.match(localReview, /Use \[Project verification\]\(worker-dialogue\.md#project-verification\) and \[Classified verification\]\(report-handoff\.md#classified-verification\) before the fix checkpoint/);
+  assert.match(phase, /Use the ordinary v1 check for the outer phase report/);
+  assert.match(followup, /When the delivery caller supplies a classified-verification brief.*for the actual checks on these prepared fixes/);
+  assert.match(cycle, /Reuse classified Prepare rows only when their recorded verification input key matches the settled input/);
+  assert.match(cycle, /If required verification is unsuccessful or unavailable, stop before commit or push/);
 });
 
 test("delivery preflight runs architect, then arena at High tier, as registered optional workflows", async () => {

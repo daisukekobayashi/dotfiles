@@ -265,6 +265,17 @@ calling workflow adds its own items. Each provider skill lists only those
 additions next to its link, such as the hosted review outcome on GitHub or the
 proposed Work Item state transitions on Azure DevOps.
 
+For implementation and fixes, delivery labels executed checks in `Verification:`
+as `changed path run` or `proxy only` and states the reason for checks that did
+not run. New implementation and fix handoffs use the caller's recorded label
+check mode on first read and on resume. Earlier reports remain readable in
+their recorded mode and leave any unlabelled coverage unknown. A current,
+authorized project `verify-<app>` that covers the change can run once per phase
+input, within 15 minutes or the user's shorter bound. If no project skill
+applies, delivery reports `not run: no project verification skill` and
+continues ordinary checks. Both preflight and verification capture their
+pre-checkpoint keys using `write-phase-input-key.mjs` in private task records.
+
 Shared delivery policy lives in `delivery-common`; restating it in a provider
 delivery skill is drift. A policy change that applies to both providers edits
 `delivery-common` once and updates the ownership statement and the frontmatter

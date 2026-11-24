@@ -125,12 +125,20 @@ Still stop and ask before:
    the verified review handoff from step 4.
    - If Prepare cannot validate the handoff, report the mismatch and stop.
    - Forward any earlier dispositions and assessment defaults the caller supplied.
+   - If the delivery caller supplies a classified-verification brief, forward it
+     to Prepare so its record labels the checks on the prepared changes.
    - Capture its prepared record, including per-thread dispositions, verification,
      proposed replies, and pending publication. Do not reply or resolve yet,
      even though this cycle authorizes later writeback.
 6. If review fixes changed files, commit and push the verified fixes.
    - Reuse Prepare's successful verification if no relevant files changed after
      it; otherwise run the smallest relevant verification for the changed files.
+   - In delivery, apply [Project verification](../delivery-common/references/worker-dialogue.md#project-verification)
+     to the settled fixes before their checkpoint. Reuse classified Prepare
+     rows only when their recorded verification input key matches the settled
+     input. If it differs, cannot be checked, or the rows are missing or invalid,
+     run the relevant checks on the settled fixes and label those results.
+     Carry the resulting classified rows into the final report.
    - Stage only review-follow-up changes.
    - Stop and report `<branch>` unless it is a **safe branch name**: run
      `node <script> -- '<branch>'`, where `<script>` is
@@ -156,7 +164,8 @@ Still stop and ask before:
      remote; use a remote the user names as given. The explicit remote and
      refspec keep `branch.<branch>.pushRemote` or `remote.pushDefault` from
      sending the fixes away from the PR head.
-   - If verification is unsuccessful or unavailable, stop before commit or push.
+   - If required verification is unsuccessful or unavailable, stop before
+     commit or push.
      If verification, commit, or push fails, stop the cycle and report; do not
      enter step 7.
    - Add the published commit to the prepared record.
@@ -191,7 +200,7 @@ Use this structure:
 **Cycle Status: <Complete | Blocked | Partial>**
 - Branch: `<branch>`
 - PR: <url>
-- Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result>`
+- Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result, or the classified rows for delivery fixes>`
 - Codex: `<acknowledged/completed/blocked summary>`
 - Follow-up: `<applied/explained/skipped/pre-existing/stale/duplicate counts>`
 - Not applied: one line per item not `applied`, from the prepared record:

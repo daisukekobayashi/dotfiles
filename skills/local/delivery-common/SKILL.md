@@ -1,6 +1,6 @@
 ---
 name: delivery-common
-description: Shared worker dialogue, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, delegates publication, hosted review, and cleanup calls to agents, stops at a bound or a missing prerequisite, runs or reports an optional workflow, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
+description: Shared worker dialogue, verification, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, verifies implementation or fixes and classifies the results, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, delegates publication, hosted review, and cleanup calls to agents, stops at a bound or a missing prerequisite, runs or reports an optional workflow, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
 ---
 
 # Delivery Common
@@ -8,6 +8,9 @@ description: Shared worker dialogue, local review procedure, risk tier, and comp
 Use [Worker Dialogue](references/worker-dialogue.md) for worker dispatch through
 the start skill and for each target's shared understanding, design preflight,
 and implementation: workers draft, and the coordinator asks the user. Use
+[Project verification](references/worker-dialogue.md#project-verification) and
+[Classified verification](references/report-handoff.md#classified-verification)
+to verify implementation and fixes and hand off the results. Use
 [Phase Delegation](references/phase-delegation.md) for every component-skill
 call after implementation: publication, the hosted review cycle, the cleanup
 preview, and cleanup. Use
@@ -156,3 +159,7 @@ shared **report handoff check**. Delivery coordinators and Codex-routed review
 callers run it on each report under
 [Report Handoff](references/report-handoff.md#check-a-handoff); its header
 gives the usage, checks, and exit codes.
+
+[`scripts/write-phase-input-key.mjs`](scripts/write-phase-input-key.mjs)
+captures the exact pre-checkpoint inputs for design preflight and verification
+under [Optional Workflows](references/optional-workflows.md#keys).

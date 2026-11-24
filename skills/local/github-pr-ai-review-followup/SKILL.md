@@ -45,6 +45,12 @@ This skill does not commit or push; the user or an orchestration skill owns publ
 7. Run the smallest relevant verification for local fixes and record its result.
    If it fails or cannot run, report the cause and leave the fixes unpublished;
    do not represent them as verified or ready for writeback.
+   When the delivery caller supplies a classified-verification brief, use its
+   [verification rows](../delivery-common/references/report-handoff.md#classified-verification)
+   for the actual checks on these prepared fixes. Carry the rows and their
+   [verification input key](../delivery-common/references/optional-workflows.md#keys)
+   in the prepared record. Record a missing or changed key as a reason to rerun
+   these checks before publication.
 8. Assign a disposition to every selected AI feedback item, even when no code changed.
    Also give every item a triage class under
    [Triage classes](../delivery-common/references/local-review.md#triage-classes),

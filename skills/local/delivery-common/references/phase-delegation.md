@@ -40,7 +40,10 @@ target (task, branch, worktree, and the PR and head when known), the component
 skill and the call it makes, the agent's name and attempt as `state.md` records
 them, the records directory, the report path under
 [Report path](#report-path), and earlier dispositions and other material as
-paths to existing material. For the preview and the cleanup, it also assigns
+paths to existing material. For the hosted cycle's fixes, forward the
+[classified verification format](report-handoff.md#classified-verification)
+and the task records used by [Project verification](worker-dialogue.md#project-verification).
+For the preview and the cleanup, it also assigns
 the manifest path: the report path with `.manifest.json` in place of `.md`,
 which the cleanup skill creates as a new file. Include
 [Foreground Checks](../SKILL.md#foreground-checks): a wait for a hosted review
@@ -72,7 +75,11 @@ The summary's labels carry what the next step needs:
 - Head: the head the phase ended on, under [Report path](#report-path).
 - Verification: one line each for the component skill's status, such as the
   cycle's status or the publish result, and for a hosted round the published
-  head and the head the hosted review covered.
+  head and the head the hosted review covered. Include the classified rows
+  from the check of the settled hosted fixes when there are such checks. Phase
+  status rows stay on the ordinary worker format. Check the hosted fix rows
+  against the classified syntax in their Prepare or recheck record. Use the
+  ordinary v1 check for the outer phase report, which also carries status.
 - Questions: the prepared result to decide on: the prepared dispositions, the
   push remote candidates, or the cleanup targets as the manifest command
   printed them with the manifest path.

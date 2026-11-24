@@ -180,10 +180,10 @@ Write each summary label once, exactly as shown, and the values in the
 report's language. Indent list items and continuation lines under their label.
 List every item, and write `None` for an empty list.
 
-Worker reports stay on this v1 summary: the check only validates its labels
-and required values and never matches it against the full report, so the gaps
-that moved reviews to a block, which came from matching a written summary
-against free-form Output, do not arise for workers.
+Worker reports stay on this v1 summary. The check validates its labels and
+required values and applies [Classified verification](#classified-verification)
+when the caller requires it. It never matches the summary against the full
+report.
 
 When a change makes a new worker summary label required, such as
 `Optional workflows:`, the check keeps no branch for the old summary: once the
@@ -194,6 +194,39 @@ earlier worker reports before its installed check updates, or reissues each
 such report it still needs at a new path, as the next attempt, with the label,
 and checks it before acting on it. The merge confirmation of the change names
 the in-flight deliveries and the reports this affects.
+
+### Classified verification
+
+New implementation and fix reports put one row per check in the existing
+`Verification:` field. Use the following syntax in the report and its summary:
+
+```markdown
+- Verification:
+  - [changed path run] <command or action> -> <actual result>
+  - [proxy only] <command or action> -> <actual result>
+  - [not run] <check> -> <reason>
+```
+
+A changed path run exercised the behavior changed by the task on the current
+input. Label indirect evidence `proxy only`, such as a syntax or wiring check
+that did not exercise that behavior. A check that reached the changed path and
+then failed still has a `changed path run` row with its failure result. Use
+`not run` for an unexecuted check and state why, including when no checks ran.
+Report actual observed results and coverage limits. Keep optional-workflow
+status under `Optional workflows:`.
+
+Before dispatching an implementation or fix report, record its path, attempt
+and required verification-label mode in the dispatch record. Use
+`--require-verification-labels` on the first check and every hash recheck of
+that report. Keep its expected mode in the hash record. On resume use the
+recorded mode. If it is unknown, validate the dispatch context before using
+the report or reissue it at a new attempt. A strict report that fails the check
+follows the retry rule in [Check a handoff](#check-a-handoff).
+
+Use the ordinary worker check for drafts and delegated phase status reports
+and for verified legacy dispatches. Legacy reports that lack a classification
+leave that coverage unknown. The caller chooses the mode from its own record.
+GitHub's hosted phase status is separate from its [fix evidence](phase-delegation.md#return-to-the-coordinator).
 
 ## Codex route
 
@@ -229,7 +262,9 @@ Before acting on a report, the caller runs
 from this reference's directory, with the expected base and head SHAs and
 round, and `--kind review --reviewer <skill> --show` or `--kind worker`, adding
 `--draft su` or `--draft preflight` for a draft; its header gives the usage,
-checks, and exit codes. For a review, the summary it prints is the only review
+checks, and exit codes. For new implementation and fix reports, pass
+`--require-verification-labels` as [Classified verification](#classified-verification)
+sets out. For a review, the summary it prints is the only review
 summary; decide from it, not from the reviewer's reply. It rejects a review
 report with a v1 summary, and a v2 block except on a `--sha256` recheck.
 Record its `valid sha256=<hex> bytes=<size>` line with the report in the
