@@ -12,12 +12,12 @@ description: Use when the user says the work is already merged or otherwise comp
      and before step 8, recover the original branch, exact PR, confirmed
      manifest, and explicit confirmation. Use a surviving checkout of the
      same local repository and the original runtime environment. Use that
-     branch as the target and look up that exact PR in step 5. Establish from
-     the original confirmation that the manifest has stayed at its original
-     path under the private storage conditions in step 6. A file copied from
-     an unverified location cannot establish custody. If the context,
-     confirmation, or continuous custody cannot be established, stop and
-     report the reason.
+     branch as the target and look up that exact PR in step 5. Recover the
+     exact SHA-256 included with the targets in the original trusted
+     confirmation. Use the original confirmed path. Never compute the
+     expected digest from the file on resume or read it from storage beside
+     the manifest. If the original context, confirmation, or digest cannot
+     be established, stop and report the reason.
    - Prefer an explicitly named branch.
    - Otherwise use the current feature branch.
    - If the current branch is the default branch and no target is specified, stop and ask for the branch to clean up.
@@ -74,22 +74,24 @@ description: Use when the user says the work is already merged or otherwise comp
    branch or reports it absent; exit 3 keeps it, so report the reason and
    continue without it; any other status stops the whole cleanup.
 6. Build the **cleanup target manifest** and require explicit confirmation of it: run `node <cleanup-script> manifest <facts> --worktree '<path>' --out '<file>'` (`--no-worktree` when there is none), adding `--temp '<path>'` for each run-owned temporary file `../worktree-runtime-cleanup/SKILL.md` identifies, with `<file>` a new path in agent-work storage or `/tmp` outside the worktree, and show the targets it prints, including any `unverified` section; any non-zero status stops the cleanup. Under a caller's combined confirmation, skip this build: the Caller preview manifest is the confirmed manifest. A caller's combined confirmation from Caller preview counts only when the user gave it in their own message and explicitly accepted these resources, and they match the preview as Caller preview defines; otherwise show them and ask again.
-   For a standalone manifest eligible for later post-removal resume, create a
-   private directory with `mktemp -d` before building the manifest. Use its
-   canonical absolute path outside the worktree. The directory must be owned
-   by the current user and mode 700, and its ancestors must be owned by the
-   current user or root. An ancestor writable by others must be sticky.
-   Keep the original mode-600 manifest at that exact path in this protected
-   storage from confirmation onwards. For post-removal standalone resume,
-   skip both building a new manifest and asking again only when the original
-   confirmation and custody still apply. Use that original file in step 7.
+   For standalone cleanup, include the exact `manifest sha256` value from the
+   manifest command's output with the targets in the original confirmation
+   request. Obtain explicit confirmation of that set. Retain the value in
+   the original trusted confirmation context, without writing it to a
+   separate file. For the manifest, create a private directory with
+   `mktemp -d` and choose a canonical absolute path outside the worktree.
+   Keep the mode-600 manifest at that path in private storage to protect its
+   inventory. For post-removal standalone resume, skip rebuilding and
+   reconfirming only when the original confirmation and its digest are
+   available. Use the original file in step 7.
 7. Remove the local worktree first when one exists. If you are inside it, change to a safe location before removal.
    - For the post-removal standalone resume, use the fresh step 5 facts and
-     the original confirmed worktree path and manifest. Run
-     `node <cleanup-script> compare <facts> --worktree '<confirmed canonical path>' --confirmed '<file>' --after-worktree-removal`
-     with the same `--temp` targets. The compare verifies the path and Git
-     registration are gone, and requires verifiable runtime listings at
-     confirmation and now. It checks for remaining processes, Compose projects
+     the original confirmed worktree path, manifest, and digest. Run
+     `node <cleanup-script> compare <facts> --worktree '<confirmed canonical path>' --confirmed '<file>' --after-worktree-removal --confirmed-sha256 '<original digest>'`
+     with the same `--temp` targets. The compare verifies the original SHA-256
+     before using the manifest. It checks that the path and Git registration
+     are gone, and requires verifiable runtime listings at confirmation and
+     now. It checks for remaining processes, Compose projects
      or volumes due for removal, and other changes before issuing branch
      authorization. Exit 0 continues directly to step 8 using the new compare
      output. On any non-zero exit, stop and report the exact reason. Keep the

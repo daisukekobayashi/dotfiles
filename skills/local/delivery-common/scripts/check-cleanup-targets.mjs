@@ -8,7 +8,7 @@
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
 //   node check-cleanup-targets.mjs local <facts>
 //   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]
-//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal]
+//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal --confirmed-sha256 <hex>]
 //
 // <facts> are the provider facts the caller looked up; the script makes no
 // gh, az, or API call. Every one is required:
@@ -98,7 +98,8 @@
 //   Caller preview for a combined merge and cleanup confirmation: the remote
 //   check runs as before the merge, and a listing that cannot run fails the
 //   check. Without --preview a listing that cannot run is recorded and printed
-//   as unverified.
+//   as unverified. Standalone manifests also print a `manifest sha256` row
+//   for the exact bytes written, for the original confirmation to include.
 //
 // compare
 //   Builds the manifest again, after the merge, and compares it with the
@@ -135,11 +136,13 @@
 //   proposed local branch `local <branch> <sha>`, the SHA to delete it at, and
 //   for a proposed remote branch `lease <remote> <sha>`.
 //   --after-worktree-removal resumes standalone cleanup before local branch
-//   deletion. Use the original confirmed manifest kept in private storage
-//   since confirmation and its exact canonical --worktree path, from the
-//   original repository with fresh facts from the same PR. The path and
-//   registration must both be gone, and the branch must still be eligible
-//   locally. Runtime listings at confirmation and now must
+//   deletion. Use the original confirmed manifest kept in private storage,
+//   its exact canonical --worktree path, and the --confirmed-sha256 from the
+//   original trusted confirmation. Pass fresh facts for the same PR from
+//   the original repository. The script checks the digest of the same raw
+//   file bytes it will parse, up to 16 MiB. The path and registration must
+//   both be gone, and the branch must still be eligible locally. Runtime
+//   listings at confirmation and now must
 //   be verifiable. The current path-scoped listings must be empty, and the
 //   checks for confirmed PIDs, Compose projects and volumes, temporary paths
 //   and branch targets still apply. A Caller preview does not qualify.
@@ -169,7 +172,8 @@
 // run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readlinkSync, readSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -185,6 +189,7 @@ const AZURE_COMPONENT = /^(?=.*[A-Za-z0-9])[A-Za-z0-9. _-]+$/;
 // The runtime executor reads this format. Keep Git-only checks usable when
 // the runtime skill is unavailable.
 const MANIFEST_VERSION = 3;
+const MAX_CONFIRMED_BYTES = 16 * 1024 * 1024;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pushTargetScript = path.join(here, "check-push-target.mjs");
@@ -198,7 +203,7 @@ const USAGE = [
   "       check-cleanup-targets.mjs remote <facts> [--preview]",
   "       check-cleanup-targets.mjs local <facts>",
   "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]",
-  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal]",
+  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal --confirmed-sha256 <hex>]",
   "facts: (--github <host> <owner>/<repo> | --azure <org> <project> <repo>) --branch <branch>",
   "       --pr-state <state> --pr-head <sha> --cross-repo true|false --default-branch <branch>",
   "       --protected true|false --open-prs <n> [--remote <name>]",
@@ -845,7 +850,7 @@ const isSymlinkPath = (target) => {
 // Creates the file exclusively with mode 0600 and writes through that
 // descriptor, so a symlink or file planted at the path, even after the checks
 // above, is never followed or overwritten.
-const writeNewFile = (file, text) => {
+const writeNewFile = (file, bytes) => {
   let fd;
   try {
     fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
@@ -854,13 +859,14 @@ const writeNewFile = (file, text) => {
     return cannotRun(`cannot create ${JSON.stringify(file)}: ${error.message}`);
   }
   try {
-    writeSync(fd, text);
+    writeFileSync(fd, bytes);
   } finally {
     closeSync(fd);
   }
 };
 
 const isInside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 const manifestCommand = (args) => {
   const options = parseOptions(args, { ...FACTS, ...TARGETS, "--out": 1, "--preview": 0 });
@@ -882,13 +888,15 @@ const manifestCommand = (args) => {
   if (preview && unavailable.length > 0) {
     fail(unavailable.map((section) => `${section} cannot be listed for a Caller preview: ${manifest[section].reason}`));
   }
-  writeNewFile(outReal, `${JSON.stringify(manifest, null, 2)}\n`);
+  const bytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  writeNewFile(outReal, bytes);
   process.stdout.write(formatTargets(manifest));
+  if (!preview) process.stdout.write(row("manifest sha256", sha256(bytes)) + "\n");
 };
 
-// Validate the original storage boundary on resume. Its continuity since
-// confirmation is established by the caller, which owns that confirmation.
-const readPrivateConfirmation = (file) => {
+// Read a bounded snapshot from one descriptor. Private storage protects the
+// inventory's confidentiality; the original digest binds its contents.
+const readConfirmedBytes = (file) => {
   const uid = process.getuid?.();
   if (uid === undefined || constants.O_NOFOLLOW === undefined || constants.O_NONBLOCK === undefined) {
     throw new Error("private confirmation storage cannot be verified on this platform");
@@ -897,21 +905,9 @@ const readPrivateConfirmation = (file) => {
     throw new Error("the private confirmation path must be canonical and absolute");
   }
   const parent = path.dirname(file);
-  const directories = [parent];
-  for (let dir = parent; path.dirname(dir) !== dir; dir = path.dirname(dir)) {
-    directories.push(path.dirname(dir));
-  }
-  for (const dir of directories.reverse()) {
-    const stat = lstatSync(dir);
-    if (!stat.isDirectory() || (stat.uid !== uid && stat.uid !== 0)) {
-      throw new Error(`the confirmation directory chain is not trusted: ${dir}`);
-    }
-    if (dir === parent && (stat.uid !== uid || (stat.mode & 0o077) !== 0)) {
-      throw new Error("the confirmation directory must be owned by the current user and private (mode 700)");
-    }
-    if ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0) {
-      throw new Error(`the confirmation directory chain is writable by others: ${dir}`);
-    }
+  const directory = lstatSync(parent);
+  if (!directory.isDirectory() || directory.uid !== uid || (directory.mode & 0o077) !== 0) {
+    throw new Error("the confirmation directory must be owned by the current user and private (mode 700)");
   }
   if (realpathSync(parent) !== parent) throw new Error("the private confirmation directory must be its own real path");
   const named = lstatSync(file);
@@ -925,20 +921,38 @@ const readPrivateConfirmation = (file) => {
     if (stat.uid !== uid || (stat.mode & 0o077) !== 0) {
       throw new Error("the confirmation must be owned by the current user and private (mode 600)");
     }
-    return readFileSync(fd, "utf8");
+    if (stat.size > MAX_CONFIRMED_BYTES) throw new Error("the confirmation exceeds 16 MiB");
+    const bytes = Buffer.alloc(stat.size);
+    for (let offset = 0; offset < bytes.length;) {
+      const count = readSync(fd, bytes, offset, bytes.length - offset, null);
+      if (count === 0) throw new Error("the confirmation size changed during the read");
+      offset += count;
+    }
+    const extra = Buffer.alloc(1);
+    if (readSync(fd, extra, 0, extra.length, null) !== 0) throw new Error("the confirmation size changed during the read");
+    return bytes;
   } finally {
     closeSync(fd);
   }
 };
 
-const readConfirmed = (file, requirePrivateStorage) => {
+const readConfirmed = (file, expectedDigest) => {
   let manifest;
   try {
-    manifest = JSON.parse(requirePrivateStorage ? readPrivateConfirmation(file) : readFileSync(file, "utf8"));
+    if (expectedDigest === undefined) {
+      manifest = JSON.parse(readFileSync(file, "utf8"));
+    } else {
+      const bytes = readConfirmedBytes(file);
+      if (sha256(bytes) !== expectedDigest) throw new Error("the confirmed manifest does not match the original SHA-256");
+      manifest = JSON.parse(bytes.toString("utf8"));
+    }
   } catch (error) {
     return usage(`cannot read the confirmed manifest ${JSON.stringify(file)}: ${error.message}`);
   }
-  if (manifest?.version !== MANIFEST_VERSION) usage(`not a version ${MANIFEST_VERSION} cleanup target manifest; preview and confirm again`);
+  if (manifest?.version !== MANIFEST_VERSION) {
+    const next = expectedDigest === undefined ? "; preview and confirm again" : "";
+    usage(`not a version ${MANIFEST_VERSION} cleanup target manifest${next}`);
+  }
   return manifest;
 };
 
@@ -1029,19 +1043,29 @@ const processSurvives = (item) => {
 
 const compareCommand = (args) => {
   const options = parseOptions(args, {
-    ...FACTS, ...TARGETS, "--confirmed": 1, "--resume-stop": 0, "--after-stop": 0, "--after-worktree-removal": 0,
+    ...FACTS, ...TARGETS, "--confirmed": 1, "--confirmed-sha256": 1,
+    "--resume-stop": 0, "--after-stop": 0, "--after-worktree-removal": 0,
   });
   const resumeStop = Boolean(options["--resume-stop"]);
   const afterStop = Boolean(options["--after-stop"]);
   const afterWorktreeRemoval = Boolean(options["--after-worktree-removal"]);
   const modes = [resumeStop, afterStop, afterWorktreeRemoval].filter(Boolean);
   if (modes.length > 1) usage("choose one runtime comparison mode");
+  const expectedDigest = options["--confirmed-sha256"]?.[0];
+  if (afterWorktreeRemoval) {
+    if (expectedDigest === undefined) usage("missing --confirmed-sha256 for worktree removal resume");
+    if (expectedDigest.length !== 64 || !/^[0-9a-f]+$/.test(expectedDigest)) {
+      usage("--confirmed-sha256 must be exactly 64 lowercase hex digits");
+    }
+  } else if (expectedDigest !== undefined) {
+    usage("--confirmed-sha256 requires --after-worktree-removal");
+  }
   // In a stop or removal mode, confirmed and now absent runtimes are expected.
   const stopped = modes.length > 0 ? [] : null;
   if (!options["--confirmed"]) usage("missing --confirmed");
   const facts = readFacts(options);
   const targets = readTargets(options, afterWorktreeRemoval);
-  const confirmed = readConfirmed(options["--confirmed"][0], afterWorktreeRemoval);
+  const confirmed = readConfirmed(options["--confirmed"][0], expectedDigest);
   if (afterWorktreeRemoval) {
     if (confirmed.preview !== false) fail(["worktree removal resume requires the original standalone confirmation"]);
     if (!targets.worktree || path.normalize(targets.worktree) !== targets.worktree || targets.worktree !== confirmed.worktree) {
