@@ -1231,14 +1231,14 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     // Only settled dispositions reach the PR: rejected fixes are removed before publication.
     /Before the cycle's review-fix publication, the worker makes the worktree match them: it removes the edits of every fix not settled as `applied`, makes any change they add, and reruns the smallest relevant required verification under \[Hosted fix verification evidence\]\(report-handoff\.md#hosted-fix-verification-evidence\) when Prepare's evidence cannot be reused\. It then commits, pushes, replies, and resolves only as the settled dispositions say/,
     // Assessment alone does not wait on the user.
-    /For a `question`, the coordinator asks the user only what needs the user's decision or an approval not already forwarded; it answers the rest from its own assessment\. It continues the same agent with the answer, quoting the user's reply verbatim as the approval for that action alone\. The preview's answer goes to the cleanup agent after the merge instead\. The component skill's own checks, such as the cleanup comparison, still run before the agent acts\./,
+    /For a `question`, the coordinator asks the user only what needs the user's decision or an approval not already forwarded; it answers the rest from its own assessment\. Before continuing the same agent for another return, use \[Report path\]\(#report-path\)\. Give it the answer, quoting the user's reply verbatim as the approval for that action alone\. The preview's answer goes to the cleanup agent after the merge instead\. The component skill's own checks, such as the cleanup comparison, still run before the agent acts\./,
     /`<base12>-<start12>\/rh<n>-hosted-a<attempt>\.md` for hosted round `n`, and `<base12>-<start12>\/r<phase>-phase-a<attempt>\.md` for `publish`, `preview`, or `cleanup`/,
     // The checked Head is the head the coordinator reads from the provider, not the agent's claim.
     /the coordinator reads that head itself and passes it as `--head`: the worktree's `HEAD` before a PR exists; the PR's current remote source head after that, which for the preview is the head to be merged that the Caller preview checks; and for the cleanup the source head of the merged PR\./,
     // A valid question report does not pin the phase to a lost agent, and a replaced agent cannot act again.
     /A `complete` report gives the result; a `question` report gives the prepared result to decide on\. Recorded assessments carry forward; ask the user again for an approval that the records show but this context did not receive, since a progress record is not authorization\./,
-    /2\. Continue the recorded agent when the host can address it, with the answer when there is one\./,
-    /3\. Otherwise, dispatch a fresh agent only when the host shows the recorded agent has ended; when it cannot show that, report the target `Blocked`\. Before dispatching, write the new agent and attempt to `state\.md`, so the old agent's check before acting stops it\./,
+    /2\. Continue the recorded agent when the host can address it, with the answer when there is one\. Before a continuation that writes a new report, update the attempt and path as \[Report path\]\(#report-path\) sets out\./,
+    /3\. Otherwise, dispatch a fresh agent only when the host shows the recorded agent has ended; when it cannot show that, report the target `Blocked`\. Before dispatching, record the new agent, attempt and report path under \[Report path\]\(#report-path\), so the old agent's check before acting stops it\./,
     /It resumes through the component skill's own resume and reconciles the logged external actions under Delivery Completion's \[Resume\]\(completion\.md#resume\) before acting\./,
     // A delegated cleanup is never resumed; the standalone cleanup skill redoes it with its own confirmation (user decision L2).
     /On resume of any delegated phase other than cleanup:/,
@@ -1693,6 +1693,37 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     assert.equal(runHosted(outerStatus, published).status, 0);
     assert.match(runHosted(outerStatus, published, [strict]).stderr, /invalid classified Verification row/);
     assert.match(runHosted(outerStatus, published, [strict, "--sha256", fixHash]).stderr, /report changed/);
+
+    // Distinct exclusive returns within one hosted round. Only the active
+    // return fence advances. The reviewed head and earlier evidence stay bound.
+    const returnDirectory = path.join(root, `${base.slice(0, 12)}-${head.slice(0, 12)}`);
+    await mkdir(returnDirectory, { mode: 0o700 });
+    const hostedState = path.join(root, "state.md");
+    const acceptedReturns = [];
+    for (const [index, [completion, resultHead, question]] of [
+      ["question", head, "Bind the actual PR before Prepare"],
+      ["question", head, "Assess the prepared dispositions"],
+      ["complete", published, "None"],
+    ].entries()) {
+      const attempt = index + 1;
+      const file = path.join(returnDirectory, `rh1-hosted-a${attempt}.md`);
+      await writeFile(hostedState, `Worker: same worker, hosted round h1, attempt ${attempt}\nReport: ${file}\n`);
+      const body = `${worker({
+        Target: "worktree, branch, task, repository and PR 1",
+        Head: resultHead, Round: "h1", Completion: completion, Questions: question,
+        Verification: `reviewed head ${head}${attempt === 1 ? "" : `, evidence ${fixEvidence} ${fixHash}`}`,
+      })(file).join("\n")}\n`;
+      await writeFile(file, body, { flag: "wx", mode: 0o600 });
+      assert.equal(runHosted(file, resultHead).status, 0);
+      assert.equal(await readFile(hostedState, "utf8"), `Worker: same worker, hosted round h1, attempt ${attempt}\nReport: ${file}\n`);
+      acceptedReturns.push({ file, resultHead, hash: createHash("sha256").update(await readFile(file)).digest("hex") });
+    }
+    await assert.rejects(writeFile(acceptedReturns[0].file, "replacement", { flag: "wx" }), { code: "EEXIST" });
+    for (const { file, resultHead, hash } of acceptedReturns) {
+      assert.equal(runHosted(file, resultHead, ["--sha256", hash]).status, 0);
+    }
+    assert.equal(runHosted(fixEvidence, head, [strict, "--sha256", fixHash]).status, 0);
+
     const publishedLegacyEvidence = await write("published-legacy-verification", worker({
       Head: published, Round: "h1", Verification: "required checks passed",
     }));
@@ -1770,10 +1801,14 @@ test("delivery binds the hosted Prepare target once and resumes only verified le
   assert.match(phase, /verified review handoff that needs Prepare and no current checked evidence binding, pause before Prepare/);
   assert.match(phase, /A verified no-actionable-feedback result bypasses Prepare and needs no evidence binding/);
   assert.match(phase, /The coordinator checks the PR and current remote source head independently\. Match the repository, source branch and head to the retained verified review handoff, and match the local worktree, branch and HEAD to that target/);
-  assert.match(phase, /Continue the same agent and attempt at Prepare with the binding\. This is a coordinator check and uses the existing approval/);
+  assert.match(phase, /Continue the same agent at Prepare in the same hosted round with the binding and the next return attempt under \[Report path\]\(#report-path\)\. This is a coordinator check and uses the existing approval/);
   assert.match(phase, /On resume use a matching recorded binding, or finish a pending binding from those verified records and continue the earliest incomplete step\. Avoid repeating publication or posting another review trigger to obtain a binding/);
   assert.match(cycle, /If the verified review needs Prepare and its assignment is unbound, pause and return a coordinator binding request with the actual target and the saved publication, trigger and review records/);
-  assert.match(cycle, /Continue the same attempt here once the coordinator binds that identity\. Reuse a matching recorded binding when resuming/);
+  assert.match(cycle, /Continue the same hosted round here once the coordinator binds that identity and supplies the next return attempt and path\. Reuse a matching recorded binding when resuming/);
+  assert.match(phase, /Before dispatch or continuation for a new return, the coordinator assigns the next unused return attempt and report path, records the agent, attempt and path in `state\.md`, then gives the agent that assignment/);
+  assert.match(phase, /the binding question, prepared dispositions, and final result, including on resume/);
+  assert.match(phase, /Retain each earlier report at its original path and recorded hash/);
+  assert.match(handoff, /An issued evidence report keeps its original attempt, path, binding and hash when the outer return attempt advances/);
   assert.match(followup, /For delivery Prepare, require the coordinator's checked \[hosted fix verification binding\]/);
   assert.match(followup, /to the current PR, reviewed head and worktree before editing or running verification/);
   assert.match(handoff, /from the coordinator's own checked dispatch and publication records/);

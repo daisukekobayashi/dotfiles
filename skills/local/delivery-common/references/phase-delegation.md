@@ -111,10 +111,11 @@ findings runs through.
 
 For a `question`, the coordinator asks the user only what needs the user's
 decision or an approval not already forwarded; it answers the rest from its own
-assessment. It continues the same agent with the answer, quoting the user's
-reply verbatim as the approval for that action alone. The preview's answer
-goes to the cleanup agent after the merge instead. The component skill's own
-checks, such as the cleanup comparison, still run before the agent acts.
+assessment. Before continuing the same agent for another return, use
+[Report path](#report-path). Give it the answer, quoting the user's reply
+verbatim as the approval for that action alone. The preview's answer goes to
+the cleanup agent after the merge instead. The component skill's own checks,
+such as the cleanup comparison, still run before the agent acts.
 
 ## Bind the hosted Prepare target
 
@@ -129,12 +130,14 @@ and needs no evidence binding.
 The coordinator checks the PR and current remote source head independently.
 Match the repository, source branch and head to the retained verified
 review handoff, and match the local worktree, branch and HEAD to that target.
-Confirm the recorded attempt and report assignments or assign their
-paths now. Record the checked identity in the private dispatch record under
+Confirm the binding request's recorded attempt and bind the reserved
+evidence paths or assign them now. Record the checked identity in the
+private dispatch record under
 [Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence).
 On mismatch, stop before Prepare and report the discrepancy.
 
-Continue the same agent and attempt at Prepare with the binding. This is a
+Continue the same agent at Prepare in the same hosted round with the binding
+and the next return attempt under [Report path](#report-path). This is a
 coordinator check and uses the existing approval. Preserve completed
 publication and any recorded trigger and review outcome. On resume use a
 matching recorded binding, or finish a pending binding from those verified
@@ -148,6 +151,16 @@ Delivery Completion's [Progress record](completion.md#progress-record) layout:
 `<base12>-<start12>/rh<n>-hosted-a<attempt>.md` for hosted round `n`, and
 `<base12>-<start12>/r<phase>-phase-a<attempt>.md` for `publish`, `preview`, or
 `cleanup`. Take the next attempt for each return.
+
+Before dispatch or continuation for a new return, the coordinator assigns
+the next unused return attempt and report path, records the agent, attempt
+and path in `state.md`, then gives the agent that assignment. Before writing
+the phase report, the agent checks that `state.md` still names that assignment.
+In a hosted round this applies
+to the binding question, prepared dispositions, and final result, including
+on resume. Keep the same hosted round, phase start head, PR, verified review
+and trigger, checked binding, and settled decisions when continuing.
+Retain each earlier report at its original path and recorded hash.
 
 The summary's Head is the head the phase ended on. Before
 [Check a handoff](report-handoff.md#check-a-handoff), the coordinator reads that
@@ -170,12 +183,14 @@ path, and the attempt. On resume of any delegated phase other than cleanup:
    that the records show but this context did not receive, since a progress
    record is not authorization.
 2. Continue the recorded agent when the host can address it, with the answer
-   when there is one.
+   when there is one. Before a continuation that writes a new report, update
+   the attempt and path as [Report path](#report-path) sets out.
 3. Otherwise, dispatch a fresh agent only when the host shows the recorded
    agent has ended; when it cannot show that, report the target `Blocked`.
-   Before dispatching, write the new agent and attempt to `state.md`, so the
-   old agent's check before acting stops it. Give the fresh agent the records,
-   the latest report path, and the answer. It resumes through the component
+   Before dispatching, record the new agent, attempt and report path under
+   [Report path](#report-path), so the old agent's check before acting stops it.
+   Give the fresh agent the records, the latest checked report for context,
+   and the answer. It resumes through the component
    skill's own resume and reconciles the logged external actions under
    Delivery Completion's [Resume](completion.md#resume) before acting.
 

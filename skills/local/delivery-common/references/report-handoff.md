@@ -244,6 +244,9 @@ report described under **Hosted fix verification evidence** below.
    [Phase Delegation](phase-delegation.md). The evidence report's `Head`
    is the checked local pre-checkpoint HEAD. The outer hosted report's `Head`
    describes the remote end state.
+   An issued evidence report keeps its original attempt, path, binding and
+   hash when the outer return attempt advances. Assign a new evidence path
+   only when writing new evidence.
 2. At each verification stage, identify the input using
    [Keys](optional-workflows.md#keys) and the exact files in scope. In the
    evidence report's `Target`, include the task, PR, worktree and input key

@@ -131,9 +131,10 @@ Still stop and ask before:
      for this repository, PR, reviewed head and worktree before calling Prepare.
      If the verified review needs Prepare and its assignment is unbound, pause
      and return a coordinator binding request with the actual target and the
-     saved publication, trigger and review records. Continue the same attempt
-     here once the coordinator binds that identity. Reuse a matching recorded
-     binding when resuming. Forward the bound brief to Prepare under
+     saved publication, trigger and review records. Continue the same hosted
+     round here once the coordinator binds that identity and supplies the next
+     return attempt and path. Reuse a matching recorded binding when resuming.
+     Forward the bound brief to Prepare under
      [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence).
    - Capture its prepared record, including per-thread dispositions, required
      verification, proposed replies, and pending publication. Do not reply or resolve yet,
