@@ -40,7 +40,9 @@ target (task, branch, worktree, and the PR and head when known), the component
 skill and the call it makes, the agent's name and attempt as `state.md` records
 them, the records directory, the report path under
 [Report path](#report-path), and earlier dispositions and other material as
-paths to existing material. For the preview and the cleanup, it also assigns
+paths to existing material. For the hosted cycle's fixes, assign
+[Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence).
+For the preview and the cleanup, it also assigns
 the manifest path: the report path with `.manifest.json` in place of `.md`,
 which the cleanup skill creates as a new file. Include
 [Foreground Checks](../SKILL.md#foreground-checks): a wait for a hosted review
@@ -62,7 +64,8 @@ the component skill's unchanged final report or output. Its Completion is:
 - `complete` when the call finished;
 - `question` before any action that its forwarded approvals do not cover, and
   for a preview that returns targets, which asks for the combined
-  confirmation;
+  confirmation. An unbound hosted Prepare instead returns a coordinator
+  request under [Bind the hosted Prepare target](#bind-the-hosted-prepare-target);
 - `blocked` with the blocker and the last state it checked.
 
 The summary's labels carry what the next step needs:
@@ -72,7 +75,9 @@ The summary's labels carry what the next step needs:
 - Head: the head the phase ended on, under [Report path](#report-path).
 - Verification: one line each for the component skill's status, such as the
   cycle's status or the publish result, and for a hosted round the published
-  head and the head the hosted review covered.
+  head and the head the hosted review covered. For hosted fixes, reference
+  the applicable separate evidence report by path and SHA-256. Use the
+  ordinary v1 check for this outer status report.
 - Questions: the prepared result to decide on: the prepared dispositions, the
   push remote candidates, or the cleanup targets as the manifest command
   printed them with the manifest path.
@@ -97,7 +102,8 @@ coordinator assesses them under Local Review's
 dispositions. Before the cycle's review-fix publication, the worker makes the
 worktree match them: it removes the edits of every fix not settled as
 `applied`, makes any change they add, and reruns the smallest relevant
-verification when a file changed after Prepare's verification. It then
+required verification under [Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence)
+when Prepare's evidence cannot be reused. It then
 commits, pushes, replies, and resolves only as the settled dispositions say,
 through Writeback and the final state check, and returns `blocked` when the
 worktree cannot be matched without touching other changes. A review without
@@ -105,10 +111,38 @@ findings runs through.
 
 For a `question`, the coordinator asks the user only what needs the user's
 decision or an approval not already forwarded; it answers the rest from its own
-assessment. It continues the same agent with the answer, quoting the user's
-reply verbatim as the approval for that action alone. The preview's answer
-goes to the cleanup agent after the merge instead. The component skill's own
-checks, such as the cleanup comparison, still run before the agent acts.
+assessment. Before continuing the same agent for another return, use
+[Report path](#report-path). Give it the answer, quoting the user's reply
+verbatim as the approval for that action alone. The preview's answer goes to
+the cleanup agent after the merge instead. The component skill's own checks,
+such as the cleanup comparison, still run before the agent acts.
+
+## Bind the hosted Prepare target
+
+If the worker has a verified review handoff that needs Prepare and no
+current checked evidence binding, pause before Prepare. In the ordinary
+phase report return `question` with a request for coordinator binding and
+the repository, PR, source branch, verified reviewed head, local worktree
+and pre-checkpoint HEAD. Carry the existing publication, trigger and review
+record references. A verified no-actionable-feedback result bypasses Prepare
+and needs no evidence binding.
+
+The coordinator checks the PR and current remote source head independently.
+Match the repository, source branch and head to the retained verified
+review handoff, and match the local worktree, branch and HEAD to that target.
+Confirm the binding request's recorded attempt and bind the reserved
+evidence paths or assign them now. Record the checked identity in the
+private dispatch record under
+[Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence).
+On mismatch, stop before Prepare and report the discrepancy.
+
+Continue the same agent at Prepare in the same hosted round with the binding
+and the next return attempt under [Report path](#report-path). This is a
+coordinator check and uses the existing approval. Preserve completed
+publication and any recorded trigger and review outcome. On resume use a
+matching recorded binding, or finish a pending binding from those verified
+records and continue the earliest incomplete step. Avoid repeating publication
+or posting another review trigger to obtain a binding.
 
 ## Report path
 
@@ -117,6 +151,16 @@ Delivery Completion's [Progress record](completion.md#progress-record) layout:
 `<base12>-<start12>/rh<n>-hosted-a<attempt>.md` for hosted round `n`, and
 `<base12>-<start12>/r<phase>-phase-a<attempt>.md` for `publish`, `preview`, or
 `cleanup`. Take the next attempt for each return.
+
+Before dispatch or continuation for a new return, the coordinator assigns
+the next unused return attempt and report path, records the agent, attempt
+and path in `state.md`, then gives the agent that assignment. Before writing
+the phase report, the agent checks that `state.md` still names that assignment.
+In a hosted round this applies
+to the binding question, prepared dispositions, and final result, including
+on resume. Keep the same hosted round, phase start head, PR, verified review
+and trigger, checked binding, and settled decisions when continuing.
+Retain each earlier report at its original path and recorded hash.
 
 The summary's Head is the head the phase ended on. Before
 [Check a handoff](report-handoff.md#check-a-handoff), the coordinator reads that
@@ -131,18 +175,22 @@ Head that differs from the head the coordinator read fails the check.
 While a phase is delegated, `state.md` names the phase, the agent, the report
 path, and the attempt. On resume of any delegated phase other than cleanup:
 
-1. Read the latest report that passes the check, if any. A `complete` report
-   gives the result; a `question` report gives the prepared result to decide
+1. Read the latest report that passes the check, if any. For hosted fix
+   evidence, recheck the recorded mode, identity, hash, and any published-head
+   binding under **Hosted fix verification evidence** in Report Handoff.
+   A `complete` report gives the result; a `question` report gives the prepared result to decide
    on. Recorded assessments carry forward; ask the user again for an approval
    that the records show but this context did not receive, since a progress
    record is not authorization.
 2. Continue the recorded agent when the host can address it, with the answer
-   when there is one.
+   when there is one. Before a continuation that writes a new report, update
+   the attempt and path as [Report path](#report-path) sets out.
 3. Otherwise, dispatch a fresh agent only when the host shows the recorded
    agent has ended; when it cannot show that, report the target `Blocked`.
-   Before dispatching, write the new agent and attempt to `state.md`, so the
-   old agent's check before acting stops it. Give the fresh agent the records,
-   the latest report path, and the answer. It resumes through the component
+   Before dispatching, record the new agent, attempt and report path under
+   [Report path](#report-path), so the old agent's check before acting stops it.
+   Give the fresh agent the records, the latest checked report for context,
+   and the answer. It resumes through the component
    skill's own resume and reconciles the logged external actions under
    Delivery Completion's [Resume](completion.md#resume) before acting.
 

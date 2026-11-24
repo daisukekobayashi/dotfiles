@@ -63,6 +63,9 @@ If approval is pending, the checkpoint and reviews remain pending; an empty
 After every worthwhile fix, verify and make the next authorized scoped commit
 before the next review or follow-up. A commit permits local review;
 publication still belongs to the caller's publication phase and its approval rules.
+Use [Project verification](worker-dialogue.md#project-verification) and
+[Classified verification](report-handoff.md#classified-verification) before the
+fix checkpoint, including the recorded report mode on resume.
 
 If unrelated dirty files must remain, identify them explicitly and use branch
 scope for every pass. If any intended task changes remain outside the committed

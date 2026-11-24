@@ -74,9 +74,11 @@ Still stop and ask before:
      verified review handoff from step 4. If the record lacks that handoff,
      recheck the same trigger and published head in step 4 within the existing
      bound.
-     Continue any verified pending publication/Writeback phase with its
-     prepared record. Evidence for an older head does not satisfy a review of
-     the current head.
+     Continue verified pending publication or Writeback with its prepared
+     record. For delivery fixes already published, select the evidence mode
+     under [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence)
+     and resume pending Writeback at step 7 when the recorded evidence holds.
+     Evidence for an older head does not satisfy a review of the current head.
 2. Use `github-pr-publish`.
    - Preserve that skill's verification, staging, commit, push, and PR rules.
    - Capture the PR number, PR URL, branch, push remote, commit, and
@@ -125,12 +127,27 @@ Still stop and ask before:
    the verified review handoff from step 4.
    - If Prepare cannot validate the handoff, report the mismatch and stop.
    - Forward any earlier dispositions and assessment defaults the caller supplied.
-   - Capture its prepared record, including per-thread dispositions, verification,
-     proposed replies, and pending publication. Do not reply or resolve yet,
+   - In delivery, require the coordinator's checked Prepare evidence binding
+     for this repository, PR, reviewed head and worktree before calling Prepare.
+     If the verified review needs Prepare and its assignment is unbound, pause
+     and return a coordinator binding request with the actual target and the
+     saved publication, trigger and review records. Continue the same hosted
+     round here once the coordinator binds that identity and supplies the next
+     return attempt and path. Reuse a matching recorded binding when resuming.
+     Forward the bound brief to Prepare under
+     [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence).
+   - Capture its prepared record, including per-thread dispositions, required
+     verification, proposed replies, and pending publication. Do not reply or resolve yet,
      even though this cycle authorizes later writeback.
+   - In delivery, if settling the dispositions leaves no fixes, clear
+     provisional verification and dependent reply claims before Writeback
+     under Hosted fix verification evidence.
 6. If review fixes changed files, commit and push the verified fixes.
-   - Reuse Prepare's successful verification if no relevant files changed after
-     it; otherwise run the smallest relevant verification for the changed files.
+   - In delivery, settle the complete verification result, report, and
+     affected replies under [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence)
+     before publication. Otherwise, reuse Prepare's successful required checks
+     if no relevant files changed after them. Run the smallest relevant
+     required checks for any changes not covered.
    - Stage only review-follow-up changes.
    - Stop and report `<branch>` unless it is a **safe branch name**: run
      `node <script> -- '<branch>'`, where `<script>` is
@@ -156,13 +173,17 @@ Still stop and ask before:
      remote; use a remote the user names as given. The explicit remote and
      refspec keep `branch.<branch>.pushRemote` or `remote.pushDefault` from
      sending the fixes away from the PR head.
-   - If verification is unsuccessful or unavailable, stop before commit or push.
-     If verification, commit, or push fails, stop the cycle and report; do not
-     enter step 7.
-   - Add the published commit to the prepared record.
+   - Stop before commit or push if required verification is unsuccessful or
+     unavailable. If commit or push fails, stop the cycle and report the
+     failure before Writeback. Optional verification status is reported
+     separately and does not gate publication.
+   - Add the published commit to the prepared record. For delivery fixes,
+     confirm the PR's remote head equals that commit and bind the settled
+     verification evidence to it before Writeback.
 7. Use only the **Writeback** phase of `github-pr-ai-review-followup`.
    - Pass the prepared record, publication evidence, and existing authorization
-     for clearly closed prepared items under the Approval Model.
+     for clearly closed prepared items under the Approval Model. Use the
+     settled record for delivery fixes.
    - Delegate target revalidation, replies, resolutions, and writeback verification
      to that phase. Do not reapply fixes or duplicate its writeback procedure.
 8. Verify final PR state when possible.
@@ -173,9 +194,9 @@ Still stop and ask before:
 
 The cycle is complete only when one of these is true:
 
-- Codex review output was inspected, worthwhile fixes were handled, verification
-  passed, needed commits/pushes were done, and clearly closed threads were
-  replied to and resolved.
+- Codex review output was inspected, worthwhile fixes were handled, required
+  verification passed, needed commits/pushes were done, and clearly closed
+  threads were replied to and resolved.
 - Codex produced no actionable feedback, and final thread/comment state was
   checked.
 
@@ -191,7 +212,7 @@ Use this structure:
 **Cycle Status: <Complete | Blocked | Partial>**
 - Branch: `<branch>`
 - PR: <url>
-- Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result>`
+- Publish: `<commit, no new commit, or blocked>`; required verification `<result or checked settled evidence reference for delivery fixes>`
 - Codex: `<acknowledged/completed/blocked summary>`
 - Follow-up: `<applied/explained/skipped/pre-existing/stale/duplicate counts>`
 - Not applied: one line per item not `applied`, from the prepared record:

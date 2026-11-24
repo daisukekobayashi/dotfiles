@@ -4,7 +4,7 @@
 // Usage:
 //   node check-report-handoff.mjs --kind review --reviewer <skill> \
 //     --base <sha> --head <sha> --round <round> --report <path> [--show] [--sha256 <hex>]
-//   node check-report-handoff.mjs --kind worker [--draft su|preflight] \
+//   node check-report-handoff.mjs --kind worker [--draft su|preflight | --require-verification-labels] \
 //     --base <sha> --head <sha> --round <round> --report <path> [--show] [--sha256 <hex>]
 //
 // A report is the full report, a delimiter line, and a summary part, ending
@@ -42,7 +42,8 @@
 //   appears, no unknown label appears, every label has a value or indented
 //   items, Base, Head, Round, and Report equal the arguments, Completion takes
 //   an allowed value, and a shared understanding draft has an Overview and a
-//   preflight draft a Tier;
+//   preflight draft a Tier. With --require-verification-labels, Verification
+//   contains one or more classified check rows and no inline value;
 // - with --sha256, the file still has the recorded hash.
 //
 // On success it prints `valid sha256=<hex> bytes=<size>` and, with --show, the
@@ -276,11 +277,19 @@ function checkWorkerSummary(summary, args) {
   if (!["complete", "question", "blocked"].includes(value("Completion"))) invalid("Completion is not complete, question, or blocked");
   if (args.draft === "su" && isNone(fields.get("Overview"))) invalid("shared understanding draft has no Overview");
   if (args.draft === "preflight" && isNone(fields.get("Tier"))) invalid("preflight draft has no Tier");
+  if (args.requireVerificationLabels) {
+    const verification = fields.get("Verification");
+    if (verification.value || !verification.children.length) invalid("Verification must list classified checks");
+    for (const line of verification.children) {
+      const check = /^  - \[(?:changed path run|proxy only|not run)\] (.+?) -> (.+)$/.exec(line);
+      if (!check || !isLine(check[1]) || !isLine(check[2])) invalid("invalid classified Verification row");
+    }
+  }
 }
 
 function main() {
   const usage = () => {
-    process.stderr.write("usage: check-report-handoff.mjs --kind review|worker [--reviewer <skill>] [--draft su|preflight] --base <sha> --head <sha> --round <round> --report <path> [--show] [--sha256 <hex>]\n");
+    process.stderr.write("usage: check-report-handoff.mjs --kind review|worker [--reviewer <skill>] [--draft su|preflight | --require-verification-labels] --base <sha> --head <sha> --round <round> --report <path> [--show] [--sha256 <hex>]\n");
     process.exit(2);
   };
 
@@ -289,6 +298,11 @@ function main() {
   for (let i = 0; i < argv.length; i++) {
     const name = argv[i];
     if (name === "--show") { args.show = true; continue; }
+    if (name === "--require-verification-labels") {
+      if (args.requireVerificationLabels) usage();
+      args.requireVerificationLabels = true;
+      continue;
+    }
     if (!["--kind", "--reviewer", "--draft", "--base", "--head", "--round", "--report", "--sha256"].includes(name)) usage();
     if (args[name.slice(2)] !== undefined || i + 1 >= argv.length) usage();
     args[name.slice(2)] = argv[++i];
@@ -296,6 +310,7 @@ function main() {
   if (!["review", "worker"].includes(args.kind) || !args.base || !args.head || !args.round || !args.report) usage();
   if (args.kind === "review" ? !Object.hasOwn(REVIEWERS, args.reviewer) || args.draft : args.reviewer) usage();
   if (args.draft !== undefined && !["su", "preflight"].includes(args.draft)) usage();
+  if (args.requireVerificationLabels && (args.kind !== "worker" || args.draft)) usage();
 
   const report = args.report;
   const pathError = reportPathError(report);

@@ -79,6 +79,8 @@ have the worker run `shared-understanding` again from step 1 on the current
 task. A delegated phase resumes under
 [Phase Delegation](phase-delegation.md#resume-a-delegated-phase). A progress
 record is evidence, not authorization. Apply the calling workflow's additions.
+On resume of implementation or fixes, carry forward each report's recorded
+[verification mode](report-handoff.md#classified-verification) when checking it.
 
 ## Decision summary
 
@@ -96,6 +98,9 @@ keep it in the progress record, and keep it out of the PR body:
   and labelled Critical or High;
 - the self-closure list under [Local Review](local-review.md), or `none` when
   it is empty.
+- the current project verification status and any uncovered changed paths,
+  including a [skip before key capture](optional-workflows.md#record-and-report)
+  when it applies to the reported verification.
 
 ## Before publication
 

@@ -180,10 +180,10 @@ Write each summary label once, exactly as shown, and the values in the
 report's language. Indent list items and continuation lines under their label.
 List every item, and write `None` for an empty list.
 
-Worker reports stay on this v1 summary: the check only validates its labels
-and required values and never matches it against the full report, so the gaps
-that moved reviews to a block, which came from matching a written summary
-against free-form Output, do not arise for workers.
+Worker reports stay on this v1 summary. The check validates its labels and
+required values and applies [Classified verification](#classified-verification)
+when the caller requires it. It never matches the summary against the full
+report.
 
 When a change makes a new worker summary label required, such as
 `Optional workflows:`, the check keeps no branch for the old summary: once the
@@ -194,6 +194,122 @@ earlier worker reports before its installed check updates, or reissues each
 such report it still needs at a new path, as the next attempt, with the label,
 and checks it before acting on it. The merge confirmation of the change names
 the in-flight deliveries and the reports this affects.
+
+### Classified verification
+
+New implementation and fix reports put one row per check in the existing
+`Verification:` field. Use the following syntax in the report and its summary:
+
+```markdown
+- Verification:
+  - [changed path run] <command or action> -> <actual result>
+  - [proxy only] <command or action> -> <actual result>
+  - [not run] <check> -> <reason>
+```
+
+A changed path run exercised the behavior changed by the task on the current
+input. Label indirect evidence `proxy only`, such as a syntax or wiring check
+that did not exercise that behavior. A check that reached the changed path and
+then failed still has a `changed path run` row with its failure result. Use
+`not run` for an unexecuted check and state why, including when no checks ran.
+Report actual observed results and coverage limits. Keep optional-workflow
+status under `Optional workflows:`.
+
+Before dispatching an implementation or fix report, record its path, attempt
+and required verification-label mode in the dispatch record. Use
+`--require-verification-labels` on the first check and every hash recheck of
+that report. Keep its expected mode in the hash record. On resume use the
+recorded mode. If it is unknown, validate the dispatch context before using
+the report or reissue it at a new attempt. A strict report that fails the check
+follows the retry rule in [Check a handoff](#check-a-handoff).
+
+Use the ordinary worker check for drafts and delegated phase status reports
+and for verified legacy dispatches. Legacy reports that lack a classification
+leave that coverage unknown. The caller chooses the mode from its own record.
+For new or unpublished hosted fixes, use the strict mode on the separate
+report described under **Hosted fix verification evidence** below.
+
+## Hosted fix verification evidence
+
+1. For Prepare and for settled verification, the coordinator assigns separate
+   ordinary v1 worker reports in the private records directory for the round.
+   Use `rh<n>-prepare-verification-a<attempt>.md` and
+   `rh<n>-settled-verification-a<attempt>.md`, taking a fresh attempt when
+   reissuing. Record the expected path, attempt, task, worktree, base, round
+   `h<n>`, and strict mode before dispatch. Bind the assignment to the real
+   PR, reviewed head and local pre-checkpoint HEAD before Prepare can edit
+   or issue verification. Verify an existing binding against the live target.
+   For a first publication or other unbound assignment, use the coordinator
+   continuation described under **Bind the hosted Prepare target** in
+   [Phase Delegation](phase-delegation.md). The evidence report's `Head`
+   is the checked local pre-checkpoint HEAD. The outer hosted report's `Head`
+   describes the remote end state.
+   An issued evidence report keeps its original attempt, path, binding and
+   hash when the outer return attempt advances. Assign a new evidence path
+   only when writing new evidence.
+2. At each verification stage, identify the input using
+   [Keys](optional-workflows.md#keys) and the exact files in scope. In the
+   evidence report's `Target`, include the task, PR, worktree and input key
+   or state why the key is unavailable. Keep only the actual
+   [classified verification rows](#classified-verification)
+   in its `Verification:`. Record the exact checked files under
+   `Files changed:`, required check outcome and coverage in the evidence
+   record, and optional status under `Optional workflows:`.
+   Before using any evidence, the worker and coordinator run the existing
+   worker handoff check with `--require-verification-labels` and `--show`
+   against the assigned path, expected base, pre-checkpoint HEAD and round.
+   Confirm the target and input against the dispatch and verification record,
+   save the hash with those values, and pass `--sha256` with the same strict
+   mode and identity on recheck. Resuming carries these recorded expectations
+   forward. An outer status report cannot replace missing or invalid evidence.
+3. When the dispositions are settled, use [Project verification](worker-dialogue.md#project-verification).
+   Reuse Prepare's required checks only if its strict report and recorded hash
+   validate for the same input key and scope. Otherwise run the relevant
+   required checks again on the settled fixes. If key capture is unavailable,
+   record the optional skip and use fresh required checks for the current
+   owned worktree and exact settled files. In that case carry the evidence
+   only through the same uninterrupted verification and checkpoint, and
+   recheck after any interruption or change before the checkpoint.
+4. Before staging, check the separate settled report and make it the
+   authoritative verification in the private fix record. Keep its required
+   outcome, actual rows, optional result, coverage limits and input there.
+   Draft affected public replies from a safe, minimized summary of the
+   relevant outcomes under the follow-up skill's Writeback rules. Keep
+   complete commands, output, inputs, paths, and diagnostic details private.
+   Keep replies and dispositions tied to the settled changes. Remove
+   provisional claims that are no longer supported,
+   including when all fixes are dropped. In that case clear provisional
+   verification and use only claims supported by the unchanged PR head.
+   Stage only the verified changes and check that the staged edits match
+   the checked files and contents. If the relevant edits change before the
+   checkpoint, update the verification and replies before publishing.
+5. Record the mapping from the checked settled evidence to the commit made
+   from the verified changes once the PR's remote head confirms it. Keep
+   the evidence's pre-checkpoint HEAD and hash in that binding. Writeback and
+   the coordinator use that same settled record and evidence, recheck the
+   strict report and hash, and independently check the current remote head
+   against the binding. Keep affected items pending if the binding cannot
+   be confirmed. The outer phase report carries status and the reference to
+   the checked evidence for the appropriate stage.
+
+### Pending published fixes from a legacy dispatch
+
+Select the evidence mode from the coordinator's own checked dispatch and
+publication records. Use the legacy mode only when those records positively
+establish a pre-upgrade dispatch, successful required checks on its fixes,
+verified publication of the fix commit, and pending Writeback for the same
+repository, PR, and feedback items. Recheck the preserved report in its
+original mode with any recorded hash. Match the current remote PR head to the
+verified fix commit and recheck the current fixes and thread scope before
+continuing Writeback.
+
+Missing labels, a missing or failed strict check, and a supplied claim of
+legacy status provide no such provenance. Use current strict evidence for
+new work and before publishing any remaining fixes. Leave fix-dependent items
+pending when provenance, required checks, publication, or current identity
+cannot be confirmed. Legacy classification stays unknown. Resume with the
+previously verified result and a safe public summary without making a new
+claim about what ran or creating evidence for the earlier uncommitted input.
 
 ## Codex route
 
@@ -229,7 +345,9 @@ Before acting on a report, the caller runs
 from this reference's directory, with the expected base and head SHAs and
 round, and `--kind review --reviewer <skill> --show` or `--kind worker`, adding
 `--draft su` or `--draft preflight` for a draft; its header gives the usage,
-checks, and exit codes. For a review, the summary it prints is the only review
+checks, and exit codes. For new implementation and fix reports, pass
+`--require-verification-labels` as [Classified verification](#classified-verification)
+sets out. For a review, the summary it prints is the only review
 summary; decide from it, not from the reviewer's reply. It rejects a review
 report with a v1 summary, and a v2 block except on a `--sha256` recheck.
 Record its `valid sha256=<hex> bytes=<size>` line with the report in the

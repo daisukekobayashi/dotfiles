@@ -27,6 +27,11 @@ one status and continue the phase whatever the status:
 - `stopped: time bound`: the run reached its time bound;
 - `failed: <reason>`: the run ended with an error.
 
+For `verify-<app>` with no applicable project verification skill, use the exact
+status `not run: no project verification skill`. A known applicable skill may
+instead be unavailable on the host or lack an execution prerequisite. Use the
+corresponding status and name the gap.
+
 Only a `ran` result counts as evidence. A run that reaches its bound or fails
 is reported and never counted as evidence, and the phase never waits on it or
 treats it as a failed required check.
@@ -62,8 +67,22 @@ A run on a committed snapshot is keyed to the reviewed head: its full SHA.
 
 A run before a checkpoint commit, such as for a preflight draft or the
 verification of uncommitted fixes, is keyed to its delivery phase's input
-instead. Before the run, write the exact input the run is given to a file in
-the task's records directory as a sequence of parts in a fixed order. Each
+instead. Before recording the intent, run
+[`write-phase-input-key.mjs`](../scripts/write-phase-input-key.mjs) with the
+canonical target worktree, full expected HEAD, and a new output path in the
+caller's private task records. Use `preflight` with the two exact input files
+or `verification` with the worker's reported task paths as NUL-terminated
+repository-relative bytes. Supply an empty file when there are no such paths.
+Keep the input and output files in private task records outside the worktree.
+For verification capture, confirm that existing authorization covers the
+normal configured Git effects, including content filters when applicable.
+The script prints only the key on success. If authorization cannot be
+confirmed or capture fails, report `not run: unavailable` with the reason
+and continue with the phase's ordinary work. Use the same inputs and key
+spelling when resuming an existing pair.
+
+The script writes the exact input the run is given as a sequence of parts in
+a fixed order. Each
 part is one header line of space-separated ASCII fields ending with byte
 counts and a line feed, followed by exactly those bytes, so the file decodes back into its
 parts and no two inputs share a file:
@@ -83,12 +102,18 @@ parts and no two inputs share a file:
   a listed directory adds none of its descendants. Any other untracked file
   in the worktree stays out of the input and never changes the key.
 
-The git file mode is `100755` for an executable file, `100644` for any other
-regular file, and `120000` for a symbolic link, whose content is its target,
-so a mode change alone changes the key. The key is
+The git file mode is `100755` for a regular file with the owner execute bit,
+`100644` for other regular files, and `120000` for a symbolic link, whose
+content is its target. Changing the owner execute bit alone changes the key.
+The key is
 `<phase>:<full HEAD SHA>:<git hash-object of that file>`. The workflow runs
 again only when its key changes, such as when an answer changes a qualifying
 decision.
+
+The script hashes the recorded bytes without Git filters or writing an
+object. Keep the evidence tied to its input when launching, completing, and
+reusing a run. For worktree verification, use the helper with a fresh record
+path to compare the current input before relying on earlier evidence.
 
 ## Accounting
 
@@ -106,6 +131,14 @@ each pair of registry entry and key, with the target, workflow, phase, key,
 status, time bound, and report path. Every later entry for the same pair
 reuses its id, and the latest entry for an id is current; another entry or
 key never reuses it.
+
+When a workflow is skipped before it has a key, such as when no verification
+skill applies or the key capture failed, record the status and reason in the
+phase's progress entry and the worker's `Optional workflows:`. Include the
+target, workflow and phase. The observation has no `[optional O<n>]` pair or
+intent, consumes no allowance, and does not increment the run count. Report
+it when it is the current phase result. Later evaluation can produce a real
+key and use the usual once-per-key rule.
 
 - Before invoking, append an intent entry with status `launching`, like the
   intent entry Progress record sets for an external action, then dispatch the
@@ -141,3 +174,4 @@ Runs as: who invokes the workflow and in what form; Result: what the run produce
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `architect` | Design preflight draft, under [Worker Dialogue](worker-dialogue.md#draft-and-ask) | A draft question that clears the preflight question bar and whose one-way door is an interface, data shape, or module boundary | All tiers | 15 minutes per invocation | Phase input: `decisions` with the qualifying questions, then `shared-understanding` | The worker, in its own context, for design only, or without delegation the coordinator itself, for design only; a question it would ask the user becomes a draft question | The compared shapes under each qualifying question in `preflight-draft.md`, as input to its recommendation only |
 | `arena` | Design preflight draft, after `architect`, under [Worker Dialogue](worker-dialogue.md#draft-and-ask) | After `architect` ran, a qualifying question still has two viable shapes | High | 30 minutes per invocation | Phase input: `decisions` with the still-open questions and `architect`'s compared shapes, then `shared-understanding` | The worker, invoking `arena` explicitly with the user's delivery request and exact target (an explicit `$arena` mention on Codex, the skill call on Claude Code), so this explicit-only skill counts as installed when the agent can invoke it by explicit mention; its isolated delegated candidates return design sketches only, with no file edits or worktrees; without delegation, `not run: unavailable` (no delegation) and no sequential comparison | The candidates, the judge's verdict, and the selected shape under each question in `preflight-draft.md`, as input to its recommendation only |
+| `verify-<app>` | Implementation and fix verification under [Worker Dialogue](worker-dialogue.md#project-verification) | One project-owned verification skill can be selected for the changed feature | All tiers | 15 minutes per invocation including setup, execution, evidence, and owned cleanup | Phase input: `verification` with the worktree diff and exact reported untracked files | The worker invokes the selected existing skill on the exact target with the effective budget and existing approvals | Observed checks and coverage limits in the verification record, plus the latest optional status |

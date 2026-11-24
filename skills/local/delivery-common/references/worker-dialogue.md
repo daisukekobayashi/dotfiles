@@ -61,7 +61,8 @@ For each target, in this order:
    door in an interface, data shape, or module boundary, it applies the
    `architect` entry, then the `arena` entry, of the
    [Optional Workflows](optional-workflows.md#registry) registry, and shows
-   each run's result under its question. It invokes `arena` explicitly,
+   each run's result under its question. Use the shared [phase-input key
+   script](optional-workflows.md#keys) for both entries. It invokes `arena` explicitly,
    forwarding the user's delivery request and exact target: an explicit
    `$arena` mention on Codex, the skill call on Claude Code. For this entry, an
    explicit-only skill that the agent can invoke by explicit mention counts as
@@ -115,9 +116,45 @@ not depend on them.
 Implement the task's acceptance criteria and agreed decisions, following the
 settled design and repository conventions. Run the smallest relevant checks and
 record actual results and material coverage limits; a successful baseline is
-not implementation verification. Complete this phase only with an
+not implementation verification. Apply [Project verification](#project-verification)
+and report each check under [Classified verification](report-handoff.md#classified-verification).
+Complete this phase only with an
 implementation and verification evidence ready for review, or an explicit
 blocker.
+
+### Project verification
+
+Use the `verify-<app>` entry of [Optional Workflows](optional-workflows.md#registry)
+before the implementation or fix checkpoint. Keep ordinary required checks in
+the plan and apply their existing success criteria.
+
+1. Use the host's available skills and the project's documented feature coverage
+   to establish ownership and scope. A matching name alone establishes neither.
+   Use an established project rule or an explicit user choice to select one
+   candidate when several qualify. With no applicable project verification
+   skill, record `not run: no project verification skill`. With unresolved
+   ambiguity or an unverified execution prerequisite, record the applicable
+   [status and reason](optional-workflows.md#run-or-report).
+2. Confirm that the selected procedure, its inputs, execution prerequisites, and
+   exact target are permitted under the existing approvals, including when the
+   worktree changes the procedure or its helpers. Existing authorizations
+   govern tool use, installation, external writes, and shared runtime effects.
+   Use the skill through the host and use it for this feature only. Installation,
+   automatic creation, and substitutes from other scopes are outside this step.
+3. Before launch, take the exact changed-file list for the task's report and use
+   [Keys](optional-workflows.md#keys) to capture the verification input. Carry
+   that list into the worker report, updating verification if the final inputs
+   changed. Follow the [shared bounds](optional-workflows.md#shared-bounds) and
+   [intent and outcome rules](optional-workflows.md#record-and-report). Forward
+   the effective budget, measure wall-clock completion, and preserve evidence
+   and the result of owned cleanup. Report a run past the limit as
+   `stopped: time bound`.
+4. Record actual changed-path checks, proxy checks, and material uncovered
+   paths using [Classified verification](report-handoff.md#classified-verification).
+   Report optional status even when the skill could not run. A failure, skipped
+   step, timed-out run, or evidence for a different input cannot show successful
+   verification of the current work. Resume and count runs through the shared
+   optional-workflow rules.
 
 ## Worker defaults
 
@@ -139,5 +176,8 @@ assigns the path; the worker writes the full report, the delimiter line, and the
 summary; and the coordinator runs
 [Check a handoff](report-handoff.md#check-a-handoff) with `--kind worker`
 before acting on it.
+Before dispatching implementation or fix work, the coordinator assigns and
+records strict verification mode with the report path and attempt under
+[Classified verification](report-handoff.md#classified-verification).
 The coordinator passes the task, drafts, and settled decisions as paths to
 existing material instead of pasting them.

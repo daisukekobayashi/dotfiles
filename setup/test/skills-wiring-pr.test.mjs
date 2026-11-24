@@ -77,7 +77,7 @@ test("Codex review cycle pushes review fixes to the publication remote", async (
   assert.match(push, /Otherwise stop before the push and ask the user to confirm or name the remote; use a remote the user names as given\./, "unresolved resume remote asks the user");
   assert.doesNotMatch(push, /compared as in `github-pr-publish` step 2|git config --get-all branch\.<branch>\.remote/, "resume prose replaced by the script");
   assert.doesNotMatch(push, /normal push/, "a plain push follows pushRemote away from the PR head");
-  assert.match(push, /If verification, commit, or push fails, stop the cycle and report; do not enter step 7\./, "a failed publication stops the cycle before writeback");
+  assert.match(push, /Stop before commit or push if required verification is unsuccessful or unavailable\. If commit or push fails, stop the cycle and report the failure before Writeback\./, "failed required checks or publication stop the cycle before writeback");
   assert.match(push, /Add the published commit to the prepared record\./);
 });
 
@@ -211,7 +211,7 @@ test("Codex cycle leaves writeback prerequisites to the follow-up skill", async 
   assert.doesNotMatch(cycle, /no empty commit is needed|Confirm the fixes are present in the remote PR head|stop before reply or resolution/);
   assert.match(cycle, /Pass the prepared record, publication evidence, and existing authorization/);
   const followup = flatText(await localSkill("github-pr-ai-review-followup", "SKILL.md"));
-  assert.match(followup, /require successful relevant verification and confirmation that the fixes are in the remote PR head/);
+  assert.match(followup, /require successful relevant required verification and confirmation that the fixes are in the remote PR head/);
   assert.match(followup, /Explanation-only items need no new commit/);
 });
 
