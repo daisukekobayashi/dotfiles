@@ -135,10 +135,11 @@
 //   proposed local branch `local <branch> <sha>`, the SHA to delete it at, and
 //   for a proposed remote branch `lease <remote> <sha>`.
 //   --after-worktree-removal resumes standalone cleanup before local branch
-//   deletion. Use the original confirmed manifest and its exact canonical
-//   --worktree path, from the original repository with fresh facts from the
-//   same PR. The path and registration must both be gone, and the branch must
-//   still be eligible locally. Runtime listings at confirmation and now must
+//   deletion. Use the original confirmed manifest kept in private storage
+//   since confirmation and its exact canonical --worktree path, from the
+//   original repository with fresh facts from the same PR. The path and
+//   registration must both be gone, and the branch must still be eligible
+//   locally. Runtime listings at confirmation and now must
 //   be verifiable. The current path-scoped listings must be empty, and the
 //   checks for confirmed PIDs, Compose projects and volumes, temporary paths
 //   and branch targets still apply. A Caller preview does not qualify.
@@ -168,7 +169,7 @@
 // run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -703,8 +704,15 @@ const checkWorktreeUnregistered = (worktree, branch) => {
     if (field.startsWith("worktree ")) {
       const registered = field.slice("worktree ".length);
       if (!path.isAbsolute(registered)) cannotRun("git worktree list included a non-absolute or quoted path");
-      if (foldName(path.normalize(registered)) === foldName(worktree)) {
+      const normalized = path.normalize(registered);
+      if (normalized === worktree) {
         fail([`the confirmed worktree path is still registered: ${worktree}`]);
+      }
+      if (foldName(normalized) === foldName(worktree)) {
+        const actual = realpathOrNull(registered);
+        if (actual === null || actual === worktree) {
+          fail([`a Git worktree registration may still refer to the confirmed path: ${registered}`]);
+        }
       }
     }
     if (field.startsWith("branch ") && sameBranchName(field.slice("branch ".length), `refs/heads/${branch}`)) {
@@ -878,10 +886,55 @@ const manifestCommand = (args) => {
   process.stdout.write(formatTargets(manifest));
 };
 
-const readConfirmed = (file) => {
+// Validate the original storage boundary on resume. Its continuity since
+// confirmation is established by the caller, which owns that confirmation.
+const readPrivateConfirmation = (file) => {
+  const uid = process.getuid?.();
+  if (uid === undefined || constants.O_NOFOLLOW === undefined || constants.O_NONBLOCK === undefined) {
+    throw new Error("private confirmation storage cannot be verified on this platform");
+  }
+  if (!path.isAbsolute(file) || path.normalize(file) !== file) {
+    throw new Error("the private confirmation path must be canonical and absolute");
+  }
+  const parent = path.dirname(file);
+  const directories = [parent];
+  for (let dir = parent; path.dirname(dir) !== dir; dir = path.dirname(dir)) {
+    directories.push(path.dirname(dir));
+  }
+  for (const dir of directories.reverse()) {
+    const stat = lstatSync(dir);
+    if (!stat.isDirectory() || (stat.uid !== uid && stat.uid !== 0)) {
+      throw new Error(`the confirmation directory chain is not trusted: ${dir}`);
+    }
+    if (dir === parent && (stat.uid !== uid || (stat.mode & 0o077) !== 0)) {
+      throw new Error("the confirmation directory must be owned by the current user and private (mode 700)");
+    }
+    if ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0) {
+      throw new Error(`the confirmation directory chain is writable by others: ${dir}`);
+    }
+  }
+  if (realpathSync(parent) !== parent) throw new Error("the private confirmation directory must be its own real path");
+  const named = lstatSync(file);
+  if (!named.isFile()) throw new Error("the confirmation must be a regular file");
+  const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.dev !== named.dev || stat.ino !== named.ino) {
+      throw new Error("the confirmation file changed while it was opened");
+    }
+    if (stat.uid !== uid || (stat.mode & 0o077) !== 0) {
+      throw new Error("the confirmation must be owned by the current user and private (mode 600)");
+    }
+    return readFileSync(fd, "utf8");
+  } finally {
+    closeSync(fd);
+  }
+};
+
+const readConfirmed = (file, requirePrivateStorage) => {
   let manifest;
   try {
-    manifest = JSON.parse(readFileSync(file, "utf8"));
+    manifest = JSON.parse(requirePrivateStorage ? readPrivateConfirmation(file) : readFileSync(file, "utf8"));
   } catch (error) {
     return usage(`cannot read the confirmed manifest ${JSON.stringify(file)}: ${error.message}`);
   }
@@ -988,7 +1041,7 @@ const compareCommand = (args) => {
   if (!options["--confirmed"]) usage("missing --confirmed");
   const facts = readFacts(options);
   const targets = readTargets(options, afterWorktreeRemoval);
-  const confirmed = readConfirmed(options["--confirmed"][0]);
+  const confirmed = readConfirmed(options["--confirmed"][0], afterWorktreeRemoval);
   if (afterWorktreeRemoval) {
     if (confirmed.preview !== false) fail(["worktree removal resume requires the original standalone confirmation"]);
     if (!targets.worktree || path.normalize(targets.worktree) !== targets.worktree || targets.worktree !== confirmed.worktree) {

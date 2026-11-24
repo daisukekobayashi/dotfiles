@@ -20,9 +20,12 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      and before step 8, recover the original branch, exact PR, confirmed
      manifest, and explicit confirmation. Use a surviving checkout of the
      same local repository and the original runtime environment. Use that
-     branch as the target and look up that exact PR in step 5. If the original
-     context or confirmation cannot be established, stop and ask for a fresh
-     confirmation.
+     branch as the target and look up that exact PR in step 5. Establish from
+     the original confirmation that the manifest has stayed at its original
+     path under the private storage conditions in step 6. A file copied from
+     an unverified location cannot establish custody. If the context,
+     confirmation, or continuous custody cannot be established, stop and
+     report the reason.
    - Prefer an explicitly named branch.
    - Otherwise use the current feature branch.
    - If the current branch is the default branch and no target is specified,
@@ -99,9 +102,15 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
    combined confirmation from Caller preview counts only when the user gave it
    in their own message and explicitly accepted these resources, and they match
    the preview as Caller preview defines; otherwise show them and ask again.
-   For this post-removal standalone resume, skip both building a new manifest
-   and asking again only when the original confirmation still applies. Use the
-   original confirmed file in step 7.
+   For a standalone manifest eligible for later post-removal resume, create a
+   private directory with `mktemp -d` before building the manifest. Use its
+   canonical absolute path outside the worktree. The directory must be owned
+   by the current user and mode 700, and its ancestors must be owned by the
+   current user or root. An ancestor writable by others must be sticky.
+   Keep the original mode-600 manifest at that exact path in this protected
+   storage from confirmation onwards. For post-removal standalone resume,
+   skip both building a new manifest and asking again only when the original
+   confirmation and custody still apply. Use that original file in step 7.
 7. Remove the local worktree first when one exists. If you are inside it, change
    to a safe location before removal.
    - For the post-removal standalone resume, use the fresh step 5 facts and
@@ -112,11 +121,14 @@ Read `../azure-devops-common/references/context.md` before checking PR status.
      confirmation and now. It checks for remaining processes, Compose projects
      or volumes due for removal, and other changes before issuing branch
      authorization. Exit 0 continues directly to step 8 using the new compare
-     output. Exit 3 requires a new confirmation at step 6; any other status
-     stops the cleanup. Do not use an earlier compare's output or repeat the
-     runtime stop or worktree removal on this path. For an interrupted
-     cleanup dispatched by a delivery workflow, return to the caller for
-     its reconfirmation procedure.
+     output. On any non-zero exit, stop and report the exact reason. Keep the
+     original manifest and the evidence that the compare found. Do not
+     restart at step 6 with `--no-worktree` or use an earlier compare's
+     output. Investigate the reported condition. Any separate cleanup needs
+     an accurate inventory of the remaining targets and fresh confirmation
+     for those targets. On the post-removal path, skip the runtime stop and
+     worktree removal. For an interrupted cleanup dispatched by a delivery
+     workflow, return to the caller for its reconfirmation procedure.
    - On a fresh cleanup, where no part of the confirmed runtime stop has run,
      before any removal, run `node <cleanup-script> compare <facts> <targets>
      --confirmed '<file>'` with step 5's facts, the same `--worktree` or

@@ -1484,6 +1484,7 @@ prepare_removed_worktree() {
   worktree="${root}/linked"
   git branch feat/1-x "${head}"
   git worktree add -q "${worktree}" feat/1-x
+  chmod 700 "${state}"
 
   export RESUME_WORKTREE="${worktree}"
   export RESUME_PROCESSES="${root}/resume-processes"
@@ -1582,6 +1583,96 @@ assert_no_resume_authorization() {
   compare "${state}/confirmed.json" --after-worktree-removal
   assert_no_resume_authorization
   [[ "${stderr}" == *"confirmed branch is checked out in a worktree"* ]]
+}
+
+@test "worktree removal resume allows a distinct registered case variant" {
+  mkdir "${root}/case-probe"
+  if [ -e "${root}/CASE-PROBE" ]; then
+    skip "the fixture filesystem does not distinguish path case"
+  fi
+  prepare_removed_worktree
+  confirm_removed_worktree
+  git worktree remove "${worktree}"
+  git worktree add -q --detach "${root}/LINKED"
+
+  compare "${state}/confirmed.json" --after-worktree-removal
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
+  [ -d "${root}/LINKED" ]
+}
+
+@test "worktree removal resume allows a distinct registration with an equivalent folded name" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  git worktree remove "${worktree}"
+  # The fullwidth name folds to "linked" without naming that path on this volume.
+  git worktree add -q --detach "${root}/ＬＩＮＫＥＤ"
+  if [ -e "${worktree}" ]; then
+    skip "the fixture filesystem does not distinguish these Unicode spellings"
+  fi
+
+  compare "${state}/confirmed.json" --after-worktree-removal
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
+}
+
+@test "worktree removal resume holds an absent case-equivalent registration" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  git worktree remove "${worktree}"
+  git worktree add -q --detach "${root}/LINKED"
+  mv "${root}/LINKED" "${root}/moved"
+
+  compare "${state}/confirmed.json" --after-worktree-removal
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"a Git worktree registration may still refer to the confirmed path"* ]]
+}
+
+@test "worktree removal resume requires a private regular confirmation in private storage" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  chmod 644 "${state}/confirmed.json"
+  compare "${state}/confirmed.json" --after-stop
+  [ "${status}" -eq 0 ]
+  git worktree remove "${worktree}"
+
+  compare "${state}/confirmed.json" --after-worktree-removal
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation must be owned by the current user and private (mode 600)"* ]]
+
+  ln -s "${state}/confirmed.json" "${state}/alias.json"
+  compare "${state}/alias.json" --after-worktree-removal
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation must be a regular file"* ]]
+
+  chmod 755 "${state}"
+  compare "${state}/confirmed.json" --after-worktree-removal
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation directory must be owned by the current user and private (mode 700)"* ]]
+}
+
+@test "worktree removal resume requires a trusted ancestor for the confirmation directory" {
+  prepare_removed_worktree
+  mkdir -m 777 "${root}/public"
+  mkdir -m 1777 "${root}/sticky"
+  for ancestor in "${root}/public" "${root}/sticky"; do
+    mkdir -m 700 "${ancestor}/private"
+    manifest_with -- --worktree "${worktree}" --out "${ancestor}/private/confirmed.json"
+    [ "${status}" -eq 0 ]
+  done
+  git worktree remove "${worktree}"
+
+  compare "${root}/public/private/confirmed.json" --after-worktree-removal
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation directory chain is writable by others"* ]]
+
+  compare "${root}/sticky/private/confirmed.json" --after-worktree-removal
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
 }
 
 @test "worktree removal resume requires standalone confirmation and current branch facts" {
