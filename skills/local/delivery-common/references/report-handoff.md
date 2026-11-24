@@ -226,7 +226,60 @@ follows the retry rule in [Check a handoff](#check-a-handoff).
 Use the ordinary worker check for drafts and delegated phase status reports
 and for verified legacy dispatches. Legacy reports that lack a classification
 leave that coverage unknown. The caller chooses the mode from its own record.
-GitHub's hosted phase status is separate from its [fix evidence](phase-delegation.md#return-to-the-coordinator).
+For hosted fixes, use the strict mode on the separate report described under
+**Hosted fix verification evidence** below.
+
+## Hosted fix verification evidence
+
+1. For Prepare and for settled verification, the coordinator assigns separate
+   ordinary v1 worker reports in the private records directory for the round.
+   Use `rh<n>-prepare-verification-a<attempt>.md` and
+   `rh<n>-settled-verification-a<attempt>.md`, taking a fresh attempt when
+   reissuing. Record the expected path, attempt, exact task, PR and worktree,
+   base, pre-checkpoint HEAD, round `h<n>`, and strict mode before dispatch.
+   Use the local worktree HEAD the caller confirms for the evidence's
+   `Head`. The outer hosted report's `Head` describes the remote end state.
+2. At each verification stage, identify the input using
+   [Keys](optional-workflows.md#keys) and the exact files in scope. In the
+   evidence report's `Target`, include the task, PR, worktree and input key
+   or state why the key is unavailable. Keep only the actual
+   [classified verification rows](#classified-verification)
+   in its `Verification:`. Record the exact checked files under
+   `Files changed:`, required check outcome and coverage in the evidence
+   record, and optional status under `Optional workflows:`.
+   Before using any evidence, the worker and coordinator run the existing
+   worker handoff check with `--require-verification-labels` and `--show`
+   against the assigned path, expected base, pre-checkpoint HEAD and round.
+   Confirm the target and input against the dispatch and verification record,
+   save the hash with those values, and pass `--sha256` with the same strict
+   mode and identity on recheck. Resuming carries these recorded expectations
+   forward. An outer status report cannot replace missing or invalid evidence.
+3. When the dispositions are settled, use [Project verification](worker-dialogue.md#project-verification).
+   Reuse Prepare's required checks only if its strict report and recorded hash
+   validate for the same input key and scope. Otherwise run the relevant
+   required checks again on the settled fixes. If key capture is unavailable,
+   record the optional skip and use fresh required checks for the current
+   owned worktree and exact settled files. In that case carry the evidence
+   only through the same uninterrupted verification and checkpoint, and
+   recheck after any interruption or change before the checkpoint.
+4. Before staging, check the separate settled report and make it the
+   authoritative verification in the fix record. Use its required outcome,
+   actual rows, optional result, coverage limits and input in both that
+   record and the affected replies. Keep replies and dispositions tied to
+   the settled changes. Remove provisional claims that are no longer supported,
+   including when all fixes are dropped. In that case clear provisional
+   verification and use only claims supported by the unchanged PR head.
+   Stage only the verified changes and check that the staged edits match
+   the checked files and contents. If the relevant edits change before the
+   checkpoint, update the verification and replies before publishing.
+5. Record the mapping from the checked settled evidence to the commit made
+   from the verified changes once the PR's remote head confirms it. Keep
+   the evidence's pre-checkpoint HEAD and hash in that binding. Writeback and
+   the coordinator use that same settled record and evidence, recheck the
+   strict report and hash, and independently check the current remote head
+   against the binding. Keep affected items pending if the binding cannot
+   be confirmed. The outer phase report carries status and the reference to
+   the checked evidence for the appropriate stage.
 
 ## Codex route
 

@@ -74,9 +74,12 @@ caller's private task records. Use `preflight` with the two exact input files
 or `verification` with the worker's reported task paths as NUL-terminated
 repository-relative bytes. Supply an empty file when there are no such paths.
 Keep the input and output files in private task records outside the worktree.
-The script prints only the key on success. If it fails, report
-`not run: unavailable` with the reason and continue with the phase's ordinary
-work. Use the same inputs and key spelling when resuming an existing pair.
+For verification capture, confirm that existing authorization covers the
+normal configured Git effects, including content filters when applicable.
+The script prints only the key on success. If authorization cannot be
+confirmed or capture fails, report `not run: unavailable` with the reason
+and continue with the phase's ordinary work. Use the same inputs and key
+spelling when resuming an existing pair.
 
 The script writes the exact input the run is given as a sequence of parts in
 a fixed order. Each
@@ -99,9 +102,10 @@ parts and no two inputs share a file:
   a listed directory adds none of its descendants. Any other untracked file
   in the worktree stays out of the input and never changes the key.
 
-The git file mode is `100755` for an executable file, `100644` for any other
-regular file, and `120000` for a symbolic link, whose content is its target,
-so a mode change alone changes the key. The key is
+The git file mode is `100755` for a regular file with the owner execute bit,
+`100644` for other regular files, and `120000` for a symbolic link, whose
+content is its target. Changing the owner execute bit alone changes the key.
+The key is
 `<phase>:<full HEAD SHA>:<git hash-object of that file>`. The workflow runs
 again only when its key changes, such as when an answer changes a qualifying
 decision.

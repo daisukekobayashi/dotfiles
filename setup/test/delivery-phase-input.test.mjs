@@ -106,6 +106,12 @@ test("verification captures the diff and only exact, literal reported untracked 
   entries[0][1] = "100755";
   const chmod = path.join(f.records, "chmod");
   assert.notEqual(f.assertRecord(f.capture("verification", chmod, [input]), chmod, "verification", expected(entries)), before);
+  // Group and other execute bits do not make a file executable in Git.
+  chmodSync(path.join(f.worktree, "[ab]*.txt"), 0o655);
+  entries[0][1] = "100644";
+  const groupExecutable = path.join(f.records, "group-executable");
+  assert.equal(f.assertRecord(f.capture("verification", groupExecutable, [input]), groupExecutable,
+    "verification", expected(entries)), before);
 });
 
 test("phase input fails without a key or output for unsafe or ambiguous inputs", posix, (t) => {

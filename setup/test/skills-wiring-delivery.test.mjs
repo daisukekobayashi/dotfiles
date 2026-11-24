@@ -1040,7 +1040,8 @@ test("optional workflows have one provider-neutral home that Missing Prerequisit
   assert.match(section("Keys"), /one part for each of the task's new files, the untracked files that the work's worker report lists as changed in the task, in byte order of its path: `file <git file mode> <path byte count> <content byte count>`, then the path's bytes, then the content's bytes\./);
   // An empty list selects nothing, and a listed directory never expands to its descendants.
   assert.match(section("Keys"), /When the report lists no such path, add no file part and run no selector\. Otherwise take each entry that `git --literal-pathspecs ls-files -z --others --exclude-standard -- <those paths>` lists and keep it only when its path equals a listed path byte for byte, so a listed directory adds none of its descendants\. Any other untracked file in the worktree stays out of the input and never changes the key\./);
-  assert.match(section("Keys"), /`100755` for an executable file, `100644` for any other regular file, and `120000` for a symbolic link, whose content is its target, so a mode change alone changes the key\./);
+  assert.match(section("Keys"), /`100755` for a regular file with the owner execute bit, `100644` for other regular files, and `120000` for a symbolic link, whose content is its target\. Changing the owner execute bit alone changes the key\./);
+  assert.match(section("Keys"), /existing authorization covers the normal configured Git effects, including content filters when applicable/);
   assert.match(section("Accounting"), /belongs to that head's local review round under \[Local Review\]\(local-review\.md#repeat-and-advance\) and never adds a round/);
   assert.match(section("Accounting"), /A run keyed to a phase input belongs to no round and counts only against its entry's once-per-key bound\./);
   // Each pair of registry entry and key has its own id, intent before dispatch, and a recorded not-run status.
@@ -1227,7 +1228,7 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     // Hosted findings are assessed by the coordinator, at the pause the cycle already has before Writeback.
     /when Prepare finds anything in the latest review, the worker stops after Prepare, before any review-fix commit, push, reply, or resolution, and returns `question` with the prepared dispositions\. The coordinator assesses them under Local Review's \[Assess findings\]\(local-review\.md#assess-findings\)/,
     // Only settled dispositions reach the PR: rejected fixes are removed before publication.
-    /Before the cycle's review-fix publication, the worker makes the worktree match them: it removes the edits of every fix not settled as `applied`, makes any change they add, and reruns the smallest relevant verification when a file changed after Prepare's verification\. It then commits, pushes, replies, and resolves only as the settled dispositions say/,
+    /Before the cycle's review-fix publication, the worker makes the worktree match them: it removes the edits of every fix not settled as `applied`, makes any change they add, and reruns the smallest relevant required verification under \[Hosted fix verification evidence\]\(report-handoff\.md#hosted-fix-verification-evidence\) when Prepare's evidence cannot be reused\. It then commits, pushes, replies, and resolves only as the settled dispositions say/,
     // Assessment alone does not wait on the user.
     /For a `question`, the coordinator asks the user only what needs the user's decision or an approval not already forwarded; it answers the rest from its own assessment\. It continues the same agent with the answer, quoting the user's reply verbatim as the approval for that action alone\. The preview's answer goes to the cleanup agent after the merge instead\. The component skill's own checks, such as the cleanup comparison, still run before the agent acts\./,
     /`<base12>-<start12>\/rh<n>-hosted-a<attempt>\.md` for hosted round `n`, and `<base12>-<start12>\/r<phase>-phase-a<attempt>\.md` for `publish`, `preview`, or `cleanup`/,
@@ -1667,6 +1668,29 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     const phase = await write("worker-phase-status", worker({ Verification: "published head matches" }));
     assert.equal(runWorker(phase).status, 0);
     assert.match(runWorker(phase, [strict]).stderr, /Verification must list classified checks/);
+
+    // Hosted classification belongs in its own strict report on the local
+    // verified input. Its outer status can name a different published HEAD.
+    const published = "f".repeat(40);
+    const fixEvidence = await write("hosted-fix-evidence", worker({
+      Target: `worktree, branch, task, PR, verification:${head}:${"1".repeat(40)}`,
+      Round: "h1", Completion: "complete",
+      Verification: "\n  - [changed path run] npm test -- feature.test.mjs -> passed",
+      "Optional workflows": "verify-app: stopped: time bound",
+    }));
+    const outerStatus = await write("hosted-outer-status", worker({
+      Head: published, Round: "h1", Completion: "complete",
+      Verification: `\n  published head matches\n  checked fix evidence: ${fixEvidence}`,
+    }));
+    const runHosted = (file, expectedHead, extra = []) => spawnSync(process.execPath, [script, "--kind", "worker",
+      "--base", base, "--head", expectedHead, "--round", "h1", "--report", file, ...extra], { encoding: "utf8" });
+    assert.equal(runHosted(fixEvidence, head, [strict]).status, 0);
+    const fixHash = createHash("sha256").update(await readFile(fixEvidence)).digest("hex");
+    assert.equal(runHosted(fixEvidence, head, [strict, "--sha256", fixHash]).status, 0);
+    assert.match(runHosted(fixEvidence, published, [strict, "--sha256", fixHash]).stderr, /Head is not/);
+    assert.equal(runHosted(outerStatus, published).status, 0);
+    assert.match(runHosted(outerStatus, published, [strict]).stderr, /invalid classified Verification row/);
+    assert.match(runHosted(outerStatus, published, [strict, "--sha256", fixHash]).stderr, /report changed/);
     for (const [name, line] of [
       ["unknown", "  - [verified] npm test -> passed"],
       ["unchecked", "  - npm test -> passed"],
@@ -1701,10 +1725,27 @@ test("shared and hosted delivery route classified verification and optional stat
   assert.match(handoff, /ordinary worker check for drafts and delegated phase status reports and for verified legacy dispatches/);
   assert.match(completion, /skip before key capture/);
   assert.match(localReview, /Use \[Project verification\]\(worker-dialogue\.md#project-verification\) and \[Classified verification\]\(report-handoff\.md#classified-verification\) before the fix checkpoint/);
-  assert.match(phase, /Use the ordinary v1 check for the outer phase report/);
-  assert.match(followup, /When the delivery caller supplies a classified-verification brief.*for the actual checks on these prepared fixes/);
-  assert.match(cycle, /Reuse classified Prepare rows only when their recorded verification input key matches the settled input/);
-  assert.match(cycle, /If required verification is unsuccessful or unavailable, stop before commit or push/);
+  assert.match(phase, /reference the applicable separate evidence report by path and SHA-256\. Use the ordinary v1 check for this outer status report/);
+  assert.match(handoff, /the coordinator assigns separate ordinary v1 worker reports/);
+  assert.match(handoff, /record the expected path, attempt, exact task, PR and worktree, base, pre-checkpoint HEAD, round `h<n>`, and strict mode before dispatch/i);
+  assert.match(handoff, /worker handoff check with `--require-verification-labels` and `--show` against the assigned path, expected base, pre-checkpoint HEAD and round/);
+  assert.match(handoff, /pass `--sha256` with the same strict mode and identity on recheck.*An outer status report cannot replace missing or invalid evidence/);
+  assert.match(handoff, /Reuse Prepare's required checks only if its strict report and recorded hash validate for the same input key and scope/);
+  assert.match(handoff, /If key capture is unavailable, record the optional skip and use fresh required checks/);
+  assert.match(handoff, /make it the authoritative verification in the fix record\. Use its required outcome, actual rows, optional result, coverage limits and input in both that record and the affected replies/);
+  assert.match(handoff, /Remove provisional claims that are no longer supported, including when all fixes are dropped/);
+  assert.match(handoff, /Keep the evidence's pre-checkpoint HEAD and hash in that binding\. Writeback and the coordinator use that same settled record and evidence/);
+  assert.match(phase, /For hosted fix evidence, recheck the recorded mode, identity, hash, and any published-head binding/);
+  assert.match(followup, /Run the smallest relevant required checks for local fixes.*write the actual Prepare checks to the assigned strict report/);
+  assert.match(followup, /For delivery fixes, use the settled record and recheck its .* against the recorded hash and published-head binding/);
+  assert.match(followup, /An optional delivery verification failure, timeout, or skip stays in the record and does not gate Writeback/);
+  assert.match(cycle, /settle the complete verification result, report, and affected replies under .* before publication/);
+  assert.match(cycle, /if settling the dispositions leaves no fixes, clear provisional verification and dependent reply claims before Writeback/);
+  assert.match(cycle, /Stop before commit or push if required verification is unsuccessful or unavailable/);
+  assert.doesNotMatch(cycle, /If verification, commit, or push/);
+  assert.match(cycle, /Optional verification status is reported separately and does not gate publication/);
+  assert.match(cycle, /confirm the PR's remote head equals that commit and bind the settled verification evidence to it before Writeback/);
+  assert.match(cycle, /worthwhile fixes were handled, required verification passed/);
 });
 
 test("delivery preflight runs architect, then arena at High tier, as registered optional workflows", async () => {

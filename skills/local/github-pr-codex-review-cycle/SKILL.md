@@ -125,20 +125,20 @@ Still stop and ask before:
    the verified review handoff from step 4.
    - If Prepare cannot validate the handoff, report the mismatch and stop.
    - Forward any earlier dispositions and assessment defaults the caller supplied.
-   - If the delivery caller supplies a classified-verification brief, forward it
-     to Prepare so its record labels the checks on the prepared changes.
-   - Capture its prepared record, including per-thread dispositions, verification,
-     proposed replies, and pending publication. Do not reply or resolve yet,
+   - For delivery fixes, forward the assigned Prepare evidence brief under
+     [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence).
+   - Capture its prepared record, including per-thread dispositions, required
+     verification, proposed replies, and pending publication. Do not reply or resolve yet,
      even though this cycle authorizes later writeback.
+   - In delivery, if settling the dispositions leaves no fixes, clear
+     provisional verification and dependent reply claims before Writeback
+     under Hosted fix verification evidence.
 6. If review fixes changed files, commit and push the verified fixes.
-   - Reuse Prepare's successful verification if no relevant files changed after
-     it; otherwise run the smallest relevant verification for the changed files.
-   - In delivery, apply [Project verification](../delivery-common/references/worker-dialogue.md#project-verification)
-     to the settled fixes before their checkpoint. Reuse classified Prepare
-     rows only when their recorded verification input key matches the settled
-     input. If it differs, cannot be checked, or the rows are missing or invalid,
-     run the relevant checks on the settled fixes and label those results.
-     Carry the resulting classified rows into the final report.
+   - In delivery, settle the complete verification result, report, and
+     affected replies under [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence)
+     before publication. Otherwise, reuse Prepare's successful required checks
+     if no relevant files changed after them. Run the smallest relevant
+     required checks for any changes not covered.
    - Stage only review-follow-up changes.
    - Stop and report `<branch>` unless it is a **safe branch name**: run
      `node <script> -- '<branch>'`, where `<script>` is
@@ -164,14 +164,17 @@ Still stop and ask before:
      remote; use a remote the user names as given. The explicit remote and
      refspec keep `branch.<branch>.pushRemote` or `remote.pushDefault` from
      sending the fixes away from the PR head.
-   - If required verification is unsuccessful or unavailable, stop before
-     commit or push.
-     If verification, commit, or push fails, stop the cycle and report; do not
-     enter step 7.
-   - Add the published commit to the prepared record.
+   - Stop before commit or push if required verification is unsuccessful or
+     unavailable. If commit or push fails, stop the cycle and report the
+     failure before Writeback. Optional verification status is reported
+     separately and does not gate publication.
+   - Add the published commit to the prepared record. For delivery fixes,
+     confirm the PR's remote head equals that commit and bind the settled
+     verification evidence to it before Writeback.
 7. Use only the **Writeback** phase of `github-pr-ai-review-followup`.
    - Pass the prepared record, publication evidence, and existing authorization
-     for clearly closed prepared items under the Approval Model.
+     for clearly closed prepared items under the Approval Model. Use the
+     settled record for delivery fixes.
    - Delegate target revalidation, replies, resolutions, and writeback verification
      to that phase. Do not reapply fixes or duplicate its writeback procedure.
 8. Verify final PR state when possible.
@@ -182,9 +185,9 @@ Still stop and ask before:
 
 The cycle is complete only when one of these is true:
 
-- Codex review output was inspected, worthwhile fixes were handled, verification
-  passed, needed commits/pushes were done, and clearly closed threads were
-  replied to and resolved.
+- Codex review output was inspected, worthwhile fixes were handled, required
+  verification passed, needed commits/pushes were done, and clearly closed
+  threads were replied to and resolved.
 - Codex produced no actionable feedback, and final thread/comment state was
   checked.
 
@@ -200,7 +203,7 @@ Use this structure:
 **Cycle Status: <Complete | Blocked | Partial>**
 - Branch: `<branch>`
 - PR: <url>
-- Publish: `<commit, no new commit, or blocked>`; verification `<command and actual result, or the classified rows for delivery fixes>`
+- Publish: `<commit, no new commit, or blocked>`; required verification `<result or checked settled evidence reference for delivery fixes>`
 - Codex: `<acknowledged/completed/blocked summary>`
 - Follow-up: `<applied/explained/skipped/pre-existing/stale/duplicate counts>`
 - Not applied: one line per item not `applied`, from the prepared record:

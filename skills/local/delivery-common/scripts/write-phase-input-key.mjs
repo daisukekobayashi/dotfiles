@@ -25,7 +25,8 @@ function readRegularFile(file) {
   try {
     const info = fstatSync(fd);
     if (!info.isFile()) throw new Error("input is not a regular file");
-    return { mode: (info.mode & 0o111) ? "100755" : "100644", content: readFileSync(fd) };
+    // Git normalizes a regular file's mode using the owner execute bit.
+    return { mode: (info.mode & constants.S_IXUSR) ? "100755" : "100644", content: readFileSync(fd) };
   } finally {
     closeSync(fd);
   }

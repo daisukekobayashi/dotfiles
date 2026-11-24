@@ -40,9 +40,8 @@ target (task, branch, worktree, and the PR and head when known), the component
 skill and the call it makes, the agent's name and attempt as `state.md` records
 them, the records directory, the report path under
 [Report path](#report-path), and earlier dispositions and other material as
-paths to existing material. For the hosted cycle's fixes, forward the
-[classified verification format](report-handoff.md#classified-verification)
-and the task records used by [Project verification](worker-dialogue.md#project-verification).
+paths to existing material. For the hosted cycle's fixes, assign
+[Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence).
 For the preview and the cleanup, it also assigns
 the manifest path: the report path with `.manifest.json` in place of `.md`,
 which the cleanup skill creates as a new file. Include
@@ -75,11 +74,9 @@ The summary's labels carry what the next step needs:
 - Head: the head the phase ended on, under [Report path](#report-path).
 - Verification: one line each for the component skill's status, such as the
   cycle's status or the publish result, and for a hosted round the published
-  head and the head the hosted review covered. Include the classified rows
-  from the check of the settled hosted fixes when there are such checks. Phase
-  status rows stay on the ordinary worker format. Check the hosted fix rows
-  against the classified syntax in their Prepare or recheck record. Use the
-  ordinary v1 check for the outer phase report, which also carries status.
+  head and the head the hosted review covered. For hosted fixes, reference
+  the applicable separate evidence report by path and SHA-256. Use the
+  ordinary v1 check for this outer status report.
 - Questions: the prepared result to decide on: the prepared dispositions, the
   push remote candidates, or the cleanup targets as the manifest command
   printed them with the manifest path.
@@ -104,7 +101,8 @@ coordinator assesses them under Local Review's
 dispositions. Before the cycle's review-fix publication, the worker makes the
 worktree match them: it removes the edits of every fix not settled as
 `applied`, makes any change they add, and reruns the smallest relevant
-verification when a file changed after Prepare's verification. It then
+required verification under [Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence)
+when Prepare's evidence cannot be reused. It then
 commits, pushes, replies, and resolves only as the settled dispositions say,
 through Writeback and the final state check, and returns `blocked` when the
 worktree cannot be matched without touching other changes. A review without
@@ -138,8 +136,10 @@ Head that differs from the head the coordinator read fails the check.
 While a phase is delegated, `state.md` names the phase, the agent, the report
 path, and the attempt. On resume of any delegated phase other than cleanup:
 
-1. Read the latest report that passes the check, if any. A `complete` report
-   gives the result; a `question` report gives the prepared result to decide
+1. Read the latest report that passes the check, if any. For hosted fix
+   evidence, recheck the recorded mode, identity, hash, and any published-head
+   binding under **Hosted fix verification evidence** in Report Handoff.
+   A `complete` report gives the result; a `question` report gives the prepared result to decide
    on. Recorded assessments carry forward; ask the user again for an approval
    that the records show but this context did not receive, since a progress
    record is not authorization.
