@@ -1478,6 +1478,318 @@ WRAP
   [[ "${output}" != *"stopped as confirmed"$'\t'"process pid ${running} "* ]]
 }
 
+
+# A real linked worktree and a fixed process inventory for resume tests.
+prepare_removed_worktree() {
+  worktree="${root}/linked"
+  git branch feat/1-x "${head}"
+  git worktree add -q "${worktree}" feat/1-x
+  chmod 700 "${state}"
+
+  export RESUME_WORKTREE="${worktree}"
+  export RESUME_PROCESSES="${root}/resume-processes"
+  : >"${RESUME_PROCESSES}"
+  cat >"${root}/skills/worktree-runtime-cleanup/scripts/list-processes.sh" <<'PROCESSES'
+#!/usr/bin/env bash
+[ "$#" -eq 1 ] && [ "$1" = "${RESUME_WORKTREE}" ] || exit 2
+[ -z "${RESUME_PROCESSES_UNAVAILABLE:-}" ] || { echo "process inventory unavailable" >&2; exit 1; }
+cat "${RESUME_PROCESSES}"
+PROCESSES
+}
+
+confirm_removed_worktree() {
+  manifest_with -- --worktree "${worktree}" --out "${state}/confirmed.json"
+  [ "${status}" -eq 0 ]
+  capture_manifest_digest
+}
+
+capture_manifest_digest() {
+  local line="${output##*$'\n'}" prefix=$'manifest sha256\t'
+  [[ "${line}" == "${prefix}"* ]]
+  manifest_digest="${line#"${prefix}"}"
+  [[ "${manifest_digest}" =~ ^[0-9a-f]{64}$ ]]
+}
+
+compare_removed_worktree() {
+  compare "$@" --after-worktree-removal --confirmed-sha256 "${manifest_digest}"
+}
+
+assert_no_resume_authorization() {
+  [ "${status}" -eq 3 ]
+  [ -z "${output}" ]
+}
+
+@test "worktree removal resume issues fresh GitHub authorization from the original confirmation" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  compare "${state}/confirmed.json" --after-stop
+  [ "${status}" -eq 0 ]
+  git worktree remove "${worktree}"
+
+  compare "${state}/confirmed.json" --after-stop
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+
+  compare_removed_worktree "${state}/confirmed.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"worktree already removed"$'\t'"${worktree}"* ]]
+  [ "$(printf '%s\n' "${output}" | grep -xcF "local"$'\t'"feat/1-x"$'\t'"${head}")" -eq 1 ]
+  [ "$(printf '%s\n' "${output}" | grep -xcF "lease"$'\t'"origin"$'\t'"${head}")" -eq 1 ]
+  [ "$(git rev-parse refs/heads/feat/1-x)" = "${head}" ]
+}
+
+@test "worktree removal resume issues the same authorization for Azure DevOps" {
+  prepare_removed_worktree
+  git remote set-url origin git@ssh.dev.azure.com:v3/org/project/repo
+  local -a args=(--azure org project repo --branch feat/1-x --pr-state completed --pr-head "${head}"
+    --cross-repo false --default-branch main --protected false --open-prs 0)
+  check manifest "${args[@]}" --worktree "${worktree}" --out "${state}/confirmed.json"
+  [ "${status}" -eq 0 ]
+  capture_manifest_digest
+  git worktree remove "${worktree}"
+
+  check compare "${args[@]}" --worktree "${worktree}" --confirmed "${state}/confirmed.json" \
+    --after-worktree-removal --confirmed-sha256 "${manifest_digest}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"worktree already removed"$'\t'"${worktree}"* ]]
+  [ "$(printf '%s\n' "${output}" | grep -xcF "local"$'\t'"feat/1-x"$'\t'"${head}")" -eq 1 ]
+  [ "$(printf '%s\n' "${output}" | grep -xcF "lease"$'\t'"origin"$'\t'"${head}")" -eq 1 ]
+}
+
+@test "worktree removal resume holds an unconfirmed path and a recreated filesystem entry" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  local original_digest="${manifest_digest}"
+  local -a args
+  mapfile -t args < <(facts)
+  check manifest "${args[@]}" --no-worktree --out "${state}/no-worktree.json"
+  [ "${status}" -eq 0 ]
+  capture_manifest_digest
+  local no_worktree_digest="${manifest_digest}"
+  manifest_digest="${original_digest}"
+  git worktree remove "${worktree}"
+
+  check compare "${args[@]}" --worktree "${root}/other" --confirmed "${state}/confirmed.json" \
+    --after-worktree-removal --confirmed-sha256 "${manifest_digest}"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"requires the exact confirmed worktree path"* ]]
+  check compare "${args[@]}" --no-worktree --confirmed "${state}/confirmed.json" \
+    --after-worktree-removal --confirmed-sha256 "${manifest_digest}"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"requires the exact confirmed worktree path"* ]]
+  manifest_digest="${no_worktree_digest}" compare_removed_worktree "${state}/no-worktree.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"requires the exact confirmed worktree path"* ]]
+
+  ln -s "${root}/absent" "${worktree}"
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"confirmed worktree path still exists"* ]]
+}
+
+@test "worktree removal resume holds a stale detached registration or a new checkout of the branch" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+
+  git -C "${worktree}" checkout -q --detach
+  mv "${worktree}" "${root}/moved"
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"confirmed worktree path is still registered"* ]]
+
+  mv "${root}/moved" "${worktree}"
+  git worktree remove "${worktree}"
+  git worktree add -q "${root}/replacement" feat/1-x
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"confirmed branch is checked out in a worktree"* ]]
+}
+
+@test "worktree removal resume allows a distinct registered case variant" {
+  mkdir "${root}/case-probe"
+  if [ -e "${root}/CASE-PROBE" ]; then
+    skip "the fixture filesystem does not distinguish path case"
+  fi
+  prepare_removed_worktree
+  confirm_removed_worktree
+  git worktree remove "${worktree}"
+  git worktree add -q --detach "${root}/LINKED"
+
+  compare_removed_worktree "${state}/confirmed.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
+  [ -d "${root}/LINKED" ]
+}
+
+@test "worktree removal resume allows a distinct registration with an equivalent folded name" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  git worktree remove "${worktree}"
+  # The fullwidth name folds to "linked" without naming that path on this volume.
+  git worktree add -q --detach "${root}/ＬＩＮＫＥＤ"
+  if [ -e "${worktree}" ]; then
+    skip "the fixture filesystem does not distinguish these Unicode spellings"
+  fi
+
+  compare_removed_worktree "${state}/confirmed.json"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"local"$'\t'"feat/1-x"$'\t'"${head}"* ]]
+}
+
+@test "worktree removal resume holds an absent case-equivalent registration" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  git worktree remove "${worktree}"
+  git worktree add -q --detach "${root}/LINKED"
+  mv "${root}/LINKED" "${root}/moved"
+
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"a Git worktree registration may still refer to the confirmed path"* ]]
+}
+
+@test "worktree removal resume requires a private regular confirmation in private storage" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  chmod 644 "${state}/confirmed.json"
+  compare "${state}/confirmed.json" --after-stop
+  [ "${status}" -eq 0 ]
+  git worktree remove "${worktree}"
+
+  compare_removed_worktree "${state}/confirmed.json"
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation must be owned by the current user and private (mode 600)"* ]]
+
+  ln -s "${state}/confirmed.json" "${state}/alias.json"
+  compare_removed_worktree "${state}/alias.json"
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation must be a regular file"* ]]
+
+  mkfifo "${state}/fifo.json"
+  compare_removed_worktree "${state}/fifo.json"
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation must be a regular file"* ]]
+
+  chmod 755 "${state}"
+  compare_removed_worktree "${state}/confirmed.json"
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation directory must be owned by the current user and private (mode 700)"* ]]
+}
+
+@test "worktree removal resume requires the original digest and identical bounded bytes" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  local file="${state}/confirmed.json"
+  # Check the digest output against the generated bytes independently. The
+  # expected value for resume still comes exclusively from the command output.
+  [ "${manifest_digest}" = "$(node -e 'const fs = require("fs"); const crypto = require("crypto"); process.stdout.write(crypto.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "${file}")" ]
+  git worktree remove "${worktree}"
+
+  compare "${file}" --after-worktree-removal
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"missing --confirmed-sha256"* ]]
+
+  compare "${file}" --after-worktree-removal --confirmed-sha256 invalid
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"exactly 64 lowercase hex digits"* ]]
+
+  # The JSON and targets are the same, but the original approval covers bytes.
+  printf '\n' >>"${file}"
+  compare_removed_worktree "${file}"
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmed manifest does not match the original SHA-256"* ]]
+
+  node -e 'require("fs").truncateSync(process.argv[1], 16 * 1024 * 1024 + 1)' "${file}"
+  compare_removed_worktree "${file}"
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmation exceeds 16 MiB"* ]]
+}
+
+@test "worktree removal resume requires standalone confirmation and current branch facts" {
+  prepare_removed_worktree
+  confirm_removed_worktree
+  preview
+  [ "${status}" -eq 0 ]
+  [[ "${output}" != *"manifest sha256"* ]]
+  compare "${state}/preview.json" --after-stop
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"lease"$'\t'"origin"$'\t'"${head}"* ]]
+  git worktree remove "${worktree}"
+
+  compare_removed_worktree "${state}/preview.json"
+  [ "${status}" -eq 2 ]
+  [ -z "${output}" ]
+  [[ "${stderr}" == *"the confirmed manifest does not match the original SHA-256"* ]]
+
+  git branch -f feat/1-x main^
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"confirmed local branch must still be eligible for deletion"* ]]
+}
+
+@test "worktree removal resume checks both listed process rows and confirmed PIDs" {
+  prepare_removed_worktree
+  printf '%s\t%s\t?\tfixture time\t%s\tcwd under target\tfixture\n' "$$" "$PPID" "${worktree}" >"${RESUME_PROCESSES}"
+  confirm_removed_worktree
+  git worktree remove "${worktree}"
+
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"processes: resources are still listed under the removed worktree"* ]]
+
+  : >"${RESUME_PROCESSES}"
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"a process with PID $$ still runs"* ]]
+}
+
+@test "worktree removal resume checks Compose containers by path and by confirmed project name" {
+  prepare_removed_worktree
+  printf 'linked\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  printf 'linked\tlinked_data\n' >"${FAKE_DOCKER_VOLUMES}"
+  printf 'volumes:\n  data:\n' >"${worktree}/compose.yaml"
+  confirm_removed_worktree
+  rm "${worktree}/compose.yaml"
+  git worktree remove "${worktree}"
+
+  printf 'new\t%s\trunning\n' "${worktree}" >"${FAKE_DOCKER_PS}"
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"compose: new or changed compose project new"* ]]
+
+  printf 'linked\t%s\trunning\n' "${root}/other" >"${FAKE_DOCKER_PS}"
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"it still has containers"* ]]
+
+  : >"${FAKE_DOCKER_PS}"
+  compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"confirmed volumes remain: linked_data"* ]]
+
+  : >"${FAKE_DOCKER_VOLUMES}"
+  compare_removed_worktree "${state}/confirmed.json"
+  [ "${status}" -eq 0 ]
+}
+
+@test "worktree removal resume holds an unavailable process inventory" {
+  prepare_removed_worktree
+  RESUME_PROCESSES_UNAVAILABLE=1 confirm_removed_worktree
+  git worktree remove "${worktree}"
+
+  RESUME_PROCESSES_UNAVAILABLE=1 compare_removed_worktree "${state}/confirmed.json"
+  assert_no_resume_authorization
+  [[ "${stderr}" == *"processes: worktree removal resume requires verified listings at confirmation and now"* ]]
+}
+
 @test "a reftable repository, with no loose ref files, is not rejected" {
   local table="${root}/table"
   git init -q -b main --ref-format=reftable "${table}" 2>/dev/null || skip "git has no reftable support"

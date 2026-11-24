@@ -8,7 +8,7 @@
 //   node check-cleanup-targets.mjs remote <facts> [--preview]
 //   node check-cleanup-targets.mjs local <facts>
 //   node check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]
-//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop]
+//   node check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal --confirmed-sha256 <hex>]
 //
 // <facts> are the provider facts the caller looked up; the script makes no
 // gh, az, or API call. Every one is required:
@@ -98,7 +98,8 @@
 //   Caller preview for a combined merge and cleanup confirmation: the remote
 //   check runs as before the merge, and a listing that cannot run fails the
 //   check. Without --preview a listing that cannot run is recorded and printed
-//   as unverified.
+//   as unverified. Standalone manifests also print a `manifest sha256` row
+//   for the exact bytes written, for the original confirmation to include.
 //
 // compare
 //   Builds the manifest again, after the merge, and compares it with the
@@ -134,6 +135,17 @@
 //   could not run there either. On a match it prints the targets, for a
 //   proposed local branch `local <branch> <sha>`, the SHA to delete it at, and
 //   for a proposed remote branch `lease <remote> <sha>`.
+//   --after-worktree-removal resumes standalone cleanup before local branch
+//   deletion. Use the original confirmed manifest kept in private storage,
+//   its exact canonical --worktree path, and the --confirmed-sha256 from the
+//   original trusted confirmation. Pass fresh facts for the same PR from
+//   the original repository. The script checks the digest of the same raw
+//   file bytes it will parse, up to 16 MiB. The path and registration must
+//   both be gone, and the branch must still be eligible locally. Runtime
+//   listings at confirmation and now must
+//   be verifiable. The current path-scoped listings must be empty, and the
+//   checks for confirmed PIDs, Compose projects and volumes, temporary paths
+//   and branch targets still apply. A Caller preview does not qualify.
 //
 // Every displayed value, such as a path or command, is printed with control
 // characters encoded as \xNN, so no target can print a line of its own; the
@@ -160,7 +172,8 @@
 // run or --out cannot be created, means the check could not run and stops the cleanup.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, constants, existsSync, lstatSync, openSync, readFileSync, readlinkSync, realpathSync, writeSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readlinkSync, readSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -176,6 +189,7 @@ const AZURE_COMPONENT = /^(?=.*[A-Za-z0-9])[A-Za-z0-9. _-]+$/;
 // The runtime executor reads this format. Keep Git-only checks usable when
 // the runtime skill is unavailable.
 const MANIFEST_VERSION = 3;
+const MAX_CONFIRMED_BYTES = 16 * 1024 * 1024;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pushTargetScript = path.join(here, "check-push-target.mjs");
@@ -189,7 +203,7 @@ const USAGE = [
   "       check-cleanup-targets.mjs remote <facts> [--preview]",
   "       check-cleanup-targets.mjs local <facts>",
   "       check-cleanup-targets.mjs manifest <facts> <targets> --out <file> [--preview]",
-  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop]",
+  "       check-cleanup-targets.mjs compare <facts> <targets> --confirmed <file> [--resume-stop | --after-stop | --after-worktree-removal --confirmed-sha256 <hex>]",
   "facts: (--github <host> <owner>/<repo> | --azure <org> <project> <repo>) --branch <branch>",
   "       --pr-state <state> --pr-head <sha> --cross-repo true|false --default-branch <branch>",
   "       --protected true|false --open-prs <n> [--remote <name>]",
@@ -392,14 +406,21 @@ const git = (args) => {
   return result.stdout;
 };
 
-// Runs git and returns { status, stdout }; a status other than those
+// Runs git and returns { status, stdout, stderr }; a status other than those
 // `allowed` means the check cannot run.
 const gitStatus = (args, allowed) => {
   const result = spawnSync("git", args, { encoding: "utf8" });
   if (!allowed.includes(result.status)) {
     return cannotRun(`git ${args.join(" ")} exited ${result.status ?? result.signal}: ${(result.stderr || result.error?.message || "").toString().trim()}`);
   }
-  return { status: result.status, stdout: result.stdout };
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+};
+
+const worktreeFields = () => {
+  const z = gitStatus(["worktree", "list", "--porcelain", "-z"], [0, 129]);
+  if (z.status === 0) return { fields: z.stdout.split("\0"), nul: true, stderr: z.stderr };
+  const lines = gitStatus(["worktree", "list", "--porcelain"], [0]);
+  return { fields: lines.stdout.split("\n"), nul: false, stderr: lines.stderr };
 };
 
 // Looks up refs/heads/<branch> as git enumerates it. Returns { sha, symref }
@@ -412,13 +433,12 @@ const gitStatus = (args, allowed) => {
 // line output counts only when every line is a known field, so a path that
 // breaks a line holds the deletion.
 const checkedOutBranches = () => {
-  const z = gitStatus(["worktree", "list", "--porcelain", "-z"], [0, 129]);
-  const fields = z.status === 0 ? z.stdout.split("\0") : git(["worktree", "list", "--porcelain"]).split("\n");
+  const { fields, nul } = worktreeFields();
   const known = /^(?:worktree .+|HEAD [0-9a-f]+|branch refs\/.+|detached|bare|locked(?: .*)?|prunable(?: .*)?|)$/;
   const branches = [];
   let worktree = null;
   for (const field of fields) {
-    if (z.status !== 0 && !known.test(field)) return `git worktree list printed a line that cannot be parsed: ${field}`;
+    if (!nul && !known.test(field)) return `git worktree list printed a line that cannot be parsed: ${field}`;
     if (field.startsWith("worktree ")) worktree = field.slice("worktree ".length);
     else if (field.startsWith("branch ")) branches.push([worktree, field.slice("branch ".length)]);
   }
@@ -640,13 +660,13 @@ const resolveTemp = (given) => {
   return cannotRun(`cannot resolve --temp ${given}: a dangling symbolic link occupies the path`);
 };
 
-const readTargets = (options) => {
+const readTargets = (options, afterWorktreeRemoval = false) => {
   const worktreeOption = options["--worktree"];
   if (Boolean(worktreeOption) === Boolean(options["--no-worktree"])) usage("exactly one of --worktree or --no-worktree is required");
   let worktree = null;
   if (worktreeOption) {
     if (!path.isAbsolute(worktreeOption[0])) usage(`--worktree is not an absolute path: ${JSON.stringify(worktreeOption[0])}`);
-    worktree = realpathOrNull(worktreeOption[0]);
+    worktree = afterWorktreeRemoval ? worktreeOption[0] : realpathOrNull(worktreeOption[0]);
     if (!worktree) usage(`--worktree not found: ${JSON.stringify(worktreeOption[0])}`);
   }
   const seen = new Set();
@@ -657,6 +677,53 @@ const readTargets = (options) => {
     return { path: given, resolved: resolveTemp(given) };
   });
   return { worktree, temps };
+};
+
+// The approved path is already canonical. A missing or redirected parent,
+// a dangling symlink at the target, and a failed lookup do not prove removal.
+const checkWorktreePathAbsent = (worktree) => {
+  const parent = path.dirname(worktree);
+  try {
+    if (realpathSync(parent) !== parent) fail([`the confirmed worktree parent changed: ${parent}`]);
+  } catch (error) {
+    return cannotRun(`cannot resolve the confirmed worktree parent ${parent}: ${error.message}`);
+  }
+  try {
+    lstatSync(worktree);
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    return cannotRun(`cannot check the confirmed worktree path ${worktree}: ${error.message}`);
+  }
+  fail([`the confirmed worktree path still exists: ${worktree}`]);
+};
+
+const checkWorktreeUnregistered = (worktree, branch) => {
+  const { fields, stderr } = worktreeFields();
+  const validField = /^(?:worktree .+|HEAD [0-9a-f]+|branch refs\/.+|detached|bare|locked(?: .*)?|prunable(?: .*)?|)$/s;
+  if (stderr?.trim() || !fields[0]?.startsWith("worktree ") ||
+      fields.at(-2) !== "" || fields.at(-1) !== "" ||
+      fields.some((field) => !validField.test(field))) {
+    cannotRun("git worktree list did not give a complete worktree inventory");
+  }
+  for (const field of fields) {
+    if (field.startsWith("worktree ")) {
+      const registered = field.slice("worktree ".length);
+      if (!path.isAbsolute(registered)) cannotRun("git worktree list included a non-absolute or quoted path");
+      const normalized = path.normalize(registered);
+      if (normalized === worktree) {
+        fail([`the confirmed worktree path is still registered: ${worktree}`]);
+      }
+      if (foldName(normalized) === foldName(worktree)) {
+        const actual = realpathOrNull(registered);
+        if (actual === null || actual === worktree) {
+          fail([`a Git worktree registration may still refer to the confirmed path: ${registered}`]);
+        }
+      }
+    }
+    if (field.startsWith("branch ") && sameBranchName(field.slice("branch ".length), `refs/heads/${branch}`)) {
+      fail([`the confirmed branch is checked out in a worktree: ${branch}`]);
+    }
+  }
 };
 
 // Runs a read-only listing script of worktree-runtime-cleanup and returns its
@@ -783,7 +850,7 @@ const isSymlinkPath = (target) => {
 // Creates the file exclusively with mode 0600 and writes through that
 // descriptor, so a symlink or file planted at the path, even after the checks
 // above, is never followed or overwritten.
-const writeNewFile = (file, text) => {
+const writeNewFile = (file, bytes) => {
   let fd;
   try {
     fd = openSync(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600);
@@ -792,13 +859,14 @@ const writeNewFile = (file, text) => {
     return cannotRun(`cannot create ${JSON.stringify(file)}: ${error.message}`);
   }
   try {
-    writeSync(fd, text);
+    writeFileSync(fd, bytes);
   } finally {
     closeSync(fd);
   }
 };
 
 const isInside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 const manifestCommand = (args) => {
   const options = parseOptions(args, { ...FACTS, ...TARGETS, "--out": 1, "--preview": 0 });
@@ -820,18 +888,71 @@ const manifestCommand = (args) => {
   if (preview && unavailable.length > 0) {
     fail(unavailable.map((section) => `${section} cannot be listed for a Caller preview: ${manifest[section].reason}`));
   }
-  writeNewFile(outReal, `${JSON.stringify(manifest, null, 2)}\n`);
+  const bytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  writeNewFile(outReal, bytes);
   process.stdout.write(formatTargets(manifest));
+  if (!preview) process.stdout.write(row("manifest sha256", sha256(bytes)) + "\n");
 };
 
-const readConfirmed = (file) => {
+// Read a bounded snapshot from one descriptor. Private storage protects the
+// inventory's confidentiality; the original digest binds its contents.
+const readConfirmedBytes = (file) => {
+  const uid = process.getuid?.();
+  if (uid === undefined || constants.O_NOFOLLOW === undefined || constants.O_NONBLOCK === undefined) {
+    throw new Error("private confirmation storage cannot be verified on this platform");
+  }
+  if (!path.isAbsolute(file) || path.normalize(file) !== file) {
+    throw new Error("the private confirmation path must be canonical and absolute");
+  }
+  const parent = path.dirname(file);
+  const directory = lstatSync(parent);
+  if (!directory.isDirectory() || directory.uid !== uid || (directory.mode & 0o077) !== 0) {
+    throw new Error("the confirmation directory must be owned by the current user and private (mode 700)");
+  }
+  if (realpathSync(parent) !== parent) throw new Error("the private confirmation directory must be its own real path");
+  const named = lstatSync(file);
+  if (!named.isFile()) throw new Error("the confirmation must be a regular file");
+  const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.dev !== named.dev || stat.ino !== named.ino) {
+      throw new Error("the confirmation file changed while it was opened");
+    }
+    if (stat.uid !== uid || (stat.mode & 0o077) !== 0) {
+      throw new Error("the confirmation must be owned by the current user and private (mode 600)");
+    }
+    if (stat.size > MAX_CONFIRMED_BYTES) throw new Error("the confirmation exceeds 16 MiB");
+    const bytes = Buffer.alloc(stat.size);
+    for (let offset = 0; offset < bytes.length;) {
+      const count = readSync(fd, bytes, offset, bytes.length - offset, null);
+      if (count === 0) throw new Error("the confirmation size changed during the read");
+      offset += count;
+    }
+    const extra = Buffer.alloc(1);
+    if (readSync(fd, extra, 0, extra.length, null) !== 0) throw new Error("the confirmation size changed during the read");
+    return bytes;
+  } finally {
+    closeSync(fd);
+  }
+};
+
+const readConfirmed = (file, expectedDigest) => {
   let manifest;
   try {
-    manifest = JSON.parse(readFileSync(file, "utf8"));
+    if (expectedDigest === undefined) {
+      manifest = JSON.parse(readFileSync(file, "utf8"));
+    } else {
+      const bytes = readConfirmedBytes(file);
+      if (sha256(bytes) !== expectedDigest) throw new Error("the confirmed manifest does not match the original SHA-256");
+      manifest = JSON.parse(bytes.toString("utf8"));
+    }
   } catch (error) {
     return usage(`cannot read the confirmed manifest ${JSON.stringify(file)}: ${error.message}`);
   }
-  if (manifest?.version !== MANIFEST_VERSION) usage(`not a version ${MANIFEST_VERSION} cleanup target manifest; preview and confirm again`);
+  if (manifest?.version !== MANIFEST_VERSION) {
+    const next = expectedDigest === undefined ? "; preview and confirm again" : "";
+    usage(`not a version ${MANIFEST_VERSION} cleanup target manifest${next}`);
+  }
   return manifest;
 };
 
@@ -895,6 +1016,15 @@ const composeStopIncomplete = (item, resume) => {
   return reasons.length > 0 ? reasons.join("; and ") : null;
 };
 
+// A Compose project with containers can disappear from the path-scoped
+// listing when its working_dir label changes. Recheck confirmed names as well.
+const composeWorktreeRemovalIncomplete = (item) => {
+  const containers = runLookup("docker ps", "docker", ["ps", "-a", "--filter", `label=com.docker.compose.project=${item.project}`, "--format", "{{.ID}}"]);
+  if (containers.unavailable) return `its containers cannot be verified: ${containers.unavailable}`;
+  if (containers.stdout.trim() !== "") return "it still has containers";
+  return composeStopIncomplete(item, false);
+};
+
 // For a process that is gone from the listing, why it may still run, or
 // null. The listing covers only processes tied to the worktree, so a process
 // whose cwd moved away drops out while it keeps running: it is gone only when
@@ -912,15 +1042,37 @@ const processSurvives = (item) => {
 };
 
 const compareCommand = (args) => {
-  const options = parseOptions(args, { ...FACTS, ...TARGETS, "--confirmed": 1, "--resume-stop": 0, "--after-stop": 0 });
+  const options = parseOptions(args, {
+    ...FACTS, ...TARGETS, "--confirmed": 1, "--confirmed-sha256": 1,
+    "--resume-stop": 0, "--after-stop": 0, "--after-worktree-removal": 0,
+  });
   const resumeStop = Boolean(options["--resume-stop"]);
-  if (resumeStop && options["--after-stop"]) usage("choose one runtime comparison mode");
-  // In either stop mode, confirmed and now absent runtimes are expected.
-  const stopped = resumeStop || options["--after-stop"] ? [] : null;
+  const afterStop = Boolean(options["--after-stop"]);
+  const afterWorktreeRemoval = Boolean(options["--after-worktree-removal"]);
+  const modes = [resumeStop, afterStop, afterWorktreeRemoval].filter(Boolean);
+  if (modes.length > 1) usage("choose one runtime comparison mode");
+  const expectedDigest = options["--confirmed-sha256"]?.[0];
+  if (afterWorktreeRemoval) {
+    if (expectedDigest === undefined) usage("missing --confirmed-sha256 for worktree removal resume");
+    if (expectedDigest.length !== 64 || !/^[0-9a-f]+$/.test(expectedDigest)) {
+      usage("--confirmed-sha256 must be exactly 64 lowercase hex digits");
+    }
+  } else if (expectedDigest !== undefined) {
+    usage("--confirmed-sha256 requires --after-worktree-removal");
+  }
+  // In a stop or removal mode, confirmed and now absent runtimes are expected.
+  const stopped = modes.length > 0 ? [] : null;
   if (!options["--confirmed"]) usage("missing --confirmed");
   const facts = readFacts(options);
-  const targets = readTargets(options);
-  const confirmed = readConfirmed(options["--confirmed"][0]);
+  const targets = readTargets(options, afterWorktreeRemoval);
+  const confirmed = readConfirmed(options["--confirmed"][0], expectedDigest);
+  if (afterWorktreeRemoval) {
+    if (confirmed.preview !== false) fail(["worktree removal resume requires the original standalone confirmation"]);
+    if (!targets.worktree || path.normalize(targets.worktree) !== targets.worktree || targets.worktree !== confirmed.worktree) {
+      fail(["worktree removal resume requires the exact confirmed worktree path"]);
+    }
+    checkWorktreePathAbsent(targets.worktree);
+  }
   const current = buildManifest(facts, targets, { preview: false });
 
   const differences = [];
@@ -931,7 +1083,9 @@ const compareCommand = (args) => {
   let localDeleted = false;
   const localBefore = confirmed.local ?? {};
   const localAfter = current.local;
-  if (localAfter.status === "absent" && localBefore.status === "proposed") {
+  if (afterWorktreeRemoval && localAfter.status !== "proposed") {
+    differences.push(`the confirmed local branch must still be eligible for deletion: ${localAfter.reason ?? localAfter.status}`);
+  } else if (localAfter.status === "absent" && localBefore.status === "proposed") {
     localDeleted = true;
   } else if (localAfter.status === "unmerged") {
     differences.push(`local branch refs/heads/${current.branch} cannot be deleted: ${localAfter.reason}`);
@@ -952,6 +1106,15 @@ const compareCommand = (args) => {
     differences.push(`remote branch: confirmed ${JSON.stringify(describeRemote(before))}, now ${JSON.stringify(describeRemote(after))}${after.reason ? ` (${after.reason})` : ""}`);
   }
 
+  if (afterWorktreeRemoval) {
+    for (const section of ["processes", "compose"]) {
+      if (confirmed[section].status !== "ok" || current[section].status !== "ok") {
+        differences.push(`${section}: worktree removal resume requires verified listings at confirmation and now`);
+      } else if (current[section].items.length > 0) {
+        differences.push(`${section}: resources are still listed under the removed worktree`);
+      }
+    }
+  }
   compareRuntime(
     "processes", confirmed, current,
     (item) => [item.pid, item.started, item.cwd],
@@ -966,9 +1129,9 @@ const compareCommand = (args) => {
     (item) => `compose project ${item.project} working_dir ${item.working_dir} volumes ${JSON.stringify(item.volumes)}`,
     differences,
     stopped,
-    (item) => composeStopIncomplete(item, resumeStop),
+    (item) => afterWorktreeRemoval ? composeWorktreeRemovalIncomplete(item) : composeStopIncomplete(item, resumeStop),
   );
-  if (options["--after-stop"]) {
+  if (afterStop) {
     for (const item of confirmed.compose.items) {
       if (item.deleteVolumes.length > 0 && current.compose.items.some((live) => live.project === item.project)) {
         differences.push(`compose project ${item.project} still has containers and confirmed volume removals`);
@@ -998,7 +1161,12 @@ const compareCommand = (args) => {
   for (const temp of removedTemps) stopped.push(`temporary path ${temp.path}`);
 
   if (differences.length > 0) fail(["the cleanup targets differ from the confirmed manifest:", ...differences]);
-  process.stdout.write(formatTargets(current));
+  if (afterWorktreeRemoval) {
+    checkWorktreeUnregistered(targets.worktree, facts.branch);
+    checkWorktreePathAbsent(targets.worktree);
+  }
+  process.stdout.write(formatTargets(afterWorktreeRemoval ? { ...current, worktree: null } : current));
+  if (afterWorktreeRemoval) process.stdout.write(row("worktree already removed", targets.worktree) + "\n");
   const stopLabel = resumeStop ? "matched for resume" : "stopped as confirmed";
   for (const item of stopped ?? []) process.stdout.write(row(stopLabel, item) + "\n");
   if (localDeleted) process.stdout.write(`${row(`local branch already deleted: refs/heads/${current.branch}`)}\n`);
