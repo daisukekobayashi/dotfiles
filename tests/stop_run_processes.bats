@@ -112,6 +112,159 @@ row_for() {
   printf '%s\n' "${output}" | awk -F '\t' -v pid="$1" '$2 == pid'
 }
 
+# A deterministic process table for zombie transitions. The Node preload
+# records every attempted signal so no fixture PID is sent a real signal.
+zombie_fixture() {
+  export ZOMBIE_SCENARIO="$1"
+  export ZOMBIE_STAT="${2:-Z}" ZOMBIE_PLATFORM="${3:-}"
+  export ZOMBIE_DIR="${BATS_TEST_TMPDIR}/zombie"
+  export ZOMBIE_ROOT=2000000000 ZOMBIE_LATE=2000000001
+  mkdir -p "${ZOMBIE_DIR}/bin" "${ZOMBIE_DIR}/scripts"
+  cp "${script}" "${ZOMBIE_DIR}/scripts/"
+  zombie_script="${ZOMBIE_DIR}/scripts/stop-run-processes.mjs"
+  cat >"${ZOMBIE_DIR}/signals.cjs" <<'EOF'
+const { appendFileSync } = require("node:fs");
+const { join } = require("node:path");
+if (process.env.ZOMBIE_PLATFORM) {
+  Object.defineProperty(process, "platform", { value: process.env.ZOMBIE_PLATFORM });
+}
+process.kill = (pid, signal) => {
+  appendFileSync(join(process.env.ZOMBIE_DIR, "signals"), `${pid} ${signal}\n`);
+  return true;
+};
+EOF
+  cat >"${ZOMBIE_DIR}/bin/ps" <<'EOF'
+#!/usr/bin/env bash
+started="Tue Nov 24 10:00:00 2026"
+sample() {
+  if [[ "${state_column}" == yes ]]; then printf '%s ' "$1"; fi
+  printf '%s\n' "$2"
+}
+state_column=no
+if [[ "$*" == *" -o stat="* ]]; then state_column=yes; fi
+state=S
+case "${ZOMBIE_SCENARIO}" in
+  initial) state="${ZOMBIE_STAT}" ;;
+  recheck)
+    if [[ "$1" == -p ]]; then state="${ZOMBIE_STAT}"; fi
+    ;;
+  waiting)
+    if [[ -s "${ZOMBIE_DIR}/signals" ]]; then state="${ZOMBIE_STAT}"; fi
+    ;;
+  late|replacement)
+    if [[ -s "${ZOMBIE_DIR}/signals" ]]; then state=Z; fi
+    ;;
+esac
+if [[ "$1" == -A ]]; then
+  printf '1 0 '
+  sample S "${started}"
+  printf '%s 1 ' "${PPID}"
+  sample R "${started}"
+  printf '%s 1 ' "${ZOMBIE_ROOT}"
+  sample "${state}" "${started}"
+  if [[ -s "${ZOMBIE_DIR}/signals" ]]; then
+    case "${ZOMBIE_SCENARIO}" in
+      late) printf '%s 1 ' "${ZOMBIE_LATE}"; sample "${ZOMBIE_STAT}" "${started}" ;;
+      replacement)
+        printf '%s 1 ' "${ZOMBIE_LATE}"
+        sample Z "Tue Nov 24 10:00:01 2026"
+        ;;
+    esac
+  fi
+elif [[ "$1" == -p && "$2" == "${ZOMBIE_ROOT}" ]]; then
+  sample "${state}" "${started}"
+else
+  exit 1
+fi
+EOF
+  chmod +x "${ZOMBIE_DIR}/bin/ps"
+  cat >"${ZOMBIE_DIR}/scripts/list-processes.sh" <<'EOF'
+#!/usr/bin/env bash
+list() {
+  printf '%s\t1\t?\tTue Nov 24 10:00:00 2026\t%s\tcwd under target\tfixture\n' "$1" "$2"
+}
+list "${ZOMBIE_ROOT}" "$1"
+if [[ -s "${ZOMBIE_DIR}/signals" ]]; then
+  case "${ZOMBIE_SCENARIO}" in
+    late|replacement) list "${ZOMBIE_LATE}" "$1" ;;
+  esac
+fi
+EOF
+  write_record '{"version":1,"target":"'"${target}"'","recorder":"2","processes":[["1","Tue Nov 24 10:00:00 2026"],["2","Tue Nov 24 10:00:00 2026"]]}'
+}
+
+stop_zombie_fixture() {
+  PATH="${ZOMBIE_DIR}/bin:${PATH}" run --separate-stderr node \
+    --require "${ZOMBIE_DIR}/signals.cjs" "${zombie_script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
+}
+
+@test "stop-run-processes treats a listed zombie as exited before teardown" {
+  zombie_fixture initial
+  stop_zombie_fixture
+  [ "${status}" -eq 0 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1,6)" = "$(printf 'gone\texited before the teardown')" ]
+  [ ! -e "${ZOMBIE_DIR}/signals" ]
+}
+
+@test "stop-run-processes skips a signal when the start-time recheck shows a zombie" {
+  zombie_fixture recheck Zs
+  stop_zombie_fixture
+  [ "${status}" -eq 0 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1,6)" = "$(printf 'gone\texited before its signal')" ]
+  [ ! -e "${ZOMBIE_DIR}/signals" ]
+}
+
+@test "stop-run-processes does not retry SIGTERM or report a zombie as a leftover" {
+  zombie_fixture waiting
+  stop_zombie_fixture
+  [ "${status}" -eq 0 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1)" = stopped ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tverified')" ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "${ZOMBIE_ROOT} SIGTERM" ]
+}
+
+@test "stop-run-processes rechecks the start time of a late zombie before excluding it" {
+  zombie_fixture late
+  stop_zombie_fixture
+  [ "${status}" -eq 0 ]
+  [ "$(row_for "${ZOMBIE_LATE}" | cut -f1,6)" = "$(printf 'gone\texited before the final check')" ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "${ZOMBIE_ROOT} SIGTERM" ]
+}
+
+@test "stop-run-processes does not use a replacement zombie to verify a late process exited" {
+  zombie_fixture replacement
+  stop_zombie_fixture
+  [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_LATE}" | cut -f1,6)" = "$(printf 'unverified\tfirst seen after the first signal')" ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "${ZOMBIE_ROOT} SIGTERM" ]
+}
+
+@test "stop-run-processes checks a Linux zombie leader with live threads before signaling" {
+  zombie_fixture initial Zsl linux
+  stop_zombie_fixture
+  [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1)" = running ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "$(printf '%s SIGTERM\n' "${ZOMBIE_ROOT}" "${ZOMBIE_ROOT}")" ]
+}
+
+@test "stop-run-processes still waits for a Linux zombie leader with live threads after SIGTERM" {
+  zombie_fixture waiting Zl linux
+  stop_zombie_fixture
+  [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1)" = running ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "$(printf '%s SIGTERM\n' "${ZOMBIE_ROOT}" "${ZOMBIE_ROOT}")" ]
+}
+
+@test "stop-run-processes reports a late Linux zombie leader with live threads as unverified" {
+  zombie_fixture late Zsl linux
+  stop_zombie_fixture
+  [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1)" = stopped ]
+  [ "$(row_for "${ZOMBIE_LATE}" | cut -f1,6)" = "$(printf 'unverified\tfirst seen after the first signal')" ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "${ZOMBIE_ROOT} SIGTERM" ]
+}
+
 @test "stop-run-processes stops a tree the run started, including an orphaned child" {
   local p root child
   p="$(payload)"
@@ -212,8 +365,8 @@ EOF
   mkdir -p "${bin}"
   cat >"${bin}/ps" <<EOF
 #!/usr/bin/env bash
-if [[ "\$*" == "-p ${root} -o lstart=" ]]; then
-  echo "Thu Jan  1 00:00:00 1970"
+if [[ "\$*" == "-p ${root} -o stat= -o lstart=" ]]; then
+  echo "Z Thu Jan  1 00:00:00 1970"
   exit 0
 fi
 exec "${real}" "\$@"

@@ -55,7 +55,9 @@
 //   signaled, and counts as a leftover. So does a process under the target
 //   first seen during the teardown, and, when any signal was sent, a process
 //   under the target that a listing after the signals shows and neither the
-//   record nor the first listing had, such as a child forked meanwhile. Any other listed process is reported "left" with the reason and
+//   record nor the first listing had, such as a child forked meanwhile. A
+//   process whose PID and start time match a zombie is already gone. Any other
+//   listed process is reported "left" with the reason and
 //   never signaled: one that existed before the run, one under a parent that
 //   did (such as another session's shell, wherever its cwd is), and one under a
 //   new parent outside the target. Ownership is read from the parent chain at
@@ -64,11 +66,12 @@
 //   other work out of the target while the run lasts. On a host where an
 //   orphan is reparented to a pre-existing subreaper rather than pid 1, its
 //   tree is left and reported.
-//   The tops of the started trees get SIGTERM first; each one's start time is
-//   read again immediately before its signal, and a changed one is not
-//   signaled. After --wait seconds (default 10), every started process still
-//   running with the same start time, even reparented, gets SIGTERM once
-//   more, and the script waits half as long again. Lookups while waiting are
+//   The tops of the started trees get SIGTERM first. Each one's start time
+//   and state are read together immediately before its signal. A changed
+//   start time or a zombie skips the signal. After --wait seconds (default
+//   10), every started process still running with the same start time, even
+//   reparented, gets SIGTERM once more, and the script waits half as long
+//   again. Lookups while waiting are
 //   bounded by the time left. The script signals no other process, except
 //   its own lookups that run past their time bound, which get SIGTERM.
 //
@@ -129,9 +132,23 @@ class Unavailable extends Error {}
 // normalize: "Sat Nov 21 16:21:27 2026".
 const PID = /^[1-9]\d*$/;
 const STARTED = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([1-9]|[12]\d|3[01]) ([01]\d|2[0-3]):[0-5]\d:[0-5]\d \d{4}$/;
+const STATE_AND_START = ["-o", "stat=", "-o", "lstart="];
 
 const under = (dir, root) => dir === root || dir.startsWith(root.endsWith("/") ? root : `${root}/`);
 const normalize = (started) => started.trim().replace(/\s+/g, " ");
+
+// The first character of stat is the process state; the rest are flags.
+const parseStateAndStart = (line) => {
+  const match = line.trim().match(/^([A-Za-z?][A-Za-z<>+]*)[ \t]+(.+)$/);
+  if (!match) return null;
+  const started = normalize(match[2]);
+  if (!STARTED.test(started)) return null;
+  const stat = match[1];
+  // On Linux, a zombie thread-group leader can still have live threads.
+  // The lowercase l flag identifies a multithreaded group.
+  const zombie = stat.startsWith("Z") && (process.platform !== "linux" || !stat.includes("l"));
+  return { started, zombie };
+};
 
 // Runs a lookup in its own process group and resolves { code, stdout, stderr }.
 // Past timeoutMs it sends the group SIGTERM, stops waiting for its output, and
@@ -191,21 +208,21 @@ const run = async (label, command, args, timeoutMs = LOOKUP_TIMEOUT_MS) => {
   return result.stdout;
 };
 
-// One ps read of every process: Map of pid -> { ppid, started }.
+// One ps read of every process: Map of pid -> { ppid, started, zombie }.
 const processTable = async (timeoutMs = LOOKUP_TIMEOUT_MS) => {
   const table = new Map();
-  const out = await run("ps", "ps", ["-A", "-o", "pid=", "-o", "ppid=", "-o", "lstart="], timeoutMs);
+  const out = await run("ps", "ps", ["-A", "-o", "pid=", "-o", "ppid=", ...STATE_AND_START], timeoutMs);
   for (const line of out.split("\n")) {
     const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\S.*?)\s*$/);
     if (!match) {
       if (line.trim() !== "") throw new Unavailable(`ps printed an unexpected line: ${line}`);
       continue;
     }
-    const started = normalize(match[3]);
-    if (!PID.test(match[1]) || !/^(0|[1-9]\d*)$/.test(match[2]) || !STARTED.test(started)) {
+    const processState = parseStateAndStart(match[3]);
+    if (!PID.test(match[1]) || !/^(0|[1-9]\d*)$/.test(match[2]) || !processState) {
       throw new Unavailable(`ps printed an unexpected line: ${line}`);
     }
-    table.set(match[1], { ppid: match[2], started });
+    table.set(match[1], { ppid: match[2], ...processState });
   }
   if (!table.has(String(process.pid)) || !table.has("1")) throw new Unavailable("ps did not list this process and pid 1");
   return table;
@@ -396,21 +413,23 @@ const liveCwd = (cwd, target, inside) => {
   return { live };
 };
 
-// The start time of one process now: a string, "" when it is gone, or null
-// when it cannot be read.
-const startOf = async (pid) => {
+// The start time and state of one process, "gone" when its PID is absent,
+// or null when it cannot be read.
+const processStateOf = async (pid) => {
   let result;
   try {
-    result = await lookup("ps", "ps", ["-p", pid, "-o", "lstart="], RECHECK_TIMEOUT_MS);
+    result = await lookup("ps", "ps", ["-p", pid, ...STATE_AND_START], RECHECK_TIMEOUT_MS);
   } catch {
     return null;
   }
-  const started = normalize(result.stdout);
-  if (result.code === 0 && started !== "") return started;
+  if (result.code === 0 && result.stderr === "") {
+    const processState = parseStateAndStart(result.stdout);
+    if (processState) return processState;
+  }
   try {
     process.kill(Number(pid), 0);
   } catch (error) {
-    if (error.code === "ESRCH") return "";
+    if (error.code === "ESRCH") return "gone";
   }
   return null;
 };
@@ -418,10 +437,11 @@ const startOf = async (pid) => {
 // Sends SIGTERM to pid when its start time still matches; returns
 // "signaled", "gone", or the reason it is unverified.
 const terminate = async (pid, started) => {
-  const now = await startOf(pid);
-  if (now === "") return "gone";
+  const now = await processStateOf(pid);
+  if (now === "gone") return "gone";
   if (now === null) return "start time unreadable";
-  if (now !== started) return "start time changed";
+  if (now.started !== started) return "start time changed";
+  if (now.zombie) return "gone";
   try {
     process.kill(Number(pid), "SIGTERM");
   } catch (error) {
@@ -443,7 +463,10 @@ const waitFor = async (procs, ms) => {
     } catch {
       return null;
     }
-    const alive = procs.filter((p) => table.get(p.pid)?.started === p.started);
+    const alive = procs.filter(({ pid, started }) => {
+      const now = table.get(pid);
+      return now?.started === started && !now.zombie;
+    });
     if (alive.length === 0 || Date.now() >= deadline) return alive;
     await delay(Math.min(500, Math.max(0, deadline - Date.now())));
   }
@@ -472,7 +495,9 @@ const stop = async (target, file, expected, waitSeconds) => {
     let verdict;
     const { problem, live } = row.reason === "cwd under target" ? liveCwd(row.cwd, target, inside) : {};
     const inNested = live && nested.find((dir) => inside(live, dir));
-    if (!now) verdict = { status: "gone", reason: "exited before the teardown" };
+    const zombie = now?.zombie && now.started === row.started &&
+      (!then || then.started === row.started) && before.get(pid) !== row.started;
+    if (!now || zombie) verdict = { status: "gone", reason: "exited before the teardown" };
     else if (!then && (row.reason === "cwd under target" || row.reason === "cwd ambiguous")) verdict = { status: "unverified", reason: "first seen during the teardown" };
     else if (!then) verdict = { status: "left", reason: "started during the teardown" };
     else if (then.started !== row.started || now.started !== row.started) verdict = { status: "unverified", reason: "start time differs between lookups" };
@@ -548,7 +573,7 @@ const stop = async (target, file, expected, waitSeconds) => {
   }
   // After any signal, list the target again: a process under it that the
   // record and the first listing did not have, such as a child a started
-  // process forked during the teardown, is a leftover, never signaled.
+  // process forked during the teardown, is a leftover unless confirmed dead.
   if (started.length > 0) {
     let again;
     try {
@@ -558,9 +583,24 @@ const stop = async (target, file, expected, waitSeconds) => {
       process.stderr.write(`the listing after the signals could not run (${error.message}); the teardown is unverified\n`);
       leftover = true;
     }
-    for (const [pid, row] of again ?? []) {
-      if (row.reason !== "cwd under target" && row.reason !== "cwd ambiguous") continue;
-      if (before.get(pid) === row.started || rows.get(pid)?.started === row.started) continue;
+    const late = [...(again ?? [])].filter(([pid, row]) =>
+      (row.reason === "cwd under target" || row.reason === "cwd ambiguous") &&
+      before.get(pid) !== row.started && rows.get(pid)?.started !== row.started);
+    let finalTable;
+    if (late.length > 0) {
+      try {
+        finalTable = await processTable(RECHECK_TIMEOUT_MS);
+      } catch (error) {
+        // A failed recheck leaves the late rows unverified.
+        if (!(error instanceof Unavailable)) throw error;
+      }
+    }
+    for (const [pid, row] of late) {
+      const now = finalTable?.get(pid);
+      if (now?.zombie && now.started === row.started) {
+        lines.push(["gone", pid, row.ppid, row.started, row.cwd, "exited before the final check"].join("\t"));
+        continue;
+      }
       leftover = true;
       lines.push(["unverified", pid, row.ppid, row.started, row.cwd, "first seen after the first signal"].join("\t"));
     }
