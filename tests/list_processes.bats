@@ -11,6 +11,7 @@ setup() {
   target="$(mkdir -p "${BATS_TEST_TMPDIR}/target" && cd "${BATS_TEST_TMPDIR}/target" && pwd -P)"
   outside="$(mkdir -p "${BATS_TEST_TMPDIR}/outside" && cd "${BATS_TEST_TMPDIR}/outside" && pwd -P)"
   pids=()
+  argv_runner_owner=""
 }
 
 teardown() {
@@ -18,6 +19,11 @@ teardown() {
   for pid in "${pids[@]}"; do
     kill "${pid}" 2>/dev/null || true
   done
+  if [[ -n "${argv_runner_owner}" ]]; then
+    for pid in "${pids[@]}"; do
+      wait "${pid}" 2>/dev/null || true
+    done
+  fi
 }
 
 # Starts a sleep whose cwd is $1 and sets started_pid.
@@ -302,7 +308,7 @@ start_with_args_in() {
   local dir="$1" runner
   shift
   runner="$(argv_runner)"
-  (cd "${dir}" && exec bash "${runner}" "$@") &
+  (cd "${dir}" && LIST_PROCESSES_TEST_OWNER="${argv_runner_owner}" exec bash "${runner}" "$@") &
   started_pid=$!
   pids+=("${started_pid}")
 }
@@ -322,6 +328,15 @@ argv_runner() {
   local runner="${BATS_TEST_TMPDIR}/argv-runner"
   if [[ ! -e "${runner}" ]]; then
     cat >"${runner}.tmp" <<'EOF'
+if [[ -n "${LIST_PROCESSES_TEST_OWNER:-}" ]]; then
+  trap 'exit 0' TERM
+  while kill -0 "${LIST_PROCESSES_TEST_OWNER}" 2>/dev/null; do
+    # Bash handles TERM after this foreground sleep finishes.
+    sleep 1
+  done
+  exit 0
+fi
+
 trap 'kill "${child}" 2>/dev/null; exit 0' TERM
 sleep 60 &
 child=$!
@@ -1047,6 +1062,8 @@ run_lookup() {
   forged="${outside}/x-\$-'"
   invalid="${target}/b"$'\xff'
   mkdir -p "${symbol}" 2>/dev/null || skip "the file system rejects U+2427"
+  # The scans can outlast a fixed sleep, leaving no row for a live-argv check.
+  argv_runner_owner="${BASHPID}"
   start_with_args --cwd "${symbol}"
   symbol_pid="${started_pid}"
   start_with_args --cwd "${invalid}/x"
