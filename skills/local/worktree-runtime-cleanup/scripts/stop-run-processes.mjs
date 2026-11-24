@@ -143,7 +143,11 @@ const parseStateAndStart = (line) => {
   if (!match) return null;
   const started = normalize(match[2]);
   if (!STARTED.test(started)) return null;
-  return { started, zombie: match[1].startsWith("Z") };
+  const stat = match[1];
+  // On Linux, a zombie thread-group leader can still have live threads.
+  // The lowercase l flag identifies a multithreaded group.
+  const zombie = stat.startsWith("Z") && (process.platform !== "linux" || !stat.includes("l"));
+  return { started, zombie };
 };
 
 // Runs a lookup in its own process group and resolves { code, stdout, stderr }.

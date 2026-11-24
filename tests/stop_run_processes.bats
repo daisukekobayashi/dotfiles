@@ -116,6 +116,7 @@ row_for() {
 # records every attempted signal so no fixture PID is sent a real signal.
 zombie_fixture() {
   export ZOMBIE_SCENARIO="$1"
+  export ZOMBIE_STAT="${2:-Z}" ZOMBIE_PLATFORM="${3:-}"
   export ZOMBIE_DIR="${BATS_TEST_TMPDIR}/zombie"
   export ZOMBIE_ROOT=2000000000 ZOMBIE_LATE=2000000001
   mkdir -p "${ZOMBIE_DIR}/bin" "${ZOMBIE_DIR}/scripts"
@@ -124,6 +125,9 @@ zombie_fixture() {
   cat >"${ZOMBIE_DIR}/signals.cjs" <<'EOF'
 const { appendFileSync } = require("node:fs");
 const { join } = require("node:path");
+if (process.env.ZOMBIE_PLATFORM) {
+  Object.defineProperty(process, "platform", { value: process.env.ZOMBIE_PLATFORM });
+}
 process.kill = (pid, signal) => {
   appendFileSync(join(process.env.ZOMBIE_DIR, "signals"), `${pid} ${signal}\n`);
   return true;
@@ -138,23 +142,29 @@ sample() {
 }
 state_column=no
 if [[ "$*" == *" -o stat="* ]]; then state_column=yes; fi
+state=S
+case "${ZOMBIE_SCENARIO}" in
+  initial) state="${ZOMBIE_STAT}" ;;
+  recheck)
+    if [[ "$1" == -p ]]; then state="${ZOMBIE_STAT}"; fi
+    ;;
+  waiting)
+    if [[ -s "${ZOMBIE_DIR}/signals" ]]; then state="${ZOMBIE_STAT}"; fi
+    ;;
+  late|replacement)
+    if [[ -s "${ZOMBIE_DIR}/signals" ]]; then state=Z; fi
+    ;;
+esac
 if [[ "$1" == -A ]]; then
   printf '1 0 '
   sample S "${started}"
   printf '%s 1 ' "${PPID}"
   sample R "${started}"
-  state=S
-  case "${ZOMBIE_SCENARIO}" in
-    initial) state=Z ;;
-    waiting|late|replacement)
-      if [[ -s "${ZOMBIE_DIR}/signals" ]]; then state=Z; fi
-      ;;
-  esac
   printf '%s 1 ' "${ZOMBIE_ROOT}"
   sample "${state}" "${started}"
-  if [[ "${state}" == Z ]]; then
+  if [[ -s "${ZOMBIE_DIR}/signals" ]]; then
     case "${ZOMBIE_SCENARIO}" in
-      late) printf '%s 1 ' "${ZOMBIE_LATE}"; sample Z "${started}" ;;
+      late) printf '%s 1 ' "${ZOMBIE_LATE}"; sample "${ZOMBIE_STAT}" "${started}" ;;
       replacement)
         printf '%s 1 ' "${ZOMBIE_LATE}"
         sample Z "Tue Nov 24 10:00:01 2026"
@@ -162,11 +172,7 @@ if [[ "$1" == -A ]]; then
     esac
   fi
 elif [[ "$1" == -p && "$2" == "${ZOMBIE_ROOT}" ]]; then
-  if [[ "${ZOMBIE_SCENARIO}" == recheck ]]; then
-    sample Zs "${started}"
-  else
-    sample S "${started}"
-  fi
+  sample "${state}" "${started}"
 else
   exit 1
 fi
@@ -201,7 +207,7 @@ stop_zombie_fixture() {
 }
 
 @test "stop-run-processes skips a signal when the start-time recheck shows a zombie" {
-  zombie_fixture recheck
+  zombie_fixture recheck Zs
   stop_zombie_fixture
   [ "${status}" -eq 0 ]
   [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1,6)" = "$(printf 'gone\texited before its signal')" ]
@@ -229,6 +235,32 @@ stop_zombie_fixture() {
   zombie_fixture replacement
   stop_zombie_fixture
   [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_LATE}" | cut -f1,6)" = "$(printf 'unverified\tfirst seen after the first signal')" ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "${ZOMBIE_ROOT} SIGTERM" ]
+}
+
+@test "stop-run-processes checks a Linux zombie leader with live threads before signaling" {
+  zombie_fixture initial Zsl linux
+  stop_zombie_fixture
+  [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1)" = running ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "$(printf '%s SIGTERM\n' "${ZOMBIE_ROOT}" "${ZOMBIE_ROOT}")" ]
+}
+
+@test "stop-run-processes still waits for a Linux zombie leader with live threads after SIGTERM" {
+  zombie_fixture waiting Zl linux
+  stop_zombie_fixture
+  [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1)" = running ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
+  [ "$(cat "${ZOMBIE_DIR}/signals")" = "$(printf '%s SIGTERM\n' "${ZOMBIE_ROOT}" "${ZOMBIE_ROOT}")" ]
+}
+
+@test "stop-run-processes reports a late Linux zombie leader with live threads as unverified" {
+  zombie_fixture late Zsl linux
+  stop_zombie_fixture
+  [ "${status}" -eq 3 ]
+  [ "$(row_for "${ZOMBIE_ROOT}" | cut -f1)" = stopped ]
   [ "$(row_for "${ZOMBIE_LATE}" | cut -f1,6)" = "$(printf 'unverified\tfirst seen after the first signal')" ]
   [ "$(cat "${ZOMBIE_DIR}/signals")" = "${ZOMBIE_ROOT} SIGTERM" ]
 }
