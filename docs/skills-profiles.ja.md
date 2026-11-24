@@ -559,19 +559,23 @@ delegation がない場合は、coordinator が `architect` を設計のみで�
 `arena` は実行しません。未インストールの場合や trigger・tier の条件を
 満たさない場合は not run として報告します。shared understanding と preflight の
 草案では、現状の挙動や経緯についての主張ごとに `how` または `why` の方法を
-明記します。これらの skill 自体は実行しません。ADR 0001 のその他の行は子 issue で
-実装予定です。
+明記します。これらの skill 自体は実行しません。
+
+Local Review では Medium・High tier の変更済みの指示を、レビュー対象の worker head
+で `evaluate-skill` によるスモーク実行にかけます。検証記録と判断サマリーには、
+実行状況とエージェントが実際に試せた範囲を記載します。
+[delivery のスモーク実行](skill-evaluation.ja.md#delivery-のスモーク実行)を参照してください。
+ADR 0001 の残りは子 issue で管理しています。
 
 `arena`・`interrogate`・`blast-radius`・`create-verification-skill`・
 `maintain-verification-skill`・`evaluate-skill`・`benchmark-checklist` は
 ユーザーによる明示起動に限定します。description と本文に加え、Codex には
 `policy.allow_implicit_invocation: false`、Claude Code には SKILL.md の
 frontmatter に `disable-model-invocation: true` を設定します。
-例外は `arena` の delivery step だけです。SKILL.md から
-`disable-model-invocation` を外し、Codex の設定は維持したうえで、description と
-本文冒頭のガードで、ユーザーが明示依頼した `github-issue-delivery` または
-`azure-devops-work-item-delivery` workflow の High tier の design preflight step
-としての起動も認めます。`change-*review` が delivery の phase を記述するのと同じ形です。
+`arena` と `evaluate-skill` は、SKILL.md から `disable-model-invocation` を外し、
+Codex の設定を維持します。description と本文冒頭のガードで、ユーザーが明示依頼した
+`github-issue-delivery` または `azure-devops-work-item-delivery` workflow の一部として、
+それぞれ High tier の design preflight と Local Review のスモーク実行での起動を認めます。
 Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出します。
 他の skill からの参照だけでは起動しません。`architect` は、ユーザーが
 `arena` を明示起動した場合を除き、自身で設計案を比較します。

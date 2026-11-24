@@ -14,6 +14,21 @@ Claude Code: /evaluate-skill maintain-verification-skill
 「スキルなし／あり」または「旧版／新版」を比較し、モデル・設定・権限・ツール・
 初期ファイルを揃えます。モデル差をスキルの効果と混同しません。
 
+## delivery のスモーク実行
+
+ユーザーが明示依頼した GitHub または Azure DevOps の delivery では、レビュー対象の
+worker head で指示が変わった場合に、Medium・High tier の Local Review で
+`evaluate-skill` を使います。全体で15分を上限とし、現在のエージェントで、
+変更したスキルごとに適用できる既存ケースを1件選び、変更後の指示で1回だけ実行します。
+ベースライン用のセッションは起動しません。
+
+コーディネーターは、ケースの入力が信頼済みの head に由来し、起動に既存の権限だけを
+使うことを確認します。検証記録と判断サマリーには、実行した項目、ケースがない変更、
+削除された指示などの未実行範囲を記載します。Low tier の指示変更は `not run: tier`
+と報告します。詳細は共通の
+[Local Review の手順](../skills/local/delivery-common/references/local-review.md#skill-instruction-smoke)
+を参照してください。
+
 ## スキル内の役割
 
 - [SKILL.md](../skills/local/evaluate-skill/SKILL.md): 評価条件、候補の実行、採点、結果の整理を指示する入口。

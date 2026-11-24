@@ -1,21 +1,45 @@
 ---
 name: evaluate-skill
-description: Use only when the user explicitly invokes evaluate-skill to compare a skill against a baseline or previous version using isolated tasks, blinded grading, and observed artifacts on Codex or Claude Code.
+description: Use only when explicitly invoked to compare a skill against a baseline or previous version on Codex or Claude Code, or as the Local Review smoke step of an explicitly user-requested `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items.
 license: MIT
-disable-model-invocation: true
 ---
 
 # Evaluate Skill
 
-Run only on explicit invocation: `$evaluate-skill` in Codex or `/evaluate-skill`
-in Claude Code. Creating a skill or mentioning evaluation does not activate it.
+Run only when the user explicitly invokes `$evaluate-skill` in Codex or
+`/evaluate-skill` in Claude Code, or as the Local Review smoke step of the user's
+explicit request for `github-issue-delivery` or `azure-devops-work-item-delivery`.
+A caller must forward that request and exact target. For the delivery step,
+follow Delivery smoke below. Direct invocation uses the comparison
+workflow below.
+
+## Delivery smoke
+
+1. Take the coordinator's pinned head, changed instruction paths, approved
+   case inputs and launch settings, private evidence location, and effective
+   deadline. Follow Prepare and run in the [execution reference](references/execution.md)
+   for fresh isolated sessions on the current agent. Prepare only `with-skill`
+   using the changed instructions,
+   run one selected existing case once for each applicable changed skill,
+   and start zero baseline sessions. An empty selection starts no session.
+   If a case cannot run within the approved settings, leave its paths
+   uncovered. Use the remaining time for evidence and cleanup.
+2. Return the head and, for each case, its skill, case ID, status, evidence
+   location, and the changed paths it actually exercised. Check observed
+   commands and artifacts against the case criteria. Record failures and
+   incomplete runs with their reasons. A prepared candidate or a zero exit
+   without evidence does not show that instructions ran. Return
+   `changed instructions not exercised by an agent` for each uncovered path.
+   Keep detailed evidence private and retain it before fixture cleanup.
+   Stop owned work on expiry and return without entering the standalone
+   comparison or comparative grading.
+
+## Frame the comparison
 
 Own the comparison from task selection through execution, grading, and synthesis.
 Use the available agent tools; do not hand the user a preparation command and
 call the evaluation complete. The bundled helper handles repeatable file setup,
 while these instructions control the experiment and interpret its evidence.
-
-## Frame the comparison
 
 Locate the target skill's canonical source and any existing `evals/evals.json`.
 Compare supplied instructions with no supplied instructions, or a frozen old
@@ -99,6 +123,6 @@ instruction comparison. Do not edit the target or install a winner implicitly.
 Adapted from Lauren Tan's [pstack Eval playbook](https://github.com/cursor/plugins/blob/6714489fa233263f00e419f6cfc4759b07c81056/pstack/skills/poteto-mode/playbooks/eval.md).
 This local standalone skill packages that playbook's experiment design, isolated
 candidates, blinded judging, and artifact inspection. Local differences are
-explicit invocation on both agents, fixed-model skill comparisons, bounded runs,
-a bundled preparation helper, and honest fallbacks when isolation or independent
-judging is unavailable. See [LICENSE](LICENSE).
+explicit invocation on both agents, delivery smoke, fixed-model skill comparisons,
+bounded runs, a bundled preparation helper, and honest fallbacks when isolation
+or independent judging is unavailable. See [LICENSE](LICENSE).

@@ -15,6 +15,23 @@ run the same cases on Codex and Claude, comparing conditions within each agent.
 Keep model, settings, permissions, tools, and initial files fixed within a pair.
 Small samples reveal concrete problems; they do not establish a general ranking.
 
+## Delivery smoke
+
+In an explicitly requested GitHub or Azure DevOps issue delivery, Local Review
+can use `evaluate-skill` at Medium and High tier when the pinned worker head
+changes instructions. Within one 15-minute budget, the current agent runs one
+applicable existing case per changed skill, once, using the changed instructions.
+The smoke run starts zero baseline sessions.
+
+The coordinator checks that the case inputs come from the trusted head and
+that the launch stays within existing permissions. Verification evidence and
+the decision summary show observed coverage and gaps, including missing cases
+and removed or otherwise unexercised instructions. At Low tier an instruction
+change reports `not run: tier`. See the shared
+[Local Review step](../skills/local/delivery-common/references/local-review.md#skill-instruction-smoke).
+
+## Comparison workflow
+
 The [skill entrypoint](../skills/local/evaluate-skill/SKILL.md) owns the procedure.
 Its [execution reference](../skills/local/evaluate-skill/references/execution.md)
 and bundled `scripts/prepare.py` contain the preparation and execution details.

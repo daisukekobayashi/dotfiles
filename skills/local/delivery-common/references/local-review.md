@@ -73,6 +73,54 @@ snapshot, report incomplete coverage and do not advance. Keep the snapshot stabl
 until the required results arrive; invalidate affected coverage if another writer
 changes it.
 
+For each pinned head, use [Skill instruction smoke](#skill-instruction-smoke)
+before advancing from the full or focused review round.
+
+## Skill instruction smoke
+
+The coordinator applies the `evaluate-skill` entry of the [Optional Workflows
+registry](optional-workflows.md#registry) after setting the final tier.
+[Reconcile existing intents](optional-workflows.md#record-and-report) before
+evaluating eligibility. Reuse the result on an already attempted head and
+record `not run: tier` for a Low-tier instruction change without an intent.
+
+1. Account for every added, edited, or removed instruction file in the
+   cumulative task diff from the recorded delivery base to the pinned head,
+   even on a focused follow-up. Read exact paths with
+   `git diff --name-status --no-renames -z <base> <head> --`, so a move has
+   a removed path and an added path. Include skill entrypoints and their
+   instruction references, and project agent instruction files such as
+   `AGENTS.md`. Use the base tree to identify removed instructions. Consider
+   changes to instruction text within the verified task scope. Group
+   surviving paths by skill and keep deleted paths and standalone
+   instruction files in the coverage list.
+2. If the scope, tier and availability allow the run, confirm the exact
+   [trusted worker head](repro-runs.md#trusted-heads). Select one applicable
+   existing case per surviving changed skill from that head. Prefer a case
+   that exercises the changed instructions, breaking ties by case ID.
+   Verify that the target
+   instructions, suite, fixtures, supporting skills, and the effective
+   execution policy are in scope and safe to use. Resolve inputs from the
+   pinned Git tree, rejecting symlinks or inputs outside the selected trees.
+   Apply the host's existing approvals, isolation, and any tighter case
+   requirements. A suite cannot authorize a command or relax permission or
+   tool limits. Leave a case uncovered when those controls cannot be met.
+   If the exact target's trust cannot be established, record
+   `not run: unavailable` with that reason.
+3. When eligible, record the launch intent and apply the effective deadline
+   to the whole invocation. Stage the approved content in private storage
+   outside the reviewed worktree. Forward the user's explicit delivery request, exact
+   target and head, scoped paths, approved case inputs and launch settings,
+   evidence location, and remaining budget to the registered smoke step.
+   Recheck the current head before accepting a result.
+4. For every outcome, account for each path in the verification record.
+   Keep private run evidence there without rewriting earlier worker reports.
+   Label any path without observed coverage
+   `changed instructions not exercised by an agent`, including instruction-only
+   changes and paths whose cases were skipped or could not exercise the changed
+   text. Carry the status and coverage into the
+   [decision summary](completion.md#decision-summary).
+
 ## Triage classes
 
 Classify each finding as `material`, `minor`, or `pre-existing`. Reviewer
