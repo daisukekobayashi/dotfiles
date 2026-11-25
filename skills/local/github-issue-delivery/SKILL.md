@@ -62,17 +62,17 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
    resolved host and repository and the fields the step needs, such as
    `state,stateReason`.
 
-On resume, follow Delivery Completion's Resume with GitHub state. Stop and
-report the recorded branch unless it is a **safe branch name** before running
+On resume, follow Delivery Completion's Resume with GitHub state. Use it to
+select the earliest incomplete phase. Stop and report the recorded branch
+unless it is a **safe branch name** before running
 any command with it: run `node <script> -- '<branch>'`, where `<script>` is
 [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
 resolved from this skill's directory, and continue only on exit 0. Write a name
 into this or any command only when it uses solely ASCII letters, digits, `/`,
 `.`, `_`, and `-`; any other name is not safe, without running the check.
-Preserve successful writebacks. Pass the PR/head/trigger record to the cycle and
-resume its earliest incomplete phase. Apply
-[Recover a delivery trigger](../github-pr-review-request/references/codex.md#recover-a-delivery-trigger)
-as the additional identity conditions for Codex trigger intents.
+Preserve successful writebacks. For a hosted resume, pass the verified phase,
+PR, trigger, review and publication records to the cycle. The cycle
+reconciles the trigger only while the request or review wait is pending.
 
 ## Per-Issue Workflow
 

@@ -20,14 +20,7 @@ Use the host, repository and PR resolved by the parent skill. Read the PR's
    matches the intent. Append the outcome with the returned ID before polling.
    On an error or unverifiable response, stop and report. Delivery recovers an
    unrecorded outcome under [Recover a delivery trigger](#recover-a-delivery-trigger).
-3. Poll that comment ID for up to 120 seconds for an `eyes` reaction:
-   ```bash
-   gh api --hostname "$host" --method GET \
-     "repos/$owner/$repo/issues/comments/$comment_id/reactions" \
-     -H 'Accept: application/vnd.github+json' -f content=eyes \
-     --jq '[.[] | select(.content == "eyes") | {user: .user.login, created_at}]'
-   ```
-   Repeat at 5-10 second intervals until the output is non-empty or the timeout expires.
+3. [Acknowledge the trigger](#acknowledge-the-trigger) on that exact comment.
 4. Report the PR URL, the trigger comment URL, and one of these outcomes:
    - `Codex acknowledged`: the posted comment has an `eyes` reaction.
    - `Codex request posted but not acknowledged`: the comment exists, but no `eyes`
@@ -42,6 +35,29 @@ Use the host, repository and PR resolved by the parent skill. Read the PR's
    ```bash
    gh api --hostname "$host" --method DELETE "repos/$owner/$repo/issues/comments/$comment_id"
    ```
+
+## Acknowledge the trigger
+
+A verified comment ID establishes posting. Use that exact ID for
+acknowledgement, including on resume. Reuse verified acknowledgement already
+recorded for that ID. Preserve a recorded timeout. When acknowledgement is
+still unchecked, poll for an `eyes` reaction at 5-10 second intervals for up
+to 120 seconds:
+
+```bash
+gh api --hostname "$host" --method GET \
+  "repos/$owner/$repo/issues/comments/$comment_id/reactions" \
+  -H 'Accept: application/vnd.github+json' -f content=eyes \
+  --jq '[.[] | select(.content == "eyes") | {user: .user.login, created_at}]'
+```
+
+In delivery, use the comment's provider `created_at` to start that bound, so
+a resume uses only the remaining time. Record a timeout if the bound expires
+without a verified reaction. In delivery, append acknowledgement or timeout
+to the task log for that comment ID. Until acknowledged, report the request
+as unacknowledged. With a timeout, stop unless the user explicitly asks to
+continue waiting for this review or approves the retry in step 5. Review
+output on the same head does not establish acknowledgement of this comment.
 
 ## Delivery trigger intent
 
@@ -71,7 +87,8 @@ when resuming an older delivery. Confirm the resolved PR and published head
 match the record. With an existing outcome or previously verified trigger ID,
 read that exact comment from `repos/<owner>/<repo>/issues/comments/<id>` on
 the resolved host and verify the recorded evidence, including its PR and the
-suffix when one was recorded. A verified old ID can still resume waiting.
+suffix when one was recorded. A verified old ID can still resume at
+[acknowledgement](#acknowledge-the-trigger).
 
 For an intent with no outcome or verified ID, require its recorded UUIDv4
 and marker version `v1`. A missing marker in an older pending record
@@ -104,7 +121,8 @@ end
 ```
 
 Recheck the published head before recording the recovered comment ID as the
-outcome. Continue the hosted wait on that comment. On missing, mismatched or
+outcome. Return the verified ID and `created_at` to the cycle for
+[acknowledgement](#acknowledge-the-trigger). On missing, mismatched or
 ambiguous evidence, stop and report without posting or deleting a comment.
 
 ## Guardrails

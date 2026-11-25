@@ -1207,8 +1207,8 @@ test("GitHub delivery binds each Codex request to its recorded intent", async ()
   ]);
   for (const skill of [delivery, cycle]) {
     assert.match(skill, /codex\.md#delivery-trigger-intent/);
-    assert.match(skill, /codex\.md#recover-a-delivery-trigger/);
   }
+  assert.match(cycle, /codex\.md#recover-a-delivery-trigger/);
   assert.doesNotMatch(azure, /delivery-trigger-intent|recover-a-delivery-trigger/);
   assert.doesNotMatch(standalone, /require.*uuid|delivery-trigger-intent/i);
   assert.match(flat(codex), /A standalone request sends `body` as set above\./);
@@ -1216,12 +1216,45 @@ test("GitHub delivery binds each Codex request to its recorded intent", async ()
   assert.match(flat(codex), /Append the outcome with the returned ID before polling\./);
   assert.doesNotMatch(codex, /sort_by|gh pr comment/);
   assert.match(flat(codex), /Append the intent to the assigned task log before posting, with the marker version and UUID, target, hosted round, full published head, existing trigger IDs, login, and baseline\./);
-  assert.match(flat(codex), /With an existing outcome or previously verified trigger ID, read that exact comment .*? A verified old ID can still resume waiting\./);
+  assert.match(flat(codex), /With an existing outcome or previously verified trigger ID, read that exact comment .*? A verified old ID can still resume at \[acknowledgement\]\(#acknowledge-the-trigger\)\./);
   assert.match(flat(codex), /A missing marker in an older pending record blocks recovery, even if author and time match\./);
   assert.match(flat(codex), /Recheck the published head before recording the recovered comment ID as the outcome\./);
   assert.match(flat(codex), /On missing, mismatched or ambiguous evidence, stop and report without posting or deleting a comment\./);
   assert.match(flat(codex), /If the user explicitly asks to retry an unacknowledged request, recheck the exact posted comment ID and its PR before deleting it\./);
   assert.match(flat(codex), /delete only that comment and repeat steps 1–4 once with the same review command and focus\. In delivery the replacement is a new post with its own intent and identifier\./);
+});
+
+test("a Codex cycle resumes verified publication, Prepare or Writeback before trigger recovery", async () => {
+  const skillDir = path.join(repoRoot, "skills", "local");
+  const delivery = flat(await readText(path.join(skillDir, "github-issue-delivery", "SKILL.md")));
+  const cycle = await readText(path.join(skillDir, "github-pr-codex-review-cycle", "SKILL.md"));
+  const resume = flat(cycle.match(/On resume, revalidate[\s\S]*?(?=\n2\. Use `github-pr-publish`)/)?.[0] ?? "");
+  assert.match(delivery, /select the earliest incomplete phase/);
+  assert.match(delivery, /pass the verified phase, PR, trigger, review and publication records to the cycle\. The cycle reconciles the trigger only while the request or review wait is pending\./);
+  assert.doesNotMatch(delivery, /codex\.md#recover-a-delivery-trigger/);
+  assert.match(resume, /Use step 2 for pending initial publication and step 6 with the verified prepared record for pending fix publication/);
+  const [advancedPhases, request] = resume.split("When the request or review wait is still pending");
+  assert.match(advancedPhases, /bind the prepared review to its reviewed head and the current remote PR head to the verified fix commit\. In delivery, resume pending Writeback at step 7 when the recorded evidence holds for both bindings\./);
+  assert.match(advancedPhases, /When resuming Prepare, use the verified review handoff from step 4/);
+  assert.match(advancedPhases, /For a completed round, reuse its verified review and writeback records and finish any pending final state check/);
+  assert.match(advancedPhases, /Reconcile a new, requested round only with that round's records/);
+  assert.doesNotMatch(advancedPhases, /codex\.md#recover-a-delivery-trigger/);
+  assert.match(request ?? "", /codex\.md#recover-a-delivery-trigger/);
+});
+
+test("a recovered Codex post must pass acknowledgement before waiting for review output", async () => {
+  const skillDir = path.join(repoRoot, "skills", "local");
+  const cycle = flat(await readText(path.join(skillDir, "github-pr-codex-review-cycle", "SKILL.md")));
+  const codex = await readText(path.join(skillDir, "github-pr-review-request", "references", "codex.md"));
+  const acknowledgement = flat(codex.match(/## Acknowledge the trigger\n[\s\S]*?(?=\n## )/)?.[0] ?? "");
+  assert.match(flat(codex), /Return the verified ID and `created_at` to the cycle for \[acknowledgement\]\(#acknowledge-the-trigger\)/);
+  assert.match(acknowledgement, /Use that exact ID for acknowledgement, including on resume\. Reuse verified acknowledgement already recorded for that ID\. Preserve a recorded timeout\./);
+  assert.match(acknowledgement, /issues\/comments\/\$comment_id\/reactions/);
+  assert.match(acknowledgement, /use the comment's provider `created_at` to start that bound, so a resume uses only the remaining time/);
+  assert.match(acknowledgement, /With a timeout, stop unless the user explicitly asks to continue waiting for this review or approves the retry in step 5/);
+  assert.match(acknowledgement, /Review output on the same head does not establish acknowledgement of this comment/);
+  assert.match(cycle, /With a verified comment ID, resume step 3 at acknowledgement on that ID\. Enter step 4 only with its verified acknowledgement or explicit user approval to continue waiting for its review\. Post only when the current round's request has yet to start\./);
+  assert.match(cycle, /Apply the same acknowledgement gate to the replacement comment/);
 });
 
 test("the documented Codex trigger uses the create response and passes the body literally", async (t) => {
