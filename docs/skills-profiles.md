@@ -556,7 +556,7 @@ remains, and `--profile ...,pstack` fails as an unknown profile.
 | `architect` | Caller usage and contract design; implementation follows the original request's authorization. |
 | `arena` | Independent candidate comparison with shared criteria, isolated writers, and verified synthesis. |
 | `interrogate` | Read-only independent reviews and evidence-based synthesis. |
-| `blast-radius` | Explicitly requested impact verification using isolated probes, without repairing the implementation. |
+| `blast-radius` | Verifies impact with isolated probes, on explicit invocation or during High-tier delivery. |
 | `create-verification-skill` | Generate and exercise project-local verification procedures and a feature map. |
 | `maintain-verification-skill` | Reconcile an existing verification skill with source and live behavior, preserving product contracts. |
 | `evaluate-skill` | Coordinate isolated skill comparisons, blinded grading, and evidence-based recommendations on either agent. |
@@ -593,18 +593,21 @@ Local Review uses `evaluate-skill` to smoke-run changed instructions at
 Medium and High tier on the pinned worker head. The verification record and
 decision summary show its status and which instructions the current agent
 exercised. See [delivery smoke](skill-evaluation.md#delivery-smoke).
+At High tier, Local Review also runs [blast-radius](../skills/local/delivery-common/references/local-review.md#blast-radius)
+when available. It reuses the adversarial review's isolation and evidence rules
+on the pinned worker head. The coordinator assesses findings against checked
+evidence, and the decision summary shows the optional run's status.
 Remaining ADR 0001 work is tracked in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
 `maintain-verification-skill`, `evaluate-skill`, and `benchmark-checklist` require
-explicit user invocation. Their descriptions and instructions enforce this
-boundary, with `policy.allow_implicit_invocation: false` for Codex and
-`disable-model-invocation: true` in SKILL.md frontmatter for Claude Code.
-`arena` and `evaluate-skill` omit `disable-model-invocation` for their delivery
-steps and keep the Codex policy. Their descriptions and body guards allow
-the High-tier design preflight step and Local Review smoke step, respectively,
-as part of an explicitly user-requested `github-issue-delivery` or
-`azure-devops-work-item-delivery` workflow.
+explicit user invocation outside their designated delivery steps. Codex
+keeps `policy.allow_implicit_invocation: false`. For Claude Code,
+`arena`, `blast-radius`, and `evaluate-skill` omit
+`disable-model-invocation` so their designated steps can invoke them in an
+explicitly requested `github-issue-delivery` or
+`azure-devops-work-item-delivery` workflow. Their descriptions and body guards
+enforce that scope. The other skills set `disable-model-invocation: true`.
 Use `$skill-name` in Codex or `/skill-name` in Claude Code. References from
 another skill do not activate these workflows; `architect` compares alternatives
 directly unless the user explicitly invokes `arena`.

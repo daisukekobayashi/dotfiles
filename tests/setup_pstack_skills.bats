@@ -66,7 +66,7 @@ const codexExplicitOnly = new Set([
   "arena", "benchmark-checklist", "blast-radius", "create-verification-skill", "evaluate-skill",
   "interrogate", "maintain-verification-skill",
 ]);
-const deliveryStep = new Set(["arena", "evaluate-skill"]);
+const deliveryStep = new Set(["arena", "blast-radius", "evaluate-skill"]);
 const claudeExplicitOnly = new Set([...codexExplicitOnly].filter((name) => !deliveryStep.has(name)));
 const metadata = JSON.parse(fs.readFileSync(path.join(root, ".agents/user/skills-profile.json")));
 const baseLocal = JSON.parse(fs.readFileSync(path.join(repoRoot, "skills/profiles/base.json"), "utf8")).local;
@@ -100,7 +100,7 @@ for (const agentDir of [".agents", ".claude"]) {
     }
     for (const match of entry.matchAll(/\]\(([^)]+)\)/g)) {
       if (/^https?:/.test(match[1])) continue;
-      assert.ok(fs.existsSync(path.resolve(installed, match[1])), match[1]);
+      assert.ok(fs.existsSync(path.resolve(installed, match[1].split("#")[0])), match[1]);
     }
   }
 }

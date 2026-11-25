@@ -528,7 +528,7 @@ local skill が含まれます。外部パッケージ、プラグインの hook
 | `architect` | 呼び出し側の使い方と契約を設計する。実装への移行は元の依頼範囲に従う。 |
 | `arena` | 共通基準で独立した候補を比較する。書き込み先を分離し、統合結果を検証する。 |
 | `interrogate` | 独立したレビューを読み取り専用で行い、根拠に基づいて統合する。 |
-| `blast-radius` | 明示起動で、安全性を支える前提を隔離した実験で確かめる。実装修正は行わない。 |
+| `blast-radius` | 明示起動または High tier の delivery で、安全性を支える前提を隔離した実験で確かめる。 |
 | `create-verification-skill` | プロジェクト固有の検証手順と feature map を作り、その手順を実行確認する。 |
 | `maintain-verification-skill` | 既存の検証手順をソースと実動作に照合して保守し、製品の契約を保つ。 |
 | `evaluate-skill` | 両エージェントで、スキルの候補実行・条件名を伏せた採点・結果の整理を進める。 |
@@ -565,17 +565,21 @@ Local Review では Medium・High tier の変更済みの指示を、レビュ�
 で `evaluate-skill` によるスモーク実行にかけます。検証記録と判断サマリーには、
 実行状況とエージェントが実際に試せた範囲を記載します。
 [delivery のスモーク実行](skill-evaluation.ja.md#delivery-のスモーク実行)を参照してください。
+High tier の Local Review では、利用できる場合に
+[blast-radius](../skills/local/delivery-common/references/local-review.md#blast-radius) も実行します。
+固定した worker head で adversarial review の隔離と証拠のルールを使います。
+コーディネーターは確認した証拠に基づいて指摘を評価し、判断サマリーに任意実行の状況を記載します。
 ADR 0001 の残りは子 issue で管理しています。
 
 `arena`・`interrogate`・`blast-radius`・`create-verification-skill`・
 `maintain-verification-skill`・`evaluate-skill`・`benchmark-checklist` は
-ユーザーによる明示起動に限定します。description と本文に加え、Codex には
-`policy.allow_implicit_invocation: false`、Claude Code には SKILL.md の
-frontmatter に `disable-model-invocation: true` を設定します。
-`arena` と `evaluate-skill` は、SKILL.md から `disable-model-invocation` を外し、
-Codex の設定を維持します。description と本文冒頭のガードで、ユーザーが明示依頼した
-`github-issue-delivery` または `azure-devops-work-item-delivery` workflow の一部として、
-それぞれ High tier の design preflight と Local Review のスモーク実行での起動を認めます。
+指定された delivery のステップ以外では、ユーザーによる明示起動に限定します。
+Codex は `policy.allow_implicit_invocation: false` を維持します。
+Claude Code では、`arena`・`blast-radius`・`evaluate-skill` から
+`disable-model-invocation` を外し、ユーザーが明示依頼した `github-issue-delivery`
+または `azure-devops-work-item-delivery` の対象ステップで起動できるようにします。
+description と本文冒頭の条件で対象を限定します。他の skill には
+`disable-model-invocation: true` を設定します。
 Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出します。
 他の skill からの参照だけでは起動しません。`architect` は、ユーザーが
 `arena` を明示起動した場合を除き、自身で設計案を比較します。
