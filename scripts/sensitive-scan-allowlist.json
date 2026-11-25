@@ -1,0 +1,16 @@
+[
+  {
+    "path": "tools/betterleaks-staged/go.sum",
+    "rule": "secret:generic-api-key",
+    "line": 92,
+    "contentSha256": "b4c3459d05c84bde0aaaebf645b190a37402087d4198e51f846db34918207d50",
+    "reason": "Betterleaks matched a public Go module checksum verified against the checksum database and authenticated module cache."
+  },
+  {
+    "path": "tools/betterleaks-staged/go.sum",
+    "rule": "secret:generic-api-key",
+    "line": 141,
+    "contentSha256": "b4c3459d05c84bde0aaaebf645b190a37402087d4198e51f846db34918207d50",
+    "reason": "Betterleaks matched a public Go module checksum verified against the checksum database and authenticated module cache."
+  }
+]
