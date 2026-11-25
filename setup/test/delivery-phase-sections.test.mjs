@@ -34,6 +34,8 @@ test("the documented commands limit the two previously observed whole-file reads
     const { status, stdout, stderr } = run(script, phase);
     assert.equal(status, 0, stderr);
     const blocks = sections(stdout);
+    assert.equal(blocks.has("references/local-review.md#Blast radius"), false, phase);
+    assert.equal(blocks.has("references/local-review.md#Remaining proof work"), false, phase);
     const label = `references/${reference}`;
     assert.equal(blocks.has(label), false);
     const actual = [...blocks].filter(([name]) => name.startsWith(`${label}#`));

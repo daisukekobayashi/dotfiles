@@ -1384,8 +1384,8 @@ test("blast-radius is an optional High-tier Local Review step with its own trust
   const frame = await readText(path.join(references, "optional-workflows.md"));
   const registryRow = frame.split("\n").find((line) => line.startsWith("| `blast-radius` |"));
   assert.ok(registryRow);
-  assert.match(registryRow, /\(local-review\.md#blast-radius\).*\| High \| 30 minutes per reviewed head.*parent confirmation \| Reviewed head: full SHA \|/);
-  assert.match(frame, /\[Blast radius\]\(local-review\.md#blast-radius\), reconcile the recorded deadline,\s+evidence retention, and cleanup as well as the report/);
+  assert.match(registryRow, /\*\*Blast radius\*\* in \[Local Review\]\(local-review\.md\).*\| High \| 30 minutes per reviewed head.*parent confirmation \| Reviewed head: full SHA \|/);
+  assert.match(flat(frame), /\*\*Blast radius\*\* step in \[Local Review\]\(local-review\.md\), reconcile the recorded deadline, evidence retention, and cleanup as well as the report/);
 
   const review = await readText(path.join(references, "local-review.md"));
   const step = flat(review.match(/\n## Blast radius\n[\s\S]*?(?=\n## )/)?.[0]);
@@ -1422,7 +1422,7 @@ test("blast-radius parent and follow-up reruns gate pending commands on current 
   const followUp = flat(review.match(/\n## Focused follow-up\n[\s\S]*?(?=\n## )/)?.[0]);
   assert.match(followUp, /workflow for the new head, applying \[Remaining proof work\]\(#remaining-proof-work\)/);
   const repro = flat(await readText(path.join(references, "repro-runs.md")));
-  assert.match(repro, /For `blast-radius`, apply \[Remaining proof work\]\(local-review\.md#remaining-proof-work\) before creating the rerun's worktree and before each command/);
+  assert.match(repro, /For `blast-radius`, apply \*\*Remaining proof work\*\* in \[Local Review\]\(local-review\.md\) before creating the rerun's worktree and before each command/);
 });
 
 test("blast-radius Codex route records process ownership before launch and checks it after exit", async () => {

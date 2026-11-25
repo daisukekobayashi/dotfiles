@@ -389,5 +389,6 @@ round, and report path from the caller's launch record.
 Exit status 3, any other non-zero status, or a failed Codex run is not a pass.
 For a required handoff, retry once as the next attempt. A second failure is a
 missing prerequisite under [Missing Prerequisites](../SKILL.md#missing-prerequisites).
-For `blast-radius`, record it under [Blast radius](local-review.md#blast-radius)
-and continue required reviews without retrying the optional invocation.
+For `blast-radius`, record it under **Blast radius** in
+[Local Review](local-review.md) and continue required reviews without retrying
+the optional invocation.
