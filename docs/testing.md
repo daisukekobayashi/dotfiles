@@ -19,8 +19,9 @@ database. The checkout, unstaged changes and candidate scanner configuration
 cannot change those inputs. CI scans branch pushes and pull requests. It checks
 each selected commit, including intermediate commits and merge changes compared
 with the first parent. It uses the push before/after or PR base/head SHA, and
-requires an exact comparison base from the event for a first branch push. When
-GitHub does not supply one, open a PR to run the check with its base and head.
+uses the comparison URL for a first branch push, accepting unambiguous Git
+object abbreviations. If GitHub does not supply a comparison base that Git can
+resolve, open a PR to run the check with its base and head.
 If a required object or range cannot be verified, CI reports the scan as
 incomplete. Commit messages, tags, old history sweeps and the contents of other
 repositories linked as submodules are outside this check. Review changes to
@@ -30,9 +31,9 @@ the workflow or scanner itself under the repository review policy.
 
 Keep the real values outside Git. To enable the local check, set
 `DOTFILES_SCAN_DENYLIST_FILE` to the absolute path of an owner-managed regular
-file outside all repository worktrees. Use a single-link file with mode
-`0600` on POSIX, or a Windows ACL granting access only to your account,
-SYSTEM and Administrators. Use a nonempty JSON array of UTF-8 literal
+file outside all repository worktrees and in a directory other users cannot
+modify. Use a single-link file with mode `0600` on POSIX, or a Windows ACL
+granting access only to your account, SYSTEM and Administrators. Use a nonempty JSON array of UTF-8 literal
 `category` and `value` pairs. Categories are `identifier`, `organization`,
 `hostname` and `path`. This example contains a synthetic value:
 
@@ -41,20 +42,15 @@ SYSTEM and Administrators. Use a nonempty JSON array of UTF-8 literal
 ```
 
 An unset denylist skips only the personal-information check. Invalid or
-unreadable configured input makes the scan incomplete. Findings identify the
-rule and location. Paths that match a rule are redacted as well.
+unreadable configured input makes the scan incomplete. The denylist is used
+only by the local staged check. GitHub Actions scans for secrets on pushes and
+pull requests with no private denylist input.
 
-The private CI job is optional. Before supplying values, restrict the
-`dotfiles-private-scan` GitHub Environment to the trusted default branch,
-confirm only trusted changes can reach that branch and its workflow, and
-store the JSON in the environment secret `DOTFILES_SCAN_PRIVATE_DENYLIST`.
-Set the repository variable `DOTFILES_PRIVATE_SCAN_ENABLED` to `true` after
-those controls are in place. The job uses the workflow's exact default-branch
-push commit. Ordinary PRs and other branch pushes run the secret scan with
-no private input. The private job reports the commit, rule and line with
-every filename masked. Use the reported commit to correlate these results
-with detailed diagnostics from the local check. The workflow keeps raw
-findings out of logs and artifacts.
+The scanner uses the pinned version's rules and per-match filters. It disables
+the default file-path prefilter, so selected files reach those rules. Findings
+report the commit or staged change, rule, and line number. Filenames are masked
+because a value detected in file contents may also appear in the path. Inspect
+the indicated commit or staged changes locally to locate the finding.
 
 ### Known false positives
 

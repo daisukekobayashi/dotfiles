@@ -47,6 +47,9 @@ function fixture(t) {
     if (process.argv[2] === "--version") {
       console.log(process.env.SCANNER_VERSION ?? "betterleaks version 1.10.1");
     } else {
+      if (process.argv.some((arg) => arg.startsWith("path=") && arg.includes("synthetic-hostname.example.test"))) {
+        process.exit(8);
+      }
       if (process.env.SCANNER_FAILURE) {
         console.error("synthetic-hostname.example.test");
         process.exit(8);
@@ -105,8 +108,6 @@ function fixture(t) {
       GITHUB_REPOSITORY: repository,
       GITHUB_SERVER_URL: server,
       GITHUB_SHA: after,
-      GITHUB_WORKFLOW_SHA: after,
-      GITHUB_WORKFLOW_REF: `${repository}/.github/workflows/sensitive-changes.yml@${ref}`,
     };
   }
   function denylist(file = path.join(scratch, "private.json")) {
@@ -129,7 +130,7 @@ test("reads the staged index, handles an unborn HEAD and suppresses scanner inte
   f.write("settings.txt", "clean after staging\n");
   const staged = f.scan("staged");
   assert.equal(staged.code, 21, staged.output);
-  assert.match(staged.output, /finding secret:fixture staged "settings.txt":1/);
+  assert.match(staged.output, /finding secret:fixture staged "\[redacted path\]":1/);
   assert.doesNotMatch(staged.output, /SYNTHETIC_SECRET_SAMPLE/);
 });
 
@@ -170,7 +171,7 @@ test("the normal Git hook still checks the build and blocks publication of a fin
   assert.equal(stopped.status, 1, stopped.stdout + stopped.stderr);
   const output = stopped.stdout + stopped.stderr;
   assert.match(output, /build check ran/);
-  assert.match(output, /finding secret:fixture staged "candidate.txt":1/);
+  assert.match(output, /finding secret:fixture staged "\[redacted path\]":1/);
   assert.ok(!output.includes("SYNTHETIC_SECRET_SAMPLE"));
   f.write("candidate.txt", "clean fixture\n");
   const allowed = commitFromHook();
@@ -257,6 +258,19 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   const output = f.scan("ci", first);
   assert.equal(output.code, 21, output.output);
   assert.ok(output.output.includes(`finding secret:fixture ${middle}`));
+  const shortened = f.scan("ci", f.event("0".repeat(40), head, {
+    created: true, compare: `${server}/${repository}/compare/${base.slice(0, 12)}...${head.slice(0, 12)}`,
+  }, firstRef));
+  assert.deepEqual(shortened, output);
+  for (const [compare, reason] of [
+    [`${server}/other/dotfiles/compare/${base}...${head}`, /no exact comparison base/],
+    [`${server}/${repository}/compare/${base}...${middle.slice(0, 12)}`, /does not match the event head/],
+    [`${server}/${repository}/compare/deadbeef00...${head}`, /missing or ambiguous/],
+  ]) {
+    const invalid = f.scan("ci", f.event("0".repeat(40), head, { created: true, compare }, firstRef));
+    assert.equal(invalid.code, 2, invalid.output);
+    assert.match(invalid.output, reason);
+  }
   const bad = f.scan("ci", f.event("0".repeat(40), head, { created: true, compare: `${server}/${repository}/commit/${head}` }, firstRef));
   assert.equal(bad.code, 2, bad.output);
   assert.match(bad.output, /no exact comparison base/);
@@ -275,9 +289,27 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   const missing = f.scan("ci", f.event("1".repeat(40), head, {}, firstRef));
   assert.equal(missing.code, 2, missing.output);
   assert.match(missing.output, /event commit is missing/);
+
+  const prefix = base.slice(0, 4);
+  const hash = base.length === 40 ? "sha1" : "sha256";
+  let collision;
+  for (let index = 0; index < 1_500_000 && !collision; index += 1) {
+    const sample = `inert Git object ${index}`;
+    if (createHash(hash).update(`blob ${sample.length}\0${sample}`).digest("hex").startsWith(prefix)) {
+      collision = sample;
+    }
+  }
+  assert.ok(collision, "the fixture needs two objects with the same prefix");
+  f.write(".git/collision-fixture", collision);
+  f.git("hash-object", "-w", ".git/collision-fixture");
+  const ambiguous = f.scan("ci", f.event("0".repeat(40), head, {
+    created: true, compare: `${server}/${repository}/compare/${prefix}...${head}`,
+  }, firstRef));
+  assert.equal(ambiguous.code, 2, ambiguous.output);
+  assert.match(ambiguous.output, /missing or ambiguous/);
 });
 
-test("trusted CI checks merge resolutions with only private input", (t) => {
+test("CI checks merge resolutions for secrets and ignores local denylist inputs", { skip: windows }, (t) => {
   const f = fixture(t);
   f.write("base.txt", "baseline\n");
   const base = f.commit("baseline");
@@ -286,25 +318,32 @@ test("trusted CI checks merge resolutions with only private input", (t) => {
   const topic = f.commit("topic");
   f.git("switch", "main");
   f.git("merge", "--no-ff", "--no-commit", topic);
-  const sensitiveFilename = `${realFinding}.txt`;
-  f.write(sensitiveFilename, marker);
+  f.write("resolution.txt", `SYNTHETIC_SECRET_SAMPLE\n${marker}\n`);
   const merge = f.commit("merge resolution");
-  const extra = { DOTFILES_SCAN_PRIVATE_DENYLIST: JSON.stringify([{ category: "hostname", value: marker }]) };
-  const trusted = f.scan("private-ci", { ...f.event(base, merge), ...extra });
-  assert.equal(trusted.code, 21, trusted.output);
-  assert.ok(!trusted.output.includes(sensitiveFilename), "private CI must suppress every filename");
-  assert.ok(trusted.output.includes(`finding personal:hostname ${merge} "[redacted path]":1`));
-  assert.ok(!trusted.output.includes(marker));
-  const notTrusted = f.scan("private-ci", { ...f.event(base, merge, {}, firstRef), ...extra });
-  assert.equal(notTrusted.code, 2, notTrusted.output);
-  assert.ok(!notTrusted.output.includes(marker));
-  const foreignWorkflow = f.scan("private-ci", {
-    ...f.event(base, merge), ...extra, GITHUB_WORKFLOW_SHA: base,
-  });
-  assert.equal(foreignWorkflow.code, 2, foreignWorkflow.output);
-  const optional = f.scan("private-ci");
-  assert.equal(optional.code, 0, optional.output);
-  assert.match(optional.output, /private denylist unavailable/);
+  const event = f.event(base, merge);
+  const extra = {
+    DOTFILES_SCAN_DENYLIST_FILE: f.denylist(),
+    DOTFILES_SCAN_PRIVATE_DENYLIST: JSON.stringify([{ category: "hostname", value: marker }]),
+  };
+  const ci = f.scan("ci", event);
+  assert.equal(ci.code, 21, ci.output);
+  assert.ok(ci.output.includes(`finding secret:fixture ${merge} "[redacted path]":1`));
+  assert.deepEqual(f.scan("ci", { ...event, ...extra }), ci);
+  assert.ok(!ci.output.includes(marker));
+  assert.doesNotMatch(ci.output, /personal|resolution\.txt/);
+  assert.equal(f.scan("private-ci", { ...event, ...extra }).code, 2);
+});
+
+test("Git's submodule ignore configuration cannot hide a staged gitlink name", { skip: windows }, (t) => {
+  const f = fixture(t);
+  f.write("base.txt", "baseline\n");
+  const base = f.commit("baseline");
+  f.git("config", "diff.ignoreSubmodules", "all");
+  f.git("update-index", "--add", "--cacheinfo", `160000,${base},${marker}`);
+  const result = f.scan("staged", { DOTFILES_SCAN_DENYLIST_FILE: f.denylist() });
+  assert.equal(result.code, 21, result.output);
+  assert.match(result.output, /finding personal:hostname staged "\[redacted path\]":0/);
+  assert.ok(!result.output.includes(marker));
 });
 
 test("a staged ignore file or unreviewed allowlist cannot exempt a finding", { skip: windows }, (t) => {
@@ -333,16 +372,73 @@ test("a staged ignore file or unreviewed allowlist cannot exempt a finding", { s
   assert.equal(f.scan("staged").code, 21);
 });
 
-test("pinned Betterleaks runs on retained binary and encoded staged content", { skip: !realScanner }, (t) => {
+test("pinned Betterleaks scans prefiltered paths, binary and encoded blobs, and path-based rules", { skip: !realScanner }, (t) => {
   const f = fixture(t);
   const opts = { PATH: process.env.PATH };
-  f.write(".gitattributes", "*.data -diff\n");
-  f.write("binary.data", Buffer.concat([Buffer.from([0, 255, 0]), Buffer.from(`\n${realFinding}\n`)]));
+  f.write(".gitattributes", "*.bin -diff\n");
+  f.write("binary.bin", Buffer.concat([Buffer.from([0, 255, 0]), Buffer.from(`\n${realFinding}\n`)]));
+  f.write("document.pdf", `\n\n${realFinding}\n`);
+  f.write("package-lock.json", `\n\n\n${realFinding}\n`);
   f.write("encoded.txt", Buffer.from(realFinding).toString("base64"));
+  f.write("container.pfx", "Inert path-only fixture, no certificate.\n");
   f.git("add", "--all");
   const result = f.scan("staged", opts);
   assert.equal(result.code, 21, result.output);
-  assert.match(result.output, /finding secret:github-pat staged "binary\.data"/);
-  assert.match(result.output, /finding secret:github-pat staged "encoded\.txt"/);
+  for (const line of [1, 2, 3, 4]) {
+    assert.ok(result.output.includes(`finding secret:github-pat staged "[redacted path]":${line}\n`), result.output);
+  }
+  assert.match(result.output, /finding secret:pkcs12-file staged "\[redacted path\]":0/);
   assert.ok(!result.output.includes(realFinding));
+});
+
+test("pinned Betterleaks dotted rule IDs report findings and honor exact scope exceptions", { skip: !realScanner }, (t) => {
+  const f = fixture(t);
+  const opts = { PATH: process.env.PATH };
+  const file = "service.conf";
+  const generated = createHash("sha512").update("inert sample for a dotted scanner rule").digest("hex").slice(0, 80);
+  const content = `abuseipdb_api_key = "${generated}"\n`;
+  f.write("base.txt", "baseline");
+  f.commit("baseline");
+  f.write(file, content);
+  f.git("add", file);
+  const initial = f.scan("staged", opts);
+  assert.equal(initial.code, 21, initial.output);
+  assert.match(initial.output, /finding secret:abuseipdb-api-key\.1 staged "\[redacted path\]":1/);
+  assert.ok(!initial.output.includes(generated));
+
+  f.git("reset", "--quiet", "--", file);
+  f.write("scripts/sensitive-scan-allowlist.json", JSON.stringify([{
+    path: file, rule: "secret:abuseipdb-api-key.1", line: 1,
+    contentSha256: createHash("sha256").update(content).digest("hex"),
+    reason: "Approved synthetic fixture",
+  }]));
+  f.git("add", "scripts/sensitive-scan-allowlist.json");
+  f.git("commit", "-qm", "approve exact finding");
+  f.git("update-ref", "refs/remotes/origin/main", f.git("rev-parse", "HEAD"));
+  f.git("add", file);
+  const allowed = f.scan("staged", opts);
+  assert.equal(allowed.code, 0, allowed.output);
+  f.write(file, `${content}changed blob\n`);
+  f.git("add", file);
+  const changed = f.scan("staged", opts);
+  assert.equal(changed.code, 21, changed.output);
+});
+
+test("pinned Betterleaks content matches are never disclosed in diagnostic filenames", { skip: !realScanner }, (t) => {
+  const f = fixture(t);
+  const opts = { PATH: process.env.PATH };
+  const value = "Synthetic-Only-57Kx8-evaluate";
+  f.write("base.txt", "baseline\n");
+  const base = f.commit("baseline");
+  f.write(`backup-${value}.tf`, `password = "${value}"\n`);
+  f.git("add", "--all");
+  const staged = f.scan("staged", opts);
+  assert.equal(staged.code, 21, staged.output);
+  assert.match(staged.output, /finding secret:generic-password staged "\[redacted path\]":1/);
+  assert.ok(!staged.output.includes(value));
+  const head = f.commit("candidate");
+  const ci = f.scan("ci", { ...opts, ...f.event(base, head) });
+  assert.equal(ci.code, 21, ci.output);
+  assert.ok(ci.output.includes(`finding secret:generic-password ${head} "[redacted path]":1`));
+  assert.ok(!ci.output.includes(value));
 });

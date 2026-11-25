@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   closeSync, constants, fstatSync, lstatSync, mkdtempSync, openSync, readFileSync,
-  realpathSync, rmSync,
+  realpathSync, rmSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -76,7 +76,17 @@ function readCommit(value, { fetch = false } = {}) {
   return id;
 }
 
-function eventSelection(mode) {
+function resolveCompareOid(prefix, fullLength) {
+  if (prefix.length === fullLength) return prefix;
+  // Resolve only object IDs. Git's revision parser can also resolve same-named refs.
+  const matches = git(["rev-parse", `--disambiguate=${prefix}`])
+    .toString().trim().split("\n").filter(Boolean);
+  expect(matches.length === 1 && matches[0].startsWith(prefix),
+    "A first branch push comparison object is missing or ambiguous.");
+  return oid(matches[0]);
+}
+
+function eventSelection() {
   const eventName = process.env.GITHUB_EVENT_NAME;
   let event;
   try {
@@ -92,17 +102,9 @@ function eventSelection(mode) {
   "The GitHub event does not identify this repository and its default branch.");
   const defaultRef = `refs/heads/${branch}`;
 
-  if (mode === "private-ci") {
-    const workflowRef = `${repository}/.github/workflows/sensitive-changes.yml@${defaultRef}`;
-    expect(eventName === "push" && event.ref === defaultRef && process.env.GITHUB_REF === defaultRef
-      && process.env.GITHUB_WORKFLOW_REF === workflowRef
-      && oid(event.after) === process.env.GITHUB_WORKFLOW_SHA
-      && event.after === git(["rev-parse", "HEAD"]).toString().trim(),
-    "Private scanning requires the trusted default-branch workflow at the exact push head.");
-  }
-
   let base;
   let head;
+  let compare;
   if (eventName === "pull_request") {
     const pull = event.pull_request;
     expect(pull?.base?.repo?.full_name === repository, "The pull request base repository does not match.");
@@ -120,18 +122,23 @@ function eventSelection(mode) {
     base = oid(event.before);
     if (/^0+$/.test(base)) {
       const prefix = `${process.env.GITHUB_SERVER_URL}/${repository}/compare/`;
-      const compare = typeof event.compare === "string" && event.compare.startsWith(prefix)
+      compare = typeof event.compare === "string" && event.compare.startsWith(prefix)
         ? event.compare.slice(prefix.length).split("...") : [];
-      expect(event.created === true && compare.length === 2 && sha.test(compare[0]) && compare[1] === head,
-        "A first branch push has no exact comparison base in the event. Open a pull request to scan the branch.");
-      base = compare[0];
+      expect(event.created === true && compare.length === 2 &&
+        compare.every((value) => /^[a-f0-9]{4,64}$/.test(value) && value.length <= head.length),
+      "A first branch push has no exact comparison base in the event. Open a pull request to scan the branch.");
     }
   }
 
   expect(git(["rev-parse", "--is-shallow-repository"]).toString().trim() === "false",
     "A shallow checkout cannot establish the complete event range.");
-  base = readCommit(base, { fetch: true });
   head = readCommit(head, { fetch: true });
+  if (compare) {
+    expect(resolveCompareOid(compare[1], head.length) === head,
+      "A first branch push comparison does not match the event head.");
+    base = resolveCompareOid(compare[0], head.length);
+  }
+  base = readCommit(base, { fetch: true });
   const commits = git(["rev-list", "--reverse", "--topo-order", "--parents", head, `^${base}`])
     .toString().trim().split("\n").filter(Boolean).map((line) => line.split(" ").map(oid));
   return {
@@ -197,14 +204,8 @@ function outsideWorktrees(file, root) {
   });
 }
 
-function privateRules(mode, root) {
-  if (mode === "private-ci") {
-    const value = process.env.DOTFILES_SCAN_PRIVATE_DENYLIST;
-    if (!value) return [];
-    expect(Buffer.byteLength(value) <= inputLimit, "The configured private denylist exceeds the size limit.");
-    return configuredRules(value);
-  }
-  const file = mode === "staged" && process.env.DOTFILES_SCAN_DENYLIST_FILE;
+function localRules(root) {
+  const file = process.env.DOTFILES_SCAN_DENYLIST_FILE;
   if (!file) return [];
   expect(path.isAbsolute(file), "The local denylist path must be absolute.");
   let fd;
@@ -270,7 +271,7 @@ function changedBlobs(args) {
 }
 
 function* selection(mode, commits) {
-  const options = ["--raw", "--no-abbrev", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--diff-filter=AMT"];
+  const options = ["--raw", "--no-abbrev", "-z", "--no-renames", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--diff-filter=AMT"];
   if (mode === "staged") {
     expect(!git(["ls-files", "--unmerged", "-z"]).length, "The Git index contains unresolved entries.");
     for (const item of changedBlobs(["diff", "--cached", ...options, "--"])) yield { ...item, commit: "staged" };
@@ -288,9 +289,13 @@ function scanner(cwd) {
   const version = run("betterleaks", ["--version"], { cwd });
   expect(version.status === 0 && version.stdout.toString().trim() === `betterleaks version ${scannerVersion}`,
     `Betterleaks ${scannerVersion} is required. See docs/testing.md.`);
+  // Do not let the built-in path prefilter discard blobs already selected by Git.
+  // Keep the pinned version's detection rules and per-match filters.
+  const config = path.join(cwd, "scan.toml");
+  writeFileSync(config, 'prefilter = "false"\n\n[extend]\nuseDefault = true\n', { mode: 0o600 });
   return (input, file) => {
     const result = run("betterleaks", [
-      "stdin", "--set-attr", `path=${file}`, "--no-banner", "--no-color", "--redact=100",
+      "stdin", "--config", config, "--set-attr", `path=${file}`, "--no-banner", "--no-color", "--redact=100",
       "--log-level", "error", "--ignore-gitleaks-allow", "--max-decode-depth", "2",
       "--report-format", "json", "--report-path", "-", "--exit-code", String(findingExit),
     ], { cwd, input });
@@ -302,7 +307,7 @@ function scanner(cwd) {
       throw new Incomplete("Betterleaks returned an invalid findings report.");
     }
     expect(Array.isArray(rows) && (result.status === findingExit) === (rows.length > 0) && rows.every((row) =>
-      typeof row?.RuleID === "string" && /^[a-zA-Z0-9_-]+$/.test(row.RuleID)
+      typeof row?.RuleID === "string" && /^[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*$/.test(row.RuleID)
       && Number.isSafeInteger(row.StartLine) && row.StartLine >= 0),
     "Betterleaks returned an invalid findings report.");
     return rows.map((row) => ({ rule: row.RuleID, line: row.StartLine }));
@@ -329,19 +334,15 @@ function personalFindings(buffer, rules) {
 }
 
 function main(mode) {
-  expect(["staged", "ci", "private-ci"].includes(mode), "Use staged, ci, or private-ci.");
-  if (mode === "private-ci" && !process.env.DOTFILES_SCAN_PRIVATE_DENYLIST) {
-    console.log("personal information: skipped (private denylist unavailable)");
-    return 0;
-  }
+  expect(["staged", "ci"].includes(mode), "Use staged or ci.");
   const root = realpathSync(text(git(["rev-parse", "--show-toplevel"])).replace(/\r?\n$/, ""));
   const { commits, policy } = mode === "staged"
-    ? { commits: [], policy: "refs/remotes/origin/main" } : eventSelection(mode);
-  const rules = privateRules(mode, root);
+    ? { commits: [], policy: "refs/remotes/origin/main" } : eventSelection();
+  const rules = mode === "staged" ? localRules(root) : [];
   const exceptions = allowlist(policy);
-  const scratch = mode === "private-ci" ? null : mkdtempSync(path.join(tmpdir(), "dotfiles-sensitive-scan-"));
+  const scratch = mkdtempSync(path.join(tmpdir(), "dotfiles-sensitive-scan-"));
   try {
-    const detectSecrets = scratch ? scanner(scratch) : () => [];
+    const detectSecrets = scanner(scratch);
     const seen = new Set();
     let found = false;
     for (const { file, id, submodule, commit } of selection(mode, commits)) {
@@ -353,11 +354,10 @@ function main(mode) {
       const fileBytes = Buffer.from(file);
       const privatePath = rules.some(({ value }) => fileBytes.includes(value));
       const secretPath = detectSecrets(fileBytes, "path.txt");
-      const hiddenPath = mode === "private-ci" || privatePath || secretPath.length > 0;
-      const safeFile = hiddenPath ? "[redacted path]" : file;
+      const scanPath = privatePath || secretPath.length > 0 ? "[redacted path]" : file;
       const findings = [
         ...secretPath.map(({ rule }) => ({ kind: "secret", rule, line: 0 })),
-        ...detectSecrets(blob, safeFile).map((row) => ({ kind: "secret", ...row })),
+        ...detectSecrets(blob, scanPath).map((row) => ({ kind: "secret", ...row })),
         ...personalFindings(fileBytes, rules).map(({ rule }) => ({ kind: "personal", rule, line: 0 })),
         ...personalFindings(blob, rules).map((row) => ({ kind: "personal", ...row })),
       ];
@@ -366,15 +366,15 @@ function main(mode) {
           entry.path === file && entry.rule === `${kind}:${rule}`
           && entry.line === line && entry.contentSha256 === digest)) continue;
         found = true;
-        console.log(`finding ${kind}:${rule} ${commit} ${JSON.stringify(safeFile)}:${line}`);
+        console.log(`finding ${kind}:${rule} ${commit} "[redacted path]":${line}`);
       }
     }
-    if (!rules.length) console.log("personal information: skipped (private denylist unavailable)");
+    if (mode === "staged" && !rules.length) console.log("personal information: skipped (private denylist unavailable)");
     if (found) return findingExit;
     console.log("sensitive changes: clean");
     return 0;
   } finally {
-    if (scratch) rmSync(scratch, { recursive: true, force: true });
+    rmSync(scratch, { recursive: true, force: true });
   }
 }
 
