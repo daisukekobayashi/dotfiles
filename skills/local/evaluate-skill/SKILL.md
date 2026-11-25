@@ -17,7 +17,9 @@ workflow below.
 
 1. Take the coordinator's pinned head, changed instruction paths, approved
    case inputs and launch settings, private evidence location, and effective
-   deadline. Follow Prepare and run in the [execution reference](references/execution.md)
+   deadline. Give preparation a fresh private scratch directory for this
+   invocation as `TMPDIR`. Store evidence outside that directory. Follow
+   Prepare and run in the [execution reference](references/execution.md)
    for fresh isolated sessions on the current agent. Prepare only `with-skill`
    using the changed instructions,
    run one selected existing case once for each applicable changed skill,
@@ -30,9 +32,10 @@ workflow below.
    incomplete runs with their reasons. A prepared candidate or a zero exit
    without evidence does not show that instructions ran. Return
    `changed instructions not exercised by an agent` for each uncovered path.
-   Keep detailed evidence private and retain it before fixture cleanup.
-   Stop owned work on expiry and return without entering the standalone
-   comparison or comparative grading.
+   Stop owned work on expiry. Retain private evidence and remove the owned
+   scratch directory after success, failure, or timeout. Report any remaining
+   scratch path in the private verification record. Return without entering
+   the standalone comparison or comparative grading.
 
 ## Frame the comparison
 

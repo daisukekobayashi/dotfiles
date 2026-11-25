@@ -1923,6 +1923,8 @@ test("delivery smoke runs at the reviewed head and reports exercised instruction
   assert.match(completion, /current head's \[skill instruction smoke\]\(local-review\.md#skill-instruction-smoke\) status, observed coverage, and any instruction paths left unexercised/);
 
   const evaluator = await readText(path.join(repoRoot, "skills", "local", "evaluate-skill", "SKILL.md"));
+  assert.match(flat(evaluator), /# Evaluate Skill Run only when the user explicitly invokes `\$evaluate-skill` in Codex or `\/evaluate-skill` in Claude Code, or as the Local Review smoke step of the user's explicit request for `github-issue-delivery` or `azure-devops-work-item-delivery`\./,
+    "evaluate-skill body scopes invocation to direct requests and the delivery smoke step");
   const smoke = flat(evaluator.split("## Delivery smoke\n")[1]?.split("## Frame the comparison\n")[0] ?? "");
   assert.match(smoke, /Prepare only `with-skill` using the changed instructions/);
   assert.match(smoke, /start zero baseline sessions/);
