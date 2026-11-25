@@ -122,6 +122,9 @@ jobs:
       - name: Skills export tests
         run: node --test setup/test/skills-export.test.mjs
 
+      - name: Sensitive changes tests
+        run: node --test setup/test/sensitive-changes.test.mjs
+
       - name: PowerShell syntax
         shell: pwsh
         run: ./tests/helpers/check_powershell_syntax.ps1 $PWD

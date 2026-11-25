@@ -18,3 +18,5 @@ case "$(uname -s 2>/dev/null || printf unknown)" in
     scripts/check-skills-build.sh
     ;;
 esac
+
+node scripts/check-sensitive-changes.mjs staged
