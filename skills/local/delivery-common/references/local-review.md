@@ -139,10 +139,9 @@ independently under [Risk Tier](risk-tier.md#tier-procedure).
    `not run: unavailable` with the reason before launch.
 2. Assign a [private report path](report-handoff.md#report-path). Record it in
    the launch intent with the reviewed worktree's absolute real path, recorded
-   task base, full head SHA, original round, route, and absolute deadline from
-   the registry's bound or the user's shorter bound. Start that
-   clock before creating the disposable worktree. The same deadline applies
-   through parent confirmation, including on resume. Apply the command and
+   task base, full head SHA, original round, route, start time, and absolute
+   deadline from the registry's bound or the user's shorter bound. Start that
+   clock before creating the disposable worktree. Apply the command and
    finding limits in [Bounds](repro-runs.md#bounds) within the remaining time.
 3. As launcher, create the disposable worktree at the pinned head and invoke
    the skill on the review route. Give the reviewer the user's explicit
@@ -171,10 +170,26 @@ independently under [Risk Tier](risk-tier.md#tier-procedure).
    head.
 5. Pass only findings from a checked `ran` result to [Assess findings](#assess-findings).
    Record each parent rerun outcome with its disposition. Reuse recorded
-   confirmations on the same head. If the workflow deadline leaves a finding
-   without a completed parent rerun, record it as unproven and assess its
-   trace. Keep the checked primary report's `ran` status and the coverage
-   limits in the [Decision summary](completion.md#decision-summary).
+   confirmations on the same head. Apply [Remaining proof work](#remaining-proof-work)
+   to unfinished confirmations, including on resume. Keep the checked primary
+   report's `ran` status and the coverage limits in the
+   [Decision summary](completion.md#decision-summary).
+
+### Remaining proof work
+
+Before creating a parent rerun's disposable worktree and immediately before
+each pending restoration or proving command, check the user's current
+authorization, opt-out, and time bound. This applies to every `blast-radius`
+parent rerun, including a focused follow-up on a new head. Use the workflow
+intent for that head. Use the earlier of its recorded deadline and its
+recorded start time plus any current shorter bound. Keep that start time when
+reusing a result or resuming. Run only within the remaining time and the
+existing per-command and parent limits.
+
+An opt-out, missing authorization, or an expired deadline stops the pending
+proof work. Record the reason, assess any unfinished confirmation as
+unproven from its trace, and perform any safe owned cleanup. Keep completed
+evidence, the original `ran` outcome, and its once-per-key accounting.
 
 ## Triage classes
 
@@ -207,7 +222,8 @@ evidence, applying these defaults:
   hints as for any finding. Treat a `Do not ship` verdict as a blocker only
   after the rerun reproduces its finding or your trace confirms it.
 - **Blast radius:** Assess its findings individually under the same triage
-  and evidence rules and use [Blast radius](#blast-radius) for their deadline.
+  and evidence rules. Apply [Remaining proof work](#remaining-proof-work)
+  before each parent rerun.
   The optional status and the report's verdict do not establish required
   coverage or close findings.
 - **Minor:** Record and defer by default. Every fix creates a new snapshot and
@@ -270,9 +286,10 @@ newly discovered material risks visible for that assessment.
 For a fixed finding that a run proved, the follow-up reruns its retained
 proving command on the new head under Repro Runs.
 For a `blast-radius` finding, do that only inside the eligible
-[Blast radius](#blast-radius) workflow's deadline for the new head. When that
-rerun cannot run or finish, report that evidence gap and verify the fix with
-the required review and verification paths.
+[Blast radius](#blast-radius) workflow for the new head, applying
+[Remaining proof work](#remaining-proof-work). When that rerun cannot run or
+finish, report that evidence gap and verify the fix with the required review
+and verification paths.
 
 Run the selected `change-review` and `change-adversarial-review` with
 `--base <preceding reviewed head> --scope branch`, and `change-security-review`

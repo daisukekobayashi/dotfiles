@@ -1396,7 +1396,7 @@ test("blast-radius is an optional High-tier Local Review step with its own trust
   assert.match(step, /--reviewer blast-radius --target <reviewed-worktree>/);
   assert.match(step, /valid completed report, evidence retention result, and safe worktree cleanup within the deadline/);
   assert.match(step, /stopped: time bound.*failed: interrupted.*recorded hash.*Never invoke the skill again on that key/);
-  assert.match(step, /Pass only findings from a checked `ran` result to \[Assess findings\].*without a completed parent rerun, record it as unproven/);
+  assert.match(step, /Pass only findings from a checked `ran` result to \[Assess findings\].*Apply \[Remaining proof work\]\(#remaining-proof-work\) to unfinished confirmations, including on resume/);
   assert.match(flat(review), /Assess its findings individually under the same triage and evidence rules/);
 
   const handoff = flat(await readText(path.join(references, "report-handoff.md")));
@@ -1408,6 +1408,35 @@ test("blast-radius is an optional High-tier Local Review step with its own trust
   assert.match(repro, /registry deadline covers the initial run and all parent confirmation.*per-command, per-rerun, retry, finding and output limits/);
   const policy = await readText(path.join(repoRoot, "AGENTS.md"));
   assert.match(policy, /^- add `skills\/local\/blast-radius\/SKILL\.md`$/m);
+});
+
+test("blast-radius parent and follow-up reruns gate pending commands on current user limits", async () => {
+  const references = path.join(repoRoot, "skills", "local", "delivery-common", "references");
+  const review = await readText(path.join(references, "local-review.md"));
+  const step = flat(review.match(/\n## Blast radius\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.match(step, /Record it in the launch intent.*start time, and absolute deadline.*before creating the disposable worktree/);
+  const remaining = flat(review.match(/\n### Remaining proof work\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.match(remaining, /Before creating a parent rerun's disposable worktree and immediately before each pending restoration or proving command, check the user's current authorization, opt-out, and time bound/);
+  assert.match(remaining, /Use the earlier of its recorded deadline and its recorded start time plus any current shorter bound\. Keep that start time when reusing a result or resuming/);
+  assert.match(remaining, /An opt-out, missing authorization, or an expired deadline stops the pending proof work.*assess any unfinished confirmation as unproven.*Keep completed evidence, the original `ran` outcome, and its once-per-key accounting/);
+  const followUp = flat(review.match(/\n## Focused follow-up\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.match(followUp, /workflow for the new head, applying \[Remaining proof work\]\(#remaining-proof-work\)/);
+  const repro = flat(await readText(path.join(references, "repro-runs.md")));
+  assert.match(repro, /For `blast-radius`, apply \[Remaining proof work\]\(local-review\.md#remaining-proof-work\) before creating the rerun's worktree and before each command/);
+});
+
+test("blast-radius Codex route records process ownership before launch and checks it after exit", async () => {
+  const handoff = await readText(path.join(repoRoot, "skills", "local", "delivery-common", "references", "report-handoff.md"));
+  const route = flat(handoff.match(/\n## Codex route\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.match(route, /before launching the companion, start \[Process Trees Started by a Codex Review\]\([^)]*\) on the actual disposable worktree passed as `--cwd`/);
+  assert.match(route, /take its hash only from the captured command output/);
+  const record = route.indexOf("Record the pre-run process snapshot");
+  const launch = route.indexOf('node "<plugin-root>/scripts/codex-companion.mjs" task');
+  const stop = route.indexOf("apply the matching stop step");
+  assert.ok(record >= 0 && record < launch && launch < stop);
+  assert.match(route, /After the companion exits, including after a failure or timeout, apply the matching stop step under \[Remove\]\(repro-runs\.md#remove\) to that same worktree with the original snapshot and captured hash/);
+  assert.match(route, /Bound the cleanup under Foreground Checks and record its result even when the report check was skipped or failed/);
+  assert.match(route, /If exit or ownership cannot be confirmed, report teardown as unverified and leave the uncertain processes alone/);
 });
 
 test("check-report-handoff accepts a complete report and rejects incomplete ones", async () => {

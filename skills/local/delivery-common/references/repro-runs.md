@@ -242,6 +242,9 @@ with the findings.
 
 ## Parent rerun
 
+For `blast-radius`, apply [Remaining proof work](local-review.md#remaining-proof-work)
+before creating the rerun's worktree and before each command it runs there.
+
 Before acting on a finding whose proof is `ran`, such as fixing it, recording a
 disposition, or treating `Do not ship` as a blocker, the parent:
 

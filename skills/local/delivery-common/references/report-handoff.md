@@ -323,8 +323,15 @@ The report path lies outside the Codex sandbox's writable roots, so the
 companion cannot write the file, and the caller writes it. Leave `--report` out of the prompt and ask instead for a final
 message of the unchanged Output, then the v3 delimiter, the
 [Review block](#review-block) with `report` set to the path, and the end line,
-writing no file. Redirect the output to the
-report path and the progress to a log beside it:
+writing no file.
+
+For delivery `blast-radius`, before launching the companion, start
+[Process Trees Started by a Codex Review](../../worktree-runtime-cleanup/SKILL.md#process-trees-started-by-a-codex-review)
+on the actual disposable worktree passed as `--cwd`. Record the pre-run
+process snapshot and take its hash only from the captured command output.
+Follow the procedure's unverified path if the record is unavailable.
+
+Redirect the output to the report path and the progress to a log beside it:
 
 ```text
 (umask 077; set -C; node "<plugin-root>/scripts/codex-companion.mjs" task \
@@ -350,7 +357,13 @@ forward the assignment in [Blast radius](local-review.md#blast-radius).
 Use the same redirections for the companion's final report, adding
 `--target <reviewed-worktree>` to the checker invocation and using the
 reviewed worktree's assigned absolute real path. The companion's `--cwd`
-is the disposable worktree under Trusted heads.
+is the disposable worktree under Trusted heads. After the companion exits,
+including after a failure or timeout, apply the matching stop step under
+[Remove](repro-runs.md#remove) to that same worktree with the original
+snapshot and captured hash. Bound the cleanup under Foreground Checks and
+record its result even when the report check was skipped or failed. If exit
+or ownership cannot be confirmed, report teardown as unverified and leave
+the uncertain processes alone.
 
 ## Check a handoff
 
