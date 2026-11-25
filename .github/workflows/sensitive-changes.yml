@@ -1,0 +1,46 @@
+name: Sensitive changes
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    if: ${{ github.event_name != 'push' || !github.event.deleted }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "24"
+
+      - name: Verify and use Betterleaks 1.10.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(mktemp -d "$RUNNER_TEMP/betterleaks.XXXXXXXX")"
+          curl --fail --silent --show-error --location --proto '=https' --max-time 60 \
+            -o "$bin/betterleaks.tar.gz" \
+            https://github.com/betterleaks/betterleaks/releases/download/v1.10.1/betterleaks_1.10.1_linux_x64.tar.gz
+          printf '%s  %s\n' c174b42d7aa60caf58c0c3e555c0e4bed01fe6b0d99a412bce777b5af4ce913e \
+            "$bin/betterleaks.tar.gz" | sha256sum --check --status
+          tar -xzf "$bin/betterleaks.tar.gz" -C "$bin" betterleaks
+          printf '%s\n' "$bin" >> "$GITHUB_PATH"
+
+      - name: Check published changes for secrets
+        run: node scripts/check-sensitive-changes.mjs ci
+
+      - name: Test the pinned scanner with synthetic input
+        run: node --test setup/test/sensitive-changes.test.mjs
+        env:
+          DOTFILES_TEST_REAL_BETTERLEAKS: "1"

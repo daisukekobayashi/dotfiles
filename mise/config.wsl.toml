@@ -59,7 +59,7 @@ powershell = "7.7.0"
 "aqua:quarto-dev/quarto-cli" = "1.11"
 "github:Syllo/nvtop" = { version = "3.4.0", bin = "nvtop" }
 "aqua:gastownhall/beads" = "1.3"
-"github:betterleaks/betterleaks" = "1.10.0"
+"github:betterleaks/betterleaks" = "1.10.1"
 
 # nvtop ships only as an AppImage; extract it on launch so it also runs
 # without FUSE (for example on WSL or in containers).

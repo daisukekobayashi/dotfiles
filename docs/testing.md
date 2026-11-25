@@ -2,7 +2,98 @@
 
 GitHub Actions (`.github/workflows/test.yml`) runs the routine checks on Ubuntu,
 macOS, and Windows. The pre-commit hook in `.githooks/` checks that the
-committed setup runtime matches its TypeScript sources.
+committed setup runtime matches its TypeScript sources and scans staged changes.
+
+## Sensitive changes
+
+The hook and the **Sensitive changes** workflow use Betterleaks 1.10.1 for
+secret detection. CI runs the checksum-verified official binary. The local
+hook uses Node.js 24 and the `dotfiles-betterleaks-staged` adapter on `PATH`.
+The adapter receives the Git-relative path and raw blob through stdin and
+passes both to the pinned detector. Its output contains only the rule and line.
+The hook stops when the adapter is missing, reports an incompatible protocol or
+engine version, fails, or finds a match.
+
+### Build the local adapter
+
+Set up Go 1.27.4 from the existing mise pin or the matching
+[official Go distribution](https://go.dev/dl/). Build the adapter once and
+rebuild it after updating its source or dependencies. Choose an owner-managed
+directory already on your `PATH`. For example, if `~/.local/bin` is set up:
+
+```sh
+cd tools/betterleaks-staged
+GOENV=off GOWORK=off GOTOOLCHAIN=local CGO_ENABLED=0 \
+  GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org \
+  go build -mod=readonly -trimpath -buildvcs=false -o "$HOME/.local/bin/dotfiles-betterleaks-staged" .
+dotfiles-betterleaks-staged --version
+```
+
+On native Windows, set the same environment values in your build shell and give
+`go build -o` an absolute path ending in `dotfiles-betterleaks-staged.exe` in
+your chosen directory. The expected version output is
+`dotfiles-betterleaks-staged protocol 1 engine v1.10.1`. Dependency resolution
+happens during this explicit build. The hook does not build, download, or install
+a scanner. To run the staged check alone, return to the checkout root and run
+`node scripts/check-sensitive-changes.mjs staged`.
+
+Git supplies new and changed file contents directly from its index or object
+database. The checkout, unstaged changes and candidate scanner configuration
+cannot change those inputs. CI scans branch pushes and pull requests. It checks
+each selected commit, including intermediate commits and merge changes compared
+with the first parent. It uses the push before/after or PR base/head SHA, and
+uses the comparison URL for a first branch push, accepting unambiguous Git
+object abbreviations. If GitHub does not supply a comparison base that Git can
+resolve, open a PR to run the check with its base and head.
+If a required object or range cannot be verified, CI reports the scan as
+incomplete. Commit messages, tags, old history sweeps and the contents of other
+repositories linked as submodules are outside this check. Review changes to
+the workflow or scanner itself under the repository review policy.
+
+### Private denylist
+
+Keep the real values outside Git. To enable the local check, set
+`DOTFILES_SCAN_DENYLIST_FILE` to the absolute path of an owner-managed regular
+file outside all repository worktrees and in a directory other users cannot
+modify. Use a single-link file with mode `0600` on POSIX, or a Windows ACL
+granting access only to your account, SYSTEM and Administrators. Use a nonempty JSON array of UTF-8 literal
+`category` and `value` pairs. Categories are `identifier`, `organization`,
+`hostname` and `path`. This example contains a synthetic value:
+
+```json
+[{"category":"hostname","value":"internal.example.test"}]
+```
+
+An unset denylist skips only the personal-information check. Invalid or
+unreadable configured input makes the scan incomplete. The denylist is used
+only by the local staged check. GitHub Actions scans for secrets on pushes and
+pull requests with no private denylist input.
+
+Both scanners use the pinned version's rules, per-match filters, and file-type
+limits. They disable the default file-path prefilter. Findings report the commit
+or staged change, rule, and line number. Filenames are masked because a value
+detected in file contents may also appear in the path. Inspect the indicated
+commit or staged changes locally to locate the finding.
+
+For synthetic parity tests, put the local adapter and the checksum-verified
+[official Betterleaks 1.10.1 binary](https://github.com/betterleaks/betterleaks/releases/tag/v1.10.1)
+on the test process's `PATH` and run:
+
+```sh
+DOTFILES_TEST_REAL_BETTERLEAKS=1 DOTFILES_TEST_REAL_STAGED_SCANNER=1 \
+  node --test setup/test/sensitive-changes.test.mjs
+```
+
+### Known false positives
+
+To approve a known benign match, add an entry to
+`scripts/sensitive-scan-allowlist.json` through normal review. Each entry
+specifies the exact repository-relative `path`, `rule` (such as
+`secret:github-pat`), `line` (0 for a filename match), `contentSha256` for the
+selected file bytes, and a `reason`. Keep private values out of this file.
+The existing reviewed default-branch copy controls the scan. For a push to
+the default branch, the before commit supplies the policy. A change to the
+allowlist cannot exempt the same candidate change by itself.
 
 ## Routine checks
 

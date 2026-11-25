@@ -8,7 +8,7 @@ if [[ "${unamestr}" == 'Linux' ]]; then
 elif [[ "${unamestr}" == 'Darwin' ]]; then
   export PATH="$HOME/.local/bin:$PATH"
   eval "$(/opt/homebrew/bin/brew shellenv)"
-  export PATH="/Users/daisuke/.antigravity/antigravity/bin:$PATH"
+  export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
 fi
 
 # keyutils: pam_keyinit revokes the SSH login's session keyring on logout,
