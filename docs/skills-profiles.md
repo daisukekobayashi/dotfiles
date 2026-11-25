@@ -587,20 +587,24 @@ Without delegation, the coordinator runs `architect` itself, design only, and
 `arena` is not run. Each is reported as not run when it is not
 installed or its trigger or tier does not hold. Shared understanding and
 preflight drafts name the `how` or `why` method behind each claim about
-current behavior or history, without running those skills. Other ADR 0001
-rows are pending in its child issues.
+current behavior or history, without running those skills.
+
+Local Review uses `evaluate-skill` to smoke-run changed instructions at
+Medium and High tier on the pinned worker head. The verification record and
+decision summary show its status and which instructions the current agent
+exercised. See [delivery smoke](skill-evaluation.md#delivery-smoke).
+Remaining ADR 0001 work is tracked in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
-`maintain-verification-skill`, `evaluate-skill`, and `benchmark-checklist` require explicit user invocation. Their descriptions
-and instructions enforce this
+`maintain-verification-skill`, `evaluate-skill`, and `benchmark-checklist` require
+explicit user invocation. Their descriptions and instructions enforce this
 boundary, with `policy.allow_implicit_invocation: false` for Codex and
 `disable-model-invocation: true` in SKILL.md frontmatter for Claude Code.
-The one exception is `arena`'s delivery step: its SKILL.md drops
-`disable-model-invocation`, keeps the Codex policy, and its description and
-body guard also allow it as the High-tier design preflight step of an
-explicitly user-requested `github-issue-delivery` or
-`azure-devops-work-item-delivery` workflow, as the `change-*review` skills
-state their delivery phases.
+`arena` and `evaluate-skill` omit `disable-model-invocation` for their delivery
+steps and keep the Codex policy. Their descriptions and body guards allow
+the High-tier design preflight step and Local Review smoke step, respectively,
+as part of an explicitly user-requested `github-issue-delivery` or
+`azure-devops-work-item-delivery` workflow.
 Use `$skill-name` in Codex or `/skill-name` in Claude Code. References from
 another skill do not activate these workflows; `architect` compares alternatives
 directly unless the user explicitly invokes `arena`.

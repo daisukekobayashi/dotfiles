@@ -101,6 +101,8 @@ keep it in the progress record, and keep it out of the PR body:
 - the current project verification status and any uncovered changed paths,
   including a [skip before key capture](optional-workflows.md#record-and-report)
   when it applies to the reported verification.
+- the current head's [skill instruction smoke](local-review.md#skill-instruction-smoke)
+  status, observed coverage, and any instruction paths left unexercised.
 
 ## Before publication
 

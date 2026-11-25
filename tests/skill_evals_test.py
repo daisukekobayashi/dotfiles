@@ -107,6 +107,36 @@ class SkillEvaluationTests(unittest.TestCase):
             PREPARE.prepare(SUITE, 1, "codex", "with-skill", output)
         self.assertEqual((output / "keep.txt").read_text(), "keep")
 
+    def test_failed_overlay_copy_removes_only_the_new_candidate(self):
+        suite = self.root / "evals/evals.json"
+        fixture = suite.parent / "fixture"
+        overlay = suite.parent / "overlay"
+        fixture.mkdir(parents=True)
+        (overlay / "entry").mkdir(parents=True)
+        (self.root / "SKILL.md").write_text("# Sample skill\n")
+        (fixture / "entry").write_text("base file\n")
+        (overlay / "entry/case.txt").write_text("overlay file\n")
+        suite.write_text(json.dumps({
+            "skill_name": "sample-skill",
+            "evals": [{
+                "id": 1, "fixture": "fixture", "overlay": "overlay", "prompt": "Evaluate."
+            }],
+        }))
+        scratch = self.root / "scratch"
+        existing = scratch / "workspace-existing"
+        existing.mkdir(parents=True)
+        (existing / "keep.txt").write_text("keep")
+        output = self.root / "run"
+
+        with mock.patch.object(PREPARE.tempfile, "tempdir", str(scratch)):
+            with self.assertRaises(shutil.Error):
+                PREPARE.prepare(suite, 1, "claude", "with-skill", output)
+
+        self.assertEqual(list(scratch.iterdir()), [existing])
+        self.assertEqual((existing / "keep.txt").read_text(), "keep")
+        self.assertTrue(output.is_dir())
+        self.assertFalse((output / "run.json").exists())
+
     def test_fixture_path_rejects_escapes_and_symlinks(self):
         suite_dir = self.root / "suite"
         suite_dir.mkdir()

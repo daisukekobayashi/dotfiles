@@ -67,51 +67,55 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
     output.mkdir(parents=True, exist_ok=False)
     # Candidate paths carry neither treatment labels nor the judging rubric.
     workspace = Path(tempfile.mkdtemp(prefix="workspace-"))
-    for source in sources:
-        shutil.copytree(source, workspace, dirs_exist_ok=True)
-    canonical = workspace / ".agents/skills"
-    if canonical.is_dir():
-        claude_skills = workspace / ".claude/skills"
-        claude_skills.mkdir(parents=True, exist_ok=True)
-        for target in canonical.iterdir():
-            (claude_skills / target.name).symlink_to(
-                Path("../../.agents/skills") / target.name, target_is_directory=True
+    try:
+        for source in sources:
+            shutil.copytree(source, workspace, dirs_exist_ok=True)
+        canonical = workspace / ".agents/skills"
+        if canonical.is_dir():
+            claude_skills = workspace / ".claude/skills"
+            claude_skills.mkdir(parents=True, exist_ok=True)
+            for target in canonical.iterdir():
+                (claude_skills / target.name).symlink_to(
+                    Path("../../.agents/skills") / target.name, target_is_directory=True
+                )
+        initial_files = digest_tree(workspace)
+        prompt = case["prompt"] + "\nWork only in this project. Retain evidence and report its location.\n"
+        guidance_files = {}
+        if variant == "with-skill":
+            guidance = workspace / ".guidance/skills"
+            for source in [skill, *supporting]:
+                shutil.copytree(
+                    source, guidance / source.name,
+                    ignore=shutil.ignore_patterns("evals", "__pycache__"),
+                )
+            guidance_files = digest_tree(guidance)
+            prompt = (
+                f"Use the {suite['skill_name']} skill at "
+                f".guidance/skills/{skill.name}/SKILL.md for this task.\n\n" + prompt
             )
-    initial_files = digest_tree(workspace)
-    prompt = case["prompt"] + "\nWork only in this project. Retain evidence and report its location.\n"
-    guidance_files = {}
-    if variant == "with-skill":
-        guidance = workspace / ".guidance/skills"
-        for source in [skill, *supporting]:
-            shutil.copytree(
-                source, guidance / source.name,
-                ignore=shutil.ignore_patterns("evals", "__pycache__"),
-            )
-        guidance_files = digest_tree(guidance)
-        prompt = (
-            f"Use the {suite['skill_name']} skill at "
-            f".guidance/skills/{skill.name}/SKILL.md for this task.\n\n" + prompt
-        )
-    (output / "prompt.txt").write_text(prompt)
+        (output / "prompt.txt").write_text(prompt)
 
-    # Both variants suppress the installed target; treatment is supplied above.
-    # Other ambient context is not isolated by this preparer.
-    name = suite["skill_name"]
-    if agent == "codex":
-        argv = codex_launch(workspace, skill, name)
-    else:
-        argv = ["claude", "--disable-slash-commands"]
-    metadata = {
-        "agent": agent, "variant": variant, "case_id": case_id,
-        "suite": str(suite_path), "workspace": str(workspace),
-        "prompt_file": str(output / "prompt.txt"), "launch_argv": argv,
-        "skill_sha256": hashlib.sha256((skill / "SKILL.md").read_bytes()).hexdigest(),
-        "guidance_files": guidance_files,
-        "initial_files": initial_files,
-        "status": "prepared", "model": None, "total_tokens": None,
-        "total_duration_seconds": None,
-    }
-    (output / "run.json").write_text(json.dumps(metadata, indent=2) + "\n")
+        # Both variants suppress the installed target; treatment is supplied above.
+        # Other ambient context is not isolated by this preparer.
+        name = suite["skill_name"]
+        if agent == "codex":
+            argv = codex_launch(workspace, skill, name)
+        else:
+            argv = ["claude", "--disable-slash-commands"]
+        metadata = {
+            "agent": agent, "variant": variant, "case_id": case_id,
+            "suite": str(suite_path), "workspace": str(workspace),
+            "prompt_file": str(output / "prompt.txt"), "launch_argv": argv,
+            "skill_sha256": hashlib.sha256((skill / "SKILL.md").read_bytes()).hexdigest(),
+            "guidance_files": guidance_files,
+            "initial_files": initial_files,
+            "status": "prepared", "model": None, "total_tokens": None,
+            "total_duration_seconds": None,
+        }
+        (output / "run.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    except BaseException:
+        shutil.rmtree(workspace)
+        raise
     return metadata
 
 

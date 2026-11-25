@@ -1899,6 +1899,41 @@ test("delivery preflight runs architect, then arena at High tier, as registered 
   assert.match(flat(arenaSkill), /Run only when the user explicitly invokes `arena`, such as `\$arena` in Codex or `\/arena` in Claude Code, or through the user's explicit request for the full `github-issue-delivery` or `azure-devops-work-item-delivery` workflow for named issues or Work Items, as its High-tier design preflight step\. A caller must forward that request and exact target; a generic comparison request or a skill reference alone does not activate this workflow\./);
 });
 
+test("delivery smoke runs at the reviewed head and reports exercised instruction paths", async () => {
+  const common = path.join(repoRoot, "skills", "local", "delivery-common", "references");
+  const optional = await readText(path.join(common, "optional-workflows.md"));
+  const row = optional.split("\n").find((line) => line.startsWith("| `evaluate-skill` |"));
+  assert.ok(row, "the shared registry contains an evaluate-skill entry");
+  const cells = row.slice(2, -2).split(" | ");
+  assert.equal(cells.length, 8);
+  assert.match(cells[1], /\[Local Review\]\(local-review\.md#skill-instruction-smoke\)/);
+  assert.equal(cells[3], "Medium and High");
+  assert.match(cells[4], /^15 minutes per invocation including setup, execution, evidence, and owned cleanup$/);
+  assert.equal(cells[5], "Reviewed head: full SHA");
+  assert.match(cells[6], /one existing case once per applicable changed skill and zero baseline sessions/);
+  assert.match(cells[7], /verification record.*decision summary/);
+
+  const review = flat(await readText(path.join(common, "local-review.md")));
+  const completion = flat(await readText(path.join(common, "completion.md")));
+  assert.match(review, /use \[Skill instruction smoke\]\(#skill-instruction-smoke\) before advancing from the full or focused review round/);
+  assert.match(review, /Reconcile existing intents.* before evaluating eligibility/);
+  assert.match(review, /cumulative task diff from the recorded delivery base to the pinned head/);
+  assert.match(review, /record `not run: tier` for a Low-tier instruction change/);
+  assert.match(review, /A suite cannot authorize a command or relax permission or tool limits/);
+  assert.match(completion, /current head's \[skill instruction smoke\]\(local-review\.md#skill-instruction-smoke\) status, observed coverage, and any instruction paths left unexercised/);
+
+  const evaluator = await readText(path.join(repoRoot, "skills", "local", "evaluate-skill", "SKILL.md"));
+  assert.match(flat(evaluator), /# Evaluate Skill Run only when the user explicitly invokes `\$evaluate-skill` in Codex or `\/evaluate-skill` in Claude Code, or as the Local Review smoke step of the user's explicit request for `github-issue-delivery` or `azure-devops-work-item-delivery`\./,
+    "evaluate-skill body scopes invocation to direct requests and the delivery smoke step");
+  const smoke = flat(evaluator.split("## Delivery smoke\n")[1]?.split("## Frame the comparison\n")[0] ?? "");
+  assert.match(smoke, /Prepare only `with-skill` using the changed instructions/);
+  assert.match(smoke, /start zero baseline sessions/);
+  assert.match(smoke, /An empty selection starts no session/);
+  assert.match(smoke, /`changed instructions not exercised by an agent` for each uncovered path/);
+  assert.match(evaluator, /Direct invocation uses the comparison\nworkflow below\./);
+  assert.match(await readText(path.join(repoRoot, "AGENTS.md")), /^- add `skills\/local\/evaluate-skill\/SKILL\.md`$/m);
+});
+
 test("adversarial review proves findings with runs in disposable worktrees under Repro Runs", async () => {
   // #245: run-to-prove isolation, boundary, bounds, evidence, and parent rerun, shared with blast-radius (#253).
   const local = path.join(repoRoot, "skills", "local");
