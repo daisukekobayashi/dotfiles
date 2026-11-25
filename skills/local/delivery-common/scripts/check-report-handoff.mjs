@@ -3,7 +3,7 @@
 //
 // Usage:
 //   node check-report-handoff.mjs --kind review --reviewer <skill> \
-//     --base <sha> --head <sha> --round <round> --report <path> [--show] [--sha256 <hex>]
+//     --base <sha> --head <sha> --round <round> --report <path> [--target <worktree>] [--show] [--sha256 <hex>]
 //   node check-report-handoff.mjs --kind worker [--draft su|preflight | --require-verification-labels] \
 //     --base <sha> --head <sha> --round <round> --report <path> [--show] [--sha256 <hex>]
 //
@@ -29,11 +29,12 @@
 //   with no member repeated in any object, and exactly the block's keys, each
 //   of its type, and every string is valid UTF-8 text; base, head, round,
 //   report, and reviewer equal the arguments; completion is complete; the
-//   verdict and each finding's severity are allowed for the reviewer; a v3
+//   verdict and each finding's severity are allowed for the reviewer;
+//   blast-radius requires v3 and an exact match to the --target worktree; a v3
 //   finding's proof is `not requested` for change-review and
 //   change-security-review, and `ran`, `unproven: <reason>`,
 //   `stopped: time bound`, or `failed: <reason>` for
-//   change-adversarial-review; finding
+//   change-adversarial-review and blast-radius; finding
 //   IDs run <prefix>1..n in order, as SECD1..n for change-security-review's
 //   deferred candidates, which other reviewers leave empty; every string is
 //   one non-empty line without control characters; and no two findings, or
@@ -88,6 +89,11 @@ const invalid = (reason) => {
   process.exit(3);
 };
 
+const REPRO_PROOF = {
+  proof: /^(?:ran|unproven: \S.*|stopped: time bound|failed: \S.*)$/,
+  proofs: "ran, unproven: <reason>, stopped: time bound, failed: <reason>",
+};
+
 const REVIEWERS = {
   "change-review": {
     prefix: "CR",
@@ -100,8 +106,7 @@ const REVIEWERS = {
     prefix: "ADV",
     verdicts: ["Do not ship", "Needs attention", "No material blocker found"],
     severities: ["High", "Medium"],
-    proof: /^(?:ran|unproven: \S.*|stopped: time bound|failed: \S.*)$/,
-    proofs: "ran, unproven: <reason>, stopped: time bound, failed: <reason>",
+    ...REPRO_PROOF,
   },
   "change-security-review": {
     prefix: "SEC",
@@ -110,6 +115,12 @@ const REVIEWERS = {
     deferred: "SECD",
     proof: /^not requested$/,
     proofs: "not requested",
+  },
+  "blast-radius": {
+    prefix: "BR",
+    verdicts: ["Findings to assess", "No findings"],
+    severities: ["High", "Medium", "Low"],
+    ...REPRO_PROOF,
   },
 };
 const TAGS = ["introduced", "worsened", "pre-existing"];
@@ -208,6 +219,7 @@ function reviewSummary(part, args, legacy) {
   for (const [key, expected] of [["base", args.base], ["head", args.head], ["round", args.round], ["report", args.report], ["reviewer", args.reviewer]]) {
     if (block[key] !== expected) invalid(`${key} is not ${expected}`);
   }
+  if (args.target !== undefined && block.target !== args.target) invalid("target does not match the assigned worktree");
   if (!COMPLETIONS.includes(block.completion)) invalid(`completion is not one of ${COMPLETIONS.join(", ")}`);
   if (block.completion !== "complete") invalid("completion is not complete");
   if (!reviewer.verdicts.includes(block.verdict)) invalid(`verdict is not one of ${reviewer.verdicts.join(", ")}`);
@@ -289,7 +301,7 @@ function checkWorkerSummary(summary, args) {
 
 function main() {
   const usage = () => {
-    process.stderr.write("usage: check-report-handoff.mjs --kind review|worker [--reviewer <skill>] [--draft su|preflight | --require-verification-labels] --base <sha> --head <sha> --round <round> --report <path> [--show] [--sha256 <hex>]\n");
+    process.stderr.write("usage: check-report-handoff.mjs --kind review|worker [--reviewer <skill>] [--draft su|preflight | --require-verification-labels] --base <sha> --head <sha> --round <round> --report <path> [--target <worktree>] [--show] [--sha256 <hex>]\n");
     process.exit(2);
   };
 
@@ -303,12 +315,14 @@ function main() {
       args.requireVerificationLabels = true;
       continue;
     }
-    if (!["--kind", "--reviewer", "--draft", "--base", "--head", "--round", "--report", "--sha256"].includes(name)) usage();
+    if (!["--kind", "--reviewer", "--draft", "--base", "--head", "--round", "--report", "--target", "--sha256"].includes(name)) usage();
     if (args[name.slice(2)] !== undefined || i + 1 >= argv.length) usage();
     args[name.slice(2)] = argv[++i];
   }
   if (!["review", "worker"].includes(args.kind) || !args.base || !args.head || !args.round || !args.report) usage();
   if (args.kind === "review" ? !Object.hasOwn(REVIEWERS, args.reviewer) || args.draft : args.reviewer) usage();
+  const isBlastRadius = args.reviewer === "blast-radius";
+  if (isBlastRadius ? !args.target : args.target !== undefined) usage();
   if (args.draft !== undefined && !["su", "preflight"].includes(args.draft)) usage();
   if (args.requireVerificationLabels && (args.kind !== "worker" || args.draft)) usage();
 
@@ -355,6 +369,7 @@ function main() {
   }
   if (lines.at(-1) !== END) invalid("truncated");
   const legacy = lines[start] === LEGACY_REVIEW_DELIMITER;
+  if (legacy && isBlastRadius) invalid("blast-radius requires a v3 review block");
   if (legacy && args.sha256 === undefined) {
     invalid(`review block is v2; a new review report ends with ${REVIEW_DELIMITER} and a block with finding proof, and v2 is accepted only on a --sha256 recheck`);
   }

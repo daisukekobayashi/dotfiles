@@ -99,7 +99,7 @@ object. Every value is a string or an array; write `[]` for an empty list, and
 each string as one non-empty line in the report's language, except the verdict, severity, tag, and completion, which
 take the Output's English values. `round` is the round as the caller passes it,
 as a string. List every finding of the Output in Output order, numbered from 1
-as `CR<n>`, `ADV<n>`, or `SEC<n>` by reviewer, with the original severity the
+as `CR<n>`, `ADV<n>`, `SEC<n>`, or `BR<n>` by reviewer, with the original severity the
 reviewer's Output allows; keep pre-existing, Low, and minor findings. Give
 each its full-report location and title, and give no two findings the same
 location and title. `change-security-review` lists every deferred candidate as
@@ -111,11 +111,17 @@ Each finding's `proof` is its status under
 `unproven: <reason>`, `stopped: time bound`, or `failed: <reason>`, and
 `change-review` and `change-security-review` write `not requested`.
 
+The `blast-radius` delivery report uses the same proof values as the
+adversarial reviewer. Its `target` is exactly the absolute real path of the
+reviewed worktree supplied by the caller. Its v3 verdict summarizes findings
+for assessment, and its optional status is recorded separately under
+[Blast radius](local-review.md#blast-radius).
+
 The v2 block, which has no `proof`, predates this rule. The check accepts it
 only on a `--sha256` recheck of a report whose hash was recorded before the
 switch, never on a first check, so a new review cannot omit `proof`. A review
-written as v2 after the switch fails its first check and is retried under
-[Check a handoff](#check-a-handoff).
+written as v2 after the switch fails its first check. A `blast-radius`
+report always requires v3, including on a hash recheck.
 
 The block is authoritative: the check validates it and never parses the
 Output's headings or bullets, so a finding that the Output describes but the
@@ -333,10 +339,18 @@ append under `set -C`. The check below runs in the same command, so the
 summary shown comes from the bytes it verified. A reviewer that ran the command
 for its caller returns only the report path and `complete`, or `failed` with
 the reason; the caller's own check gives the summary. A non-zero exit is a
-failed run or an invalid report. For `change-adversarial-review`, set
+failed run or an invalid report. For `change-adversarial-review` and
+delivery `blast-radius`, set
 `--write` and `--cwd` as [Trusted heads](repro-runs.md#trusted-heads) sets for
 the Codex companion; on a trusted head its launcher, outside the sandbox,
 copies the run's evidence under [Repro Runs](repro-runs.md#evidence).
+
+For delivery `blast-radius`, start the prompt with `Use $blast-radius` and
+forward the assignment in [Blast radius](local-review.md#blast-radius).
+Use the same redirections for the companion's final report, adding
+`--target <reviewed-worktree>` to the checker invocation and using the
+reviewed worktree's assigned absolute real path. The companion's `--cwd`
+is the disposable worktree under Trusted heads.
 
 ## Check a handoff
 
@@ -354,6 +368,13 @@ Record its `valid sha256=<hex> bytes=<size>` line with the report in the
 progress record, and before reopening the report later, run the check again
 with `--sha256 <hex>`.
 
+For delivery `blast-radius`, supply `--target <reviewed-worktree>` with
+the assigned absolute real path on both the first check and every hash
+recheck, including on the Codex route. Read it and the original base, head,
+round, and report path from the caller's launch record.
+
 Exit status 3, any other non-zero status, or a failed Codex run is not a pass.
-Retry once as the next attempt; a second failure is a missing prerequisite
-under [Missing Prerequisites](../SKILL.md#missing-prerequisites).
+For a required handoff, retry once as the next attempt. A second failure is a
+missing prerequisite under [Missing Prerequisites](../SKILL.md#missing-prerequisites).
+For `blast-radius`, record it under [Blast radius](local-review.md#blast-radius)
+and continue required reviews without retrying the optional invocation.

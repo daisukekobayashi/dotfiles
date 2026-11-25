@@ -1309,7 +1309,7 @@ test("review and worker reports hand off through a file and a fixed summary", as
   assert.match(flat(section("Review block")), /`change-adversarial-review` writes `ran`, `unproven: <reason>`, `stopped: time bound`, or `failed: <reason>`, and `change-review` and `change-security-review` write `not requested`/);
   assert.match(flat(section("Review block")), /The check accepts it only on a `--sha256` recheck of a report whose hash was recorded before the switch, never on a first check/);
   assert.match(section("Review summary"), /- <title> - proof: <proof>\n/);
-  assert.match(flat(section("Codex route")), /For `change-adversarial-review`, set `--write` and `--cwd` as \[Trusted heads\]\(repro-runs\.md#trusted-heads\) sets for the Codex companion/);
+  assert.match(flat(section("Codex route")), /For `change-adversarial-review` and delivery `blast-radius`, set `--write` and `--cwd` as \[Trusted heads\]\(repro-runs\.md#trusted-heads\) sets for the Codex companion/);
   assert.doesNotMatch(handoff, /add `--write`/);
   assert.match(flat(section("Check a handoff")), /a v2 block except on a `--sha256` recheck/);
   for (const key of ["target", "base", "head", "round", "reviewer", "route", "completion", "verdict", "findings", "deferredCandidates", "confirmedFixes", "unverifiedCoverage", "report"]) {
@@ -1376,6 +1376,38 @@ test("review and worker reports hand off through a file and a fixed summary", as
     assert.match(await readText(path.join(local, start, "SKILL.md")),
       /\(\.\.\/delivery-common\/references\/report-handoff\.md#worker-summary\)/, start);
   }
+});
+
+test("blast-radius is an optional High-tier Local Review step with its own trusted evidence", async () => {
+  const local = path.join(repoRoot, "skills", "local");
+  const references = path.join(local, "delivery-common", "references");
+  const frame = await readText(path.join(references, "optional-workflows.md"));
+  const registryRow = frame.split("\n").find((line) => line.startsWith("| `blast-radius` |"));
+  assert.ok(registryRow);
+  assert.match(registryRow, /\(local-review\.md#blast-radius\).*\| High \| 30 minutes per reviewed head.*parent confirmation \| Reviewed head: full SHA \|/);
+  assert.match(frame, /\[Blast radius\]\(local-review\.md#blast-radius\), reconcile the recorded deadline,\s+evidence retention, and cleanup as well as the report/);
+
+  const review = await readText(path.join(references, "local-review.md"));
+  const step = flat(review.match(/\n## Blast radius\n[\s\S]*?(?=\n## )/)?.[0]);
+  assert.match(flat(review), /Apply \[Blast radius\]\(#blast-radius\) before assessing the round's findings/);
+  assert.match(step, /required reviewers are selected independently under \[Risk Tier\]/);
+  assert.match(step, /delivery's own \[trusted worker head\].*not run: unavailable/);
+  assert.match(step, /Record it in the launch intent.*absolute deadline.*before creating the disposable worktree/);
+  assert.match(step, /--reviewer blast-radius --target <reviewed-worktree>/);
+  assert.match(step, /valid completed report, evidence retention result, and safe worktree cleanup within the deadline/);
+  assert.match(step, /stopped: time bound.*failed: interrupted.*recorded hash.*Never invoke the skill again on that key/);
+  assert.match(step, /Pass only findings from a checked `ran` result to \[Assess findings\].*without a completed parent rerun, record it as unproven/);
+  assert.match(flat(review), /Assess its findings individually under the same triage and evidence rules/);
+
+  const handoff = flat(await readText(path.join(references, "report-handoff.md")));
+  assert.match(handoff, /start the prompt with `Use \$blast-radius`.*adding `--target <reviewed-worktree>` to the checker invocation/);
+  assert.match(handoff, /original base, head, round, and report path from the caller's launch record/);
+  assert.match(handoff, /continue required reviews without retrying the optional invocation/);
+  const repro = flat(await readText(path.join(references, "repro-runs.md")));
+  assert.match(repro, /`\^BR\[0-9\]\+\$` for `blast-radius`/);
+  assert.match(repro, /registry deadline covers the initial run and all parent confirmation.*per-command, per-rerun, retry, finding and output limits/);
+  const policy = await readText(path.join(repoRoot, "AGENTS.md"));
+  assert.match(policy, /^- add `skills\/local\/blast-radius\/SKILL\.md`$/m);
 });
 
 test("check-report-handoff accepts a complete report and rejects incomplete ones", async () => {
@@ -1591,6 +1623,47 @@ test("check-report-handoff accepts a complete report and rejects incomplete ones
     }
     assert.match(run(await write("cr-ran", forReviewer("change-review", "CR", { verdict: "Comment",
       findings: [finding("CR1", "a.js:1", "A", "High", "introduced", "ran")] })), [], "change-review").stderr, /findings\[0\]\.proof is not one of not requested/);
+
+    const blastTarget = "/worktrees/reviewed";
+    const blastBlock = (file, overrides = {}) => reviewBlock(file, {
+      target: blastTarget, reviewer: "blast-radius", verdict: "Findings to assess",
+      findings: [finding("BR1", "a.js:1", "A", "Low", "introduced", "ran")], deferredCandidates: [], ...overrides,
+    });
+    const runBlast = (file, extra = []) => run(file, ["--target", blastTarget, ...extra], "blast-radius");
+    const blast = await write("blast-radius", report(blastBlock));
+    const checkedBlast = runBlast(blast, ["--show"]);
+    assert.equal(checkedBlast.status, 0, checkedBlast.stderr);
+    assert.match(checkedBlast.stdout, /  - BR1 \[Low\] introduced - a\.js:1 - A - proof: ran/);
+    const blastHash = createHash("sha256").update(await readFile(blast)).digest("hex");
+    assert.equal(runBlast(blast, ["--sha256", blastHash]).status, 0);
+    assert.match(runBlast(blast, ["--sha256", "0".repeat(64)]).stderr, /invalid: report changed/);
+    assert.equal(run(blast, [], "blast-radius").status, 2, "blast-radius checks require the caller's target");
+    assert.equal(run(good, ["--target", blastTarget]).status, 2, "other reviewers keep their existing interface");
+    const blastMismatches = [
+      ["target", { target: "/worktrees/another" }, /target does not match/],
+      ["base", { base: "c".repeat(40) }, /base is not/],
+      ["head", { head: "c".repeat(40) }, /head is not/],
+      ["round", { round: "2" }, /round is not 1/],
+      ["reviewer", { reviewer: "change-adversarial-review" }, /reviewer is not blast-radius/],
+      ["report", { report: "/records/another.md" }, /report is not/],
+      ["finding-id", { findings: [finding("ADV1", "a.js:1", "A", "Medium", "introduced", "ran")] }, /id is not BR1/],
+      ["proof", { findings: [finding("BR1", "a.js:1", "A")] }, /proof is not one of ran, unproven/],
+    ];
+    for (const [name, overrides, expectation] of blastMismatches) {
+      const rejected = runBlast(await write(`blast-${name}`, report((file) => blastBlock(file, overrides))));
+      assert.equal(rejected.status, 3, name);
+      assert.match(rejected.stderr, expectation, name);
+    }
+    const blastLegacy = await write("blast-v2", report((file) => {
+      const block = blastBlock(file);
+      delete block.findings[0].proof;
+      return block;
+    }, reviewBody, "<!-- report-summary v2 -->"));
+    const blastLegacyHash = createHash("sha256").update(await readFile(blastLegacy)).digest("hex");
+    const rejectedLegacy = runBlast(blastLegacy, ["--sha256", blastLegacyHash]);
+    assert.equal(rejectedLegacy.status, 3);
+    assert.match(rejectedLegacy.stderr, /blast-radius requires a v3 review block/);
+
     assert.equal(run(await write("no-findings", report((f) => reviewBlock(f, { verdict: "No material security finding", findings: [], deferredCandidates: [] }))), ["--show"]).stdout
       .includes("- Findings: None\n- Deferred candidates: None\n"), true);
     assert.equal(spawnSync(process.execPath, [script, "--kind", "review", "--reviewer", "__proto__", "--base", base, "--head", head,
@@ -2011,8 +2084,10 @@ test("adversarial review proves findings with runs in disposable worktrees under
   assert.match(section("Parent rerun"), /runs exactly the recorded restoration command, the second line of `command`, unless it is `-`, within the rerun's bound/);
   // Round 2 (#245): reruns restore dependencies (D8) and finding IDs are checked before use (D11).
   assert.match(section("Parent rerun"), /checks the finding ID under \[Evidence\]\(#evidence\)/);
-  assert.match(section("Evidence"), /A finding ID must match the reviewer's form, `\^ADV\[0-9\]\+\$` for `change-adversarial-review`, as a whole name before it is used in a path or a command\. Test the whole name, never line by line/);
-  assert.match(section("Evidence"), /`case "\$id" in ADV\|ADV\*\[!0-9\]\*\) reject ;; ADV\[0-9\]\*\) accept ;; \*\) reject ;; esac`, and quote it, such as `"\$id"`, wherever a command uses it/);
+  assert.match(section("Evidence"), /A finding ID must match the reviewer's form as a whole name before it is used in a path or a command/);
+  assert.match(section("Evidence"), /`\^ADV\[0-9\]\+\$` for `change-adversarial-review`/);
+  assert.match(section("Evidence"), /Test the whole name, never line by line.*`case "\$id" in ADV\|ADV\*\[!0-9\]\*\) reject ;; ADV\[0-9\]\*\) accept ;; \*\) reject ;; esac`/);
+  assert.match(section("Evidence"), /Quote it, such as `"\$id"`, wherever a command uses it/);
   assert.match(section("Bounds"), /Each parent rerun: 10 minutes for restoring dependencies and running the command/);
   assert.match(section("Parent rerun"), /Before acting on a finding whose proof is `ran`/);
   assert.match(section("Parent rerun"), /A finding that is not reproduced is assessed as `unproven`/);

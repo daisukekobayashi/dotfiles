@@ -74,7 +74,8 @@ until the required results arrive; invalidate affected coverage if another write
 changes it.
 
 For each pinned head, use [Skill instruction smoke](#skill-instruction-smoke)
-before advancing from the full or focused review round.
+before advancing from the full or focused review round. Apply
+[Blast radius](#blast-radius) before assessing the round's findings.
 
 ## Skill instruction smoke
 
@@ -121,6 +122,60 @@ record `not run: tier` for a Low-tier instruction change without an intent.
    text. Carry the status and coverage into the
    [decision summary](completion.md#decision-summary).
 
+## Blast radius
+
+The coordinator applies the `blast-radius` entry of the
+[Optional Workflows registry](optional-workflows.md#registry) after pinning
+the head and setting its final tier. The required reviewers are selected
+independently under [Risk Tier](risk-tier.md#tier-procedure).
+
+1. [Reconcile existing intents](optional-workflows.md#record-and-report) before
+   evaluating eligibility. On an attempted key, reuse the recorded outcome under
+   step 4. Otherwise apply the registry's tier, installation, and opt-out
+   gates. Require the delivery's own [trusted worker head](repro-runs.md#trusted-heads)
+   and the route, permission, and isolated location needed by
+   [Disposable worktree](repro-runs.md#disposable-worktree). If the installed
+   skill cannot be invoked or these prerequisites cannot be met, report
+   `not run: unavailable` with the reason before launch.
+2. Assign a [private report path](report-handoff.md#report-path). Record it in
+   the launch intent with the reviewed worktree's absolute real path, recorded
+   task base, full head SHA, original round, route, and absolute deadline from
+   the registry's bound or the user's shorter bound. Start that
+   clock before creating the disposable worktree. The same deadline applies
+   through parent confirmation, including on resume. Apply the command and
+   finding limits in [Bounds](repro-runs.md#bounds) within the remaining time.
+3. As launcher, create the disposable worktree at the pinned head and invoke
+   the skill on the review route. Give the reviewer the user's explicit
+   delivery request, task, exact assignment and deadline, trust decision,
+   and disposable worktree path. Use a fresh subagent by default, or the
+   user's explicitly selected route under
+   [Trusted heads](repro-runs.md#trusted-heads) and
+   [Report Handoff](report-handoff.md#codex-route) with
+   [Foreground Checks](../SKILL.md#foreground-checks). Stop the run at the
+   deadline. After it exits, copy the evidence and perform safe owned cleanup
+   under [Remove](repro-runs.md#remove). If exit cannot be confirmed, leave
+   the worktree in place and report it with any other leftovers.
+4. Check the report with [Check a handoff](report-handoff.md#check-a-handoff),
+   using `--kind review --reviewer blast-radius --target <reviewed-worktree>`.
+   Recheck that the live head is still pinned. Record `ran` only with a valid
+   completed report, evidence retention result, and safe worktree cleanup
+   within the deadline. Record the completion time and report digest before
+   acting on the result. An initial run that exceeded the deadline is
+   `stopped: time bound`; setup, cleanup, or report errors fail the optional
+   run. When resuming an intent without an outcome, require recorded evidence
+   of timely completion and cleanup as well as a valid report to recover
+   `ran`; otherwise record `failed: interrupted` and perform any remaining
+   safe owned cleanup. Use the original assignment and recorded hash to recheck
+   an accepted report before reopening it. Never invoke the skill again on
+   that key, including after a malformed report, or use its result on another
+   head.
+5. Pass only findings from a checked `ran` result to [Assess findings](#assess-findings).
+   Record each parent rerun outcome with its disposition. Reuse recorded
+   confirmations on the same head. If the workflow deadline leaves a finding
+   without a completed parent rerun, record it as unproven and assess its
+   trace. Keep the checked primary report's `ran` status and the coverage
+   limits in the [Decision summary](completion.md#decision-summary).
+
 ## Triage classes
 
 Classify each finding as `material`, `minor`, or `pre-existing`. Reviewer
@@ -151,6 +206,10 @@ evidence, applying these defaults:
   `ran`, as unproven from its traced failure path; its severity and tag stay
   hints as for any finding. Treat a `Do not ship` verdict as a blocker only
   after the rerun reproduces its finding or your trace confirms it.
+- **Blast radius:** Assess its findings individually under the same triage
+  and evidence rules and use [Blast radius](#blast-radius) for their deadline.
+  The optional status and the report's verdict do not establish required
+  coverage or close findings.
 - **Minor:** Record and defer by default. Every fix creates a new snapshot and
   another review round; fix a minor finding only when it is a trivial, local
   correction bundled with a material fix in the same round.
@@ -210,6 +269,10 @@ newly discovered material risks visible for that assessment.
 
 For a fixed finding that a run proved, the follow-up reruns its retained
 proving command on the new head under Repro Runs.
+For a `blast-radius` finding, do that only inside the eligible
+[Blast radius](#blast-radius) workflow's deadline for the new head. When that
+rerun cannot run or finish, report that evidence gap and verify the fix with
+the required review and verification paths.
 
 Run the selected `change-review` and `change-adversarial-review` with
 `--base <preceding reviewed head> --scope branch`, and `change-security-review`

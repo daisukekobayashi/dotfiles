@@ -161,7 +161,7 @@ commands inside a proving command are part of that run.
 
 ## Bounds
 
-Runs follow the rules of
+Adversarial repro runs follow the rules of
 [Shared bounds](optional-workflows.md#shared-bounds), with these numbers. They
 are part of the reviewer, not an optional workflow, and have no registry entry.
 
@@ -175,6 +175,12 @@ are part of the reviewer, not an optional workflow, and have no registry entry.
   command, outside the review's total.
 - Each output excerpt: at most 50 lines and 8 KB. The finding cap and the
   excerpts bound the tokens a run adds.
+
+For the optional [Blast radius](local-review.md#blast-radius) step, its
+registry deadline covers the initial run and all parent confirmation. Apply
+the per-command, per-rerun, retry, finding and output limits above within
+that deadline. The separate adversarial review total does not give this step
+additional time.
 
 Run each command under [Foreground Checks](../SKILL.md#foreground-checks).
 Runs belong to the review's local round and never add one. A run that reaches
@@ -214,14 +220,15 @@ The reviewer writes each finding's repro files as regular files under
 Its finding gives the same command, the output excerpt, and the output the
 intent requires.
 
-A finding ID must match the reviewer's form, `^ADV[0-9]+$` for
-`change-adversarial-review`, as a whole name before it is used in a path or a
-command. Test the whole name, never line by line, so a name with a newline or
+A finding ID must match the reviewer's form as a whole name before it is
+used in a path or a command. Use `^ADV[0-9]+$` for
+`change-adversarial-review` and `^BR[0-9]+$` for `blast-radius`.
+Test the whole name, never line by line, so a name with a newline or
 any other character fails, such as with
-`case "$id" in ADV|ADV*[!0-9]*) reject ;; ADV[0-9]*) accept ;; *) reject ;; esac`,
-and quote it, such as `"$id"`, wherever a command uses it. The launcher skips
-and reports any `.repro/` entry or finding whose ID does not match, with or
-without `--report`.
+`case "$id" in ADV|ADV*[!0-9]*) reject ;; ADV[0-9]*) accept ;; *) reject ;; esac`
+for the adversarial reviewer. Quote it, such as `"$id"`, wherever a command
+uses it. The launcher skips and reports any `.repro/` entry or finding whose
+ID does not match, with or without `--report`.
 
 Before removal, the launcher copies each `.repro/<finding ID>/` directory to
 `<report path without .md>.evidence/<finding ID>/`, or without `--report` to
