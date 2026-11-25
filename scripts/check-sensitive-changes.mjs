@@ -171,7 +171,8 @@ function verifyWindowsPrivateFile(file) {
     "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   const check = `
     $ErrorActionPreference = 'Stop'
-    $acl = Get-Acl -LiteralPath $env:DOTFILES_ACL_FILE
+    $sections = [System.Security.AccessControl.AccessControlSections]'Access, Owner'
+    $acl = [System.IO.File]::GetAccessControl($env:DOTFILES_ACL_FILE, $sections)
     $sidType = [System.Security.Principal.SecurityIdentifier]
     $owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
     if ($acl.GetOwner($sidType).Value -cne $owner.Value) { exit 1 }

@@ -208,7 +208,7 @@ test("native Windows denylist ACL admits the owner and rejects an unrelated prin
         $other = [System.Security.Principal.SecurityIdentifier]::new('S-1-5-11')
         $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($other, 'Read', 'Allow'))
       }
-      Set-Acl -LiteralPath $file -AclObject $acl
+      [System.IO.File]::SetAccessControl($file, $acl)
     `], {
       env: { ...f.env, DOTFILES_TEST_ACL_FILE: privateFile, DOTFILES_TEST_ACL_OTHER: extra },
       encoding: "utf8", timeout: 20_000,
