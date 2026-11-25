@@ -9,6 +9,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const scannerVersion = "1.10.1";
+const stagedCommand = "dotfiles-betterleaks-staged";
+const stagedVersion = `${stagedCommand} protocol 1 engine v${scannerVersion}`;
+const stagedRequired = `The pinned staged scanner (${stagedVersion}) is required. See docs/testing.md.`;
 const findingExit = 21;
 const byteLimit = 64 * 1024 * 1024;
 const inputLimit = 64 * 1024;
@@ -34,7 +37,8 @@ function run(command, args, options = {}) {
   });
   expect(!result.error && result.status !== null, command === "git"
     ? "Git failed, timed out, or exceeded the input limit."
-    : `Betterleaks ${scannerVersion} is required and must finish without errors.`);
+    : command === stagedCommand ? stagedRequired
+      : `Betterleaks ${scannerVersion} is required and must finish without errors.`);
   return result;
 }
 
@@ -285,20 +289,37 @@ function* selection(mode, commits) {
   }
 }
 
-function scanner(cwd) {
-  const version = run("betterleaks", ["--version"], { cwd });
-  expect(version.status === 0 && version.stdout.toString().trim() === `betterleaks version ${scannerVersion}`,
-    `Betterleaks ${scannerVersion} is required. See docs/testing.md.`);
-  // Do not let the built-in path prefilter discard blobs already selected by Git.
-  // Keep the pinned version's detection rules and per-match filters.
+function stagedInput(blob, file) {
+  const name = Buffer.from(file, "utf8");
+  expect(name.length > 0 && name.length <= inputLimit && blob.length <= byteLimit,
+    "A staged scanner input exceeds the protocol limit.");
+  const header = Buffer.alloc(8);
+  header.writeUInt32BE(name.length, 0);
+  header.writeUInt32BE(blob.length, 4);
+  return Buffer.concat([header, name, blob]);
+}
+
+function scanner(cwd, mode) {
+  const staged = mode === "staged";
+  const command = staged ? stagedCommand : "betterleaks";
+  const expectedVersion = staged ? stagedVersion : `betterleaks version ${scannerVersion}`;
+  const version = run(command, ["--version"], { cwd });
+  expect(version.status === 0 && version.stdout.toString().trim() === expectedVersion,
+    staged ? stagedRequired : `Betterleaks ${scannerVersion} is required. See docs/testing.md.`);
+  // Match the staged scanner policy. Retain the pinned rules and per-match
+  // filters, while scanning blobs already selected by Git.
   const config = path.join(cwd, "scan.toml");
-  writeFileSync(config, 'prefilter = "false"\n\n[extend]\nuseDefault = true\n', { mode: 0o600 });
-  return (input, file) => {
-    const result = run("betterleaks", [
-      "stdin", "--config", config, "--set-attr", `path=${file}`, "--no-banner", "--no-color", "--redact=100",
-      "--log-level", "error", "--ignore-gitleaks-allow", "--max-decode-depth", "2",
-      "--report-format", "json", "--report-path", "-", "--exit-code", String(findingExit),
-    ], { cwd, input });
+  if (!staged) {
+    writeFileSync(config, 'prefilter = "false"\n\n[extend]\nuseDefault = true\n', { mode: 0o600 });
+  }
+  return (blob, file) => {
+    const result = staged
+      ? run(command, [], { cwd, input: stagedInput(blob, file) })
+      : run(command, [
+        "stdin", "--config", config, "--set-attr", `path=${file}`, "--no-banner", "--no-color", "--redact=100",
+        "--log-level", "error", "--ignore-gitleaks-allow", "--max-decode-depth", "2",
+        "--report-format", "json", "--report-path", "-", "--exit-code", String(findingExit),
+      ], { cwd, input: blob });
     expect(result.status === 0 || result.status === findingExit, "Betterleaks returned an incomplete scan.");
     let rows;
     try {
@@ -342,7 +363,7 @@ function main(mode) {
   const exceptions = allowlist(policy);
   const scratch = mkdtempSync(path.join(tmpdir(), "dotfiles-sensitive-scan-"));
   try {
-    const detectSecrets = scanner(scratch);
+    const detectSecrets = scanner(scratch, mode);
     const seen = new Set();
     let found = false;
     for (const { file, id, submodule, commit } of selection(mode, commits)) {
@@ -352,12 +373,10 @@ function main(mode) {
       const blob = submodule ? Buffer.alloc(0) : git(["cat-file", "blob", id]);
       const digest = createHash("sha256").update(blob).digest("hex");
       const fileBytes = Buffer.from(file);
-      const privatePath = rules.some(({ value }) => fileBytes.includes(value));
       const secretPath = detectSecrets(fileBytes, "path.txt");
-      const scanPath = privatePath || secretPath.length > 0 ? "[redacted path]" : file;
       const findings = [
         ...secretPath.map(({ rule }) => ({ kind: "secret", rule, line: 0 })),
-        ...detectSecrets(blob, scanPath).map((row) => ({ kind: "secret", ...row })),
+        ...detectSecrets(blob, file).map((row) => ({ kind: "secret", ...row })),
         ...personalFindings(fileBytes, rules).map(({ rule }) => ({ kind: "personal", rule, line: 0 })),
         ...personalFindings(blob, rules).map((row) => ({ kind: "personal", ...row })),
       ];

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { createHash } from "node:crypto";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +15,8 @@ const server = "https://github.com";
 const marker = "synthetic-hostname.example.test";
 const firstRef = "refs/heads/topic";
 const realScanner = process.env.DOTFILES_TEST_REAL_BETTERLEAKS === "1";
+const realStaged = process.env.DOTFILES_TEST_REAL_STAGED_SCANNER === "1";
+const stagedCommand = "dotfiles-betterleaks-staged";
 const windows = process.platform === "win32";
 const realFinding = ["ghp_", "xRFj6FBf8b6Yy3JZp6rDarxZcPs00UTAYCji"].join("");
 
@@ -42,11 +45,17 @@ function fixture(t) {
   };
   writeFileSync(path.join(bin, "betterleaks"), '#!/bin/sh\nexec "$DOTFILES_TEST_FAKE_NODE" "$DOTFILES_TEST_FAKE_PROGRAM" "$@"\n',
     { mode: 0o700 });
+  writeFileSync(path.join(bin, stagedCommand),
+    '#!/bin/sh\nDOTFILES_TEST_BACKEND=staged exec "$DOTFILES_TEST_FAKE_NODE" "$DOTFILES_TEST_FAKE_PROGRAM" "$@"\n',
+    { mode: 0o700 });
   writeFileSync(fakeEnv.DOTFILES_TEST_FAKE_PROGRAM, `
     import fs from "node:fs";
+    const staged = process.env.DOTFILES_TEST_BACKEND === "staged";
     if (process.argv[2] === "--version") {
-      console.log(process.env.SCANNER_VERSION ?? "betterleaks version 1.10.1");
+      const version = staged ? "dotfiles-betterleaks-staged protocol 1 engine v1.10.1" : "betterleaks version 1.10.1";
+      console.log(process.env.SCANNER_VERSION ?? version);
     } else {
+      if (staged && process.argv.length !== 2) process.exit(8);
       if (process.argv.some((arg) => arg.startsWith("path=") && arg.includes("synthetic-hostname.example.test"))) {
         process.exit(8);
       }
@@ -56,7 +65,8 @@ function fixture(t) {
       }
       if (process.env.SCANNER_INVALID) process.exit(0);
       const input = fs.readFileSync(0);
-      if (input.includes("SYNTHETIC_SECRET_SAMPLE")) {
+      const blob = staged ? input.subarray(8 + input.readUInt32BE(0)) : input;
+      if (blob.includes("SYNTHETIC_SECRET_SAMPLE")) {
         console.log(JSON.stringify([{ RuleID: "fixture", StartLine: 1, Match: "SYNTHETIC_SECRET_SAMPLE" }]));
         console.error("SYNTHETIC_SECRET_SAMPLE");
         process.exitCode = 21;
@@ -140,9 +150,10 @@ test("missing, mismatched, failing and malformed scanner results stop the check"
   f.git("add", "settings.txt");
   const missing = f.scan("staged", { PATH: f.gitOnly });
   assert.equal(missing.code, 2, missing.output);
-  assert.match(missing.output, /Betterleaks 1\.10\.1 is required/);
+  assert.match(missing.output, /The pinned staged scanner/);
   for (const options of [
-    { SCANNER_VERSION: "betterleaks version 1.10.0" },
+    { SCANNER_VERSION: "dotfiles-betterleaks-staged protocol 2 engine v1.10.1" },
+    { SCANNER_VERSION: "dotfiles-betterleaks-staged protocol 1 engine v1.10.0" },
     { SCANNER_FAILURE: "1" },
     { SCANNER_INVALID: "1" },
   ]) {
@@ -211,7 +222,7 @@ test("native Windows denylist ACL admits the owner and rejects an unrelated prin
     assert.match(allowed.output, /finding personal:hostname/);
   } else {
     assert.equal(allowed.code, 2, allowed.output);
-    assert.match(allowed.output, /Betterleaks 1\.10\.1 is required/);
+    assert.match(allowed.output, /The pinned staged scanner/);
   }
   ownerAcl("yes");
   const rejected = f.scan("staged", opts);
@@ -372,73 +383,196 @@ test("a staged ignore file or unreviewed allowlist cannot exempt a finding", { s
   assert.equal(f.scan("staged").code, 21);
 });
 
-test("pinned Betterleaks scans prefiltered paths, binary and encoded blobs, and path-based rules", { skip: !realScanner }, (t) => {
+test("official CI scans prefiltered paths, binary and encoded blobs, and path-based rules", { skip: !realScanner }, (t) => {
   const f = fixture(t);
   const opts = { PATH: process.env.PATH };
+  f.write("base.txt", "baseline");
+  const base = f.commit("baseline");
   f.write(".gitattributes", "*.bin -diff\n");
   f.write("binary.bin", Buffer.concat([Buffer.from([0, 255, 0]), Buffer.from(`\n${realFinding}\n`)]));
   f.write("document.pdf", `\n\n${realFinding}\n`);
   f.write("package-lock.json", `\n\n\n${realFinding}\n`);
   f.write("encoded.txt", Buffer.from(realFinding).toString("base64"));
   f.write("container.pfx", "Inert path-only fixture, no certificate.\n");
-  f.git("add", "--all");
-  const result = f.scan("staged", opts);
+  const head = f.commit("candidate");
+  const result = f.scan("ci", { ...opts, ...f.event(base, head) });
   assert.equal(result.code, 21, result.output);
   for (const line of [1, 2, 3, 4]) {
-    assert.ok(result.output.includes(`finding secret:github-pat staged "[redacted path]":${line}\n`), result.output);
+    assert.ok(result.output.includes(`finding secret:github-pat ${head} "[redacted path]":${line}\n`), result.output);
   }
-  assert.match(result.output, /finding secret:pkcs12-file staged "\[redacted path\]":0/);
+  assert.ok(result.output.includes(`finding secret:pkcs12-file ${head} "[redacted path]":0`));
   assert.ok(!result.output.includes(realFinding));
 });
 
-test("pinned Betterleaks dotted rule IDs report findings and honor exact scope exceptions", { skip: !realScanner }, (t) => {
+test("official CI dotted rule IDs report findings and honor exact scope exceptions", { skip: !realScanner }, (t) => {
   const f = fixture(t);
   const opts = { PATH: process.env.PATH };
   const file = "service.conf";
   const generated = createHash("sha512").update("inert sample for a dotted scanner rule").digest("hex").slice(0, 80);
   const content = `abuseipdb_api_key = "${generated}"\n`;
   f.write("base.txt", "baseline");
-  f.commit("baseline");
+  const base = f.commit("baseline");
   f.write(file, content);
-  f.git("add", file);
-  const initial = f.scan("staged", opts);
+  const head = f.commit("candidate");
+  const initial = f.scan("ci", { ...opts, ...f.event(base, head) });
   assert.equal(initial.code, 21, initial.output);
-  assert.match(initial.output, /finding secret:abuseipdb-api-key\.1 staged "\[redacted path\]":1/);
+  assert.ok(initial.output.includes(`finding secret:abuseipdb-api-key.1 ${head} "[redacted path]":1`));
   assert.ok(!initial.output.includes(generated));
 
-  f.git("reset", "--quiet", "--", file);
+  f.git("switch", "-qc", "approved-policy", base);
   f.write("scripts/sensitive-scan-allowlist.json", JSON.stringify([{
     path: file, rule: "secret:abuseipdb-api-key.1", line: 1,
     contentSha256: createHash("sha256").update(content).digest("hex"),
     reason: "Approved synthetic fixture",
   }]));
-  f.git("add", "scripts/sensitive-scan-allowlist.json");
-  f.git("commit", "-qm", "approve exact finding");
-  f.git("update-ref", "refs/remotes/origin/main", f.git("rev-parse", "HEAD"));
-  f.git("add", file);
-  const allowed = f.scan("staged", opts);
+  const policy = f.commit("approve exact finding");
+  f.write(file, content);
+  const allowedHead = f.commit("known fixture");
+  const allowed = f.scan("ci", { ...opts, ...f.event(policy, allowedHead) });
   assert.equal(allowed.code, 0, allowed.output);
   f.write(file, `${content}changed blob\n`);
-  f.git("add", file);
-  const changed = f.scan("staged", opts);
+  const changedHead = f.commit("alter blob");
+  const changed = f.scan("ci", { ...opts, ...f.event(allowedHead, changedHead) });
   assert.equal(changed.code, 21, changed.output);
 });
 
-test("pinned Betterleaks content matches are never disclosed in diagnostic filenames", { skip: !realScanner }, (t) => {
+test("official CI content matches are never disclosed in diagnostic filenames", { skip: !realScanner }, (t) => {
   const f = fixture(t);
   const opts = { PATH: process.env.PATH };
   const value = "Synthetic-Only-57Kx8-evaluate";
   f.write("base.txt", "baseline\n");
   const base = f.commit("baseline");
   f.write(`backup-${value}.tf`, `password = "${value}"\n`);
-  f.git("add", "--all");
-  const staged = f.scan("staged", opts);
-  assert.equal(staged.code, 21, staged.output);
-  assert.match(staged.output, /finding secret:generic-password staged "\[redacted path\]":1/);
-  assert.ok(!staged.output.includes(value));
   const head = f.commit("candidate");
   const ci = f.scan("ci", { ...opts, ...f.event(base, head) });
   assert.equal(ci.code, 21, ci.output);
   assert.ok(ci.output.includes(`finding secret:generic-password ${head} "[redacted path]":1`));
   assert.ok(!ci.output.includes(value));
+});
+
+function stagedFrame(file, blob) {
+  const name = Buffer.from(file);
+  const content = Buffer.from(blob);
+  const header = Buffer.alloc(8);
+  header.writeUInt32BE(name.length, 0);
+  header.writeUInt32BE(content.length, 4);
+  return Buffer.concat([header, name, content]);
+}
+
+test("staged adapter matches official detection, exclusions, and raw blob behavior", { skip: !realScanner || !realStaged }, (t) => {
+  const f = fixture(t);
+  const config = path.join(f.cwd, "fixed.toml");
+  writeFileSync(config, 'prefilter = "false"\n\n[extend]\nuseDefault = true\n');
+  const opts = { cwd: f.cwd, env: { ...f.env, PATH: process.env.PATH }, encoding: "utf8", timeout: 10_000 };
+  const fixtures = [
+    ["archive.zip", realFinding, 21],
+    ["@octokit/auth-token/README.md", realFinding, 0],
+    ["container.p12", "inert content", 21],
+    ["empty.p12", "", 0],
+    ["--format=other/受理.p12", "inert content", 21],
+    [".betterleaksignore", realFinding, 21],
+    ["literal.txt", realFinding + " # betterleaks:allow", 21],
+    ["document.pdf", `%PDF-1.7\n${realFinding}`, 0],
+    ["binary.bin", Buffer.concat([Buffer.from([0, 255, 0]), Buffer.from(`\n${realFinding}\n`)]), 21],
+    ["encoded.txt", Buffer.from(realFinding).toString("base64"), 21],
+    ["safe.txt", "ordinary text", 0],
+  ];
+  for (const [file, blob, expected] of fixtures) {
+    const baseline = spawnSync("betterleaks", [
+      "stdin", "--config", config, "--set-attr", `path=${file}`, "--no-banner", "--no-color", "--redact=100",
+      "--log-level", "error", "--ignore-gitleaks-allow", "--max-decode-depth", "2",
+      "--report-format", "json", "--report-path", "-", "--exit-code", "21",
+    ], { ...opts, input: blob });
+    const staged = spawnSync(stagedCommand, [], { ...opts, input: stagedFrame(file, blob) });
+    assert.equal(baseline.error, undefined);
+    assert.equal(staged.error, undefined);
+    assert.equal(baseline.status, expected, file);
+    assert.equal(staged.status, expected, file);
+    const project = (rows) => rows.map(({ RuleID, StartLine }) => ({ RuleID, StartLine }));
+    assert.deepEqual(JSON.parse(staged.stdout), project(JSON.parse(baseline.stdout)), file);
+    assert.ok(!staged.stdout.includes(file) && !staged.stdout.includes(realFinding));
+    assert.equal(staged.stderr, "");
+  }
+  const frame = stagedFrame("private-metadata.example.test", "ordinary text");
+  const oversizedName = Buffer.from(frame);
+  oversizedName.writeUInt32BE(64 * 1024 + 1, 0);
+  const oversizedBlob = Buffer.from(frame);
+  oversizedBlob.writeUInt32BE(64 * 1024 * 1024 + 1, 4);
+  const malformed = [
+    frame.subarray(0, frame.length - 1), oversizedName, oversizedBlob,
+    stagedFrame(Buffer.from([0xff]), ""), stagedFrame("name\0end", ""),
+    Buffer.concat([frame, Buffer.from([0])]),
+  ];
+  for (const input of malformed) {
+    const result = spawnSync(stagedCommand, [], { ...opts, input });
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr.trim(), "Staged scanner could not complete the scan.");
+  }
+});
+
+test("staged adapter preserves private path context and blocks the real Git hook", { skip: !realStaged || windows }, (t) => {
+  const f = fixture(t);
+  const file = `bundle-${marker}.p12`;
+  const content = "inert file-only fixture";
+  f.write("scripts/sensitive-scan-allowlist.json", JSON.stringify([{
+    path: file, rule: "personal:hostname", line: 0,
+    contentSha256: createHash("sha256").update(content).digest("hex"),
+    reason: "Approved synthetic path only",
+  }]));
+  const policy = f.commit("approve exact private-path exception");
+  f.git("update-ref", "refs/remotes/origin/main", policy);
+  f.write(".githooks/pre-commit", readFileSync(new URL("../../.githooks/pre-commit", import.meta.url)));
+  f.write("scripts/check-sensitive-changes.mjs", readFileSync(script));
+  f.write("scripts/check-skills-build.sh", "#!/bin/sh\nprintf '%s\\n' 'build check ran'\n");
+  for (const file of [".githooks/pre-commit", "scripts/check-skills-build.sh"]) {
+    chmodSync(path.join(f.cwd, file), 0o700);
+  }
+  f.write(file, content);
+  f.git("add", file);
+  const env = { ...f.env, PATH: process.env.PATH, DOTFILES_SCAN_DENYLIST_FILE: f.denylist() };
+  const result = spawnSync("git", ["-c", "core.hooksPath=.githooks", "commit", "-qm", "candidate"],
+    { cwd: f.cwd, env, encoding: "utf8", timeout: 15_000 });
+  assert.equal(result.error, undefined);
+  const output = result.stdout + result.stderr;
+  assert.equal(result.status, 1, output);
+  assert.match(output, /build check ran/);
+  assert.match(output, /finding secret:pkcs12-file staged "\[redacted path\]":0/);
+  assert.doesNotMatch(output, /finding personal:hostname/);
+  assert.ok(!output.includes(marker));
+  assert.equal(f.git("rev-parse", "HEAD"), policy);
+});
+
+test("staged adapter leaves private filename data out of the OS command line", {
+  skip: !realStaged || process.platform !== "linux",
+  timeout: 15_000,
+}, async (t) => {
+  const value = "Synthetic-Only-57Kx8-evaluate";
+  const filename = `backup-${value}.tf`;
+  const blob = Buffer.concat([Buffer.from(`password = "${value}"\n`), Buffer.alloc(1024 * 1024, 10)]);
+  const frame = stagedFrame(filename, blob);
+  const child = spawn(stagedCommand, [], { stdio: ["pipe", "pipe", "pipe"] });
+  t.after(() => child.kill());
+  try {
+    let output = "";
+    let errors = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => { output += chunk; });
+    child.stderr.setEncoding("utf8").on("data", (chunk) => { errors += chunk; });
+    const closed = once(child, "close");
+    await once(child, "spawn");
+    // Hold the child open after feeding the private path and most of the blob.
+    const lastByte = frame.length - 1;
+    await new Promise((resolve, reject) => {
+      child.stdin.write(frame.subarray(0, lastByte), (error) => error ? reject(error) : resolve());
+    });
+    const argv = readFileSync(`/proc/${child.pid}/cmdline`).toString().split("\0").filter(Boolean);
+    assert.deepEqual(argv, [stagedCommand]);
+    child.stdin.end(frame.subarray(lastByte));
+    const [code] = await closed;
+    assert.equal(code, 21, errors);
+    assert.ok(JSON.parse(output).some(({ RuleID }) => RuleID === "generic-password"));
+    assert.ok(!(output + errors).includes(value));
+  } finally {
+    child.kill();
+  }
 });

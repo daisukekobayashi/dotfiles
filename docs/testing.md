@@ -7,12 +7,35 @@ committed setup runtime matches its TypeScript sources and scans staged changes.
 ## Sensitive changes
 
 The hook and the **Sensitive changes** workflow use Betterleaks 1.10.1 for
-secret detection. Have Node.js 24 and that Betterleaks version on `PATH` before
-committing. Linux and WSL select it in mise. For macOS and Windows, use the
-matching [official release asset](https://github.com/betterleaks/betterleaks/releases/tag/v1.10.1)
-and check its SHA-256 before installing. The hook stops if the scanner is
-missing, reports a different version, fails, or finds a match. Run the staged
-check alone with `node scripts/check-sensitive-changes.mjs staged` from the checkout.
+secret detection. CI runs the checksum-verified official binary. The local
+hook uses Node.js 24 and the `dotfiles-betterleaks-staged` adapter on `PATH`.
+The adapter receives the Git-relative path and raw blob through stdin and
+passes both to the pinned detector. Its output contains only the rule and line.
+The hook stops when the adapter is missing, reports an incompatible protocol or
+engine version, fails, or finds a match.
+
+### Build the local adapter
+
+Set up Go 1.27.4 from the existing mise pin or the matching
+[official Go distribution](https://go.dev/dl/). Build the adapter once and
+rebuild it after updating its source or dependencies. Choose an owner-managed
+directory already on your `PATH`. For example, if `~/.local/bin` is set up:
+
+```sh
+cd tools/betterleaks-staged
+GOENV=off GOWORK=off GOTOOLCHAIN=local CGO_ENABLED=0 \
+  GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org \
+  go build -mod=readonly -trimpath -buildvcs=false -o "$HOME/.local/bin/dotfiles-betterleaks-staged" .
+dotfiles-betterleaks-staged --version
+```
+
+On native Windows, set the same environment values in your build shell and give
+`go build -o` an absolute path ending in `dotfiles-betterleaks-staged.exe` in
+your chosen directory. The expected version output is
+`dotfiles-betterleaks-staged protocol 1 engine v1.10.1`. Dependency resolution
+happens during this explicit build. The hook does not build, download, or install
+a scanner. To run the staged check alone, return to the checkout root and run
+`node scripts/check-sensitive-changes.mjs staged`.
 
 Git supplies new and changed file contents directly from its index or object
 database. The checkout, unstaged changes and candidate scanner configuration
@@ -46,11 +69,20 @@ unreadable configured input makes the scan incomplete. The denylist is used
 only by the local staged check. GitHub Actions scans for secrets on pushes and
 pull requests with no private denylist input.
 
-The scanner uses the pinned version's rules and per-match filters. It disables
-the default file-path prefilter, so selected files reach those rules. Findings
-report the commit or staged change, rule, and line number. Filenames are masked
-because a value detected in file contents may also appear in the path. Inspect
-the indicated commit or staged changes locally to locate the finding.
+Both scanners use the pinned version's rules, per-match filters, and file-type
+limits. They disable the default file-path prefilter. Findings report the commit
+or staged change, rule, and line number. Filenames are masked because a value
+detected in file contents may also appear in the path. Inspect the indicated
+commit or staged changes locally to locate the finding.
+
+For synthetic parity tests, put the local adapter and the checksum-verified
+[official Betterleaks 1.10.1 binary](https://github.com/betterleaks/betterleaks/releases/tag/v1.10.1)
+on the test process's `PATH` and run:
+
+```sh
+DOTFILES_TEST_REAL_BETTERLEAKS=1 DOTFILES_TEST_REAL_STAGED_SCANNER=1 \
+  node --test setup/test/sensitive-changes.test.mjs
+```
 
 ### Known false positives
 
