@@ -68,6 +68,9 @@ Still stop and ask before:
    - Resolve and process targets under `github-pr-publish` step 1, across the
      whole cycle.
    - On resume, revalidate any supplied PR/head/trigger and follow-up record.
+     In delivery, reconcile any current post intent or recorded outcome under
+     [Recover a delivery trigger](../github-pr-review-request/references/codex.md#recover-a-delivery-trigger)
+     before continuing.
      Reuse verified completed operations and enter the earliest incomplete phase.
      If a trigger already awaits output for the same published head, resume step
      4 rather than posting another request. When resuming Prepare, use the
@@ -84,6 +87,9 @@ Still stop and ask before:
    - Capture the PR number, PR URL, branch, push remote, commit, and
      verification result.
 3. Use `github-pr-review-request` with provider `codex` for the resolved PR.
+   - In delivery, forward the checked published head, hosted round, and task
+     record assignment to the Codex procedure so it can record each
+     [delivery trigger intent](../github-pr-review-request/references/codex.md#delivery-trigger-intent).
    - Treat `Codex request posted but not acknowledged` as a blocker unless the
      user explicitly asks to continue waiting or retry.
 4. Wait for Codex review completion.

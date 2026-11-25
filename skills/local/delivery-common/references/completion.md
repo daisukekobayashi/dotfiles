@@ -66,9 +66,10 @@ differ, the actual state holds. For an intent entry without an outcome, look
 at the provider before any retry. First confirm that the target's current head
 equals the intent's full SHA. Its outcome is then the only artifact that the
 provider shows created no earlier than the intent's baseline, absent from its
-recorded identifiers, and made by its recorded identity. Log that artifact as
-the outcome; when the head differs or the order or the single match cannot be
-shown, stop and report.
+recorded identifiers, and made by its recorded identity. Apply the calling
+workflow's additional identity conditions before deciding that exactly one
+artifact matches. Log that artifact as the outcome. When the head differs
+or the order or the single match cannot be shown, stop and report.
 The calling workflow checks a recorded branch name before any command uses
 it. Reuse matching worktrees and PRs, and verify the current head before
 reusing review evidence. Resume the earliest incomplete phase; a completed PR
