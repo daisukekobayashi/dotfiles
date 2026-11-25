@@ -40,24 +40,45 @@ Use the host, repository and PR resolved by the parent skill. Read the PR's
 
 A verified comment ID establishes posting. Use that exact ID for
 acknowledgement, including on resume. Reuse verified acknowledgement already
-recorded for that ID. Preserve a recorded timeout. When acknowledgement is
-still unchecked, poll for an `eyes` reaction at 5-10 second intervals for up
-to 120 seconds:
+recorded for that ID. Preserve a recorded timeout. With acknowledgement
+still unchecked, use a bounded read of all reaction pages on that comment:
 
 ```bash
-gh api --hostname "$host" --method GET \
+gh api --hostname "$host" --method GET --paginate --slurp \
   "repos/$owner/$repo/issues/comments/$comment_id/reactions" \
-  -H 'Accept: application/vnd.github+json' -f content=eyes \
-  --jq '[.[] | select(.content == "eyes") | {user: .user.login, created_at}]'
+  -H 'Accept: application/vnd.github+json' -f content=eyes
 ```
 
-In delivery, use the comment's provider `created_at` to start that bound, so
-a resume uses only the remaining time. Record a timeout if the bound expires
-without a verified reaction. In delivery, append acknowledgement or timeout
-to the task log for that comment ID. Until acknowledged, report the request
-as unacknowledged. With a timeout, stop unless the user explicitly asks to
-continue waiting for this review or approves the retry in step 5. Review
-output on the same head does not establish acknowledgement of this comment.
+For standalone, poll for an `eyes` reaction at 5-10 second intervals for up
+to 120 seconds. For delivery, use the comment's provider `created_at` to
+start the 120-second bound, so a resume uses only the remaining time. Read
+even if the deadline has passed, and count only reactions created within
+the original window, including both endpoints. Run this query with `jq -e`
+on a successful, complete read, passing the comment's `created_at` with
+`--arg posted_at`:
+
+```jq
+if type != "array" or length == 0 or any(.[]; type != "array") then
+  error("expected complete reaction pages")
+else
+  ($posted_at | fromdateiso8601) as $start
+  | [.[][]
+    | select(.content == "eyes")
+    | (.created_at | fromdateiso8601) as $reaction
+    | select($start <= $reaction and $reaction <= ($start + 120))
+    | {user: .user.login, created_at}]
+end
+```
+
+In delivery, keep the 5-10 second polling intervals within the original
+deadline. At or after the deadline, take one bounded read and finish
+without another wait. Record timeout only after a complete read at or after
+the deadline with no eligible reaction. If the read or timestamp evidence
+is unavailable, stop and report acknowledgement as unverified.
+Append verified acknowledgement or timeout to the task log for that comment
+ID. With a timeout, stop unless the user explicitly asks to continue
+waiting for this review or approves the retry in step 5. Review output on
+the same head does not establish acknowledgement of this comment.
 
 ## Delivery trigger intent
 

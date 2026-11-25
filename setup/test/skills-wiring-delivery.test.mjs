@@ -1250,11 +1250,66 @@ test("a recovered Codex post must pass acknowledgement before waiting for review
   assert.match(flat(codex), /Return the verified ID and `created_at` to the cycle for \[acknowledgement\]\(#acknowledge-the-trigger\)/);
   assert.match(acknowledgement, /Use that exact ID for acknowledgement, including on resume\. Reuse verified acknowledgement already recorded for that ID\. Preserve a recorded timeout\./);
   assert.match(acknowledgement, /issues\/comments\/\$comment_id\/reactions/);
-  assert.match(acknowledgement, /use the comment's provider `created_at` to start that bound, so a resume uses only the remaining time/);
+  assert.match(acknowledgement, /use the comment's provider `created_at` to start the 120-second bound, so a resume uses only the remaining time/);
+  assert.match(acknowledgement, /At or after the deadline, take one bounded read and finish without another wait\./);
+  assert.match(acknowledgement, /Record timeout only after a complete read at or after the deadline with no eligible reaction\./);
+  assert.match(acknowledgement, /If the read or timestamp evidence is unavailable, stop and report acknowledgement as unverified\./);
   assert.match(acknowledgement, /With a timeout, stop unless the user explicitly asks to continue waiting for this review or approves the retry in step 5/);
   assert.match(acknowledgement, /Review output on the same head does not establish acknowledgement of this comment/);
   assert.match(cycle, /With a verified comment ID, resume step 3 at acknowledgement on that ID\. Enter step 4 only with its verified acknowledgement or explicit user approval to continue waiting for its review\. Post only when the current round's request has yet to start\./);
   assert.match(cycle, /Apply the same acknowledgement gate to the replacement comment/);
+});
+
+test("the documented Codex reaction read recovers only evidence inside the original window", async (t) => {
+  const codex = await readText(path.join(repoRoot, "skills", "local", "github-pr-review-request", "references", "codex.md"));
+  const acknowledgement = codex.match(/## Acknowledge the trigger\n[\s\S]*?(?=\n## )/)?.[0] ?? "";
+  const read = acknowledgement.match(/```bash\n([^`]+)```/)?.[1];
+  const filter = acknowledgement.match(/```jq\n([^`]+)```/)?.[1];
+  assert.ok(read && filter, "missing the documented reaction read or filter");
+  const readWithFixture = [
+    "gh() { printf '%s\\0' \"$@\" >&2; printf '%s\\n' \"$fixture\"; return \"$read_status\"; }",
+    read,
+  ].join("\n");
+  const host = "github.example.com";
+  const posted = "2026-01-01T00:00:00Z";
+  const reaction = (created_at, content = "eyes") => ({ content, created_at, user: { login: "review-bot" } });
+  const onTime = [posted, "2026-01-01T00:00:10Z", "2026-01-01T00:02:00Z"];
+  const late = reaction("2026-01-01T00:02:01Z");
+  const cases = [
+    { pages: [[late, reaction("2025-12-31T23:59:59Z")], onTime.map((time) => reaction(time))], expected: onTime },
+    { pages: [[late, reaction(posted, "thumbs-up")]], expected: [] },
+    { pages: [[]], expected: [] },
+    { pages: [[reaction(posted)]], readStatus: 1 },
+    { pages: [], filterError: /expected complete reaction pages/ },
+    { pages: [[reaction("unknown")]], filterError: /does not match format/ },
+  ];
+  for (const { pages, expected, readStatus = 0, filterError } of cases) {
+    const fetched = spawnSync("bash", ["-c", readWithFixture], {
+      env: { ...process.env, BASH_ENV: "", host, owner: "sample", repo: "project", comment_id: "101",
+        fixture: JSON.stringify(pages), read_status: String(readStatus) },
+      encoding: "utf8", timeout: 5000,
+    });
+    if (fetched.error?.code === "ENOENT") { t.skip("bash unavailable"); return; }
+    assert.ifError(fetched.error);
+    assert.equal(fetched.status, readStatus);
+    assert.deepEqual(fetched.stderr.split("\0").slice(0, -1), [
+      "api", "--hostname", host, "--method", "GET", "--paginate", "--slurp",
+      "repos/sample/project/issues/comments/101/reactions", "-H", "Accept: application/vnd.github+json", "-f", "content=eyes",
+    ]);
+    if (fetched.status !== 0) continue;
+    const filtered = spawnSync("jq", ["-e", "--arg", "posted_at", posted, filter], {
+      input: fetched.stdout, encoding: "utf8", timeout: 5000,
+    });
+    if (filtered.error?.code === "ENOENT") { t.skip("jq unavailable"); return; }
+    assert.ifError(filtered.error);
+    if (filterError) {
+      assert.notEqual(filtered.status, 0);
+      assert.match(filtered.stderr, filterError);
+    } else {
+      assert.equal(filtered.status, 0, filtered.stderr);
+      assert.deepEqual(JSON.parse(filtered.stdout).map(({ created_at }) => created_at), expected);
+    }
+  }
 });
 
 test("the documented Codex trigger uses the create response and passes the body literally", async (t) => {
@@ -1291,8 +1346,9 @@ test("the documented Codex trigger uses the create response and passes the body 
 
 test("the documented Codex recovery query matches only an exact new intent on all pages", async (t) => {
   const codex = await readText(path.join(repoRoot, "skills", "local", "github-pr-review-request", "references", "codex.md"));
-  assert.match(flat(codex), /--paginate --slurp .*application\/vnd\.github\.raw\+json/);
-  const filter = codex.match(/```jq\n([^`]+)```/)?.[1];
+  const recovery = codex.match(/## Recover a delivery trigger\n[\s\S]*?(?=\n## )/)?.[0] ?? "";
+  assert.match(flat(recovery), /--paginate --slurp .*application\/vnd\.github\.raw\+json/);
+  const filter = recovery.match(/```jq\n([^`]+)```/)?.[1];
   assert.ok(filter, "missing the documented recovery query");
   const uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const issueUrl = "https://github.example.com/api/v3/repos/sample/project/issues/51";
