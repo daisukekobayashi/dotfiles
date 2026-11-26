@@ -1,6 +1,6 @@
 {
   "skill_name": "maintain-verification-skill",
-  "supporting_skills": ["create-verification-skill", "prove-it-works"],
+  "supporting_skills": ["create-verification-skill", "principle-prove-it-works"],
   "evals": [
     {
       "id": 1,

@@ -1,7 +1,8 @@
 ---
-name: explain-the-number
+name: principle-explain-the-number
 description: Consult before you measure, and before you trust, report, or act on a number you measured, such as a speedup, regression, throughput, latency, or eval result. Find what limits it, and rule out that it measured something other than the intended work.
 license: MIT
+disable-model-invocation: true
 ---
 
 # Explain the Number
@@ -34,8 +35,8 @@ across trials and models, and whether the scenario matters.
 ## Source
 
 Adapted from Lauren Tan's [pstack Explain the Number](https://github.com/cursor/plugins/blob/0b46ec399d55f2829e88822998f53b84944837d3/pstack/skills/principle-explain-the-number/SKILL.md).
-Local changes: the `principle-` prefix is dropped from the name; the principle
-can be consulted without explicit invocation; it refers to `benchmark-checklist`
-as a workflow the user invokes instead of running it, and reports unchecked
-questions as gaps. The principle and the checklist stay two skills, one per
+Local changes: it refers to `benchmark-checklist` as a workflow the user
+invokes instead of running it, and reports unchecked questions as gaps. Like
+upstream, this leaf is reached through the `principles` index or by explicit
+invocation. The principle and the checklist stay two skills, one per
 upstream skill. See [LICENSE](LICENSE).

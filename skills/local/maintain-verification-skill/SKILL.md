@@ -86,7 +86,7 @@ An unexpected result alone is not proof of an intentional behavior change.
 Ground changed expectations in an explicit requirement, specification, or
 recorded decision. Preserve unresolved coverage in the map.
 
-Use [prove-it-works](../prove-it-works/SKILL.md) before reporting. Review the
+Use [principle-prove-it-works](../principle-prove-it-works/SKILL.md) before reporting. Review the
 diff and report one outcome:
 
 - **clean:** all mapped features ran successfully and no correction was needed.

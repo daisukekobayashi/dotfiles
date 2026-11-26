@@ -15,7 +15,7 @@ report claims. A caller must
 forward that request and exact target under the verification step of
 `delivery-common`'s Worker Dialogue.
 A generic performance question or a reference from another skill, including
-[explain-the-number](../explain-the-number/SKILL.md), does not activate this
+[principle-explain-the-number](../principle-explain-the-number/SKILL.md), does not activate this
 workflow.
 
 Use it when you produce a performance number: a change's before and after, a
@@ -71,8 +71,8 @@ files in the evidence directory the caller gives, outside the worktree.
   feeds, the result that would change it, and the noise floor. Take the floor
   from earlier recorded runs; without them, write it as a stated estimate,
   which question 5's measured spread then checks. This is the first rule of
-  explain-the-number, required here because an explicit run does not load
-  that principle.
+  principle-explain-the-number, required here because an explicit run does
+  not load that principle.
 - Write down the claim you expect to make, in the words you would ship
   ("export is 30% faster at p50 on the 60k-row dataset"). The questions test
   that sentence.
@@ -158,5 +158,5 @@ with an estimated floor checked against the measured spread; tools named as
 examples with platform equivalents; evidence kept in existing notes rather than
 new artifacts; and the upstream "Other perf material" section dropped, because
 its Perf issue and Hillclimb playbooks have no local equivalent. The principle
-stays a separate skill, [explain-the-number](../explain-the-number/SKILL.md).
+stays a separate skill, [principle-explain-the-number](../principle-explain-the-number/SKILL.md).
 See [LICENSE](LICENSE).

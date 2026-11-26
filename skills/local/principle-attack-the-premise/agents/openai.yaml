@@ -1,0 +1,6 @@
+interface:
+  display_name: "Attack the Premise"
+  short_description: "Test the shared premise of repeated failed fixes"
+
+policy:
+  allow_implicit_invocation: false

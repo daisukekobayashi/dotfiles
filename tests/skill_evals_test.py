@@ -74,7 +74,7 @@ class SkillEvaluationTests(unittest.TestCase):
                         guidance = workspace / ".guidance/skills"
                         self.assertEqual(guidance.exists(), variant == "with-skill")
                         if guidance.exists():
-                            self.assertTrue((guidance / "prove-it-works/SKILL.md").is_file())
+                            self.assertTrue((guidance / "principle-prove-it-works/SKILL.md").is_file())
                             self.assertTrue((guidance / "create-verification-skill/references/verification-contract.md").is_file())
                             self.assertFalse((guidance / "maintain-verification-skill/evals").exists())
                         (workspace / "app.py").write_text("local change\n")
@@ -725,7 +725,7 @@ class SkillEvaluationTests(unittest.TestCase):
 
     def test_old_snapshot_is_supplied_without_the_judging_cases(self):
         bundle = self.root / "snapshot"
-        for name in ("maintain-verification-skill", "prove-it-works", "create-verification-skill"):
+        for name in ("maintain-verification-skill", "principle-prove-it-works", "create-verification-skill"):
             shutil.copytree(ROOT / "skills/local" / name, bundle / name,
                             ignore=shutil.ignore_patterns("evals"))
         old_skill = bundle / "maintain-verification-skill"

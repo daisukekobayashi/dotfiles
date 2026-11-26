@@ -34,7 +34,7 @@ teardown() {
   teardown_test_env
 }
 
-@test "base user profile installs all thirteen pstack-adapted local skills for both agents" {
+@test "base user profile installs all nineteen pstack-adapted local skills for both agents" {
   run env \
     SETUP_HOME="${TEST_HOME}" \
     SETUP_TMPDIR="${TEST_TMP}" \
@@ -54,17 +54,24 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const [root, homeDir, repoRoot] = process.argv.slice(2);
+const leaves = [
+  "principle-attack-the-premise", "principle-encode-lessons-in-structure",
+  "principle-explain-the-number", "principle-fix-root-causes", "principle-laziness-protocol",
+  "principle-prove-it-works", "principle-redesign-from-first-principles",
+  "principle-subtract-before-you-add",
+];
 const expected = [
   "architect", "arena", "benchmark-checklist", "blast-radius", "create-verification-skill",
-  "encode-lessons-in-structure", "evaluate-skill", "explain-the-number", "how", "interrogate",
-  "maintain-verification-skill", "prove-it-works", "why",
+  "evaluate-skill", "how", "interrogate", "maintain-verification-skill", ...leaves, "principles",
+  "why",
 ];
 // Codex keeps every workflow below explicit-only. Claude Code drops
 // disable-model-invocation for a workflow that delivery runs as its step,
 // which then guards that exception in its description and body.
+// The principle leaves are reached through the principles index or by explicit invocation.
 const codexExplicitOnly = new Set([
   "arena", "benchmark-checklist", "blast-radius", "create-verification-skill", "evaluate-skill",
-  "interrogate", "maintain-verification-skill",
+  "interrogate", "maintain-verification-skill", ...leaves,
 ]);
 const deliveryStep = new Set(["arena", "benchmark-checklist", "blast-radius", "evaluate-skill"]);
 const claudeExplicitOnly = new Set([...codexExplicitOnly].filter((name) => !deliveryStep.has(name)));
@@ -134,8 +141,11 @@ JS
   [ "$(cat skills-lock.json)" = '{"existing":"lock"}' ]
   for agent_dir in .agents .claude; do
     for skill in architect arena benchmark-checklist blast-radius create-verification-skill \
-      encode-lessons-in-structure evaluate-skill explain-the-number how interrogate \
-      maintain-verification-skill prove-it-works why; do
+      evaluate-skill how interrogate maintain-verification-skill \
+      principle-attack-the-premise principle-encode-lessons-in-structure \
+      principle-explain-the-number principle-fix-root-causes principle-laziness-protocol \
+      principle-prove-it-works principle-redesign-from-first-principles \
+      principle-subtract-before-you-add principles why; do
       [ -L "${agent_dir}/skills/${skill}" ]
       [ -f "${agent_dir}/skills/${skill}/SKILL.md" ]
     done

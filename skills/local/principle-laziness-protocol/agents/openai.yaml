@@ -1,0 +1,6 @@
+interface:
+  display_name: "Laziness Protocol"
+  short_description: "Prefer one source of truth and the smallest diff"
+
+policy:
+  allow_implicit_invocation: false

@@ -73,7 +73,7 @@ the check can detect the failure. Run against the actual changed code and
 capture the command, input identity, result, and relevant output. Do not replace
 a failed check with one that merely passes.
 
-Use [prove-it-works](../prove-it-works/SKILL.md) to assess the evidence. Stop
+Use [principle-prove-it-works](../principle-prove-it-works/SKILL.md) to assess the evidence. Stop
 processes you started and retain useful evidence. In delivery the coordinator
 owns cleanup of the isolated worktree and the handoff of repro files.
 

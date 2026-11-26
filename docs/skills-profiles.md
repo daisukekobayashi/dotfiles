@@ -304,7 +304,9 @@ drops such a link.
 
 [ADR 0001](adr/0001-pstack-principles-in-delivery.md) records how pstack
 principles and optional pstack workflows are to enter the shared delivery
-policy; the text above describes current behavior.
+policy, and [ADR 0004](adr/0004-adopt-pstack-principles-through-an-index.md)
+how the principles themselves are adopted; the text above describes current
+behavior.
 
 ### Shared Scripts
 
@@ -527,7 +529,7 @@ Include:
 - `repo-execution-context`, `change-review`, `change-adversarial-review`, `change-security-review`, and runtime isolation local skills
 - `delivery-common` for the shared worker dialogue, committed-snapshot local review procedure, risk tier, and delivery completion policy
 - `shared-understanding`, which before design preflight reads an issue or Work Item back to the user with a before/after example and settles with them what it decides and what it leaves undecided
-- the thirteen local skills adapted from Lauren Tan's pstack, described under [Adapted from pstack](#adapted-from-pstack)
+- the nineteen local skills adapted from Lauren Tan's pstack, described under [Adapted from pstack](#adapted-from-pstack)
 - `git-commit`
 
 Matt Pocock `misc`, `personal`, `in-progress`, and `deprecated` skills are not included.
@@ -537,7 +539,7 @@ Use `base,github` when you want the previous GitHub-enabled baseline.
 
 #### Adapted from pstack
 
-`base` includes thirteen local adaptations of Lauren Tan's pstack. They add no
+`base` includes nineteen local adaptations of Lauren Tan's pstack. They add no
 external packages, plugin hooks, model settings, or default routing. Existing
 `tdd` and `teach` skills keep their names and owners.
 
@@ -546,7 +548,7 @@ These skills formed a separate `pstack` profile until
 `base`, because delivery in `base` runs `architect` and `arena` as optional
 workflows. This replaces the option that
 [ADR 0001](adr/0001-pstack-principles-in-delivery.md) considered and rejected,
-moving `how`, `why`, and `prove-it-works` into `base`. No `pstack` profile
+moving `how`, `why`, and `prove-it-works` (now `principle-prove-it-works`) into `base`. No `pstack` profile
 remains, and `--profile ...,pstack` fails as an unknown profile.
 
 | Skill | Responsibility |
@@ -561,9 +563,15 @@ remains, and `--profile ...,pstack` fails as an unknown profile.
 | `maintain-verification-skill` | Reconcile an existing verification skill with source and live behavior, preserving product contracts. |
 | `evaluate-skill` | Coordinate isolated skill comparisons, blinded grading, and evidence-based recommendations on either agent. |
 | `benchmark-checklist` | Explicitly requested vetting of a performance measurement: limiter, tuning, limits, errors, repeatability, relevance, and whether the work ran. |
-| `prove-it-works` | Shared principle for matching completion claims to observed behavior. |
-| `encode-lessons-in-structure` | Shared principle for preventing evidenced recurring failures with focused safeguards. |
-| `explain-the-number` | Shared principle for finding what limits a measured number and what else it could be measuring before trusting it. |
+| `principles` | Index of pstack's 24 principles: when each applies, and whether it is a leaf, covered by an existing skill or rule, not adopted, or deferred until evidence. |
+| `principle-prove-it-works` | Leaf: match completion claims to observed behavior. |
+| `principle-encode-lessons-in-structure` | Leaf: prevent evidenced recurring failures with focused safeguards. |
+| `principle-explain-the-number` | Leaf: find what limits a measured number and what else it could be measuring before trusting it. |
+| `principle-attack-the-premise` | Leaf: write down and test the premise that repeated failed fixes share. |
+| `principle-subtract-before-you-add` | Leaf: remove complexity before building on it. |
+| `principle-laziness-protocol` | Leaf: one source of truth and the smallest diff. |
+| `principle-fix-root-causes` | Leaf: fix the first fault, not where it surfaced. |
+| `principle-redesign-from-first-principles` | Leaf: integrate a requirement as if it were foundational. |
 
 Example invocations: `$how trace this request`, `$why was this state persisted?`,
 `$architect design this interface`, `$arena compare these approaches`,
@@ -572,8 +580,15 @@ Example invocations: `$how trace this request`, `$why was this state persisted?`
 `$maintain-verification-skill for this app`,
 `$evaluate-skill maintain-verification-skill`, and
 `$benchmark-checklist vet this speedup`. Claude Code exposes installed skills
-through its own invocation interface. The three principles can be consulted
-directly or by the workflow skills.
+through its own invocation interface. Agents reach the principles through
+the `principles` index, which they consult by its description; the eight
+`principle-*` leaves are explicit-only, as upstream, and are read from the
+index or linked by the workflow skills. The index and its leaves record their
+adoption in [ADR 0004](adr/0004-adopt-pstack-principles-through-an-index.md).
+`principle-prove-it-works`, `principle-encode-lessons-in-structure`, and
+`principle-explain-the-number` were named `prove-it-works`,
+`encode-lessons-in-structure`, and `explain-the-number` before #318; rerun the
+skills setup so the installed links follow the new names.
 
 How delivery uses these skills is decided in
 [ADR 0001](adr/0001-pstack-principles-in-delivery.md). Delivery runs one of these
@@ -626,9 +641,8 @@ Use `$skill-name` in Codex or `/skill-name` in Claude Code. References from
 another skill do not activate these workflows; `architect` compares alternatives
 directly unless the user explicitly invokes `arena`.
 
-`how`, `why`, and `architect` remain discoverable by their task descriptions.
-The three principles can be consulted when relevant or by another workflow.
-Availability does not mean every task runs all thirteen workflows. Parallel
+`how`, `why`, `architect`, and `principles` remain discoverable by their task
+descriptions. Availability does not mean every task runs all nineteen skills. Parallel
 candidates/reviewers are bounded and conditional; unavailable delegation is
 reported as a limitation, not simulated independence.
 
@@ -667,16 +681,18 @@ execution, grading, and synthesis, with its preparation helper bundled inside
 the skill. It uses independent fixtures and common criteria for both agents. Preparing fixtures or
 validating metadata does not establish that either model followed the workflow.
 
-`arena`, `interrogate`, `create-verification-skill`, `benchmark-checklist`, and
-`explain-the-number` follow upstream revision
+`arena`, `interrogate`, `create-verification-skill`, `benchmark-checklist`,
+`principles`, `principle-explain-the-number`, and the five leaves added with
+the index follow upstream revision
 [`0b46ec399d55f2829e88822998f53b84944837d3`](https://github.com/cursor/plugins/tree/0b46ec399d55f2829e88822998f53b84944837d3/pstack).
 The other six of the original nine adaptations use upstream revision
 [`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack);
 their upstream changes through `0b46ec3` were compared and not adopted.
 Each skill includes its source link, local adaptation rationale, and Lauren Tan's
-MIT license. The upstream `principle-prove-it-works`,
-`principle-encode-lessons-in-structure`, and `principle-explain-the-number`
-names are shortened locally. `explain-the-number` refers to
+MIT license. The leaves keep the upstream `principle-` names. `principles`
+adapts the Principles section of upstream `poteto-mode`. The five leaves added
+with the index keep the upstream text and list where local rules win in their
+`Source` sections. `principle-explain-the-number` refers to
 `benchmark-checklist` as a workflow the user invokes and does not run it.
 The maintenance and evaluation skills record their source revisions in their
 entrypoints. `evaluate-skill` adapts the upstream Eval playbook as a standalone
