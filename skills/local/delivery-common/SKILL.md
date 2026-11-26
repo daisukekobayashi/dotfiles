@@ -159,8 +159,10 @@ explanation or gaps, and the latest `benchmark-checklist` status.
 [Performance claims](references/local-review.md#performance-claims) in Local
 Review runs `benchmark-checklist` on the claims at the pinned worker head as an
 optional workflow. A claim first written after that step, such as in the PR
-body, gets only this rule: cite that head's evidence or label it
-`inconclusive`; it launches no run. A delivery with no claimed number never
+title or body, gets only this rule: cite that head's evidence or label it
+`inconclusive`; it launches no run. [Brief the
+agent](references/phase-delegation.md#brief-the-agent) carries this rule to
+the agent that publishes. A delivery with no claimed number never
 runs it. [Worker Dialogue](references/worker-dialogue.md) and Local Review link
 this section instead of restating it.
 

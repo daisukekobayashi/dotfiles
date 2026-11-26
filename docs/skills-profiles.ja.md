@@ -572,10 +572,12 @@ High tier の Local Review では、利用できる場合に
 delivery 自身の出力が、時間やトークン消費量の比較など、高速化や性能低下の数値を主張する場合は、
 [Performance Claims](../skills/local/delivery-common/SKILL.md#performance-claims)
 に従い、その数値の実行回数・ばらつき・律速要因を示すか、未確認の項目を明記して
-inconclusive と表示します。さらに Local Review では全 tier で、固定した worker head と
-記録した base に対して
+inconclusive と表示します。Local Review の時点で主張があれば、tier に関係なく、固定した
+worker head と記録した base に対して
 [benchmark-checklist](../skills/local/delivery-common/references/local-review.md#performance-claims)
-を full モードで30分以内に実行します。数値の主張がない delivery では実行しません。
+を full モードで30分以内に実行します。未インストール・利用不可・オプトアウトの場合は
+not run として報告します。PR 本文など後から書かれた主張にはルールだけを適用し、
+数値の主張がない delivery では checklist を実行しません。
 ADR 0001 の残りは子 issue で管理しています。
 
 `arena`・`interrogate`・`blast-radius`・`create-verification-skill`・

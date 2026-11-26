@@ -601,10 +601,13 @@ When a delivery's own output claims a speedup or regression number, such as a
 time or token-consumption comparison, delivery requires the number's run
 count, spread, and limiter, or labels it inconclusive with named gaps, under
 [Performance Claims](../skills/local/delivery-common/SKILL.md#performance-claims).
-At every tier, Local Review then runs
+When such a claim exists at the Local Review step, at any tier, Local Review
+runs
 [benchmark-checklist](../skills/local/delivery-common/references/local-review.md#performance-claims)
 in full mode on the pinned worker head and its recorded base, within 30
-minutes. A delivery with no claimed number never runs it.
+minutes, and reports it as not run when it is not installed, unavailable, or
+opted out. A claim first written later, such as in the PR body, gets the rule
+only, and a delivery with no claimed number never runs the checklist.
 Remaining ADR 0001 work is tracked in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
