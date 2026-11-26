@@ -168,7 +168,7 @@ obtain required approval before removing worktrees or branches during cleanup.
 
 - Do not assume cross-project Work Items.
 - If no Work Item ID is provided, stop and ask for one.
-- Do not commit or push without explicit approval.
+- Commit and push only as the applicable approval rules allow.
 - Dependency changes and manifest or lockfile edits require explicit approval;
   restoration from existing manifests and lockfiles follows repository rules.
 - If setup, tests, or worktree creation fails, stop and report the failure.

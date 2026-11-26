@@ -27,7 +27,9 @@ Review 行の run-to-prove の部分は [#245](https://github.com/daisukekobayas
 pstack の考え方は2つの原則にまとめられます。代理の指標ではなく実物を確かめること、
 繰り返す誤りを構造で防ぐことです。どちらもすでに `ai-rules/base/global.md` の
 グローバルルール（「Match completion claims to observed evidence ...」と「When the
-same confirmed failure recurs, prefer a small safeguard near its cause ...」）として
+same confirmed failure recurs, write down the premise the failed fixes share and
+first consider removing the mechanism behind it, then a small safeguard near its
+cause ...」）として
 すべての agent に適用されています。以下のルールはこの基準を delivery の各フェーズ向けに
 具体化するもので、置き換えるものではありません。
 

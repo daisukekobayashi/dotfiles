@@ -39,3 +39,19 @@ teardown() {
   [[ "$(cat "${output_path}")" == *"Sources: ai-rules/base/global.md"* ]]
   [[ ! "$(cat "${output_path}")" == *"Codex Overrides"* ]]
 }
+
+@test "global rules keep the approval tiers within the size budget" {
+  local output_path
+  local base_file
+  output_path="${TEST_TMP}/AGENTS.md"
+  base_file="$(repo_root)/ai-rules/base/global.md"
+
+  run bash "$(repo_root)/ai-rules/scripts/compose-rules.sh" codex "${output_path}"
+
+  [ "$status" -eq 0 ]
+  [[ "$(cat "${output_path}")" == *"- Local and reversible, proceed and report:"* ]]
+  [[ "$(cat "${output_path}")" == *"- Outward, one user approval per workflow and target,"* ]]
+  [[ "$(cat "${output_path}")" == *"- Irreversible or high impact, explicit user approval each time:"* ]]
+  [ "$(wc -l < "${base_file}")" -le 100 ]
+  [ "$(wc -w < "${base_file}")" -le 1287 ]
+}
