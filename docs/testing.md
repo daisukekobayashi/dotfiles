@@ -41,10 +41,13 @@ Git supplies new and changed file contents directly from its index or object
 database. The checkout, unstaged changes and candidate scanner configuration
 cannot change those inputs. CI scans branch pushes and pull requests. It checks
 each selected commit, including intermediate commits and merge changes compared
-with the first parent. It uses the push before/after or PR base/head SHA, and
-uses the comparison URL for a first branch push, accepting unambiguous Git
-object abbreviations. If GitHub does not supply a comparison base that Git can
-resolve, open a PR to run the check with its base and head.
+with the first parent. It uses the push before/after or PR base/head SHA. A
+first branch push has no before SHA, so CI scans the commits that the fetched
+default branch does not contain, and treats commits reachable from that branch
+as already scanned. It first checks that the remote's default branch is still
+the one the event names. A first push of the default branch itself, a remote
+default branch that differs or cannot be read, or a checkout without the
+fetched default branch has no such base and is reported as incomplete.
 If a required object or range cannot be verified, CI reports the scan as
 incomplete. Commit messages, tags, old history sweeps and the contents of other
 repositories linked as submodules are outside this check. Review changes to
