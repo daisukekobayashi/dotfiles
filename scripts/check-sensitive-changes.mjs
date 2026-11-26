@@ -80,16 +80,6 @@ function readCommit(value, { fetch = false } = {}) {
   return id;
 }
 
-function resolveCompareOid(prefix, fullLength) {
-  if (prefix.length === fullLength) return prefix;
-  // Resolve only object IDs. Git's revision parser can also resolve same-named refs.
-  const matches = git(["rev-parse", `--disambiguate=${prefix}`])
-    .toString().trim().split("\n").filter(Boolean);
-  expect(matches.length === 1 && matches[0].startsWith(prefix),
-    "A first branch push comparison object is missing or ambiguous.");
-  return oid(matches[0]);
-}
-
 function eventSelection() {
   const eventName = process.env.GITHUB_EVENT_NAME;
   let event;
@@ -108,7 +98,7 @@ function eventSelection() {
 
   let base;
   let head;
-  let compare;
+  let firstPush = false;
   if (eventName === "pull_request") {
     const pull = event.pull_request;
     expect(pull?.base?.repo?.full_name === repository, "The pull request base repository does not match.");
@@ -125,22 +115,21 @@ function eventSelection() {
     expect(head === process.env.GITHUB_SHA, "The push head does not match the event SHA.");
     base = oid(event.before);
     if (/^0+$/.test(base)) {
-      const prefix = `${process.env.GITHUB_SERVER_URL}/${repository}/compare/`;
-      compare = typeof event.compare === "string" && event.compare.startsWith(prefix)
-        ? event.compare.slice(prefix.length).split("...") : [];
-      expect(event.created === true && compare.length === 2 &&
-        compare.every((value) => /^[a-f0-9]{4,64}$/.test(value) && value.length <= head.length),
-      "A first branch push has no exact comparison base in the event. Open a pull request to scan the branch.");
+      expect(event.created === true, "A push without a previous head must be a branch creation.");
+      // The fetched default branch is already scanned. Its own first push has no such base.
+      expect(event.ref !== defaultRef, "A first push of the default branch has no scanned comparison base.");
+      firstPush = true;
     }
   }
 
   expect(git(["rev-parse", "--is-shallow-repository"]).toString().trim() === "false",
     "A shallow checkout cannot establish the complete event range.");
   head = readCommit(head, { fetch: true });
-  if (compare) {
-    expect(resolveCompareOid(compare[1], head.length) === head,
-      "A first branch push comparison does not match the event head.");
-    base = resolveCompareOid(compare[0], head.length);
+  if (firstPush) {
+    const resolved = gitResult(["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${branch}^{commit}`]);
+    expect(resolved.status === 0,
+      "A first branch push needs the fetched default branch as its comparison base.");
+    base = oid(resolved.stdout.toString().trim());
   }
   base = readCommit(base, { fetch: true });
   const commits = git(["rev-list", "--reverse", "--topo-order", "--parents", head, `^${base}`])

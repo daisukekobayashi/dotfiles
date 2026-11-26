@@ -262,29 +262,29 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   const middle = f.commit("middle");
   f.write("payload.txt", "visible final state\n");
   const head = f.commit("head");
-  f.git("update-ref", "refs/remotes/origin/main", head);
-  const first = f.event("0".repeat(40), head, {
-    created: true, compare: `${server}/${repository}/compare/${base}...${head}`,
-  }, firstRef);
-  const output = f.scan("ci", first);
+  // GitHub reports a branch creation with an all-zero before and a compare
+  // URL that names no commits. The scan ignores that URL.
+  const created = { created: true, compare: `${server}/${repository}/compare/topic` };
+  f.git("update-ref", "refs/remotes/origin/main", base);
+  const output = f.scan("ci", f.event("0".repeat(40), head, created, firstRef));
   assert.equal(output.code, 21, output.output);
   assert.ok(output.output.includes(`finding secret:fixture ${middle}`));
-  const shortened = f.scan("ci", f.event("0".repeat(40), head, {
-    created: true, compare: `${server}/${repository}/compare/${base.slice(0, 12)}...${head.slice(0, 12)}`,
-  }, firstRef));
-  assert.deepEqual(shortened, output);
-  for (const [compare, reason] of [
-    [`${server}/other/dotfiles/compare/${base}...${head}`, /no exact comparison base/],
-    [`${server}/${repository}/compare/${base}...${middle.slice(0, 12)}`, /does not match the event head/],
-    [`${server}/${repository}/compare/deadbeef00...${head}`, /missing or ambiguous/],
+  for (const [extras, ref, reason] of [
+    [{ compare: created.compare }, firstRef, /must be a branch creation/],
+    [created, defaultRef, /first push of the default branch/],
   ]) {
-    const invalid = f.scan("ci", f.event("0".repeat(40), head, { created: true, compare }, firstRef));
+    const invalid = f.scan("ci", f.event("0".repeat(40), head, extras, ref));
     assert.equal(invalid.code, 2, invalid.output);
     assert.match(invalid.output, reason);
   }
-  const bad = f.scan("ci", f.event("0".repeat(40), head, { created: true, compare: `${server}/${repository}/commit/${head}` }, firstRef));
-  assert.equal(bad.code, 2, bad.output);
-  assert.match(bad.output, /no exact comparison base/);
+  f.git("update-ref", "-d", "refs/remotes/origin/main");
+  const unfetched = f.scan("ci", f.event("0".repeat(40), head, created, firstRef));
+  assert.equal(unfetched.code, 2, unfetched.output);
+  assert.match(unfetched.output, /needs the fetched default branch/);
+  f.git("update-ref", "refs/remotes/origin/main", head);
+  const merged = f.scan("ci", f.event("0".repeat(40), head, created, firstRef));
+  assert.equal(merged.code, 0, merged.output);
+  assert.match(merged.output, /sensitive changes: clean/);
 
   const pr = f.event(base, head, { pull_request: {
     base: { sha: base, repo: { full_name: repository } },
@@ -300,24 +300,6 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   const missing = f.scan("ci", f.event("1".repeat(40), head, {}, firstRef));
   assert.equal(missing.code, 2, missing.output);
   assert.match(missing.output, /event commit is missing/);
-
-  const prefix = base.slice(0, 4);
-  const hash = base.length === 40 ? "sha1" : "sha256";
-  let collision;
-  for (let index = 0; index < 1_500_000 && !collision; index += 1) {
-    const sample = `inert Git object ${index}`;
-    if (createHash(hash).update(`blob ${sample.length}\0${sample}`).digest("hex").startsWith(prefix)) {
-      collision = sample;
-    }
-  }
-  assert.ok(collision, "the fixture needs two objects with the same prefix");
-  f.write(".git/collision-fixture", collision);
-  f.git("hash-object", "-w", ".git/collision-fixture");
-  const ambiguous = f.scan("ci", f.event("0".repeat(40), head, {
-    created: true, compare: `${server}/${repository}/compare/${prefix}...${head}`,
-  }, firstRef));
-  assert.equal(ambiguous.code, 2, ambiguous.output);
-  assert.match(ambiguous.output, /missing or ambiguous/);
 });
 
 test("CI checks merge resolutions for secrets and ignores local denylist inputs", { skip: windows }, (t) => {
