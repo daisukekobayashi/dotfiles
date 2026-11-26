@@ -43,9 +43,11 @@ cannot change those inputs. CI scans branch pushes and pull requests. It checks
 each selected commit, including intermediate commits and merge changes compared
 with the first parent. It uses the push before/after or PR base/head SHA. A
 first branch push has no before SHA, so CI scans the commits that the fetched
-default branch does not contain. The default branch's own pushes scanned the
-rest. A first push of the default branch itself, or a checkout without the
-fetched default branch, has no such base and is reported as incomplete.
+default branch does not contain, and treats commits reachable from that branch
+as already scanned. It first checks that the remote's default branch is still
+the one the event names. A first push of the default branch itself, a remote
+default branch that differs or cannot be read, or a checkout without the
+fetched default branch has no such base and is reported as incomplete.
 If a required object or range cannot be verified, CI reports the scan as
 incomplete. Commit messages, tags, old history sweeps and the contents of other
 repositories linked as submodules are outside this check. Review changes to

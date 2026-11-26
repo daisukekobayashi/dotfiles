@@ -75,6 +75,17 @@ function fixture(t) {
       }
     }
   `);
+  // A remote helper answers `ls-remote` as the test configures it.
+  writeFileSync(path.join(bin, "git-remote-fixture"), `#!/bin/sh
+[ -z "$DOTFILES_TEST_REMOTE_FAIL" ] || exit 1
+while read -r line; do
+  case "$line" in
+    capabilities) printf 'list\\n\\n' ;;
+    list*) printf '@%s HEAD\\n%s %s\\n\\n' "$DOTFILES_TEST_REMOTE_HEAD" "$DOTFILES_TEST_REMOTE_OID" "$DOTFILES_TEST_REMOTE_HEAD" ;;
+    *) exit 0 ;;
+  esac
+done
+`, { mode: 0o700 });
   const gitOnly = path.join(scratch, "git-only");
   if (!windows) {
     const installedGit = spawnSync("/bin/sh", ["-c", "command -v git"], { env: fakeEnv, encoding: "utf8", timeout: 5_000 });
@@ -265,10 +276,18 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   // GitHub reports a branch creation with an all-zero before and a compare
   // URL that names no commits. The scan ignores that URL.
   const created = { created: true, compare: `${server}/${repository}/compare/topic` };
+  f.git("remote", "add", "origin", "fixture::origin");
+  const remote = { DOTFILES_TEST_REMOTE_HEAD: defaultRef, DOTFILES_TEST_REMOTE_OID: base };
+  const firstPush = (extras = {}) => f.scan("ci", { ...f.event("0".repeat(40), head, created, firstRef), ...remote, ...extras });
   f.git("update-ref", "refs/remotes/origin/main", base);
-  const output = f.scan("ci", f.event("0".repeat(40), head, created, firstRef));
+  const output = firstPush();
   assert.equal(output.code, 21, output.output);
   assert.ok(output.output.includes(`finding secret:fixture ${middle}`));
+  for (const extras of [{ DOTFILES_TEST_REMOTE_HEAD: "refs/heads/topic" }, { DOTFILES_TEST_REMOTE_FAIL: "1" }]) {
+    const unmatched = firstPush(extras);
+    assert.equal(unmatched.code, 2, unmatched.output);
+    assert.match(unmatched.output, /remote default branch to match the event/);
+  }
   for (const [extras, ref, reason] of [
     [{ compare: created.compare }, firstRef, /must be a branch creation/],
     [created, defaultRef, /first push of the default branch/],
@@ -278,11 +297,17 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
     assert.match(invalid.output, reason);
   }
   f.git("update-ref", "-d", "refs/remotes/origin/main");
-  const unfetched = f.scan("ci", f.event("0".repeat(40), head, created, firstRef));
+  const unfetched = firstPush();
   assert.equal(unfetched.code, 2, unfetched.output);
   assert.match(unfetched.output, /needs the fetched default branch/);
+  // A revision lookup of the missing ref would resolve this tag and find nothing to scan.
+  f.git("update-ref", "refs/tags/refs/remotes/origin/main", head);
+  const substitute = firstPush();
+  assert.equal(substitute.code, 2, substitute.output);
+  assert.match(substitute.output, /needs the fetched default branch/);
+  f.git("update-ref", "-d", "refs/tags/refs/remotes/origin/main");
   f.git("update-ref", "refs/remotes/origin/main", head);
-  const merged = f.scan("ci", f.event("0".repeat(40), head, created, firstRef));
+  const merged = firstPush();
   assert.equal(merged.code, 0, merged.output);
   assert.match(merged.output, /sensitive changes: clean/);
 

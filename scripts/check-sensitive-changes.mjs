@@ -60,6 +60,8 @@ function text(buffer) {
   }
 }
 
+const remoteProtocols = ["-c", "protocol.file.allow=never", "-c", "protocol.ext.allow=never"];
+
 function oid(value) {
   expect(typeof value === "string" && sha.test(value), "The event does not contain a valid Git object ID.");
   return value;
@@ -69,10 +71,7 @@ function readCommit(value, { fetch = false } = {}) {
   const id = oid(value);
   let result = gitResult(["cat-file", "-t", id]);
   if (result.status !== 0 && fetch) {
-    const fetched = gitResult([
-      "-c", "protocol.file.allow=never", "-c", "protocol.ext.allow=never",
-      "fetch", "--no-tags", "--no-write-fetch-head", "origin", id,
-    ]);
+    const fetched = gitResult([...remoteProtocols, "fetch", "--no-tags", "--no-write-fetch-head", "origin", id]);
     if (fetched.status === 0) result = gitResult(["cat-file", "-t", id]);
   }
   expect(result.status === 0 && result.stdout.toString().trim() === "commit",
@@ -126,17 +125,23 @@ function eventSelection() {
     "A shallow checkout cannot establish the complete event range.");
   head = readCommit(head, { fetch: true });
   if (firstPush) {
-    const resolved = gitResult(["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${branch}^{commit}`]);
+    // The event's default branch must still be the remote's, so its fetched
+    // ref is the branch whose pushes were scanned.
+    const remote = gitResult([...remoteProtocols, "ls-remote", "--symref", "origin", "HEAD"]);
+    expect(remote.status === 0 && remote.stdout.toString().split("\n").includes(`ref: ${defaultRef}\tHEAD`),
+      "A first branch push needs the remote default branch to match the event.");
+    // Read the exact ref. A revision lookup can resolve a same-named tag instead.
+    const resolved = gitResult(["show-ref", "--verify", "--hash", `refs/remotes/origin/${branch}`]);
     expect(resolved.status === 0,
       "A first branch push needs the fetched default branch as its comparison base.");
-    base = oid(resolved.stdout.toString().trim());
+    base = readCommit(resolved.stdout.toString().trim());
   }
   base = readCommit(base, { fetch: true });
   const commits = git(["rev-list", "--reverse", "--topo-order", "--parents", head, `^${base}`])
     .toString().trim().split("\n").filter(Boolean).map((line) => line.split(" ").map(oid));
   return {
     commits,
-    policy: eventName === "push" && event.ref === defaultRef ? base : `refs/remotes/origin/${branch}`,
+    policy: firstPush || (eventName === "push" && event.ref === defaultRef) ? base : `refs/remotes/origin/${branch}`,
   };
 }
 
