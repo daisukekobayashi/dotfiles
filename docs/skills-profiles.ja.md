@@ -560,6 +560,9 @@ skill がリンクで読みます。索引と leaf の採用理由は
 `principle-explain-the-number` は #318 より前は `prove-it-works`・
 `encode-lessons-in-structure`・`explain-the-number` という名前でした。
 インストール済みのリンクを新しい名前に合わせるため、skills の setup を再実行してください。
+`evaluate-skill` は suite の supporting skill を現在の名前で探すため、#318 より前の
+snapshot と比べるときは、その snapshot の supporting skill を新しい `principle-*` の
+名前で置いてください。
 
 delivery でのこれらの skill の使い方は
 [ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) で決めています。

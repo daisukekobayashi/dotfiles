@@ -1,6 +1,6 @@
 ---
 name: principles
-description: Index of the working principles adopted from pstack. Consult when two or more fixes that share one premise have failed, when sizing or sequencing an addition, refactor, or rewrite, when tempted to add an abstraction or layer, when integrating a new requirement into an existing design, when debugging, before declaring work done, before measuring or reporting a measured number, or when the same correction repeats.
+description: Index of the working principles adopted from pstack. Consult when two or more fixes that share one premise have failed; when refactoring, sizing a diff, or sequencing an addition, refactor, or rewrite; when tempted to add an abstraction, layer, or signal threading; when integrating a new requirement into an existing design; when debugging; when planning verification, interpreting whether a check's evidence proves the requested behavior, or before declaring work done; before measuring, and before trusting, reporting, or acting on a measured number such as a speedup, regression, throughput, latency, or eval result; or when the same correction or instruction comes up a second time.
 license: MIT
 ---
 
