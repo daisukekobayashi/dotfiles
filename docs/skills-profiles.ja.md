@@ -283,7 +283,8 @@ Azure DevOps 側を後回しにできるのは、Azure DevOps の API やポリ�
 `setup/test/skills-wiring-delivery.test.mjs` が失敗します。
 
 pstack の原則と任意の pstack workflow を共有 delivery ポリシーにどう組み込むかは
-[ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) に記録しています。
+[ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) に、原則そのものの取り込み方は
+[ADR 0004](adr/0004-adopt-pstack-principles-through-an-index.ja.md) に記録しています。
 上記の記述は現在の動作です。
 
 ### 共有スクリプト
@@ -500,7 +501,7 @@ Profile は JSON にします。Bash で無理に parse せず、Node で処理�
 - `repo-execution-context`、`change-review`、`change-adversarial-review`、`change-security-review`、runtime isolation の local skill
 - worker の草稿とコーディネーターの質問の流れ、commit 済み snapshot のローカルレビュー手順、リスク tier、delivery の完了ポリシーを共有する `delivery-common`
 - design preflight の前に、before/after の具体例を含む概要で issue や Work Item の内容を読み上げ、決めていることと決めていない点をユーザーと合意する `shared-understanding`
-- Lauren Tan の pstack を元にした13個の local skill（[Adapted from pstack](#adapted-from-pstack) を参照）
+- Lauren Tan の pstack を元にした19個の local skill（[Adapted from pstack](#adapted-from-pstack) を参照）
 - `git-commit`
 
 Matt Pocock の `misc`、`personal`、`in-progress`、`deprecated` skill は含めません。
@@ -510,7 +511,7 @@ Superpowers は `base` に含めません。`writing-great-skills` は上流で�
 
 #### Adapted from pstack
 
-`base` には、Lauren Tan の pstack をこの環境の作業範囲と承認ルールに合わせた13個の
+`base` には、Lauren Tan の pstack をこの環境の作業範囲と承認ルールに合わせた19個の
 local skill が含まれます。外部パッケージ、プラグインの hook、モデル設定、既定の
 自動ルーティングは追加しません。既存の `tdd`・`teach` は維持します。
 
@@ -518,7 +519,7 @@ local skill が含まれます。外部パッケージ、プラグインの hook
 `arena` を任意 workflow として実行するため、
 [#271](https://github.com/daisukekobayashi/dotfiles/issues/271) で `base` に移しました。
 これは [ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) が検討して退けた
-「`how`・`why`・`prove-it-works` を `base` に移す」案を置き換えるものです。
+「`how`・`why`・`prove-it-works`（現 `principle-prove-it-works`）を `base` に移す」案を置き換えるものです。
 `pstack` profile はもうなく、`--profile ...,pstack` は未知の profile として失敗します。
 
 | Skill | 責務 |
@@ -533,9 +534,15 @@ local skill が含まれます。外部パッケージ、プラグインの hook
 | `maintain-verification-skill` | 既存の検証手順をソースと実動作に照合して保守し、製品の契約を保つ。 |
 | `evaluate-skill` | 両エージェントで、スキルの候補実行・条件名を伏せた採点・結果の整理を進める。 |
 | `benchmark-checklist` | 明示起動で、性能測定値の律速要因・チューニング・限界・エラー・再現性・影響度・処理の実行有無を確かめる。 |
-| `prove-it-works` | 完了の主張と観測した挙動を対応させる共通原則。 |
-| `encode-lessons-in-structure` | 根拠のある再発パターンを、型・テスト・既存の検査などで防ぐ共通原則。 |
-| `explain-the-number` | 測定値を信頼する前に、律速要因と他に測っている可能性のあるものを確かめる共通原則。 |
+| `principles` | pstack の24原則の索引。原則ごとに、いつ適用するかと、leaf・既存の skill やルールが担う・不採用・根拠待ちのどれかを示す。 |
+| `principle-prove-it-works` | leaf: 完了の主張と観測した挙動を対応させる。 |
+| `principle-encode-lessons-in-structure` | leaf: 根拠のある再発パターンを、型・テスト・既存の検査などで防ぐ。 |
+| `principle-explain-the-number` | leaf: 測定値を信頼する前に、律速要因と他に測っている可能性のあるものを確かめる。 |
+| `principle-attack-the-premise` | leaf: 失敗した修正に共通する前提を書き出し、検証する。 |
+| `principle-subtract-before-you-add` | leaf: 足す前に複雑さを取り除く。 |
+| `principle-laziness-protocol` | leaf: 判断を一か所にまとめ、差分を最小にする。 |
+| `principle-fix-root-causes` | leaf: 症状が出た場所ではなく、最初の誤りを直す。 |
+| `principle-redesign-from-first-principles` | leaf: 新しい要件を、最初からの前提だったように設計に組み込む。 |
 
 呼び出し例は `$how この処理の経路を説明して`、`$why この状態を永続化した理由は？`、
 `$architect このインターフェースを設計して`、`$arena この案を比較して`、
@@ -545,7 +552,17 @@ local skill が含まれます。外部パッケージ、プラグインの hook
 `$evaluate-skill maintain-verification-skill`、
 `$benchmark-checklist この高速化を検証して`。
 Claude Code では、その環境の skill 呼び出し方法を使います。
-共通原則3つは直接参照するほか、各 workflow skill から必要に応じて読みます。
+エージェントは原則に `principles` 索引から届きます。索引は description で参照され、
+8つの `principle-*` leaf は上流と同じく明示起動のみで、索引から読むか、各 workflow
+skill がリンクで読みます。索引と leaf の採用理由は
+[ADR 0004](adr/0004-adopt-pstack-principles-through-an-index.ja.md) に記録しています。
+`principle-prove-it-works`・`principle-encode-lessons-in-structure`・
+`principle-explain-the-number` は #318 より前は `prove-it-works`・
+`encode-lessons-in-structure`・`explain-the-number` という名前でした。
+インストール済みのリンクを新しい名前に合わせるため、skills の setup を再実行してください。
+#318 より前の snapshot と `evaluate-skill` で比べるときは、supporting skill を旧名で
+指定しているその snapshot 自身の suite で旧版を準備し、両方の suite のケース・入力・
+判定基準が同じであることを確かめてください。
 
 delivery でのこれらの skill の使い方は
 [ADR 0001](adr/0001-pstack-principles-in-delivery.ja.md) で決めています。
@@ -596,8 +613,7 @@ Codex では `$skill-name`、Claude Code では `/skill-name` で呼び出しま
 他の skill からの参照だけでは起動しません。`architect` は、ユーザーが
 `arena` を明示起動した場合を除き、自身で設計案を比較します。
 
-`how`・`why`・`architect` はタスクの description に従って選択できます。
-共通原則3つは、必要な場面や他の workflow から参照します。
+`how`・`why`・`architect`・`principles` はタスクの description に従って選択できます。
 登録されている全 skill を毎回実行する構成ではありません。
 候補・レビューの並列実行は条件と上限を設け、利用できない場合は独立性の限界を明示します。
 
@@ -634,7 +650,7 @@ draft とし、検証済み範囲は実際に通した経路に限定します�
 判定基準を使い、環境の準備や設定検証だけで実モデルでの成功とはしません。
 
 `arena`・`interrogate`・`create-verification-skill`・`benchmark-checklist`・
-`explain-the-number` は上流リビジョン
+`principles`・`principle-explain-the-number`、索引と一緒に加えた5つの leaf は上流リビジョン
 [`0b46ec399d55f2829e88822998f53b84944837d3`](https://github.com/cursor/plugins/tree/0b46ec399d55f2829e88822998f53b84944837d3/pstack) に追従しています。
 最初の9スキルのうち残り6つは
 [`12d587dfb20741cafc376c42c696c5f6e2a64487`](https://github.com/cursor/plugins/tree/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack) を参照し、
@@ -643,9 +659,10 @@ draft とし、検証済み範囲は実際に通した経路に限定します�
 保守・評価スキルは自身の本文に参照した上流リビジョンを記載します。
 `evaluate-skill` は上流の Eval playbook を独立したローカルスキルにしたもので、
 上流に同名の独立スキルがあるという意味ではありません。
-上流の `principle-prove-it-works`・`principle-encode-lessons-in-structure`・
-`principle-explain-the-number` は、ローカルでは接頭辞を省略しています。
-`explain-the-number` は `benchmark-checklist` をユーザーが起動する workflow として
+leaf は上流の `principle-` 付きの名前を保ちます。`principles` は上流 `poteto-mode` の
+Principles 節を元にしています。索引と一緒に加えた5つの leaf は上流の本文を保ち、
+ローカルの規則が優先する箇所を `Source` 節に列挙します。
+`principle-explain-the-number` は `benchmark-checklist` をユーザーが起動する workflow として
 示すだけで、自身では実行しません。自動同期するプラグイン fork ではなく、
 上流の変更とローカルの契約を照合して更新する構成です。
 

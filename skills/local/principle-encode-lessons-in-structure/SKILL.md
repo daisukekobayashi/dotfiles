@@ -1,7 +1,8 @@
 ---
-name: encode-lessons-in-structure
+name: principle-encode-lessons-in-structure
 description: Turn an evidenced recurring mistake into a focused structural safeguard such as a type, test, lint rule, or existing check. Consult when the same correction repeats; avoid generalizing a one-off preference.
 license: MIT
+disable-model-invocation: true
 ---
 
 # Encode Lessons in Structure
@@ -34,7 +35,7 @@ that area. Otherwise return a concrete proposal with its location, cost, and
 verification method; do not auto-file an issue or modify another repository.
 
 Show that the observed bad case is rejected and representative valid cases still
-work. Use [prove-it-works](../prove-it-works/SKILL.md). A rule that passes without
+work. Use [principle-prove-it-works](../principle-prove-it-works/SKILL.md). A rule that passes without
 detecting the recurring failure has not closed the loop.
 
 Remove redundant instruction text only after the mechanism covers the same
@@ -50,4 +51,6 @@ appropriate; do not update user memory or global rules without a request.
 
 Adapted from Lauren Tan's [pstack Encode Lessons in Structure](https://github.com/cursor/plugins/blob/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack/skills/principle-encode-lessons-in-structure/SKILL.md).
 Local changes: evidence of recurrence, local enforcement, scope-aware application,
-and no automatic memory, issue, or instruction edits. See [LICENSE](LICENSE).
+and no automatic memory, issue, or instruction edits. Like upstream, this leaf
+is reached through the `principles` index or by explicit invocation. See
+[LICENSE](LICENSE).

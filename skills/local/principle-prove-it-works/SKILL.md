@@ -1,7 +1,8 @@
 ---
-name: prove-it-works
+name: principle-prove-it-works
 description: Assess whether observed evidence proves the requested behavior before declaring work complete. Consult for verification planning, interpreting checks, or distinguishing a real result from a proxy.
 license: MIT
+disable-model-invocation: true
 ---
 
 # Prove It Works
@@ -42,4 +43,6 @@ because they were used for verification.
 
 Adapted from Lauren Tan's [pstack Prove It Works](https://github.com/cursor/plugins/blob/12d587dfb20741cafc376c42c696c5f6e2a64487/pstack/skills/principle-prove-it-works/SKILL.md).
 Local changes: scope-aware checks, minimal verification, explicit revision and
-coverage, and no unconditional script or commit requirement. See [LICENSE](LICENSE).
+coverage, and no unconditional script or commit requirement. Like upstream,
+this leaf is reached through the `principles` index or by explicit
+invocation. See [LICENSE](LICENSE).

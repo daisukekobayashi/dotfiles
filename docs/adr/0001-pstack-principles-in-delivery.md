@@ -17,7 +17,7 @@ land, this record describes the chosen design, not current delivery behavior;
 ## Context
 
 The local pstack skills (`how`, `why`, `architect`, `arena`, `interrogate`,
-`blast-radius`, `prove-it-works`, `encode-lessons-in-structure`,
+`blast-radius`, `principle-prove-it-works`, `principle-encode-lessons-in-structure`,
 `create-verification-skill`, `maintain-verification-skill`, `evaluate-skill`)
 form the separate `pstack` profile. No delivery skill (`delivery-common`,
 `github-issue-delivery`, `azure-devops-work-item-delivery`, `change-*review`)
@@ -26,20 +26,25 @@ names any of them, and delivery's prerequisites are `base,github` or
 the instructions without exercising them with an agent, although
 `evaluate-skill` exists for that.
 
-pstack reduces to two principles: check the real thing instead of a proxy, and
-encode repeated mistakes in structure. Both already apply to every agent as
-global rules in `ai-rules/base/global.md` ("Match completion claims to observed
-evidence ..." and "When the same confirmed failure recurs, write down the
-premise the failed fixes share and first consider removing the mechanism
-behind it, then a small safeguard near its cause ..."). The rules below refine
-that baseline for specific delivery phases; they do not replace it.
+Which pstack principles this environment adopts, and how agents reach them
+through the `principles` index, is decided in
+[ADR 0004](0004-adopt-pstack-principles-through-an-index.md). It replaces this
+record's earlier reading that pstack reduces to two principles. This record
+covers how delivery applies the principles and workflows. Two principles also
+apply to every agent as global rules in `ai-rules/base/global.md` ("Match
+completion claims to observed evidence ..." and "When the same confirmed
+failure recurs, write down the premise the failed fixes share and first
+consider removing the mechanism behind it, then a small safeguard near its
+cause ..."). The rules below refine that baseline for specific delivery
+phases; they do not replace it.
 
 ## Decision
 
 ### Dependency policy
 
 Delivery applies the principles through short rules written into
-`delivery-common` phase text, so they hold without any pstack skill installed.
+`delivery-common` phase text, so they hold without any pstack skill installed,
+including the `principles` index (see ADR 0004).
 In addition, the heavier pstack workflows are **optional workflows**: delivery
 runs one automatically when it is installed and its trigger holds, and
 otherwise reports `not run: not installed` or `not run: trigger not met` and
@@ -73,7 +78,7 @@ implementing issues test both. Outside delivery they stay explicit-only.
 | Skill and instruction changes | Exercise changed instructions with an agent | Adopted | At Medium and High tier, when a delivery changes skill or agent-instruction text, such as a skill or an instruction file like `AGENTS.md`, it invokes `evaluate-skill` once on the current agent under a time bound, in a delivery smoke mode: one existing eval case per changed skill, each run once with the changed instructions and no baseline session, so `evaluate-skill`'s usual baseline and treatment comparison does not run in delivery. Changed text with no applicable eval case, including an instruction-only change, is reported as not exercised; Low tier reports `not run: tier`. | Closes the gap #239 showed, at a cost a delivery can absorb; a full `evaluate-skill` comparison per delivery costs too much. |
 | Review | Findings proven by a run | Adopted, in two parts | #245 makes `change-adversarial-review` back findings with runs; `change-review` and `change-security-review` are unchanged. At High tier, delivery also runs `blast-radius`, reusing #245's isolation, cleanup, and evidence rules. | One isolation design serves both; High tier already escalates review. |
 | Performance claims | Explain the number before reporting it | Adopted, conditional | The inline rule applies to every claimed speedup or regression number in delivery output. When a worker's own implementation or fix report claims one, the worker runs `benchmark-checklist`, the measurement workflow #240 adapts, as an optional workflow in its verification, before reporting. | The trigger is narrow; a change with no claimed number never runs them. |
-| Completion | Encode repeated mistakes in structure | Adjusted | Follow-up candidates gain a fourth creation criterion: the same finding class recurred at least twice across rounds or deliveries, with a proposed structural safeguard. `encode-lessons-in-structure` shapes the proposal when installed; otherwise the inline rule applies. Delivery never runs `correct` automatically. | The current criteria would recommend dropping such candidates; `correct` edits the repository beyond the task. |
+| Completion | Encode repeated mistakes in structure | Adjusted | Follow-up candidates gain a fourth creation criterion: the same finding class recurred at least twice across rounds or deliveries, with a proposed structural safeguard. `principle-encode-lessons-in-structure` shapes the proposal when installed; otherwise the inline rule applies. Delivery never runs `correct` automatically. | The current criteria would recommend dropping such candidates; `correct` edits the repository beyond the task. |
 
 ### Cost bounds
 
@@ -112,7 +117,7 @@ on it, and the `architect` and `arena` rows share one preflight issue. The
 - **Principle rules only, with no optional workflows.** Delivery would behave
   the same with or without pstack installed, but the heavier checks would run
   only when the user named them.
-- **Move `how`, `why`, and `prove-it-works` into `base`.** This would change
+- **Move `how`, `why`, and `prove-it-works` (now `principle-prove-it-works`) into `base`.** This would change
   every `base` install and split the `pstack` profile, while the principles
   those skills carry already reach every agent through the global rules.
 - **Automatic `create-verification-skill`, `correct`, or full `evaluate-skill`

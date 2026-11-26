@@ -1,0 +1,6 @@
+interface:
+  display_name: "Fix Root Causes"
+  short_description: "Fix the first fault, not where it surfaced"
+
+policy:
+  allow_implicit_invocation: false

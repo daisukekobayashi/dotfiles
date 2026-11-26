@@ -66,13 +66,19 @@
     "benchmark-checklist",
     "blast-radius",
     "create-verification-skill",
-    "encode-lessons-in-structure",
     "evaluate-skill",
-    "explain-the-number",
     "how",
     "interrogate",
     "maintain-verification-skill",
-    "prove-it-works",
+    "principle-attack-the-premise",
+    "principle-encode-lessons-in-structure",
+    "principle-explain-the-number",
+    "principle-fix-root-causes",
+    "principle-laziness-protocol",
+    "principle-prove-it-works",
+    "principle-redesign-from-first-principles",
+    "principle-subtract-before-you-add",
+    "principles",
     "why"
   ]
 }

@@ -15,7 +15,7 @@ Review 行の run-to-prove の部分は [#245](https://github.com/daisukekobayas
 ## 背景
 
 ローカルの pstack skill（`how`、`why`、`architect`、`arena`、`interrogate`、
-`blast-radius`、`prove-it-works`、`encode-lessons-in-structure`、
+`blast-radius`、`principle-prove-it-works`、`principle-encode-lessons-in-structure`、
 `create-verification-skill`、`maintain-verification-skill`、`evaluate-skill`）は
 独立した `pstack` profile にあります。delivery の skill（`delivery-common`、
 `github-issue-delivery`、`azure-devops-work-item-delivery`、`change-*review`）は
@@ -24,8 +24,11 @@ Review 行の run-to-prove の部分は [#245](https://github.com/daisukekobayas
 指示を読んで追跡しただけで、agent による実行はしませんでした。そのための
 `evaluate-skill` は存在していました。
 
-pstack の考え方は2つの原則にまとめられます。代理の指標ではなく実物を確かめること、
-繰り返す誤りを構造で防ぐことです。どちらもすでに `ai-rules/base/global.md` の
+この環境がどの pstack の原則を採用し、agent が `principles` 索引を通じてそれに
+どう届くかは [ADR 0004](0004-adopt-pstack-principles-through-an-index.ja.md) で
+決めています。これは、pstack の考え方は2つの原則にまとめられるという、この記録の
+以前の読み方を置き換えます。この記録は、delivery が原則と workflow をどう適用するかを
+扱います。2つの原則は `ai-rules/base/global.md` の
 グローバルルール（「Match completion claims to observed evidence ...」と「When the
 same confirmed failure recurs, write down the premise the failed fixes share and
 first consider removing the mechanism behind it, then a small safeguard near its
@@ -38,7 +41,7 @@ cause ...」）として
 ### 依存の方針
 
 delivery は原則を `delivery-common` のフェーズの記述に短いルールとして書き込み、
-pstack skill がなくても成り立つようにします。加えて、重い pstack workflow を
+`principles` 索引を含め pstack skill がなくても成り立つようにします（ADR 0004 を参照）。加えて、重い pstack workflow を
 **任意 workflow** とします。delivery はインストールされていてトリガー条件を満たすときに
 自動で実行し、そうでなければ `not run: not installed` または `not run: trigger not met`
 と報告してフェーズを続けます。インストールされていても、必要なツール、実行環境、
@@ -69,7 +72,7 @@ delivery は `arena`、`blast-radius`、`evaluate-skill`、`benchmark-checklist`
 | skill と指示の変更 | 変更した指示を agent で実行する | 採用 | Medium と High tier で skill や `AGENTS.md` などの指示ファイルの文面を変えた delivery は、現在の agent で `evaluate-skill` を時間の上限つきで1回呼び出し、delivery 用のスモークモードで実行します。変更した skill ごとに既存の eval ケースを1つ選び、変更後の指示でそれぞれ1回だけ実行し、ベースラインのセッションは作りません。`evaluate-skill` の通常のベースラインとの比較は delivery では行いません。指示ファイルだけの変更を含め、該当する eval ケースのない変更は未実行と報告し、Low tier は `not run: tier` と報告します。 | #239 で見えた穴を、1回の delivery が負担できるコストで埋めます。delivery ごとの `evaluate-skill` の完全な比較は高すぎます。 |
 | レビュー | 実行で裏付けた指摘 | 2つに分けて採用 | #245 で `change-adversarial-review` の指摘を実行で裏付けます。`change-review` と `change-security-review` は変えません。High tier では delivery が `blast-radius` も実行し、#245 の隔離、後片付け、証拠のルールを再利用します。 | 1つの隔離の設計を両方で使えます。High tier はすでにレビューを重くしています。 |
 | 性能の主張 | 数値を報告する前に説明する | 条件つきで採用 | delivery の出力で主張される高速化や性能低下の数値すべてに本文のルールを適用します。worker 自身の実装・修正の報告が数値を主張するときは、その worker が報告前の検証で、#240 で取り込んだ計測の workflow である `benchmark-checklist` を任意 workflow として実行します。 | トリガーが狭く、数値を主張しない変更では実行しません。 |
-| 完了 | 繰り返す誤りを構造で防ぐ | 調整して採用 | follow-up 候補の作成条件に4つ目を加えます。同じ種類の指摘がラウンドや delivery をまたいで2回以上起き、構造による防止策を提案しているものです。提案は、`encode-lessons-in-structure` がインストールされていればそれに沿って作り、なければ本文のルールに従います。`correct` は自動では実行しません。 | 現在の条件ではこうした候補は見送りが推奨されます。`correct` はタスクを超えてリポジトリを編集します。 |
+| 完了 | 繰り返す誤りを構造で防ぐ | 調整して採用 | follow-up 候補の作成条件に4つ目を加えます。同じ種類の指摘がラウンドや delivery をまたいで2回以上起き、構造による防止策を提案しているものです。提案は、`principle-encode-lessons-in-structure` がインストールされていればそれに沿って作り、なければ本文のルールに従います。`correct` は自動では実行しません。 | 現在の条件ではこうした候補は見送りが推奨されます。`correct` はタスクを超えてリポジトリを編集します。 |
 
 ### コストの上限
 
@@ -106,7 +109,7 @@ delivery は `arena`、`blast-radius`、`evaluate-skill`、`benchmark-checklist`
 
 - **原則のルールだけで任意 workflow を設けない。** pstack の有無で delivery の動作は
   変わりませんが、重い確認はユーザーが名指ししたときにしか実行されません。
-- **`how`、`why`、`prove-it-works` を `base` に移す。** すべての `base` のインストールが
+- **`how`、`why`、`prove-it-works`（現 `principle-prove-it-works`）を `base` に移す。** すべての `base` のインストールが
   変わり、`pstack` profile が分かれます。一方で、これらの skill が担う原則はすでに
   グローバルルールですべての agent に届いています。
 - **`create-verification-skill`、`correct`、`evaluate-skill` の完全な比較を自動で実行する。**

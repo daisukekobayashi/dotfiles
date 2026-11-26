@@ -65,7 +65,7 @@ design. Apply changes to the target checkout only when implementation is
 authorized, after inspecting its current diff and preserving unrelated work.
 Do not merge branches or rewrite history as an implicit synthesis step.
 
-Use [prove-it-works](../prove-it-works/SKILL.md) on the synthesized result.
+Use [principle-prove-it-works](../principle-prove-it-works/SKILL.md) on the synthesized result.
 Evidence from an individual candidate does not validate the combined result.
 
 ## Deliver

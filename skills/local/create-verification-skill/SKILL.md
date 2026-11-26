@@ -75,7 +75,7 @@ launch from an empty data directory and reach the usable state before claiming
 startup verified. When only an existing instance can be driven, report
 cold-start readiness as unverified.
 
-Use [prove-it-works](../prove-it-works/SKILL.md). A generated procedure that was
+Use [principle-prove-it-works](../principle-prove-it-works/SKILL.md). A generated procedure that was
 never successfully executed is a draft. Report exactly which behavior ran and
 which feature-map entries remain unverified; one successful path does not
 certify the whole application.

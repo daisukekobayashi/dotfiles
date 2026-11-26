@@ -147,10 +147,11 @@ summary or final report, or text the task diff adds.
 
 Explain a claimed number before reporting it: keep the run count, the spread,
 and the limiter with it, and rule out with evidence what else it could be
-measuring. `explain-the-number` gives these rules in full when installed;
-it is never a prerequisite. A number that cannot be explained stays where it
-was written, labeled `inconclusive` with each unchecked item named as a gap;
-it never blocks the delivery. A worker records its claim's explanation in its
+measuring. The `principle-explain-the-number` leaf of the `principles` index
+gives these rules in full when installed; it is never a prerequisite. A
+number that cannot be explained stays where it was written, labeled
+`inconclusive` with each unchecked item named as a gap; it never blocks the
+delivery. A worker records its claim's explanation in its
 `Verification:` rows under
 [Classified verification](references/report-handoff.md#classified-verification).
 The decision summary and the final report show each claim with its

@@ -637,6 +637,19 @@ test("repository github bundle adds delivery-common and worktree-runtime-cleanup
     assert.ok(mode);
   }));
 
+// The principles index links its leaves, so they travel with it; nothing links the index.
+test("repository principles index requires its leaves and no skill requires the index", () =>
+  withFixture(async (fixture) => {
+    await useRepositorySources(fixture);
+    const leaf = runExport(
+      ["--profile", "base", "--exclude", "principle-attack-the-premise", "--out", fixture.out],
+      fixture,
+    );
+    assert.notEqual(leaf.status, 0);
+    assert.match(leaf.stderr, /principle-attack-the-premise is required by principles/);
+    assertOk(runExport(["--profile", "base", "--exclude", "principles", "--out", fixture.out], fixture));
+  }));
+
 test("export rules match compose-rules.sh", { skip: process.platform === "win32" }, () =>
   withFixture(async (fixture) => {
     await useRepositorySources(fixture);
