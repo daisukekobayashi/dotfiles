@@ -154,26 +154,27 @@ it never blocks the delivery. A worker records its claim's explanation in its
 `Verification:` rows under
 [Classified verification](references/report-handoff.md#classified-verification).
 The decision summary and the final report show each claim with its
-explanation or gaps, and the latest `benchmark-checklist` status. A claim whose explanation a
-`benchmark-checklist` verdict contradicts is `inconclusive`, with both shown.
+explanation or gaps, and the latest `benchmark-checklist` status. A claim
+whose explanation a `benchmark-checklist` verdict contradicts is
+`inconclusive`, with both shown.
 
-[Performance claims](references/local-review.md#performance-claims) in Local
-Review runs `benchmark-checklist` on the claims at the pinned worker head as an
-optional workflow. A claim first written after that step, such as in the PR
-title or body, gets only this rule: cite that head's evidence or label it
-`inconclusive`; it launches no run. [Brief the
-agent](references/phase-delegation.md#brief-the-agent) asks the agent that
-publishes to label its claims before publishing. A delivery with no claimed
-number never runs it.
+A worker whose own report claims a number runs `benchmark-checklist` on it as
+an optional workflow in its verification step, before reporting, under
+[Preflight and implementation](references/worker-dialogue.md#preflight-and-implementation).
+A claim first written anywhere else, such as in the PR title or body, the
+decision summary, or the final report, gets only this rule: cite the head's
+verification record or label it `inconclusive`; it launches no run. A delivery
+with no claimed number never runs the checklist.
 
-Right before the merge confirmation, the coordinator reads the published PR's
-title and body and checks each claimed number in them against the
-verification record of the published head. A claim without evidence from that
-head, or one that a `ran` verdict on that head contradicts, is shown
-`inconclusive` with its gaps in the decision summary and the final report.
-This check, not the publishing agent's labels, is what the decision summary
-and the final report use for PR claims. [Worker Dialogue](references/worker-dialogue.md) and Local Review link
-this section instead of restating it.
+At the merge confirmation or the final report, whichever comes first, the
+coordinator reads the published PR's title and body and checks each claimed
+number in them against the published head's verification record. A claim
+without evidence from that head, or one that a `ran` verdict contradicts, is
+shown `inconclusive` with its gaps in the decision summary and the final
+report. A delivery that stops before the merge, or a PR merged by other means,
+still gets this check in its final report.
+[Worker Dialogue](references/worker-dialogue.md) links this section instead of
+restating it.
 
 ## Shared Scripts
 

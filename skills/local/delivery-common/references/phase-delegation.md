@@ -42,13 +42,6 @@ them, the records directory, the report path under
 [Report path](#report-path), and earlier dispositions and other material as
 paths to existing material. For the hosted cycle's fixes, assign
 [Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence).
-For publication, forward [Performance Claims](../SKILL.md#performance-claims)
-and the path of the pinned head's verification record: before publishing, the
-agent checks the PR title and body for a claimed number and gives each one the
-explanation that record cites, or labels it `inconclusive` with its gaps. When
-the record holds a `benchmark-checklist` verdict that disagrees with the
-claim's explanation, the agent shows both and labels the claim `inconclusive`
-instead of citing the explanation alone.
 For the preview and the cleanup, it also assigns
 the manifest path: the report path with `.manifest.json` in place of `.md`,
 which the cleanup skill creates as a new file. Include

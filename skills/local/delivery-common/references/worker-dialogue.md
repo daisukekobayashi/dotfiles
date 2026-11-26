@@ -119,7 +119,17 @@ record actual results and material coverage limits; a successful baseline is
 not implementation verification. Apply [Project verification](#project-verification)
 and report each check under [Classified verification](report-handoff.md#classified-verification).
 Apply [Performance Claims](../SKILL.md#performance-claims) to any number the
-report claims.
+report claims. For such a number, before reporting, apply the
+`benchmark-checklist` entry of the [Optional Workflows](optional-workflows.md#registry)
+registry, with its key, intent, and outcome handled as step 3 of
+[Project verification](#project-verification) handles them. Run it in the task
+worktree under [Foreground Checks](../SKILL.md#foreground-checks), and write
+its evidence to `<report path without .md>.evidence/benchmark-checklist/`,
+never in the worktree. Anything it cannot do there, such as a before side that
+needs another checkout or an item the checklist asks about first, is a named
+gap that makes the claim `inconclusive`. Delivery creates no worktree and
+removes nothing for it; normal cleanup's runtime inspection handles any
+leftover.
 Complete this phase only with an
 implementation and verification evidence ready for review, or an explicit
 blocker.

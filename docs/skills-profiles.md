@@ -601,13 +601,16 @@ When a delivery's own output claims a speedup or regression number, such as a
 time or token-consumption comparison, delivery requires the number's run
 count, spread, and limiter, or labels it inconclusive with named gaps, under
 [Performance Claims](../skills/local/delivery-common/SKILL.md#performance-claims).
-When such a claim exists at the Local Review step, at any tier, Local Review
-runs
-[benchmark-checklist](../skills/local/delivery-common/references/local-review.md#performance-claims)
-in full mode on the pinned worker head and its recorded base, within 30
-minutes, and reports it as not run when it is not installed, unavailable, or
-opted out. A claim first written later, such as in the PR body, gets the rule
-only, and a delivery with no claimed number never runs the checklist.
+When a worker's own report claims such a number, at any tier, the worker runs
+`benchmark-checklist` in full mode on its own measurement in its task
+worktree before reporting, within 30 minutes, under
+[Preflight and implementation](../skills/local/delivery-common/references/worker-dialogue.md#preflight-and-implementation),
+and reports it as not run when it is not installed, unavailable, or opted
+out. Anything it cannot do there, such as a before side that needs another
+checkout, is a named gap. A claim first written elsewhere, such as in the PR
+body, gets the rule only, and the coordinator checks the PR's claims against
+the published head's verification record at the merge confirmation or the
+final report. A delivery with no claimed number never runs the checklist.
 Remaining ADR 0001 work is tracked in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
