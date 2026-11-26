@@ -76,6 +76,8 @@ changes it.
 For each pinned head, use [Skill instruction smoke](#skill-instruction-smoke)
 before advancing from the full or focused review round. Apply
 [Blast radius](#blast-radius) before assessing the round's findings.
+Apply [Performance claims](#performance-claims) before advancing from the
+round.
 
 ## Skill instruction smoke
 
@@ -190,6 +192,53 @@ An opt-out, missing authorization, or an expired deadline stops the pending
 proof work. Record the reason, assess any unfinished confirmation as
 unproven from its trace, and perform any safe owned cleanup. Keep completed
 evidence, the original `ran` outcome, and its once-per-key accounting.
+
+## Performance claims
+
+The coordinator applies the `benchmark-checklist` entry of the
+[Optional Workflows registry](optional-workflows.md#registry) after pinning
+the head and setting its final tier, for the claimed numbers that
+[Performance Claims](../SKILL.md#performance-claims) defines.
+
+1. [Reconcile existing intents](optional-workflows.md#record-and-report) before
+   evaluating eligibility. On an attempted key, reuse the recorded outcome
+   under step 5.
+2. Collect the claims: read the worker reports for the pinned head, the commit
+   messages from the recorded base to the head
+   (`git log --format=%B <base>..<head>`), and the lines the task diff adds
+   (`git diff --no-ext-diff --no-textconv <base> <head>`). Record each claim's
+   quoted text, its source, and the number with its unit. With no claim,
+   record `not run: trigger not met`.
+3. Apply the installation and opt-out gates. Require the delivery's own
+   [trusted worker head](repro-runs.md#trusted-heads). For this step only, the
+   recorded base that head was built on runs as the before side under the same
+   trust. If the installed skill cannot be invoked, or the route, permission,
+   or isolated location that [Disposable worktree](repro-runs.md#disposable-worktree)
+   needs is missing, report `not run: unavailable` with the reason before
+   launch.
+4. Record the launch intent with its absolute deadline from the registry's
+   bound or the user's shorter bound, and start that clock before creating
+   any worktree. Create one disposable worktree at the pinned head and one at
+   the recorded base under [Disposable worktree](repro-runs.md#disposable-worktree),
+   with the base SHA in place of the head for the second. Invoke
+   `benchmark-checklist` explicitly in full mode, forwarding the user's
+   explicit delivery request, the exact target, the claims, both worktree
+   paths, and the deadline. The request authorizes running only the existing
+   measurement and installed, unprivileged profilers locally in those
+   worktrees. Every item the checklist asks before, such as editing the
+   measurement script, tuning a side, installing a tool, `sudo`, or load on a
+   shared or remote system, is not done and is reported as a gap. Stop the run
+   at the deadline, then perform safe owned cleanup under
+   [Remove](repro-runs.md#remove).
+5. Record `ran` only with a verdict for every claim and safe cleanup within
+   the deadline; a run past it is `stopped: time bound`, and a setup, run, or
+   cleanup error is `failed: <reason>`. On resume, recover `ran` only from a
+   recorded verdict for every claim and the cleanup result; otherwise record
+   `failed: interrupted`. In the verification record, give each claim its
+   source and either the verdict with run count, range, and limiter, or
+   `inconclusive` with the named gaps, including when the run did not reach
+   `ran`. Never remove or rewrite a claim. Never invoke the skill again on
+   that key, or use its result on another head.
 
 ## Triage classes
 

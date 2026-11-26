@@ -1,6 +1,6 @@
 ---
 name: delivery-common
-description: Shared worker dialogue, verification, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, verifies implementation or fixes and classifies the results, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, delegates publication, hosted review, and cleanup calls to agents, stops at a bound or a missing prerequisite, runs or reports an optional workflow, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
+description: Shared worker dialogue, verification, local review procedure, risk tier, and completion policy for GitHub issue and Azure DevOps Work Item delivery. Read when a delivery workflow dispatches workers through its start skill, has workers draft the shared understanding and design preflight for the coordinator to ask, hands the settled scope to preflight and implementation, verifies implementation or fixes and classifies the results, sets a change's risk tier, requires normal, adversarial, and security reviews, selects focused follow-up of a committed implementation, decides whether local reviews repeat or advance, keeps a progress record, resumes a delivery, checks the published head before advancing, prepares a merge confirmation, delegates publication, hosted review, and cleanup calls to agents, stops at a bound or a missing prerequisite, runs or reports an optional workflow, explains a claimed performance number before reporting it, handles an agent that went idle waiting on a background job, or reports completion and follow-up candidates. Also states the delegated authorization rule that the PR, review request, and delivery skills link.
 ---
 
 # Delivery Common
@@ -33,8 +33,10 @@ an optional workflow: when it runs, how it is reported as not run, and its
 shared bounds. Apply
 [Missing Prerequisites](#missing-prerequisites) whenever a phase lacks what it
 needs, and [Foreground Checks](#foreground-checks) to every delegated worker
-and reviewer and to each result they return. The coordinator reads these
-references by [Phase sections](#phase-sections).
+and reviewer and to each result they return. Apply
+[Performance Claims](#performance-claims) to every performance number a
+delivery claims. The coordinator reads these references by
+[Phase sections](#phase-sections).
 
 The calling workflow owns implementation, assessment decisions, how its hosted
 review runs, publication, and approvals;
@@ -132,6 +134,35 @@ an agent is outstanding.
 The start skills' worker rules, [Worker Dialogue](references/worker-dialogue.md),
 and [Local Review](references/local-review.md) link this section instead of
 restating it.
+
+## Performance Claims
+
+A claimed number is a measured comparison, before and after or between
+options, of time (wall time, latency, throughput, or a percentage or factor
+faster or slower) or of resource consumption (memory, CPU, size, or token or
+context consumption). A test count or a pass or fail check result is never
+one. It is claimed when it appears in the delivery's own output: a worker
+report or summary, a commit message, the PR title or body, the decision
+summary or final report, or text the task diff adds.
+
+Explain a claimed number before reporting it: keep the run count, the spread,
+and the limiter with it, and rule out with evidence what else it could be
+measuring. `explain-the-number` gives these rules in full when installed;
+it is never a prerequisite. A number that cannot be explained stays where it
+was written, labeled `inconclusive` with each unchecked item named as a gap;
+it never blocks the delivery. A worker records its claim's explanation in its
+`Verification:` rows under
+[Classified verification](references/report-handoff.md#classified-verification).
+The decision summary and the final report show each claim with its
+explanation or gaps, and the latest `benchmark-checklist` status.
+
+[Performance claims](references/local-review.md#performance-claims) in Local
+Review runs `benchmark-checklist` on the claims at the pinned worker head as an
+optional workflow. A claim first written after that step, such as in the PR
+body, gets only this rule: cite that head's evidence or label it
+`inconclusive`; it launches no run. A delivery with no claimed number never
+runs it. [Worker Dialogue](references/worker-dialogue.md) and Local Review link
+this section instead of restating it.
 
 ## Shared Scripts
 

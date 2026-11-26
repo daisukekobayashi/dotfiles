@@ -597,13 +597,21 @@ At High tier, Local Review also runs [blast-radius](../skills/local/delivery-com
 when available. It reuses the adversarial review's isolation and evidence rules
 on the pinned worker head. The coordinator assesses findings against checked
 evidence, and the decision summary shows the optional run's status.
+When a delivery's own output claims a speedup or regression number, such as a
+time or token-consumption comparison, delivery requires the number's run
+count, spread, and limiter, or labels it inconclusive with named gaps, under
+[Performance Claims](../skills/local/delivery-common/SKILL.md#performance-claims).
+At every tier, Local Review then runs
+[benchmark-checklist](../skills/local/delivery-common/references/local-review.md#performance-claims)
+in full mode on the pinned worker head and its recorded base, within 30
+minutes. A delivery with no claimed number never runs it.
 Remaining ADR 0001 work is tracked in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
 `maintain-verification-skill`, `evaluate-skill`, and `benchmark-checklist` require
 explicit user invocation outside their designated delivery steps. Codex
 keeps `policy.allow_implicit_invocation: false`. For Claude Code,
-`arena`, `blast-radius`, and `evaluate-skill` omit
+`arena`, `blast-radius`, `evaluate-skill`, and `benchmark-checklist` omit
 `disable-model-invocation` so their designated steps can invoke them in an
 explicitly requested `github-issue-delivery` or
 `azure-devops-work-item-delivery` workflow. Their descriptions and body guards

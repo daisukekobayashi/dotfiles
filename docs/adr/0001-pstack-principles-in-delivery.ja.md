@@ -48,7 +48,7 @@ workflow です。
 これは Missing Prerequisites の唯一の例外です。必須の skill、レビュアー、チェック、
 ツールがない場合は、引き続きそれを必要とするフェーズを止めます。
 
-delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change-*review` を
+delivery は `arena`、`blast-radius`、`evaluate-skill`、`benchmark-checklist` を、すでに `change-*review` を
 呼んでいるのと同じ方法で呼び出します。`SKILL.md` から `disable-model-invocation` を
 外し、Codex のメタデータは `allow_implicit_invocation: false` のまま残し、description
 に、ユーザーが明示的に依頼した `github-issue-delivery` または
@@ -115,6 +115,6 @@ delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change
 
 - 任意 workflow により、delivery の確認の深さはインストール状況で変わります。
   報告の `not run` の行でそれが見えるようにします。
-- `arena`、`blast-radius`、`evaluate-skill` の明示呼び出し専用のルールに delivery の
+- `arena`、`blast-radius`、`evaluate-skill`、`benchmark-checklist` の明示呼び出し専用のルールに delivery の
   例外が加わり、それらのメタデータと Missing Prerequisites の文面を固定しているテストは、
   実装する issue で一緒に変わります。

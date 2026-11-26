@@ -52,9 +52,9 @@ adapts.
 This is the only exception to Missing Prerequisites: a missing required skill,
 reviewer, check, or tool still stops the phase that needs it.
 
-Delivery invokes `arena`, `blast-radius`, and `evaluate-skill` the way it
-already invokes `change-*review`: their `SKILL.md` drops
-`disable-model-invocation`, their Codex metadata keeps
+Delivery invokes `arena`, `blast-radius`, `evaluate-skill`, and
+`benchmark-checklist` the way it already invokes `change-*review`: their
+`SKILL.md` drops `disable-model-invocation`, their Codex metadata keeps
 `allow_implicit_invocation: false`, and their description adds that the skill
 also runs as its step of an explicitly user-requested `github-issue-delivery`
 or `azure-devops-work-item-delivery` workflow. The "Run only ..." guard at the
@@ -123,6 +123,7 @@ on it, and the `architect` and `arena` rows share one preflight issue. The
 
 - With the optional workflows, delivery depth depends on what is installed. The
   `not run` lines in reports make that visible.
-- The explicit-only rule for `arena`, `blast-radius`, and `evaluate-skill`
-  gains a delivery exception, and the tests that pin those skills' metadata and
-  the Missing Prerequisites text change with the implementing issues.
+- The explicit-only rule for `arena`, `blast-radius`, `evaluate-skill`, and
+  `benchmark-checklist` gains a delivery exception, and the tests that pin
+  those skills' metadata and the Missing Prerequisites text change with the
+  implementing issues.

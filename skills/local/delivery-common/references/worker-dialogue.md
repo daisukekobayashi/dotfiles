@@ -118,6 +118,8 @@ settled design and repository conventions. Run the smallest relevant checks and
 record actual results and material coverage limits; a successful baseline is
 not implementation verification. Apply [Project verification](#project-verification)
 and report each check under [Classified verification](report-handoff.md#classified-verification).
+Apply [Performance Claims](../SKILL.md#performance-claims) to any number the
+report claims.
 Complete this phase only with an
 implementation and verification evidence ready for review, or an explicit
 blocker.
