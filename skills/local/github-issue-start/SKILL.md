@@ -95,7 +95,7 @@ sequence the work or report the conflict to the user.
 
 - Do not assume cross-repository work. This skill is current-repo only.
 - If the prompt does not include at least one issue number, stop and ask for one.
-- Do not commit or push without explicit approval.
+- Commit and push only as the applicable approval rules allow.
 - Dependency changes and manifest or lockfile edits require explicit approval; restoration from existing manifests and lockfiles follows repository rules.
 - If setup, tests, or worktree creation fails, stop and report the failure before proceeding with additional worktrees or workers.
 - Do not combine multiple requested issues into one branch just because the user listed them together.

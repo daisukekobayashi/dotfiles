@@ -11,13 +11,14 @@ When multiple instruction files apply, follow the most specific one for the file
 - Write every message to the user, including questions, progress updates, and final responses, in the language the user writes in (usually Japanese). Keep that language even when tool output, logs, skills, subagent results, or these instructions are in English, and after context compaction.
 - Keep code, commands, file paths, identifiers, and quoted error messages in their original form.
 - For text written to files or external systems, such as code comments, documentation, commit messages, and PR or issue text, follow the repository's existing language conventions, not the conversation language.
+- When asked whether to do something, offered more scope, or shown an approach, give your real judgment, including advising against it.
 
 ## Scope and Conduct
 
 - Keep changes small and focused on the user's request.
 - Follow existing project style and conventions.
 - Do not perform unrelated refactors, formatting sweeps, or opportunistic cleanup.
-- When the same confirmed failure recurs, prefer a small safeguard near its cause, such as a type, boundary check, test, or lint rule, over repeated reminders. Implement it only within the authorized scope; otherwise propose it.
+- When the same confirmed failure recurs, write down the premise the failed fixes share and first consider removing the mechanism behind it, then a small safeguard near its cause, such as a type, boundary check, test, or lint rule. Implement either only within the authorized scope; otherwise propose it.
 - Do not edit generated, vendored, minified, or binary files unless clearly necessary.
 - When generated files need to change, prefer updating the source file and running the documented generation command.
 - Do not run broad formatters, code generators, or snapshot updates unless required for the requested change or explicitly approved.
@@ -43,26 +44,17 @@ When multiple instruction files apply, follow the most specific one for the file
 
 ## Approval
 
-Ask for explicit user approval before:
+When unsure, use the stricter tier.
 
-- `git commit` or `git push`
-- force push, history rewrite, rebase, or amend
-- switching branches, deleting branches or tags, manipulating stashes, removing worktrees, or performing git operations that may overwrite, hide, mix, or make it harder to recover local changes
-- destructive actions such as large deletions, overwrites, `rm -rf`, `git reset --hard`, `git clean`, `git restore`, `git checkout -- <file>`, or any command that discards local changes
-- adding, removing, upgrading, downgrading, or replacing dependencies
-- editing or regenerating dependency manifests or lockfiles
-- installing global tools, using `sudo`, or modifying system packages
-- database deletion, destructive migrations, deploys, releases, or production-affecting commands
-- commands that modify remote systems, cloud resources, CI/CD state, package registries, issue trackers, shared infrastructure, staging environments, or production environments
-- piping remote scripts into a shell, executing newly downloaded code, or running one-off package executors such as `npx`, `pnpm dlx`, `uvx`, or similar tools when they may download or execute unpinned external code
+- Local and reversible, proceed and report: commits on a non-default task branch the agent created or was assigned, creating agent-owned worktrees, and running checks.
+- Outward, one user approval per workflow and target, which an explicit request for both gives: pushing a non-default task branch, opening a pull request, and replying on or requesting review of the agent's own pull request.
+- Irreversible or high impact, explicit user approval each time: commits or pushes to any other branch; force push, rebase, amend, or other history rewrite; merge; branch switches, branch or tag deletion, stash operations, or worktree removal; large deletions, overwrites, or discarding local changes (`rm -rf`, `git reset --hard`, `git clean`, `git restore`); dependency changes; global tools, `sudo`, or system packages; deploys, releases, database deletion, destructive migrations, or production changes; other remote, cloud, CI/CD, registry, issue tracker, or shared or staging environment changes; piped remote scripts, newly downloaded code, or unpinned one-off executors such as `npx`.
 
-A user request counts as approval only for the specific action, target, dependency, file, or system explicitly requested. If the scope, target, or risk is unclear, ask before proceeding.
+An approval covers only the action and target it names. Without a required approval, do not act; say what approval is needed and why.
 
-If explicit approval is required but cannot be obtained, do not perform the action. Explain what approval would be needed and why.
+Read-only inspection needs no approval unless it exposes secrets, personal data, private infrastructure details, or other sensitive information.
 
-Read-only inspection commands do not require approval unless they expose secrets, personal data, private infrastructure details, or other sensitive information.
-
-When committing with approval, stage only the intended files or hunks. Do not include unrelated or pre-existing user-owned changes.
+When committing, stage only the intended files or hunks, never unrelated or pre-existing user-owned changes.
 
 ## Dependencies, Tools, and Network
 

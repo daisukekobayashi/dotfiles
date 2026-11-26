@@ -29,9 +29,10 @@ the instructions without exercising them with an agent, although
 pstack reduces to two principles: check the real thing instead of a proxy, and
 encode repeated mistakes in structure. Both already apply to every agent as
 global rules in `ai-rules/base/global.md` ("Match completion claims to observed
-evidence ..." and "When the same confirmed failure recurs, prefer a small
-safeguard near its cause ..."). The rules below refine that baseline for
-specific delivery phases; they do not replace it.
+evidence ..." and "When the same confirmed failure recurs, write down the
+premise the failed fixes share and first consider removing the mechanism
+behind it, then a small safeguard near its cause ..."). The rules below refine
+that baseline for specific delivery phases; they do not replace it.
 
 ## Decision
 
