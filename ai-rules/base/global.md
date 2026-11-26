@@ -46,15 +46,15 @@ When multiple instruction files apply, follow the most specific one for the file
 
 When unsure, use the stricter tier.
 
-- Local and reversible, proceed and report: commits on a non-default task branch the agent created or was assigned, creating agent-owned worktrees, and running checks.
+- Local and reversible, proceed and report: commits on a non-default task branch the agent created or was explicitly assigned, creating agent-owned worktrees, and running checks.
 - Outward, one user approval per workflow and target, which an explicit request for both gives: pushing a non-default task branch, opening a pull request, and replying on or requesting review of the agent's own pull request.
-- Irreversible or high impact, explicit user approval each time: commits or pushes to any other branch; force push, rebase, amend, or other history rewrite; merge; branch switches, branch or tag deletion, stash operations, or worktree removal; large deletions, overwrites, or discarding local changes (`rm -rf`, `git reset --hard`, `git clean`, `git restore`); dependency changes; global tools, `sudo`, or system packages; deploys, releases, database deletion, destructive migrations, or production changes; other remote, cloud, CI/CD, registry, issue tracker, or shared or staging environment changes; piped remote scripts, newly downloaded code, or unpinned one-off executors such as `npx`.
+- Irreversible or high impact, explicit user approval each time: commits or pushes to any other branch; force push, rebase, amend, or other history rewrite; merge; branch switches, branch or tag deletion, stash operations, or worktree removal; large deletions, overwrites, or hiding or discarding local changes (`rm -rf`, `git reset --hard`, `git clean`, `git restore`); dependency changes; global tools, `sudo`, or system packages; deploys, releases, database deletion, destructive migrations, or production changes; other remote, cloud, CI/CD, registry, issue tracker, or shared or staging environment changes; piped remote scripts, newly downloaded code, or unpinned one-off executors such as `npx`.
 
-An approval covers only the action and target it names. Without a required approval, do not act; say what approval is needed and why.
+An approval covers only the action and target it names. Without a required approval, do not act; say what is needed and why.
 
 Read-only inspection needs no approval unless it exposes secrets, personal data, private infrastructure details, or other sensitive information.
 
-When committing, stage only the intended files or hunks, never unrelated or pre-existing user-owned changes.
+When committing, stage only the intended files or hunks, never unrelated or user-owned changes.
 
 ## Dependencies, Tools, and Network
 

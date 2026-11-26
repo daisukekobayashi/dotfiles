@@ -185,7 +185,9 @@ not from the progress record, which can omit what it missed:
 - Expected confirmations: each commit, push, PR creation, merge, cleanup, and
   issue or PR write the transcript shows, and each worker-listed default or
   question on a contract, boundary, compatibility, or security decision that
-  the coordinator adopted. Implementation tactics need none.
+  the coordinator adopted. Implementation tactics need none, and neither does a
+  commit on a non-default task branch the agent created or was explicitly
+  assigned, which the global rules let it make and report.
 - Expected reviews: every head that was published or merged needs a covering
   review by the reviewers its tier selects, whether or not the transcript
   shows a review phase for it. A head published without one, including after
