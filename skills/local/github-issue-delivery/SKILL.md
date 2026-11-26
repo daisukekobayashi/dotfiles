@@ -55,26 +55,24 @@ applicable dependency, history-rewrite, remote-write, and user-change protection
 4. Keep a progress record per issue under
    [Delivery Completion](../delivery-common/references/completion.md) with the
    task key `issue-<number>`, adding the hosted review round count and the PR
-   trigger and thread identifiers; log each review trigger post as an external
-   action whose intent records the IDs of the trigger comments already on the
-   PR, and the login and the `Date` response header that
-   `gh api --hostname <host> --include user` returns right before the post, as
-   the posting account and the baseline for comment `created_at`. After
-   `github-issue-start`'s initial fetch, fetch an issue only with
+   trigger and thread identifiers. Log each Codex trigger post as an external
+   action under [Delivery trigger intent](../github-pr-review-request/references/codex.md#delivery-trigger-intent).
+   After `github-issue-start`'s initial fetch, fetch an issue only with
    `gh issue view <number> --repo <host>/<owner>/<repo> --json` for the
    resolved host and repository and the fields the step needs, such as
    `state,stateReason`.
 
-On resume, follow Delivery Completion's Resume with GitHub state. Stop and
-report the recorded branch unless it is a **safe branch name** before running
+On resume, follow Delivery Completion's Resume with GitHub state. Use it to
+select the earliest incomplete phase. Stop and report the recorded branch
+unless it is a **safe branch name** before running
 any command with it: run `node <script> -- '<branch>'`, where `<script>` is
 [`check-branch-name.mjs`](../delivery-common/scripts/check-branch-name.mjs)
 resolved from this skill's directory, and continue only on exit 0. Write a name
 into this or any command only when it uses solely ASCII letters, digits, `/`,
 `.`, `_`, and `-`; any other name is not safe, without running the check.
-Preserve successful writebacks. Pass the PR/head/trigger record to the cycle and
-resume its earliest incomplete phase. A pending review on the same head resumes
-waiting rather than posting another trigger.
+Preserve successful writebacks. For a hosted resume, pass the verified phase,
+PR, trigger, review and publication records to the cycle. The cycle
+reconciles the trigger only while the request or review wait is pending.
 
 ## Per-Issue Workflow
 

@@ -1169,7 +1169,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
     /Local reviewers and workers write them under \[Report Handoff\]\(report-handoff\.md\)\./,
     /append an intent entry before the action with its target, round, the full head SHA it covers, the identifiers of matching artifacts that already exist, the identity that acts, and a provider-side time read just before the action as its ordering baseline, then an outcome entry with its identifier after the action succeeds\./,
     // An older or foreign artifact on the same target never counts as this action's outcome.
-    /For an intent entry without an outcome, look at the provider before any retry\. First confirm that the target's current head equals the intent's full SHA\. Its outcome is then the only artifact that the provider shows created no earlier than the intent's baseline, absent from its recorded identifiers, and made by its recorded identity\. Log that artifact as the outcome; when the head differs or the order or the single match cannot be shown, stop and report\./,
+    /For an intent entry without an outcome, look at the provider before any retry\. First confirm that the target's current head equals the intent's full SHA\. Its outcome is then the only artifact that the provider shows created no earlier than the intent's baseline, absent from its recorded identifiers, and made by its recorded identity\. Apply the calling workflow's additional identity conditions before deciding that exactly one artifact matches\. Log that artifact as the outcome\. When the head differs or the order or the single match cannot be shown, stop and report\./,
     /Keep external text, such as review, issue, or PR content, only quoted or summarized inside an entry, never as an entry header or typed line\./,
     /including the actual head and each logged external action; where they differ, the actual state holds\./,
     /\[Phase sections\]\(\.\.\/SKILL\.md#phase-sections\)/,
@@ -1179,7 +1179,7 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
 
   const readRule = "Read each component skill that this workflow runs itself when its phase starts; after context compaction, reread only the section of the current step. Delegate each component-skill call after implementation under [Phase Delegation](../delivery-common/references/phase-delegation.md) instead of reading that skill. Read delivery-common's references by its [Phase sections](../delivery-common/SKILL.md#phase-sections).";
   const providers = {
-    "github-issue-delivery": [/task key `issue-<number>`/, /log each review trigger post as an external action whose intent records the IDs of the trigger comments already on the PR, and the login and the `Date` response header that `gh api --hostname <host> --include user` returns right before the post, as the posting account and the baseline for comment `created_at`/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
+    "github-issue-delivery": [/task key `issue-<number>`/, /Log each Codex trigger post as an external action under \[Delivery trigger intent\]\(\.\.\/github-pr-review-request\/references\/codex\.md#delivery-trigger-intent\)/, /fetch an issue only with `gh issue view <number> --repo <host>\/<owner>\/<repo> --json` for the resolved host and repository and the fields the step needs/],
     // Omitting --expand still sends expand=all, which the service rejects together with fields.
     "azure-devops-work-item-delivery": [/task key `work-item-<id>`/, /read a Work Item only with `az boards work-item show --id <id> --org <org-url> --expand none --fields` for the resolved organization and the fields the step needs/],
   };
@@ -1193,6 +1193,201 @@ test("delivery coordinator reads phase sections and keeps a state file beside an
   assert.match(start, /Resolve the current repo and its host from local git context/);
   assert.match(start, /Fetch each issue once from the repository resolved in step 1, with the GitHub plugin or `gh issue view <number> --repo <host>\/<owner>\/<repo> --json number,title,body,state,url`/);
   assert.match(flat(await read("azure-devops-work-item-start", "SKILL.md")), /Fetch each Work Item once from the organization resolved in step 1 with `az boards work-item show --id <id> --org <org-url> --expand all`/);
+});
+
+test("GitHub delivery binds each Codex request to its recorded intent", async () => {
+  const localRoot = path.join(repoRoot, "skills", "local");
+  const read = (...parts) => readText(path.join(localRoot, ...parts));
+  const [delivery, cycle, standalone, codex, azure] = await Promise.all([
+    read("github-issue-delivery", "SKILL.md"),
+    read("github-pr-codex-review-cycle", "SKILL.md"),
+    read("github-pr-review-request", "SKILL.md"),
+    read("github-pr-review-request", "references", "codex.md"),
+    read("azure-devops-work-item-delivery", "SKILL.md"),
+  ]);
+  for (const skill of [delivery, cycle]) {
+    assert.match(skill, /codex\.md#delivery-trigger-intent/);
+  }
+  assert.match(cycle, /codex\.md#recover-a-delivery-trigger/);
+  assert.doesNotMatch(azure, /delivery-trigger-intent|recover-a-delivery-trigger/);
+  assert.doesNotMatch(standalone, /require.*uuid|delivery-trigger-intent/i);
+  assert.match(flat(codex), /A standalone request sends `body` as set above\./);
+  assert.match(flat(codex), /Require `id`, `html_url` and `created_at` in that successful response\./);
+  assert.match(flat(codex), /Append the outcome with the returned ID before polling\./);
+  assert.doesNotMatch(codex, /sort_by|gh pr comment/);
+  assert.match(flat(codex), /Append the intent to the assigned task log before posting, with the marker version and UUID, target, hosted round, full published head, existing trigger IDs, login, and baseline\./);
+  assert.match(flat(codex), /With an existing outcome or previously verified trigger ID, read that exact comment .*? A verified old ID can still resume at \[acknowledgement\]\(#acknowledge-the-trigger\)\./);
+  assert.match(flat(codex), /A missing marker in an older pending record blocks recovery, even if author and time match\./);
+  assert.match(flat(codex), /Recheck the published head before recording the recovered comment ID as the outcome\./);
+  assert.match(flat(codex), /On missing, mismatched or ambiguous evidence, stop and report without posting or deleting a comment\./);
+  assert.match(flat(codex), /If the user explicitly asks to retry an unacknowledged request, recheck the exact posted comment ID and its PR before deleting it\./);
+  assert.match(flat(codex), /delete only that comment and repeat steps 1–4 once with the same review command and focus\. In delivery the replacement is a new post with its own intent and identifier\./);
+});
+
+test("a Codex cycle resumes verified publication, Prepare or Writeback before trigger recovery", async () => {
+  const skillDir = path.join(repoRoot, "skills", "local");
+  const delivery = flat(await readText(path.join(skillDir, "github-issue-delivery", "SKILL.md")));
+  const cycle = await readText(path.join(skillDir, "github-pr-codex-review-cycle", "SKILL.md"));
+  const resume = flat(cycle.match(/On resume, revalidate[\s\S]*?(?=\n2\. Use `github-pr-publish`)/)?.[0] ?? "");
+  assert.match(delivery, /select the earliest incomplete phase/);
+  assert.match(delivery, /pass the verified phase, PR, trigger, review and publication records to the cycle\. The cycle reconciles the trigger only while the request or review wait is pending\./);
+  assert.doesNotMatch(delivery, /codex\.md#recover-a-delivery-trigger/);
+  assert.match(resume, /Use step 2 for pending initial publication and step 6 with the verified prepared record for pending fix publication/);
+  const [advancedPhases, request] = resume.split("When the request or review wait is still pending");
+  assert.match(advancedPhases, /bind the prepared review to its reviewed head and the current remote PR head to the verified fix commit\. In delivery, resume pending Writeback at step 7 when the recorded evidence holds for both bindings\./);
+  assert.match(advancedPhases, /When resuming Prepare, use the verified review handoff from step 4/);
+  assert.match(advancedPhases, /For a completed round, reuse its verified review and writeback records and finish any pending final state check/);
+  assert.match(advancedPhases, /Reconcile a new, requested round only with that round's records/);
+  assert.doesNotMatch(advancedPhases, /codex\.md#recover-a-delivery-trigger/);
+  assert.match(request ?? "", /codex\.md#recover-a-delivery-trigger/);
+});
+
+test("a recovered Codex post must pass acknowledgement before waiting for review output", async () => {
+  const skillDir = path.join(repoRoot, "skills", "local");
+  const cycle = flat(await readText(path.join(skillDir, "github-pr-codex-review-cycle", "SKILL.md")));
+  const codex = await readText(path.join(skillDir, "github-pr-review-request", "references", "codex.md"));
+  const acknowledgement = flat(codex.match(/## Acknowledge the trigger\n[\s\S]*?(?=\n## )/)?.[0] ?? "");
+  assert.match(flat(codex), /Return the verified ID and `created_at` to the cycle for \[acknowledgement\]\(#acknowledge-the-trigger\)/);
+  assert.match(acknowledgement, /Use that exact ID for acknowledgement, including on resume\. Reuse verified acknowledgement already recorded for that ID\. Preserve a recorded timeout\./);
+  assert.match(acknowledgement, /issues\/comments\/\$comment_id\/reactions/);
+  assert.match(acknowledgement, /use the comment's provider `created_at` to start the 120-second bound, so a resume uses only the remaining time/);
+  assert.match(acknowledgement, /At or after the deadline, take one bounded read and finish without another wait\./);
+  assert.match(acknowledgement, /Record timeout only after a complete read at or after the deadline with no eligible reaction\./);
+  assert.match(acknowledgement, /If the read or timestamp evidence is unavailable, stop and report acknowledgement as unverified\./);
+  assert.match(acknowledgement, /With a timeout, stop unless the user explicitly asks to continue waiting for this review or approves the retry in step 5/);
+  assert.match(acknowledgement, /Review output on the same head does not establish acknowledgement of this comment/);
+  assert.match(cycle, /With a verified comment ID, resume step 3 at acknowledgement on that ID\. Enter step 4 only with its verified acknowledgement or explicit user approval to continue waiting for its review\. Post only when the current round's request has yet to start\./);
+  assert.match(cycle, /Apply the same acknowledgement gate to the replacement comment/);
+});
+
+test("the documented Codex reaction read recovers only evidence inside the original window", async (t) => {
+  const codex = await readText(path.join(repoRoot, "skills", "local", "github-pr-review-request", "references", "codex.md"));
+  const acknowledgement = codex.match(/## Acknowledge the trigger\n[\s\S]*?(?=\n## )/)?.[0] ?? "";
+  const read = acknowledgement.match(/```bash\n([^`]+)```/)?.[1];
+  const filter = acknowledgement.match(/```jq\n([^`]+)```/)?.[1];
+  assert.ok(read && filter, "missing the documented reaction read or filter");
+  const readWithFixture = [
+    "gh() { printf '%s\\0' \"$@\" >&2; printf '%s\\n' \"$fixture\"; return \"$read_status\"; }",
+    read,
+  ].join("\n");
+  const host = "github.example.com";
+  const posted = "2026-01-01T00:00:00Z";
+  const reaction = (created_at, content = "eyes") => ({ content, created_at, user: { login: "review-bot" } });
+  const onTime = [posted, "2026-01-01T00:00:10Z", "2026-01-01T00:02:00Z"];
+  const late = reaction("2026-01-01T00:02:01Z");
+  const cases = [
+    { pages: [[late, reaction("2025-12-31T23:59:59Z")], onTime.map((time) => reaction(time))], expected: onTime },
+    { pages: [[late, reaction(posted, "thumbs-up")]], expected: [] },
+    { pages: [[]], expected: [] },
+    { pages: [[reaction(posted)]], readStatus: 1 },
+    { pages: [], filterError: /expected complete reaction pages/ },
+    { pages: [[reaction("unknown")]], filterError: /does not match format/ },
+  ];
+  for (const { pages, expected, readStatus = 0, filterError } of cases) {
+    const fetched = spawnSync("bash", ["-c", readWithFixture], {
+      env: { ...process.env, BASH_ENV: "", host, owner: "sample", repo: "project", comment_id: "101",
+        fixture: JSON.stringify(pages), read_status: String(readStatus) },
+      encoding: "utf8", timeout: 5000,
+    });
+    if (fetched.error?.code === "ENOENT") { t.skip("bash unavailable"); return; }
+    assert.ifError(fetched.error);
+    assert.equal(fetched.status, readStatus);
+    assert.deepEqual(fetched.stderr.split("\0").slice(0, -1), [
+      "api", "--hostname", host, "--method", "GET", "--paginate", "--slurp",
+      "repos/sample/project/issues/comments/101/reactions", "-H", "Accept: application/vnd.github+json", "-f", "content=eyes",
+    ]);
+    if (fetched.status !== 0) continue;
+    const filtered = spawnSync("jq", ["-e", "--arg", "posted_at", posted, filter], {
+      input: fetched.stdout, encoding: "utf8", timeout: 5000,
+    });
+    if (filtered.error?.code === "ENOENT") { t.skip("jq unavailable"); return; }
+    assert.ifError(filtered.error);
+    if (filterError) {
+      assert.notEqual(filtered.status, 0);
+      assert.match(filtered.stderr, filterError);
+    } else {
+      assert.equal(filtered.status, 0, filtered.stderr);
+      assert.deepEqual(JSON.parse(filtered.stdout).map(({ created_at }) => created_at), expected);
+    }
+  }
+});
+
+test("the documented Codex trigger uses the create response and passes the body literally", async (t) => {
+  const codex = await readText(path.join(repoRoot, "skills", "local", "github-pr-review-request", "references", "codex.md"));
+  const post = codex.match(/```bash\n\s*(gh api[^`]+--method POST[^`]+)```/)?.[1];
+  assert.ok(post, "missing the documented create-comment call");
+  const postWithFixture = [
+    "gh() { printf '%s\\0' \"$@\" >&2; printf '%s\\n' \"$fixture\"; }",
+    post,
+  ].join("\n");
+  const host = "github.example.com";
+  const owner = "sample";
+  const repo = "project";
+  const pr = "51";
+  const bare = "@codex review";
+  const focused = `${bare} for literal $(printf 'focus')`;
+  const marked = `${focused}\n\n<!-- codex-review-intent:v1 aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa -->`;
+  for (const body of [bare, focused, marked]) {
+    const created = { id: 101, body };
+    const result = spawnSync("bash", ["-c", postWithFixture], {
+      encoding: "utf8",
+      env: { ...process.env, BASH_ENV: "", host, owner, repo, pr, body, fixture: JSON.stringify(created) },
+      timeout: 5000,
+    });
+    if (result.error?.code === "ENOENT") { t.skip("bash unavailable"); return; }
+    assert.equal(result.status, 0, result.error?.message);
+    assert.deepEqual(result.stderr.split("\0").slice(0, -1), [
+      "api", "--hostname", host, "--method", "POST", `repos/${owner}/${repo}/issues/${pr}/comments`,
+      "-H", "Accept: application/vnd.github.raw+json", "-f", `body=${body}`,
+    ]);
+    assert.deepEqual(JSON.parse(result.stdout), created);
+  }
+});
+
+test("the documented Codex recovery query matches only an exact new intent on all pages", async (t) => {
+  const codex = await readText(path.join(repoRoot, "skills", "local", "github-pr-review-request", "references", "codex.md"));
+  const recovery = codex.match(/## Recover a delivery trigger\n[\s\S]*?(?=\n## )/)?.[0] ?? "";
+  assert.match(flat(recovery), /--paginate --slurp .*application\/vnd\.github\.raw\+json/);
+  const filter = recovery.match(/```jq\n([^`]+)```/)?.[1];
+  assert.ok(filter, "missing the documented recovery query");
+  const uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const issueUrl = "https://github.example.com/api/v3/repos/sample/project/issues/51";
+  const baseline = "2026-01-01T00:00:00Z";
+  const marker = `<!-- codex-review-intent:v1 ${uuid} -->`;
+  const own = { id: 101, issue_url: issueUrl, user: { login: "reviewer" }, created_at: baseline,
+    body: `@codex review for review scope\n\n${marker}` };
+  const competing = [
+    { ...own, id: 102, body: "@codex review" },
+    { ...own, id: 103, body: own.body.replace(uuid, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb") },
+    { ...own, id: 104, body: `${own.body}\nAfter the marker` },
+    { ...own, id: 105, issue_url: issueUrl.replace(/51$/, "52") },
+    { ...own, id: 106, user: { login: "someone-else" } },
+    { ...own, id: 107, created_at: "2025-12-31T23:59:59Z" },
+    { ...own, id: 108 },
+    { ...own, id: 109, body: `@codex reviewer\n\n${marker}` },
+  ];
+  const cases = [
+    { pages: [competing, [own]], wanted: own },
+    { pages: [[own], competing], wanted: own },
+    { pages: [competing], failure: /expected one matching/ },
+    { pages: [[own], [{ ...own, id: 110 }]], failure: /expected one matching/ },
+    { pages: [[own]], intent: "", failure: /missing or invalid/ },
+  ];
+  for (const { pages, wanted, intent = uuid, failure } of cases) {
+    const result = spawnSync("jq", ["-e", "--arg", "issue_url", issueUrl, "--arg", "login", "reviewer",
+      "--arg", "baseline", baseline, "--arg", "uuid", intent, "--argjson", "prior_ids", "[108]", filter], {
+      input: JSON.stringify(pages), encoding: "utf8", timeout: 5000,
+    });
+    if (result.error?.code === "ENOENT") { t.skip("jq unavailable"); return; }
+    assert.ifError(result.error);
+    if (failure) {
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, failure);
+    } else {
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), wanted);
+    }
+  }
 });
 
 test("delivery delegates component-skill phases under one Phase Delegation home", async () => {

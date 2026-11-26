@@ -67,25 +67,44 @@ Still stop and ask before:
 1. Resolve the target branch or worktree.
    - Resolve and process targets under `github-pr-publish` step 1, across the
      whole cycle.
-   - On resume, revalidate any supplied PR/head/trigger and follow-up record.
-     Reuse verified completed operations and enter the earliest incomplete phase.
-     If a trigger already awaits output for the same published head, resume step
-     4 rather than posting another request. When resuming Prepare, use the
-     verified review handoff from step 4. If the record lacks that handoff,
-     recheck the same trigger and published head in step 4 within the existing
-     bound.
-     Continue verified pending publication or Writeback with its prepared
-     record. For delivery fixes already published, select the evidence mode
-     under [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence)
-     and resume pending Writeback at step 7 when the recorded evidence holds.
-     Evidence for an older head does not satisfy a review of the current head.
+   - On resume, revalidate the supplied PR and phase records and enter the
+     earliest incomplete phase. Use these branches before looking for a trigger:
+     - Use step 2 for pending initial publication and step 6 with the verified
+       prepared record for pending fix publication. For pending Writeback with
+       published delivery fixes, use
+       [Hosted fix verification evidence](../delivery-common/references/report-handoff.md#hosted-fix-verification-evidence)
+       to bind the prepared review to its reviewed head and the current remote
+       PR head to the verified fix commit. In delivery, resume pending Writeback
+       at step 7 when the recorded evidence holds for both bindings. Apply the
+       existing Writeback checks to other pending Writeback. If verification
+       fails, stop and report.
+     - When resuming Prepare, use the verified review handoff from step 4.
+       If the record lacks that handoff, recheck the same trigger and
+       published head in step 4 within the existing bound. Apply the request
+       and wait checks below first. For a completed round, reuse its verified
+       review and writeback records and finish any pending final state check.
+       Reconcile a new, requested round only with that round's records.
+     - When the request or review wait is still pending, revalidate the current
+       full published head. In delivery, if the round has a post intent or
+       trigger record, apply
+       [Recover a delivery trigger](../github-pr-review-request/references/codex.md#recover-a-delivery-trigger)
+       for this round's post intent or outcome. With a verified comment ID,
+       resume step 3 at acknowledgement on that ID. Enter step 4 only with its
+       verified acknowledgement or explicit user approval to continue waiting
+       for its review. Post only when the current round's request has yet to
+       start. Keep an earlier head's review scoped to that head.
 2. Use `github-pr-publish`.
    - Preserve that skill's verification, staging, commit, push, and PR rules.
    - Capture the PR number, PR URL, branch, push remote, commit, and
      verification result.
 3. Use `github-pr-review-request` with provider `codex` for the resolved PR.
+   - In delivery, forward the checked published head, hosted round, and task
+     record assignment to the Codex procedure so it can record each
+     [delivery trigger intent](../github-pr-review-request/references/codex.md#delivery-trigger-intent).
    - Treat `Codex request posted but not acknowledged` as a blocker unless the
      user explicitly asks to continue waiting or retry.
+   - A retry goes through the Codex request procedure. Apply the same
+     acknowledgement gate to the replacement comment.
 4. Wait for Codex review completion.
    - Codex posts a summary comment starting with
      `<!-- codex-pull-request-review-summary -->` and edits it in place. Read
