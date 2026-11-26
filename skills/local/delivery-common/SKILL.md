@@ -158,9 +158,9 @@ explanation or gaps, and the latest `benchmark-checklist` status. A claim
 whose explanation a `benchmark-checklist` verdict contradicts is
 `inconclusive`, with both shown.
 
-A worker whose own report claims a number runs `benchmark-checklist` on it as
-an optional workflow in its verification step, before reporting, under
-[Preflight and implementation](references/worker-dialogue.md#preflight-and-implementation).
+A worker whose own implementation or fix report claims a number runs
+`benchmark-checklist` on it as an optional workflow before reporting, under
+[Project verification](references/worker-dialogue.md#project-verification).
 A claim first written anywhere else, such as in the PR title or body, the
 decision summary, or the final report, gets only this rule: cite the head's
 verification record or label it `inconclusive`; it launches no run. A delivery
@@ -172,7 +172,9 @@ number in them against the published head's verification record. A claim
 without evidence from that head, or one that a `ran` verdict contradicts, is
 shown `inconclusive` with its gaps in the decision summary and the final
 report. A delivery that stops before the merge, or a PR merged by other means,
-still gets this check in its final report.
+still gets this check in its final report. At the merge confirmation, record
+the SHA-256 of the title and body checked; right before merging and at the
+final report, re-read them and repeat the check when that hash differs.
 [Worker Dialogue](references/worker-dialogue.md) links this section instead of
 restating it.
 

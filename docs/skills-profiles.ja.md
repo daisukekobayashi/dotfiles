@@ -572,10 +572,10 @@ High tier の Local Review では、利用できる場合に
 delivery 自身の出力が、時間やトークン消費量の比較など、高速化や性能低下の数値を主張する場合は、
 [Performance Claims](../skills/local/delivery-common/SKILL.md#performance-claims)
 に従い、その数値の実行回数・ばらつき・律速要因を示すか、未確認の項目を明記して
-inconclusive と表示します。worker 自身の報告が数値を主張する場合は、tier に関係なく、
-その worker が報告前に、自分の task worktree で自分の計測に対して
+inconclusive と表示します。worker 自身の実装・修正の報告が数値を主張する場合は、tier に
+関係なく、その worker が報告前に、自分の task worktree で自分の計測に対して
 `benchmark-checklist` を full モードで30分以内に実行します
-（[Preflight and implementation](../skills/local/delivery-common/references/worker-dialogue.md#preflight-and-implementation)）。
+（[Project verification](../skills/local/delivery-common/references/worker-dialogue.md#project-verification)）。
 未インストール・利用不可・オプトアウトの場合は not run として報告します。別の
 checkout が必要な変更前の計測など、そこで実行できないものは未確認の項目として明記します。
 PR 本文など別の場所で初めて書かれた主張にはルールだけを適用し、コーディネーターが

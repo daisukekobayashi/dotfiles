@@ -38,7 +38,7 @@ test("delivery-common states which numbers are claimed and how a claimed number 
   assert.match(rule, /A claim whose explanation a `benchmark-checklist` verdict contradicts is `inconclusive`, with both shown\./);
 
   // The checklist runs only in the claiming worker's verification step; claims elsewhere get the rule only.
-  assert.match(rule, /A worker whose own report claims a number runs `benchmark-checklist` on it as an optional workflow in its verification step, before reporting, under \[Preflight and implementation\]\(references\/worker-dialogue\.md#preflight-and-implementation\)\./);
+  assert.match(rule, /A worker whose own implementation or fix report claims a number runs `benchmark-checklist` on it as an optional workflow before reporting, under \[Project verification\]\(references\/worker-dialogue\.md#project-verification\)\./);
   assert.match(rule, /A claim first written anywhere else, such as in the PR title or body, the decision summary, or the final report, gets only this rule: cite the head's verification record or label it `inconclusive`; it launches no run\./);
   assert.match(rule, /A delivery with no claimed number never runs the checklist\./);
 
@@ -46,10 +46,13 @@ test("delivery-common states which numbers are claimed and how a claimed number 
   assert.match(rule, /At the merge confirmation or the final report, whichever comes first, the coordinator reads the published PR's title and body and checks each claimed number in them against the published head's verification record\./);
   assert.match(rule, /A claim without evidence from that head, or one that a `ran` verdict contradicts, is shown `inconclusive` with its gaps in the decision summary and the final report\./);
   assert.match(rule, /A delivery that stops before the merge, or a PR merged by other means, still gets this check in its final report\./);
+  // A PR edited after the merge confirmation is checked again.
+  assert.match(rule, /At the merge confirmation, record the SHA-256 of the title and body checked; right before merging and at the final report, re-read them and repeat the check when that hash differs\./);
 
-  // No publication-agent brief or return path remains.
+  // One publication-brief sentence; the coordinator check stays authoritative, and no return path exists.
   const delegation = await readText(path.join(commonDir, "references", "phase-delegation.md"));
-  assert.doesNotMatch(delegation, /Performance Claims|claimed number/);
+  assert.match(flat(section(delegation, "## Brief the agent")), /For publication, forward \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\) and the path of the head's verification record: before publishing, the agent gives each claimed number in the PR title or body its explanation from that record, or labels it `inconclusive` with its gaps; the coordinator's check there stays authoritative\./);
+  assert.doesNotMatch(section(delegation, "## Return to the coordinator"), /Performance Claims|claimed number/);
 });
 
 test("benchmark-checklist is a registered optional workflow in the claiming worker's verification at every tier", async () => {
@@ -59,11 +62,12 @@ test("benchmark-checklist is a registered optional workflow in the claiming work
   assert.ok(row, "the registry contains a benchmark-checklist entry");
   const cells = row.slice(2, -2).split(" | ");
   assert.equal(cells.length, 8);
-  assert.equal(cells[1], "Implementation and fix verification under [Worker Dialogue](worker-dialogue.md#preflight-and-implementation), before the worker reports");
+  assert.equal(cells[1], "Implementation and fix verification under [Worker Dialogue](worker-dialogue.md#project-verification), before the worker reports");
   assert.equal(cells[2], "The worker's own report claims a number under [Performance Claims](../SKILL.md#performance-claims)");
   assert.equal(cells[3], "All tiers");
   assert.equal(cells[4], "30 minutes per invocation including runs, evidence, and owned cleanup");
-  assert.equal(cells[5], "Phase input: `verification` with the worktree diff and exact reported untracked files");
+  // The quoted claims are part of the key, so a changed claim on the same input gets a new key.
+  assert.equal(cells[5], "Phase input: the `verification` key with the worktree diff and exact reported untracked files, followed by `:claims:` and the SHA-256 of the quoted claims, each claim's text with its number and unit on its own line in report order, so a changed claim gets a new key");
   assert.match(cells[6], /^The worker that wrote the claim invokes `benchmark-checklist` explicitly \(an explicit `\$benchmark-checklist` mention on Codex, the skill call on Claude Code\) in full mode on its own measurement in its own task worktree, forwarding the user's delivery request, the exact target, and the claims as quoted data\./);
   assert.match(cells[7], /^Per claim, the verdict with run count, range, and limiter, or the status and named gaps, in the worker's `Verification:` rows, with evidence at `<report path without \.md>\.evidence\/benchmark-checklist\/` beside the worker's report, never in the task worktree$/);
 
@@ -73,13 +77,18 @@ test("benchmark-checklist is a registered optional workflow in the claiming work
   assert.doesNotMatch(frame, /Performance claims/);
 });
 
-test("the claiming worker runs the checklist in its own worktree and delivery adds no worktree or cleanup machinery", async () => {
-  const dialogue = flat(section(await readText(path.join(commonDir, "references", "worker-dialogue.md")), "## Preflight and implementation"));
-  assert.match(dialogue, /Apply \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\) to any number the report claims\. For such a number, before reporting, apply the `benchmark-checklist` entry of the \[Optional Workflows\]\(optional-workflows\.md#registry\) registry, with its key, intent, and outcome handled as step 3 of \[Project verification\]\(#project-verification\) handles them\./);
+test("the claiming worker runs the checklist in Project verification and delivery adds no worktree or cleanup machinery", async () => {
+  const dialogueRaw = await readText(path.join(commonDir, "references", "worker-dialogue.md"));
+  // Implementation points to Project verification, the shared entry that fix verification also reaches.
+  assert.match(flat(section(dialogueRaw, "## Preflight and implementation")), /Apply \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\) to any number the report claims, under \[Project verification\]\(#project-verification\)\./);
+  const dialogue = flat(section(dialogueRaw, "### Project verification"));
+  assert.match(dialogue, /For a number the implementation or fix report claims under \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\), apply the `benchmark-checklist` entry of the same registry before reporting, with steps 2 to 4 above and the key its entry sets\./);
   assert.match(dialogue, /Run it in the task worktree under \[Foreground Checks\]\(\.\.\/SKILL\.md#foreground-checks\), and write its evidence to `<report path without \.md>\.evidence\/benchmark-checklist\/`, never in the worktree\./);
   assert.match(dialogue, /Anything it cannot do there, such as a before side that needs another checkout or an item the checklist asks about first, is a named gap that makes the claim `inconclusive`\./);
   assert.match(dialogue, /Delivery creates no worktree and removes nothing for it; normal cleanup's runtime inspection handles any leftover\./);
-  assert.doesNotMatch(dialogue, /15 minutes|30 minutes/, "worker-dialogue.md restates the registry bound");
+  // No claim: a status without a launch or a key.
+  assert.match(dialogue, /With no claimed number, record `benchmark-checklist: not run: trigger not met` without launching it or capturing a key\./);
+  assert.doesNotMatch(dialogueRaw, /15 minutes|30 minutes/, "worker-dialogue.md restates the registry bound");
 
   // Local Review has no Performance claims step and no checkpoint report recording for one.
   const review = await readText(path.join(commonDir, "references", "local-review.md"));
@@ -114,12 +123,15 @@ test("benchmark-checklist gains only the scoped delivery exception and is a deli
   assert.match(adr, /Delivery invokes `arena`, `blast-radius`, `evaluate-skill`, and `benchmark-checklist` the way it already invokes `change-\*review`/);
   const adrJa = flat(await readText(path.join(repoRoot, "docs", "adr", "0001-pstack-principles-in-delivery.ja.md")));
   assert.match(adrJa, /delivery は `arena`、`blast-radius`、`evaluate-skill`、`benchmark-checklist` を/);
+  // ADR row 5 matches the worker-run design in both languages.
+  assert.match(adr, /\| The inline rule applies to every claimed speedup or regression number in delivery output\. When a worker's own implementation or fix report claims one, the worker runs `benchmark-checklist`, the measurement workflow #240 adapts, as an optional workflow in its verification, before reporting\. \|/);
+  assert.match(adrJa, /\| delivery の出力で主張される高速化や性能低下の数値すべてに本文のルールを適用します。worker 自身の実装・修正の報告が数値を主張するときは、その worker が報告前の検証で、#240 で取り込んだ計測の workflow である `benchmark-checklist` を任意 workflow として実行します。 \|/);
 
   // The profile docs describe the worker-run checklist, not a Local Review step.
   for (const doc of ["skills-profiles.md", "skills-profiles.ja.md"]) {
     const text = flat(await readText(path.join(repoRoot, "docs", doc)));
     assert.doesNotMatch(text, /local-review\.md#performance-claims/, doc);
-    assert.match(text, /worker-dialogue\.md#preflight-and-implementation/, doc);
+    assert.match(text, /worker-dialogue\.md#project-verification/, doc);
   }
 });
 

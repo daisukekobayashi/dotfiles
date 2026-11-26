@@ -601,10 +601,10 @@ When a delivery's own output claims a speedup or regression number, such as a
 time or token-consumption comparison, delivery requires the number's run
 count, spread, and limiter, or labels it inconclusive with named gaps, under
 [Performance Claims](../skills/local/delivery-common/SKILL.md#performance-claims).
-When a worker's own report claims such a number, at any tier, the worker runs
-`benchmark-checklist` in full mode on its own measurement in its task
-worktree before reporting, within 30 minutes, under
-[Preflight and implementation](../skills/local/delivery-common/references/worker-dialogue.md#preflight-and-implementation),
+When a worker's own implementation or fix report claims such a number, at
+any tier, the worker runs `benchmark-checklist` in full mode on its own
+measurement in its task worktree before reporting, within 30 minutes, under
+[Project verification](../skills/local/delivery-common/references/worker-dialogue.md#project-verification),
 and reports it as not run when it is not installed, unavailable, or opted
 out. Anything it cannot do there, such as a before side that needs another
 checkout, is a named gap. A claim first written elsewhere, such as in the PR
