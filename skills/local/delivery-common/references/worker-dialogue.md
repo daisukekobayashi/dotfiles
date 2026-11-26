@@ -118,6 +118,8 @@ settled design and repository conventions. Run the smallest relevant checks and
 record actual results and material coverage limits; a successful baseline is
 not implementation verification. Apply [Project verification](#project-verification)
 and report each check under [Classified verification](report-handoff.md#classified-verification).
+Apply [Performance Claims](../SKILL.md#performance-claims) to any number the
+report claims, under [Project verification](#project-verification).
 Complete this phase only with an
 implementation and verification evidence ready for review, or an explicit
 blocker.
@@ -155,6 +157,19 @@ the plan and apply their existing success criteria.
    step, timed-out run, or evidence for a different input cannot show successful
    verification of the current work. Resume and count runs through the shared
    optional-workflow rules.
+
+For a number the implementation or fix report claims under
+[Performance Claims](../SKILL.md#performance-claims), apply the
+`benchmark-checklist` entry of the same registry before reporting, with
+steps 2 to 4 above and the key its entry sets. Run it in the task worktree
+under [Foreground Checks](../SKILL.md#foreground-checks), and write its
+evidence to `<report path without .md>.evidence/benchmark-checklist/`, never
+in the worktree. Anything it cannot do there, such as a before side that needs
+another checkout or an item the checklist asks about first, is a named gap
+that makes the claim `inconclusive`. Delivery creates no worktree and removes
+nothing for it; normal cleanup's runtime inspection handles any leftover. With
+no claimed number, record `benchmark-checklist: not run: trigger not met`
+without launching it or capturing a key.
 
 ## Worker defaults
 

@@ -40,6 +40,7 @@ matches and no `add` entry matches is a `REVIEW.md` failure.
 - add `skills/local/change-security-review/SKILL.md`
 - add `skills/local/blast-radius/SKILL.md`
 - add `skills/local/evaluate-skill/SKILL.md`
+- add `skills/local/benchmark-checklist/SKILL.md`
 - add `skills/local/*-delivery/SKILL.md`
 - add `skills/local/azure-devops-work-item-delivery/references/merge-and-state.md`
 - add `skills/local/*-worktree-cleanup/SKILL.md`

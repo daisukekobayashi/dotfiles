@@ -52,9 +52,9 @@ adapts.
 This is the only exception to Missing Prerequisites: a missing required skill,
 reviewer, check, or tool still stops the phase that needs it.
 
-Delivery invokes `arena`, `blast-radius`, and `evaluate-skill` the way it
-already invokes `change-*review`: their `SKILL.md` drops
-`disable-model-invocation`, their Codex metadata keeps
+Delivery invokes `arena`, `blast-radius`, `evaluate-skill`, and
+`benchmark-checklist` the way it already invokes `change-*review`: their
+`SKILL.md` drops `disable-model-invocation`, their Codex metadata keeps
 `allow_implicit_invocation: false`, and their description adds that the skill
 also runs as its step of an explicitly user-requested `github-issue-delivery`
 or `azure-devops-work-item-delivery` workflow. The "Run only ..." guard at the
@@ -71,7 +71,7 @@ implementing issues test both. Outside delivery they stay explicit-only.
 | Implementation verification | Check the real thing, not a proxy | Adopted | Each verification is labeled as the changed path run or a proxy only. When the target project has its own `verify-<app>` skill for the changed feature, the worker runs it. Delivery never runs `create-verification-skill` automatically. | Proxy-only checks went unlabeled; a project's `verify-<app>` skill is part of the target, while generating one would add files outside the task. |
 | Skill and instruction changes | Exercise changed instructions with an agent | Adopted | At Medium and High tier, when a delivery changes skill or agent-instruction text, such as a skill or an instruction file like `AGENTS.md`, it invokes `evaluate-skill` once on the current agent under a time bound, in a delivery smoke mode: one existing eval case per changed skill, each run once with the changed instructions and no baseline session, so `evaluate-skill`'s usual baseline and treatment comparison does not run in delivery. Changed text with no applicable eval case, including an instruction-only change, is reported as not exercised; Low tier reports `not run: tier`. | Closes the gap #239 showed, at a cost a delivery can absorb; a full `evaluate-skill` comparison per delivery costs too much. |
 | Review | Findings proven by a run | Adopted, in two parts | #245 makes `change-adversarial-review` back findings with runs; `change-review` and `change-security-review` are unchanged. At High tier, delivery also runs `blast-radius`, reusing #245's isolation, cleanup, and evidence rules. | One isolation design serves both; High tier already escalates review. |
-| Performance claims | Explain the number before reporting it | Adopted, conditional | When a change claims a speedup or regression number, the inline rule applies, and whatever measurement workflows #240 adapts run as optional workflows. | The trigger is narrow; a change with no claimed number never runs them. |
+| Performance claims | Explain the number before reporting it | Adopted, conditional | The inline rule applies to every claimed speedup or regression number in delivery output. When a worker's own implementation or fix report claims one, the worker runs `benchmark-checklist`, the measurement workflow #240 adapts, as an optional workflow in its verification, before reporting. | The trigger is narrow; a change with no claimed number never runs them. |
 | Completion | Encode repeated mistakes in structure | Adjusted | Follow-up candidates gain a fourth creation criterion: the same finding class recurred at least twice across rounds or deliveries, with a proposed structural safeguard. `encode-lessons-in-structure` shapes the proposal when installed; otherwise the inline rule applies. Delivery never runs `correct` automatically. | The current criteria would recommend dropping such candidates; `correct` edits the repository beyond the task. |
 
 ### Cost bounds
@@ -123,6 +123,7 @@ on it, and the `architect` and `arena` rows share one preflight issue. The
 
 - With the optional workflows, delivery depth depends on what is installed. The
   `not run` lines in reports make that visible.
-- The explicit-only rule for `arena`, `blast-radius`, and `evaluate-skill`
-  gains a delivery exception, and the tests that pin those skills' metadata and
-  the Missing Prerequisites text change with the implementing issues.
+- The explicit-only rule for `arena`, `blast-radius`, `evaluate-skill`, and
+  `benchmark-checklist` gains a delivery exception, and the tests that pin
+  those skills' metadata and the Missing Prerequisites text change with the
+  implementing issues.

@@ -597,13 +597,27 @@ At High tier, Local Review also runs [blast-radius](../skills/local/delivery-com
 when available. It reuses the adversarial review's isolation and evidence rules
 on the pinned worker head. The coordinator assesses findings against checked
 evidence, and the decision summary shows the optional run's status.
+When a delivery's own output claims a speedup or regression number, such as a
+time or token-consumption comparison, delivery requires the number's run
+count, spread, and limiter, or labels it inconclusive with named gaps, under
+[Performance Claims](../skills/local/delivery-common/SKILL.md#performance-claims).
+When a worker's own implementation or fix report claims such a number, at
+any tier, the worker runs `benchmark-checklist` in full mode on its own
+measurement in its task worktree before reporting, within 30 minutes, under
+[Project verification](../skills/local/delivery-common/references/worker-dialogue.md#project-verification),
+and reports it as not run when it is not installed, unavailable, or opted
+out. Anything it cannot do there, such as a before side that needs another
+checkout, is a named gap. A claim first written elsewhere, such as in the PR
+body, gets the rule only, and the coordinator checks the PR's claims against
+the published head's verification record at the merge confirmation or the
+final report. A delivery with no claimed number never runs the checklist.
 Remaining ADR 0001 work is tracked in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,
 `maintain-verification-skill`, `evaluate-skill`, and `benchmark-checklist` require
 explicit user invocation outside their designated delivery steps. Codex
 keeps `policy.allow_implicit_invocation: false`. For Claude Code,
-`arena`, `blast-radius`, and `evaluate-skill` omit
+`arena`, `blast-radius`, `evaluate-skill`, and `benchmark-checklist` omit
 `disable-model-invocation` so their designated steps can invoke them in an
 explicitly requested `github-issue-delivery` or
 `azure-devops-work-item-delivery` workflow. Their descriptions and body guards

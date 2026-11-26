@@ -48,7 +48,7 @@ workflow です。
 これは Missing Prerequisites の唯一の例外です。必須の skill、レビュアー、チェック、
 ツールがない場合は、引き続きそれを必要とするフェーズを止めます。
 
-delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change-*review` を
+delivery は `arena`、`blast-radius`、`evaluate-skill`、`benchmark-checklist` を、すでに `change-*review` を
 呼んでいるのと同じ方法で呼び出します。`SKILL.md` から `disable-model-invocation` を
 外し、Codex のメタデータは `allow_implicit_invocation: false` のまま残し、description
 に、ユーザーが明示的に依頼した `github-issue-delivery` または
@@ -66,7 +66,7 @@ delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change
 | 実装の検証 | 代理ではなく実物を確かめる | 採用 | 各検証に、変更した経路を実行したのか代理の確認だけなのかを明記します。対象プロジェクトに変更した機能を扱う自身の `verify-<app>` skill があれば、worker はそれを実行します。`create-verification-skill` は自動では実行しません。 | 代理だけの確認が区別されずに報告されていました。プロジェクトの `verify-<app>` skill は対象の一部ですが、新たに生成するとタスク外のファイルが増えます。 |
 | skill と指示の変更 | 変更した指示を agent で実行する | 採用 | Medium と High tier で skill や `AGENTS.md` などの指示ファイルの文面を変えた delivery は、現在の agent で `evaluate-skill` を時間の上限つきで1回呼び出し、delivery 用のスモークモードで実行します。変更した skill ごとに既存の eval ケースを1つ選び、変更後の指示でそれぞれ1回だけ実行し、ベースラインのセッションは作りません。`evaluate-skill` の通常のベースラインとの比較は delivery では行いません。指示ファイルだけの変更を含め、該当する eval ケースのない変更は未実行と報告し、Low tier は `not run: tier` と報告します。 | #239 で見えた穴を、1回の delivery が負担できるコストで埋めます。delivery ごとの `evaluate-skill` の完全な比較は高すぎます。 |
 | レビュー | 実行で裏付けた指摘 | 2つに分けて採用 | #245 で `change-adversarial-review` の指摘を実行で裏付けます。`change-review` と `change-security-review` は変えません。High tier では delivery が `blast-radius` も実行し、#245 の隔離、後片付け、証拠のルールを再利用します。 | 1つの隔離の設計を両方で使えます。High tier はすでにレビューを重くしています。 |
-| 性能の主張 | 数値を報告する前に説明する | 条件つきで採用 | 変更が高速化や性能低下の数値を主張するとき、本文のルールを適用し、#240 で取り込む計測の workflow を任意 workflow として実行します。 | トリガーが狭く、数値を主張しない変更では実行しません。 |
+| 性能の主張 | 数値を報告する前に説明する | 条件つきで採用 | delivery の出力で主張される高速化や性能低下の数値すべてに本文のルールを適用します。worker 自身の実装・修正の報告が数値を主張するときは、その worker が報告前の検証で、#240 で取り込んだ計測の workflow である `benchmark-checklist` を任意 workflow として実行します。 | トリガーが狭く、数値を主張しない変更では実行しません。 |
 | 完了 | 繰り返す誤りを構造で防ぐ | 調整して採用 | follow-up 候補の作成条件に4つ目を加えます。同じ種類の指摘がラウンドや delivery をまたいで2回以上起き、構造による防止策を提案しているものです。提案は、`encode-lessons-in-structure` がインストールされていればそれに沿って作り、なければ本文のルールに従います。`correct` は自動では実行しません。 | 現在の条件ではこうした候補は見送りが推奨されます。`correct` はタスクを超えてリポジトリを編集します。 |
 
 ### コストの上限
@@ -115,6 +115,6 @@ delivery は `arena`、`blast-radius`、`evaluate-skill` を、すでに `change
 
 - 任意 workflow により、delivery の確認の深さはインストール状況で変わります。
   報告の `not run` の行でそれが見えるようにします。
-- `arena`、`blast-radius`、`evaluate-skill` の明示呼び出し専用のルールに delivery の
+- `arena`、`blast-radius`、`evaluate-skill`、`benchmark-checklist` の明示呼び出し専用のルールに delivery の
   例外が加わり、それらのメタデータと Missing Prerequisites の文面を固定しているテストは、
   実装する issue で一緒に変わります。
