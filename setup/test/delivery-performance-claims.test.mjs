@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -35,7 +35,7 @@ test("delivery-common states which numbers are claimed and how a claimed number 
   assert.doesNotMatch(skill, /\]\(\.\.\/(explain-the-number|benchmark-checklist)\//);
   assert.match(rule, /A number that cannot be explained stays where it was written, labeled `inconclusive` with each unchecked item named as a gap; it never blocks the delivery\./);
   assert.match(rule, /`Verification:` rows under \[Classified verification\]\(references\/report-handoff\.md#classified-verification\)/);
-  assert.match(rule, /The decision summary and the final report show each claim with its explanation or gaps, and the latest `benchmark-checklist` status\./);
+  assert.match(rule, /The decision summary and the final report show each claim with its explanation or gaps, including the PR claims the publishing agent returns, and the latest `benchmark-checklist` status\./);
 
   // A late claim gets the rule only, and no claim means no run.
   assert.match(rule, /A claim first written after that step, such as in the PR title or body, gets only this rule: cite that head's evidence or label it `inconclusive`; it launches no run\./);
@@ -44,6 +44,13 @@ test("delivery-common states which numbers are claimed and how a claimed number 
   // The publishing agent gets the rule and the evidence to cite, so a PR claim is checked before it is published.
   const delegation = flat(section(await readText(path.join(commonDir, "references", "phase-delegation.md")), "## Brief the agent"));
   assert.match(delegation, /For publication, forward \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\) and the path of the pinned head's verification record: before publishing, the agent checks the PR title and body for a claimed number and gives each one the explanation that record cites, or labels it `inconclusive` with its gaps\./);
+  assert.match(delegation, /When the record holds a `benchmark-checklist` verdict that disagrees with the claim's explanation, the agent shows both and labels the claim `inconclusive` instead of citing the explanation alone\./);
+  // The publishing agent returns its PR claims, and the coordinator records them for the decision summary and final report.
+  const returned = flat(section(await readText(path.join(commonDir, "references", "phase-delegation.md")), "## Return to the coordinator"));
+  assert.match(returned, /For publication, also one line for each claimed number the agent added to or kept in the PR title or body, with the explanation it cites or `inconclusive` with its gaps, or one line saying the PR claims none\./);
+  assert.match(returned, /The coordinator records each claimed-number line from a publication summary in the pinned head's verification record, where the decision summary and the final report show it under \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\)\./);
+  assert.match(rule, /including the PR claims the publishing agent returns/);
+  assert.match(rule, /A claim whose explanation a `benchmark-checklist` verdict contradicts is `inconclusive`, with both shown\./);
   assert.match(rule, /A delivery with no claimed number never runs it\./);
 
   // Workers reach the rule from their verification step without a restatement.
@@ -59,7 +66,11 @@ test("benchmark-checklist is a registered optional workflow on the reviewed head
   const cells = row.slice(2, -2).split(" | ");
   assert.equal(cells.length, 8);
   assert.match(cells[1], /^\*\*Performance claims\*\* in \[Local Review\]\(local-review\.md#performance-claims\), on the pinned worker head after final tier selection$/);
-  assert.match(cells[2], /^A claimed number under \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\) in the accepted implementation and fix reports the progress record ties to the checkpoint commits from the recorded base to the head, those commits' messages, or the lines the task diff adds$/);
+  assert.match(cells[2], /^A claimed number under \[Performance Claims\]\(\.\.\/SKILL\.md#performance-claims\) in the accepted implementation and fix reports recorded with the checkpoint commits from the recorded base to the head under Local Review's \*\*Pin the implementation\*\*, those commits' messages, or the lines the task diff adds$/);
+
+  // Common resume reconciliation never records an outcome before the step's own finish order.
+  const recordAndReport = flat(section(frame, "## Record and report"));
+  assert.match(recordAndReport, /For the \*\*Performance claims\*\* step in \[Local Review\]\(local-review\.md\), finish in that step's order first \(confirm the run ended, retain the remaining evidence, remove the owned worktrees\) and record no outcome before it\./);
   assert.equal(cells[3], "All tiers");
   assert.match(cells[4], /^30 minutes per reviewed head, shared by worktree creation for both sides/);
   assert.equal(cells[5], "Reviewed head: full SHA");
@@ -75,12 +86,14 @@ test("Local Review runs benchmark-checklist on the claims with both sides isolat
   assert.match(flat(review), /Apply \[Performance claims\]\(#performance-claims\) before advancing from the round\./);
   const step = flat(section(review, "## Performance claims"));
   assert.match(step, /applies the `benchmark-checklist` entry of the \[Optional Workflows registry\]\(optional-workflows\.md#registry\)/);
-  assert.match(step, /\[Reconcile existing intents\]\(optional-workflows\.md#record-and-report\) before evaluating eligibility\./);
-  // Resume cleans up the worktrees the intent recorded before anything was created.
-  assert.match(step, /For an intent without an outcome, perform safe owned cleanup under \[Remove\]\(repro-runs\.md#remove\) for each worktree path and SHA the intent recorded, and report any leftover/);
+  assert.match(step, /\[Reconcile existing intents\]\(optional-workflows\.md#record-and-report\) before evaluating eligibility, and never relaunch\./);
+  // Each checkpoint records the reports it commits, so the step can find them on a first run and on resume.
+  assert.match(flat(section(review, "## Pin the implementation")), /For each implementation or fix checkpoint, record in the progress record the commit's full SHA with the path and checked SHA-256 of each accepted worker report whose work it commits/);
+  // Resume follows the same finish order as the normal path, on the worktrees the intent recorded.
+  assert.match(step, /before evaluating eligibility, and never relaunch\. For an intent without an outcome, follow step 6's order on the worktree paths and SHAs the intent recorded: confirm the run ended, retain any remaining evidence, remove the worktrees and report any leftover, then recover the outcome\./);
   assert.match(step, /Before creating anything, record the launch intent with that report path, its absolute deadline from the registry's bound or the user's shorter bound, and both owned worktrees: the head side at `<report path without \.md>\.repro` with the pinned head SHA, and the base side at `<report path without \.md>\.repro-base` with the base SHA\./);
   // Claims come from the reports tied to the checkpoint commits, not reports whose Head is the pinned head.
-  assert.match(step, /the accepted implementation and fix reports that the progress record ties to each checkpoint commit from the recorded base to the pinned head, each opened by its recorded path and rechecked against its recorded hash/);
+  assert.match(step, /the accepted implementation and fix reports recorded with each checkpoint commit from the recorded base to the pinned head under \*\*Pin the implementation\*\* above, each opened by its recorded path and rechecked against its recorded hash with \[Check a handoff\]\(report-handoff\.md#check-a-handoff\)'s `--sha256`, where a checkpoint with no recorded report or a failed recheck is a named gap in the verification record/);
   assert.match(step, /\(`git log --format=%B <base>\.\.<head>`\); and the lines the task diff adds/);
   assert.match(step, /With no claim, record `not run: trigger not met`\./);
   // Claim text is data, never a source of what runs.
@@ -90,11 +103,18 @@ test("Local Review runs benchmark-checklist on the claims with both sides isolat
   assert.match(step, /Invoke `benchmark-checklist` explicitly in full mode/);
   assert.match(step, /The request authorizes running only that measurement and installed, unprivileged profilers locally in them\./);
   assert.match(step, /is not done and is reported as a gap\./);
-  // Evidence is retained before the worktrees are removed, and ran depends on it.
-  assert.match(step, /Before \[Remove\]\(repro-runs\.md#remove\), copy `\.repro\/benchmark-checklist\/` to `<report path without \.md>\.evidence\/benchmark-checklist\/` with the copy rules of \[Evidence\]\(repro-runs\.md#evidence\)/);
-  assert.match(step, /Record `ran` only with a verdict for every claim, the evidence retained, and safe cleanup, all within the deadline/);
-  // An explained claim keeps its explanation when the checklist does not run.
-  assert.match(step, /A claim whose source already explains it with cited evidence keeps that explanation whatever the checklist's status; label only an unexplained claim `inconclusive`, with the named gaps\./);
+  // One finish order: confirm exit, retain evidence, remove worktrees, record the outcome.
+  const order = [
+    "First confirm the run and every process it started have exited: for a Codex run, step 1 of [Remove](repro-runs.md#remove); for a subagent, the host call returned.",
+    "Then copy `.repro/benchmark-checklist/` from the head-side worktree to `<report path without .md>.evidence/benchmark-checklist/` with the copy rules of [Evidence](repro-runs.md#evidence)",
+    "Then remove both worktrees with steps 3 and 4 of Remove.",
+    "Last, record the outcome: `ran` only with a verdict for every claim, the evidence retained, and safe cleanup, all within the deadline;",
+  ].map((text) => step.indexOf(text));
+  assert.ok(order.every((index) => index !== -1), `finish order sentences present: ${order}`);
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "finish order");
+  assert.match(step, /If exit cannot be confirmed, copy and remove nothing, leave the worktrees in place, record `failed: <reason>`, and report them\./);
+  // An explained claim keeps its explanation unless a ran verdict contradicts it.
+  assert.match(step, /A claim whose source explains it with cited evidence keeps that explanation when the checklist did not reach `ran` or its verdict agrees\. When a `ran` verdict disagrees with the source's explanation, record both and label the claim `inconclusive`\./);
   assert.match(step, /Never remove or rewrite a claim\. Never invoke the skill again on that key, or use its result on another head\./);
   // The step links the registry instead of restating its bound.
   assert.doesNotMatch(step, /30 minutes/);
@@ -131,8 +151,14 @@ test("benchmark-checklist gains only the scoped delivery exception and is a deli
 test("benchmark-checklist still exports for standalone use without delivery-common", () => {
   // The review's repro: a base export that excludes delivery-common and the review skills.
   const require = createRequire(import.meta.url);
+  // A portable stand-in for git that exits 1, as git does for an unset config key.
+  const fakeDir = mkdtempSync(path.join(tmpdir(), "delivery-performance-claims-git-"));
+  const fakeGit = path.join(fakeDir, process.platform === "win32" ? "git.cmd" : "git");
+  writeFileSync(fakeGit, process.platform === "win32" ? "@exit /b 1\r\n" : "#!/bin/sh\nexit 1\n", { mode: 0o755 });
   const { runExportCommand } = require(path.join(repoRoot, "setup", "skills-export.js"));
-  const out = path.join(tmpdir(), `delivery-performance-claims-${process.pid}-never-created`);
+  // Outside the repository whatever TMPDIR is: under the filesystem root of the checkout.
+  const out = path.join(path.parse(repoRoot).root, `delivery-performance-claims-${process.pid}-never-created`);
+  assert.ok(path.relative(repoRoot, out).startsWith(".."), "out path is outside the repository");
   const lines = [];
   const log = console.log;
   console.log = (...args) => lines.push(args.join(" "));
@@ -141,10 +167,11 @@ test("benchmark-checklist still exports for standalone use without delivery-comm
       ["--profile", "base", "--agent", "codex",
         "--exclude", "delivery-common,change-adversarial-review,change-review,change-security-review,blast-radius,interrogate",
         "--out", out],
-      { dotfilesRoot: repoRoot, home: "/nonexistent", dryRun: true, env: { XDG_CONFIG_HOME: "/nonexistent" }, gitCommand: () => "/bin/false" },
+      { dotfilesRoot: repoRoot, home: path.join(out, "home"), dryRun: true, env: { XDG_CONFIG_HOME: path.join(out, "config") }, gitCommand: () => fakeGit },
     );
   } finally {
     console.log = log;
+    rmSync(fakeDir, { recursive: true, force: true });
   }
   assert.equal(existsSync(out), false, "dry run creates no output");
   const selected = lines.find((line) => line.startsWith("Local skills: "));

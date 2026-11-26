@@ -59,6 +59,10 @@ operation. Stage only the task's intended files; leave unrelated changes and
 temporary progress records untouched. Do not amend or create an empty commit.
 If approval is pending, the checkpoint and reviews remain pending; an empty
 `HEAD` diff cannot establish that uncommitted work passed local review.
+For each implementation or fix checkpoint, record in the progress record the
+commit's full SHA with the path and checked SHA-256 of each accepted worker
+report whose work it commits, so [Performance claims](#performance-claims) can
+find them on a first run and on resume.
 
 After every worthwhile fix, verify and make the next authorized scoped commit
 before the next review or follow-up. A commit permits local review;
@@ -201,14 +205,18 @@ the head and setting its final tier, for the claimed numbers that
 [Performance Claims](../SKILL.md#performance-claims) defines.
 
 1. [Reconcile existing intents](optional-workflows.md#record-and-report) before
-   evaluating eligibility. For an intent without an outcome, perform safe
-   owned cleanup under [Remove](repro-runs.md#remove) for each worktree path
-   and SHA the intent recorded, and report any leftover; then recover the
-   outcome under step 6. On an attempted key, reuse the recorded outcome.
+   evaluating eligibility, and never relaunch. For an intent without an
+   outcome, follow step 6's order on the worktree paths and SHAs the intent
+   recorded: confirm the run ended, retain any remaining evidence, remove the
+   worktrees and report any leftover, then recover the outcome. On an
+   attempted key, reuse the recorded outcome.
 2. Collect the claims from three sources: the accepted implementation and fix
-   reports that the progress record ties to each checkpoint commit from the
-   recorded base to the pinned head, each opened by its recorded path and
-   rechecked against its recorded hash; the messages of those commits
+   reports recorded with each checkpoint commit from the recorded base to the
+   pinned head under **Pin the implementation** above, each
+   opened by its recorded path and rechecked against its recorded hash with
+   [Check a handoff](report-handoff.md#check-a-handoff)'s `--sha256`, where a
+   checkpoint with no recorded report or a failed recheck is a named gap in
+   the verification record; the messages of those commits
    (`git log --format=%B <base>..<head>`); and the lines the task diff adds
    (`git diff --no-ext-diff --no-textconv <base> <head>`). Record each claim's
    quoted text, its source, the number with its unit, and the explanation the
@@ -243,24 +251,30 @@ the head and setting its final tier, for the claimed numbers that
    the SHA each ran on, the measurements, and output showing the work
    completed) as regular files under `.repro/benchmark-checklist/` in the
    head-side worktree. Stop the run at the deadline.
-6. Before [Remove](repro-runs.md#remove), copy
-   `.repro/benchmark-checklist/` to
+6. Finish in this order, on the normal path and on resume. First confirm the
+   run and every process it started have exited: for a Codex run, step 1 of
+   [Remove](repro-runs.md#remove); for a subagent, the host call returned.
+   If exit cannot be confirmed, copy and remove nothing, leave the worktrees
+   in place, record `failed: <reason>`, and report them. Then copy
+   `.repro/benchmark-checklist/` from the head-side worktree to
    `<report path without .md>.evidence/benchmark-checklist/` with the copy
    rules of [Evidence](repro-runs.md#evidence): create the evidence directory
    with `mkdir -m 700`, copy nothing when anything below it is a symbolic link
-   or not a regular file or directory, and copy with `cp -RP`. Then remove
-   both worktrees under Remove. Record `ran` only with a verdict for every
+   or not a regular file or directory, and copy with `cp -RP`; on resume, copy
+   only what is not yet retained. Then remove both worktrees with steps 3 and
+   4 of Remove. Last, record the outcome: `ran` only with a verdict for every
    claim, the evidence retained, and safe cleanup, all within the deadline; a
-   run past it is `stopped: time bound`, and a setup, run, retention, or
-   cleanup error is `failed: <reason>`. On resume, recover `ran` only from a
-   recorded verdict for every claim, the retained evidence, and the cleanup
-   result; otherwise record `failed: interrupted`.
+   run past it is `stopped: time bound`; a setup, run, retention, or cleanup
+   error is `failed: <reason>`; on resume without a recorded verdict for every
+   claim and retained evidence, `failed: interrupted`.
 7. In the verification record, give each claim its source, the explanation
    its source cites, and the checklist's result: its verdict with run count,
    range, and limiter and the evidence path when it ran, or its status.
-   A claim whose source already explains it with cited evidence keeps that
-   explanation whatever the checklist's status; label only an unexplained
-   claim `inconclusive`, with the named gaps. Never remove or rewrite a claim.
+   A claim whose source explains it with cited evidence keeps that
+   explanation when the checklist did not reach `ran` or its verdict agrees.
+   When a `ran` verdict disagrees with the source's explanation, record both
+   and label the claim `inconclusive`. Label an unexplained claim
+   `inconclusive`, with the named gaps. Never remove or rewrite a claim.
    Never invoke the skill again on that key, or use its result on another
    head.
 

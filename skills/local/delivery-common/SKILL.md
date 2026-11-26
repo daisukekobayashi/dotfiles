@@ -154,7 +154,9 @@ it never blocks the delivery. A worker records its claim's explanation in its
 `Verification:` rows under
 [Classified verification](references/report-handoff.md#classified-verification).
 The decision summary and the final report show each claim with its
-explanation or gaps, and the latest `benchmark-checklist` status.
+explanation or gaps, including the PR claims the publishing agent returns,
+and the latest `benchmark-checklist` status. A claim whose explanation a
+`benchmark-checklist` verdict contradicts is `inconclusive`, with both shown.
 
 [Performance claims](references/local-review.md#performance-claims) in Local
 Review runs `benchmark-checklist` on the claims at the pinned worker head as an

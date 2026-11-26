@@ -45,7 +45,10 @@ paths to existing material. For the hosted cycle's fixes, assign
 For publication, forward [Performance Claims](../SKILL.md#performance-claims)
 and the path of the pinned head's verification record: before publishing, the
 agent checks the PR title and body for a claimed number and gives each one the
-explanation that record cites, or labels it `inconclusive` with its gaps.
+explanation that record cites, or labels it `inconclusive` with its gaps. When
+the record holds a `benchmark-checklist` verdict that disagrees with the
+claim's explanation, the agent shows both and labels the claim `inconclusive`
+instead of citing the explanation alone.
 For the preview and the cleanup, it also assigns
 the manifest path: the report path with `.manifest.json` in place of `.md`,
 which the cleanup skill creates as a new file. Include
@@ -79,7 +82,10 @@ The summary's labels carry what the next step needs:
 - Head: the head the phase ended on, under [Report path](#report-path).
 - Verification: one line each for the component skill's status, such as the
   cycle's status or the publish result, and for a hosted round the published
-  head and the head the hosted review covered. For hosted fixes, reference
+  head and the head the hosted review covered. For publication, also one line
+  for each claimed number the agent added to or kept in the PR title or body,
+  with the explanation it cites or `inconclusive` with its gaps, or one line
+  saying the PR claims none. For hosted fixes, reference
   the applicable separate evidence report by path and SHA-256. Use the
   ordinary v1 check for this outer status report.
 - Questions: the prepared result to decide on: the prepared dispositions, the
@@ -92,6 +98,9 @@ its manifest command, the preview agent returns `complete` with a Verification
 line saying no preview and why. The coordinator then presents the merge alone,
 and the cleanup keeps its own confirmation after the merge.
 
+The coordinator records each claimed-number line from a publication summary
+in the pinned head's verification record, where the decision summary and the
+final report show it under [Performance Claims](../SKILL.md#performance-claims).
 The coordinator opens the full report only for a named field: the hosted
 cycle's Final Report `Not applied` items, which it records as the provider
 delivery skill says. For the preview and the cleanup, it presents the targets
