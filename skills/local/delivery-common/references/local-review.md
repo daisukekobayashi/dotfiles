@@ -205,10 +205,12 @@ the head and setting its final tier, for the claimed numbers that
 [Performance Claims](../SKILL.md#performance-claims) defines.
 
 1. [Reconcile existing intents](optional-workflows.md#record-and-report) before
-   evaluating eligibility, and never relaunch. For an intent without an
-   outcome, follow step 6's order on the worktree paths and SHAs the intent
-   recorded: confirm the run ended, retain any remaining evidence, remove the
-   worktrees and report any leftover, then recover the outcome. On an
+   evaluating eligibility, and never relaunch. Never recover the outcome of an
+   intent without one. For each worktree path the intent recorded, run
+   `list-processes.sh <path>` from `worktree-runtime-cleanup`: only when it
+   exits 0 and lists no process for that worktree, remove it with steps 3 and
+   4 of [Remove](repro-runs.md#remove); otherwise leave it and report it as a
+   leftover. Copy no evidence. Then record `failed: interrupted`. On an
    attempted key, reuse the recorded outcome.
 2. Collect the claims from three sources: the accepted implementation and fix
    reports recorded with each checkpoint commit from the recorded base to the
@@ -238,7 +240,10 @@ the head and setting its final tier, for the claimed numbers that
    side at `<report path without .md>.repro-base` with the base SHA. Start the
    clock, then create both under
    [Disposable worktree](repro-runs.md#disposable-worktree) at their recorded
-   SHAs.
+   SHAs. Before the run, record each worktree's process table with
+   `stop-run-processes.mjs record` from `worktree-runtime-cleanup`, under its
+   "Process Trees Started by a Codex Review" rules, whatever route runs the
+   checklist, and keep each printed hash only in this context.
 5. Invoke `benchmark-checklist` explicitly in full mode, forwarding the user's
    explicit delivery request, the exact target, the quoted claims, both
    worktree paths, the report path, and the deadline. The measurement is the
@@ -251,22 +256,22 @@ the head and setting its final tier, for the claimed numbers that
    the SHA each ran on, the measurements, and output showing the work
    completed) as regular files under `.repro/benchmark-checklist/` in the
    head-side worktree. Stop the run at the deadline.
-6. Finish in this order, on the normal path and on resume. First confirm the
-   run and every process it started have exited: for a Codex run, step 1 of
-   [Remove](repro-runs.md#remove); for a subagent, the host call returned.
-   If exit cannot be confirmed, copy and remove nothing, leave the worktrees
-   in place, record `failed: <reason>`, and report them. Then copy
-   `.repro/benchmark-checklist/` from the head-side worktree to
+6. Finish in this order. First confirm that the run and every process it
+   started have exited: for each worktree, run `stop-run-processes.mjs stop`
+   with the hash its `record` printed; exit 0 confirms that worktree. This is
+   the only confirmation, for a Codex run and a subagent alike: a subagent's
+   return does not show that its child processes exited. Without a captured
+   hash, or on any other exit, exit is not confirmed: copy and remove nothing,
+   leave both worktrees in place, record `failed: <reason>`, and report them.
+   Then copy `.repro/benchmark-checklist/` from the head-side worktree to
    `<report path without .md>.evidence/benchmark-checklist/` with the copy
    rules of [Evidence](repro-runs.md#evidence): create the evidence directory
    with `mkdir -m 700`, copy nothing when anything below it is a symbolic link
-   or not a regular file or directory, and copy with `cp -RP`; on resume, copy
-   only what is not yet retained. Then remove both worktrees with steps 3 and
-   4 of Remove. Last, record the outcome: `ran` only with a verdict for every
-   claim, the evidence retained, and safe cleanup, all within the deadline; a
-   run past it is `stopped: time bound`; a setup, run, retention, or cleanup
-   error is `failed: <reason>`; on resume without a recorded verdict for every
-   claim and retained evidence, `failed: interrupted`.
+   or not a regular file or directory, and copy with `cp -RP`. Then remove
+   both worktrees with steps 3 and 4 of Remove. Last, record the outcome:
+   `ran` only with a verdict for every claim, the evidence retained, and safe
+   cleanup, all within the deadline; a run past it is `stopped: time bound`;
+   a setup, run, retention, or cleanup error is `failed: <reason>`.
 7. In the verification record, give each claim its source, the explanation
    its source cites, and the checklist's result: its verdict with run count,
    range, and limiter and the evidence path when it ran, or its status.

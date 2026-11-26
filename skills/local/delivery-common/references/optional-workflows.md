@@ -158,9 +158,8 @@ key and use the usual once-per-key rule.
   **Blast radius** step in [Local Review](local-review.md), reconcile the
   recorded deadline, evidence retention, and cleanup as well as the report.
   For the **Performance claims** step in [Local Review](local-review.md),
-  finish in that step's order first (confirm the run ended, retain the
-  remaining evidence, remove the owned worktrees) and record no outcome
-  before it.
+  never recover a result: apply that step's resume cleanup and record
+  `failed: interrupted`.
 
 `state.md` carries one line with the count of intent entries. A worker lists
 each registry entry that applied to its work, with its status, under

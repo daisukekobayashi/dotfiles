@@ -154,8 +154,7 @@ it never blocks the delivery. A worker records its claim's explanation in its
 `Verification:` rows under
 [Classified verification](references/report-handoff.md#classified-verification).
 The decision summary and the final report show each claim with its
-explanation or gaps, including the PR claims the publishing agent returns,
-and the latest `benchmark-checklist` status. A claim whose explanation a
+explanation or gaps, and the latest `benchmark-checklist` status. A claim whose explanation a
 `benchmark-checklist` verdict contradicts is `inconclusive`, with both shown.
 
 [Performance claims](references/local-review.md#performance-claims) in Local
@@ -163,9 +162,17 @@ Review runs `benchmark-checklist` on the claims at the pinned worker head as an
 optional workflow. A claim first written after that step, such as in the PR
 title or body, gets only this rule: cite that head's evidence or label it
 `inconclusive`; it launches no run. [Brief the
-agent](references/phase-delegation.md#brief-the-agent) carries this rule to
-the agent that publishes. A delivery with no claimed number never
-runs it. [Worker Dialogue](references/worker-dialogue.md) and Local Review link
+agent](references/phase-delegation.md#brief-the-agent) asks the agent that
+publishes to label its claims before publishing. A delivery with no claimed
+number never runs it.
+
+Right before the merge confirmation, the coordinator reads the published PR's
+title and body and checks each claimed number in them against the
+verification record of the published head. A claim without evidence from that
+head, or one that a `ran` verdict on that head contradicts, is shown
+`inconclusive` with its gaps in the decision summary and the final report.
+This check, not the publishing agent's labels, is what the decision summary
+and the final report use for PR claims. [Worker Dialogue](references/worker-dialogue.md) and Local Review link
 this section instead of restating it.
 
 ## Shared Scripts
