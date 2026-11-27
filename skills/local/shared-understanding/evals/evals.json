@@ -1,0 +1,31 @@
+{
+  "skill_name": "shared-understanding",
+  "supporting_skills": ["principles",
+                        "principle-attack-the-premise",
+                        "principle-encode-lessons-in-structure",
+                        "principle-explain-the-number",
+                        "principle-fix-root-causes",
+                        "principle-laziness-protocol",
+                        "principle-prove-it-works",
+                        "principle-redesign-from-first-principles",
+                        "principle-subtract-before-you-add"],
+  "evals": [
+    {
+      "id": 1,
+      "name": "retry-knob-draft",
+      "prompt": "A delivery coordinator asks you for a shared understanding draft of the task in ISSUE.md for this project; the coordinator holds the dialogue with the user. This copy has no git history or remote. Work directly in this session without subagents, and give the draft in your final answer.",
+      "expected_output": "A draft in the skill's coordinator format, with Overview, Decisions to Read Back, Undecided Points, and Carry to Design Preflight. It reads back that FETCH_RETRIES already sets the retry count (fetch.py:7, README.md), which the issue does not mention. The undecided points cover how --retries, fetch.toml, and FETCH_RETRIES relate, including the issue's open precedence question, each with 2-3 options and a recommendation with a one-line reason. At least one recommendation is compared with removal (no new setting beyond FETCH_RETRIES) and a smaller option (such as --retries only); a recommended larger option says in one line why the smaller one is insufficient, and a principle that changed the recommendation is named. The draft asks the user nothing and settles nothing. Not exercised: steps 2-5 with a user.",
+      "fixture": "files/retry-knob",
+      "files": ["files/retry-knob"],
+      "assertions": [
+        "The final answer is a draft with the Overview, Decisions to Read Back, Undecided Points, and Carry to Design Preflight sections, and it asks the user no question and settles no point",
+        "The draft states that FETCH_RETRIES already sets the retry count, citing fetch.py or README.md, and that ISSUE.md does not mention it",
+        "An undecided point covers which setting wins or how the new settings relate to FETCH_RETRIES, with 2-3 options and a recommendation with a one-line reason",
+        "At least one recommendation is compared with removal (no new setting beyond FETCH_RETRIES) and with a smaller option",
+        "Where the recommended option is not the removal or the smaller option, one line says why the smaller one is insufficient",
+        "A reason that a principle changed names principle-subtract-before-you-add or principle-laziness-protocol",
+        "The transcript shows a read of .guidance/skills/shared-understanding/SKILL.md; a run that reads outside the workspace, including an installed copy of the skill, or calls a memory or other MCP tool is contaminated; exclude a contaminated run from grading and report its case as missing coverage"
+      ]
+    }
+  ]
+}

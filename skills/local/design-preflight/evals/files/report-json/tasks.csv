@@ -1,0 +1,4 @@
+id,title,owner,status,due
+1,Renew the TLS certificate,ops,open,2026-12-01
+2,Archive the 2025 logs,ops,done,2026-11-15
+3,Draft the release notes,docs,open,2026-12-05

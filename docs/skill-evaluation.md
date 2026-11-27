@@ -140,6 +140,26 @@ when a majority of the valid full-read runs match the expected answer;
 otherwise the case is inconclusive (suspected case defect). Each run records its next issue, both waves, its parallel groups,
 its detail reads, and its `gh` bytes; bytes are measured, not gated.
 
+The `delivery-common`, `shared-understanding`, and `design-preflight` suites
+give delivery smoke one case each, and they have no `execution` object. Each
+case reads its synthetic fixture and answers in the final message. On either
+agent, the smoke launch passes the runner's own agent configuration through,
+such as hooks, plugins, MCP servers, and memories; isolating it is follow-up
+work. The
+`delivery-common` case is a single prompt over a synthetic progress record and
+round 2 review summary, and needs no calling workflow; it checks Local Review's
+Recurrence rule and the `[premise P<n>]` entry. The other two cases ask for a
+coordinator draft, which never questions the user, and check the recommendation
+rules, including the comparison with removal and a smaller option. Each suite
+supplies the `principles` index and every leaf the index links, and
+`tests/skill_evals_test.py` derives that list from the index. Grading reads the
+final answer and the transcript. A run is contaminated when it reads outside
+the workspace, including an installed copy of the skill, or calls a memory or
+other MCP tool; a contaminated run is excluded and its case reported as missing
+coverage. Not covered: the user
+dialogue, the `grilling` sub-skill (not a sibling skill, so it cannot be
+supplied), and the parts that only `design-preflight-with-docs` adds.
+
 `bats tests/setup_pstack_skills.bats tests/skill_evals.bats` checks both agent
 layouts and preparation behavior. Those checks do not establish real-model
 effectiveness. Native skill discovery/triggering is a separate check from the
