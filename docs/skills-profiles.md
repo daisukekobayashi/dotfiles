@@ -581,7 +581,8 @@ Example invocations: `$how trace this request`, `$why was this state persisted?`
 `$evaluate-skill maintain-verification-skill`, and
 `$benchmark-checklist vet this speedup`. Claude Code exposes installed skills
 through its own invocation interface. Agents reach the principles through
-the `principles` index, which they consult by its description; the eight
+the `principles` index, which they consult by its description or when a
+principle is named; the eight
 `principle-*` leaves are explicit-only, as upstream, and are read from the
 index or linked by the workflow skills. The index and its leaves record their
 adoption in [ADR 0004](adr/0004-adopt-pstack-principles-through-an-index.md).
