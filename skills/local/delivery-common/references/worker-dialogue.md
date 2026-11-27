@@ -114,7 +114,9 @@ Leave material unanswered decisions pending and continue only work that does
 not depend on them.
 
 Implement the task's acceptance criteria and agreed decisions, following the
-settled design and repository conventions. Run the smallest relevant checks and
+settled design and repository conventions, under
+[Restraint in Implementation and Fixes](../SKILL.md#restraint-in-implementation-and-fixes).
+Run the smallest relevant checks and
 record actual results and material coverage limits; a successful baseline is
 not implementation verification. Apply [Project verification](#project-verification)
 and report each check under [Classified verification](report-handoff.md#classified-verification).

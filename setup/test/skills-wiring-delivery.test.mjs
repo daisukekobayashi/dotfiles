@@ -1417,7 +1417,7 @@ test("delivery delegates component-skill phases under one Phase Delegation home"
     /- Target: the worktree, branch, and task, and the PR's URL and ID once a PR exists\./,
     /- Verification: one line each for the component skill's status, such as the cycle's status or the publish result, and for a hosted round the published head and the head the hosted review covered\./,
     /- Questions: the prepared result to decide on: the prepared dispositions, the push remote candidates, or the cleanup targets as the manifest command printed them with the manifest path\./,
-    /The coordinator opens the full report only for a named field: the hosted cycle's Final Report `Not applied` items/,
+    /The coordinator opens the full report only for named fields: the hosted cycle's Final Report `Not applied` items/,
     // What the user confirms is the manifest the cleanup later compares against.
     /For the preview and the cleanup, it presents the targets from the manifest file at the assigned path, not from the summary, and records the file's SHA-256 with the report\./,
     /assigns the manifest path: the report path with `\.manifest\.json` in place of `\.md`, which the cleanup skill creates as a new file\./,

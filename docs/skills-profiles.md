@@ -630,6 +630,14 @@ checkout, is a named gap. A claim first written elsewhere, such as in the PR
 body, gets the rule only, and the coordinator checks the PR's claims against
 the published head's verification record at the merge confirmation or the
 final report. A delivery with no claimed number never runs the checklist.
+Delivery names the restraining principles of the `principles` index at the
+steps they apply to, with a short inline rule that holds when the index is
+not installed. Local Review's [Assess findings](../skills/local/delivery-common/references/local-review.md#assess-findings)
+applies `principle-attack-the-premise` when a finding class recurs across
+local or hosted rounds. Shared understanding and design preflight
+recommendations consider removal and a smaller option first, and the
+implementation and every fix follow
+[Restraint in Implementation and Fixes](../skills/local/delivery-common/SKILL.md#restraint-in-implementation-and-fixes).
 Remaining ADR 0001 work is tracked in its child issues.
 
 `arena`, `interrogate`, `blast-radius`, `create-verification-skill`,

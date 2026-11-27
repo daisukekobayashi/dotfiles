@@ -598,6 +598,14 @@ checkout が必要な変更前の計測など、そこで実行できないも�
 PR 本文など別の場所で初めて書かれた主張にはルールだけを適用し、コーディネーターが
 マージ確認または最終報告の時点で、公開した head の検証記録と PR の主張を照合します。
 数値の主張がない delivery では checklist を実行しません。
+delivery は、`principles` 索引の抑制側の原則を、それが当てはまる手順で名指しし、
+索引がインストールされていなくても成り立つ短い本文のルールを添えます。Local Review の
+[Assess findings](../skills/local/delivery-common/references/local-review.md#assess-findings)
+は、同じ種類の指摘が local または hosted のラウンドをまたいで再発したときに
+`principle-attack-the-premise` を適用します。shared understanding と design preflight の推奨は、
+取り除く案と小さい案を先に検討します。実装とすべての修正は
+[Restraint in Implementation and Fixes](../skills/local/delivery-common/SKILL.md#restraint-in-implementation-and-fixes)
+に従います。
 ADR 0001 の残りは子 issue で管理しています。
 
 `arena`・`interrogate`・`blast-radius`・`create-verification-skill`・

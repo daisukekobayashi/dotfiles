@@ -64,7 +64,8 @@ takes to the task's `log.md` under Delivery Completion's
 The agent ends each turn with a report under
 [Report Handoff](report-handoff.md#report-file) and the
 [Worker summary](report-handoff.md#worker-summary), and its full report holds
-the component skill's unchanged final report or output. Its Completion is:
+the component skill's unchanged final report or output, plus a hosted cycle's
+restraint lines. Its Completion is:
 
 - `complete` when the call finished;
 - `question` before any action that its forwarded approvals do not cover, and
@@ -93,9 +94,14 @@ its manifest command, the preview agent returns `complete` with a Verification
 line saying no preview and why. The coordinator then presents the merge alone,
 and the cleanup keeps its own confirmation after the merge.
 
-The coordinator opens the full report only for a named field: the hosted
+The coordinator opens the full report only for named fields: the hosted
 cycle's Final Report `Not applied` items, which it records as the provider
-delivery skill says. For the preview and the cleanup, it presents the targets
+delivery skill says, and the
+[restraint lines](../SKILL.md#restraint-in-implementation-and-fixes) of the
+fixes the cycle applied. It compares them with the additions in the delta the
+cycle pushed, read from Git, and assesses each added mechanism, step, or guard
+without an adequate line as a local finding under Local Review's Assess
+findings. For the preview and the cleanup, it presents the targets
 from the manifest file at the assigned path, not from the summary, and records
 the file's SHA-256 with the report.
 
@@ -103,8 +109,10 @@ In the hosted review cycle, when Prepare finds anything in the latest review,
 the worker stops after Prepare, before any review-fix commit, push, reply, or
 resolution, and returns `question` with the prepared dispositions. The
 coordinator assesses them under Local Review's
-[Assess findings](local-review.md#assess-findings) and sends the settled
-dispositions. Before the cycle's review-fix publication, the worker makes the
+[Assess findings](local-review.md#assess-findings), applying its Recurrence
+first, and sends the settled dispositions. A prepared fix for a finding in a
+recurring class is not settled as `applied`; the worker removes its edit, and
+the fix is redone only after the `[premise P<n>]` decision. Before the cycle's review-fix publication, the worker makes the
 worktree match them: it removes the edits of every fix not settled as
 `applied`, makes any change they add, and reruns the smallest relevant
 required verification under [Hosted fix verification evidence](report-handoff.md#hosted-fix-verification-evidence)
