@@ -492,3 +492,46 @@ test("Azure triage reports an incomplete overview before relying on returned can
   assert.match(overview, /In either case, label the ranking, blocker assessment, and\s+parallel recommendations as provisional for the retrieved candidates/);
   assert.match(skill, /^- Candidate Work Items: <count with a completeness warning when applicable>$/m);
 });
+
+// Upstream pstack's 24 principles, as titled in the principles index.
+const pstackPrinciples = [
+  "Laziness Protocol", "Foundational Thinking", "Redesign from First Principles",
+  "Attack the Premise", "Subtract Before You Add", "Minimize Reader Load",
+  "Outcome-Oriented Execution", "Experience First", "Exhaust the Design Space",
+  "Build the Lever", "Model the Domain", "Boundary Discipline", "Type System Discipline",
+  "Make Operations Idempotent", "Migrate Callers Then Delete Legacy APIs",
+  "Separate Before Serializing Shared State", "Prove It Works", "Fix Root Causes",
+  "Sequence Work into Verifiable Units", "Test Behavior, Not Implementation",
+  "Explain the Number", "Guard the Context Window", "Never Block on the Human",
+  "Encode Lessons in Structure",
+];
+const principleDispositions = ["Leaf:", "Covered:", "Not adopted:", "Deferred:"];
+
+test("the principles index gives every pstack principle one disposition with its evidence", async () => {
+  const index = await readText(path.join(repoRoot, "skills", "local", "principles", "SKILL.md"));
+  const description = index.match(/^description: (.*)$/m)[1];
+  assert.match(description, /or when a pstack principle is named, by its title or as `principle-<title>`\.$/);
+  assert.match(index, /0b46ec399d55f2829e88822998f53b84944837d3[^\n]*\n[^\n]*`Upstream:` quote is from that commit's\s+`pstack\/skills\/principle-<title>\/SKILL\.md`/);
+
+  const rows = new Map();
+  for (const [, title, body] of index.matchAll(/^- \*\*(.+?)\.\*\* ([\s\S]*?)(?=\n- \*\*|\n\n)/gm)) {
+    assert.equal(rows.has(title), false, `${title} is listed twice`);
+    rows.set(title, body.replace(/\s+/g, " "));
+  }
+  assert.deepEqual([...rows.keys()].sort(), [...pstackPrinciples].sort());
+
+  for (const [title, row] of rows) {
+    const found = principleDispositions.filter((label) => row.includes(label));
+    assert.equal(found.length, 1, `${title}: expected one disposition, found ${found.join(", ") || "none"}`);
+    const [label] = found;
+    assert.match(row.slice(row.indexOf(label) + label.length), /^ \S/, `${title}: ${label} names no target or reason`);
+    const kebab = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    if (label === "Leaf:") {
+      assert.equal(row.includes(`(../principle-${kebab}/SKILL.md)`), true, `${title}: leaf link`);
+      assert.equal(existsSync(path.join(repoRoot, "skills", "local", `principle-${kebab}`, "SKILL.md")), true, `${title}: leaf skill`);
+    } else {
+      assert.match(row, /Upstream: "[^"]+"/, `${title}: no upstream quote`);
+      assert.equal(row.includes("Delta:") && label !== "Covered:", false, `${title}: a Delta belongs to a Covered row`);
+    }
+  }
+});

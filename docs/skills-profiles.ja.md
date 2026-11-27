@@ -552,7 +552,8 @@ local skill が含まれます。外部パッケージ、プラグインの hook
 `$evaluate-skill maintain-verification-skill`、
 `$benchmark-checklist この高速化を検証して`。
 Claude Code では、その環境の skill 呼び出し方法を使います。
-エージェントは原則に `principles` 索引から届きます。索引は description で参照され、
+エージェントは原則に `principles` 索引から届きます。索引は description で、または
+原則が名前で言及されたときに参照され、
 8つの `principle-*` leaf は上流と同じく明示起動のみで、索引から読むか、各 workflow
 skill がリンクで読みます。索引と leaf の採用理由は
 [ADR 0004](adr/0004-adopt-pstack-principles-through-an-index.ja.md) に記録しています。

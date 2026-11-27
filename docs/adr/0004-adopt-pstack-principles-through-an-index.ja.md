@@ -35,8 +35,9 @@ status: accepted
 扱いのどれか1つとともに列挙します。
 
 - **leaf:** 根拠に基づいて採用し、`principle-<title>` skill が全文を持つ。
-- **既存:** 既存の skill やルールが同じ判断を担う。例: Exhaust the Design Space は
-  `arena`、Never Block on the Human はグローバルの承認の段階。
+- **既存:** 既存の skill やルールがその原則の中核の判断を担う。例: Exhaust the
+  Design Space は `arena`、Never Block on the Human はグローバルの承認の段階。
+  参照先が担わない部分は行に書く。
 - **不採用:** ローカルの規則と衝突する、または当てはまる対象がない。理由を書く。
 - **根拠待ち:** 衝突はないが、記録された根拠がまだない。issue に引用された再発や
   失敗の記録があれば leaf に昇格できる。
@@ -49,7 +50,9 @@ leaf は、#255 の根拠で選んだ `principle-attack-the-premise`・
 setup を再実行すると、存在しなくなった skill へのリンクは外れます。
 
 agent が自分で起動する原則の skill は索引だけで、その description が leaf の適用
-場面を挙げます。leaf は上流と同じく両 agent で明示起動のみ
+場面を挙げ、pstack の原則が名前（title または `principle-<title>`）で言及されたときにも
+起動します。この名前の条件は言及があったときだけ当たるので、下で退けた作業開始時の
+条件とは違います。leaf は上流と同じく両 agent で明示起動のみ
 （`disable-model-invocation: true` と `allow_implicit_invocation: false`）で、
 索引か workflow skill のリンクから読みます。原則を適用するときは、その leaf または
 参照先を全文読み、原則名とそれが変えた判断を、その判断を報告する行に書きます。

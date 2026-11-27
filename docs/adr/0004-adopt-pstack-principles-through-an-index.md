@@ -38,9 +38,9 @@ with when it applies and one disposition:
 
 - **Leaf:** adopted on evidence; a `principle-<title>` skill holds the full
   rule.
-- **Covered:** an existing skill or rule makes the same decision, such as
-  `arena` for Exhaust the Design Space or the global approval tiers for Never
-  Block on the Human.
+- **Covered:** an existing skill or rule makes the principle's core decision,
+  such as `arena` for Exhaust the Design Space or the global approval tiers
+  for Never Block on the Human. The row names what the target leaves out.
 - **Not adopted:** it conflicts with local rules or has nothing to apply to,
   with the reason.
 - **Deferred:** no conflict, but no recorded evidence yet. A recorded
@@ -56,7 +56,10 @@ old name; a user reruns the skills setup, which drops links to skills that no
 longer exist.
 
 The index is the only principle skill an agent invokes by itself: its
-description names the situations in which the leaves apply. The leaves are
+description names the situations in which the leaves apply, and also fires
+when a pstack principle is named, by its title or as `principle-<title>`. This
+name trigger fires only on a mention, so it is not the start-of-task trigger
+rejected below. The leaves are
 explicit-only on both agents (`disable-model-invocation: true` and
 `allow_implicit_invocation: false`), as upstream, and are read from the index
 or from a workflow skill's link. To apply a principle, an agent reads its leaf
