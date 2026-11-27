@@ -210,7 +210,7 @@ candidate meets at least one criterion:
 - the same finding class recurred at least twice across rounds or deliveries,
   shown by a `[premise P<n>]` entry or a cited earlier issue, PR, or record,
   and the candidate proposes a structural safeguard outside this task's scope:
-  where it goes, removing the mechanism behind the failure before adding a
+  where it goes, first removing the mechanism behind the failure, otherwise a
   small safeguard near its cause, such as a type, boundary check, test, or lint
   rule, and how it would reject the observed case. When the `principles` index
   is installed, read its `principle-encode-lessons-in-structure` leaf in full
