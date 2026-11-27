@@ -191,10 +191,12 @@ finding or a failed verification at the first place the system went wrong, not
 where it surfaced, and fix its whole class under Local Review's Bug class rule.
 Under the `durable` stance, build a new requirement into the design as if it
 had been foundational; under `conservative`, record that design as a follow-up
-proposal. The `principle-subtract-before-you-add`,
-`principle-laziness-protocol`, `principle-fix-root-causes`, and
-`principle-redesign-from-first-principles` leaves of the `principles` index
-give these rules in full when installed; they are never a prerequisite.
+proposal. When the `principles` index is installed, read the applicable
+leaf in full (`principle-subtract-before-you-add`,
+`principle-laziness-protocol`, `principle-fix-root-causes`, or
+`principle-redesign-from-first-principles`) and name the principle on the line
+that reports the decision it changed; these rules hold without it, and it is
+never a prerequisite.
 [Worker Dialogue](references/worker-dialogue.md) and
 [Local Review](references/local-review.md) link this section instead of
 restating it.

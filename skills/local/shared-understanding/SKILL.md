@@ -69,12 +69,12 @@ maintainability; add another, such as risk or compatibility, only when the
 sources show it favors a different option. The overall recommendation favors
 long-term maintainability unless the user's request states another stance, such
 as the smallest change or design-preflight's `conservative`. When the sources
-support no recommendation, say so in place of one. Before recommending an
-option that adds a mechanism, step, or layer, consider removing complexity and
-a smaller option; when you still recommend the larger one, its reason says in
-one line why the smaller one is insufficient. The
-`principle-subtract-before-you-add` and `principle-laziness-protocol` leaves of
-the `principles` index give these rules in full when installed.
+support no recommendation, say so in place of one. Compare every recommended
+option with removal and a smaller option, keeping the baseline above; when you
+still recommend the larger one, its reason says in one line why the smaller one
+is insufficient. When the `principles` index is installed, read its
+`principle-subtract-before-you-add` and `principle-laziness-protocol` leaves in
+full and name the principle in the reason it changed.
 
 On `can't decide`, explain the readings the sources support and what each leads
 to, then ask the user to choose or adjust one. A point the user still cannot
