@@ -207,6 +207,16 @@ candidate meets at least one criterion:
 
 - it reproduces under supported use of the changed behavior;
 - it is an exploitable security vulnerability;
+- the same finding class recurred at least twice across rounds or deliveries,
+  shown by a `[premise P<n>]` entry or a cited earlier issue, PR, or record,
+  and the candidate proposes a structural safeguard outside this task's scope:
+  where it goes, removing the mechanism behind the failure before adding a
+  small safeguard near its cause, such as a type, boundary check, test, or lint
+  rule, and how it would reject the observed case. When the `principles` index
+  is installed, read its `principle-encode-lessons-in-structure` leaf in full
+  to shape the proposal and name the principle on the line that gives the
+  recommendation; the criterion holds without it, and it is never a
+  prerequisite;
 - the user asked for it.
 
 Otherwise recommend drop, including theoretical edge cases and tests that only
