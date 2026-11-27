@@ -278,7 +278,9 @@ class SkillEvaluationTests(unittest.TestCase):
 
     def test_delivery_instruction_suites_prepare_for_default_launch_settings(self):
         supporting = {
-            "delivery-common": ["principles", "principle-attack-the-premise"],
+            "delivery-common": ["principles", "principle-attack-the-premise",
+                                "principle-subtract-before-you-add", "principle-laziness-protocol",
+                                "principle-fix-root-causes", "principle-redesign-from-first-principles"],
             "shared-understanding": ["principles", "principle-subtract-before-you-add",
                                      "principle-laziness-protocol"],
             "design-preflight": ["principles", "principle-subtract-before-you-add",

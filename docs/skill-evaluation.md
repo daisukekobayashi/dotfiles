@@ -142,19 +142,21 @@ its detail reads, and its `gh` bytes; bytes are measured, not gated.
 
 The `delivery-common`, `shared-understanding`, and `design-preflight` suites
 give delivery smoke one case each, and they have no `execution` object. Each
-case reads its synthetic fixture and answers in the final message, so it runs
-with the prepared launch arguments and default permissions, which deny writes
-and commands that need approval, such as running project code. The `delivery-common` case is a single prompt over a
-synthetic progress record and round 2 review summary, and needs no calling
-workflow; it checks Local Review's Recurrence rule and the `[premise P<n>]`
-entry. The other two cases ask for a coordinator draft, which never questions
-the user, and check the recommendation rules, including the comparison with
-removal and a smaller option. Each suite supplies the `principles` index and the
-leaves its rules name. Grading reads the final answer and the transcript; a
-read of an installed copy of the skill outside the workspace contaminates the
-run. Not covered: the user dialogue, the `grilling` sub-skill (not a sibling
-skill, so it cannot be supplied), and the parts that only
-`design-preflight-with-docs` adds.
+case reads its synthetic fixture and answers in the final message. It runs with
+the prepared launch arguments and the runner's own Claude settings, so the
+user's hooks, plugins, and MCP servers load and act outside any permission
+limit, and no permission setting of the suite keeps the run read-only. The
+`delivery-common` case is a single prompt over a synthetic progress record and
+round 2 review summary, and needs no calling workflow; it checks Local Review's
+Recurrence rule and the `[premise P<n>]` entry. The other two cases ask for a
+coordinator draft, which never questions the user, and check the recommendation
+rules, including the comparison with removal and a smaller option. Each suite
+supplies the `principles` index and the leaves named by the rules its case
+reaches. Grading reads the final answer and the transcript. A run is
+contaminated when it reads outside the workspace, including an installed copy
+of the skill, or calls a memory or other MCP tool. Not covered: the user
+dialogue, the `grilling` sub-skill (not a sibling skill, so it cannot be
+supplied), and the parts that only `design-preflight-with-docs` adds.
 
 `bats tests/setup_pstack_skills.bats tests/skill_evals.bats` checks both agent
 layouts and preparation behavior. Those checks do not establish real-model
