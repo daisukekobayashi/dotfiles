@@ -1,6 +1,14 @@
 {
   "skill_name": "design-preflight",
-  "supporting_skills": ["principles", "principle-subtract-before-you-add", "principle-laziness-protocol", "principle-redesign-from-first-principles"],
+  "supporting_skills": ["principles",
+                        "principle-attack-the-premise",
+                        "principle-encode-lessons-in-structure",
+                        "principle-explain-the-number",
+                        "principle-fix-root-causes",
+                        "principle-laziness-protocol",
+                        "principle-prove-it-works",
+                        "principle-redesign-from-first-principles",
+                        "principle-subtract-before-you-add"],
   "evals": [
     {
       "id": 1,
@@ -15,7 +23,7 @@
         "The recommendation for that question is compared with removal (the dashboard reads the existing CSV) and with a smaller change",
         "Where the recommended answer is larger than the smaller change, one line says why the smaller one is insufficient",
         "A reason that a principle changed names principle-subtract-before-you-add, principle-laziness-protocol, or principle-redesign-from-first-principles",
-        "The transcript shows a read of .guidance/skills/design-preflight/SKILL.md; a run that reads outside the workspace, including an installed copy of the skill, or calls a memory or other MCP tool is contaminated"
+        "The transcript shows a read of .guidance/skills/design-preflight/SKILL.md; a run that reads outside the workspace, including an installed copy of the skill, or calls a memory or other MCP tool is contaminated; exclude a contaminated run from grading and report its case as missing coverage"
       ]
     }
   ]

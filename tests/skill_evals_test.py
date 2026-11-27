@@ -277,20 +277,16 @@ class SkillEvaluationTests(unittest.TestCase):
         self.check_plain_fixture_suite(suite, [claude["claude_settings"]])
 
     def test_delivery_instruction_suites_prepare_for_default_launch_settings(self):
-        supporting = {
-            "delivery-common": ["principles", "principle-attack-the-premise",
-                                "principle-subtract-before-you-add", "principle-laziness-protocol",
-                                "principle-fix-root-causes", "principle-redesign-from-first-principles"],
-            "shared-understanding": ["principles", "principle-subtract-before-you-add",
-                                     "principle-laziness-protocol"],
-            "design-preflight": ["principles", "principle-subtract-before-you-add",
-                                 "principle-laziness-protocol",
-                                 "principle-redesign-from-first-principles"],
-        }
-        for name, expected in supporting.items():
+        # A suite that supplies the principles index supplies every leaf it links,
+        # so no link in the supplied guidance points outside the workspace.
+        index = (ROOT / "skills/local/principles/SKILL.md").read_text()
+        leaves = re.findall(r"\]\(\.\./(principle-[a-z0-9-]+)/SKILL\.md\)", index)
+        self.assertTrue(leaves)
+        expected = sorted(["principles", *leaves])
+        for name in ("delivery-common", "shared-understanding", "design-preflight"):
             suite = ROOT / f"skills/local/{name}/evals/evals.json"
             data = json.loads(suite.read_text())
-            self.assertEqual((data["skill_name"], data["supporting_skills"]), (name, expected))
+            self.assertEqual((data["skill_name"], sorted(data["supporting_skills"])), (name, expected))
             # Delivery smoke runs these with the prepared launch arguments only.
             self.assertNotIn("execution", data)
             files = suite.parent / "files"

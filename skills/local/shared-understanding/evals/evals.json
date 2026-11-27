@@ -1,6 +1,14 @@
 {
   "skill_name": "shared-understanding",
-  "supporting_skills": ["principles", "principle-subtract-before-you-add", "principle-laziness-protocol"],
+  "supporting_skills": ["principles",
+                        "principle-attack-the-premise",
+                        "principle-encode-lessons-in-structure",
+                        "principle-explain-the-number",
+                        "principle-fix-root-causes",
+                        "principle-laziness-protocol",
+                        "principle-prove-it-works",
+                        "principle-redesign-from-first-principles",
+                        "principle-subtract-before-you-add"],
   "evals": [
     {
       "id": 1,
@@ -16,7 +24,7 @@
         "At least one recommendation is compared with removal (no new setting beyond FETCH_RETRIES) and with a smaller option",
         "Where the recommended option is not the removal or the smaller option, one line says why the smaller one is insufficient",
         "A reason that a principle changed names principle-subtract-before-you-add or principle-laziness-protocol",
-        "The transcript shows a read of .guidance/skills/shared-understanding/SKILL.md; a run that reads outside the workspace, including an installed copy of the skill, or calls a memory or other MCP tool is contaminated"
+        "The transcript shows a read of .guidance/skills/shared-understanding/SKILL.md; a run that reads outside the workspace, including an installed copy of the skill, or calls a memory or other MCP tool is contaminated; exclude a contaminated run from grading and report its case as missing coverage"
       ]
     }
   ]
