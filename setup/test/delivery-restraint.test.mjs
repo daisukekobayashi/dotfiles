@@ -65,6 +65,18 @@ test("Local Review records a recurring finding class as a premise before the nex
   assert.match(completion, /- each `\[premise P<n>\]` entry whose option the coordinator chose itself under Local Review's Recurrence, with its premise and the chosen option, or `none`\./);
 });
 
+test("Follow-up candidates recommend a structural safeguard for a recurring finding class", async () => {
+  const completion = await readText(path.join(commonDir, "references", "completion.md"));
+  const followUps = flat(section(completion, "## Follow-up candidates"));
+
+  assert.match(followUps, /- it is an exploitable security vulnerability; - the same finding class recurred at least twice across rounds or deliveries, shown by a `\[premise P<n>\]` entry or a cited earlier issue, PR, or record, and the candidate proposes a structural safeguard outside this task's scope: where it goes, first removing the mechanism behind the failure, otherwise a small safeguard near its cause, such as a type, boundary check, test, or lint rule, and how it would reject the observed case\./);
+  assert.match(followUps, /When the `principles` index is installed, read its `principle-encode-lessons-in-structure` leaf in full to shape the proposal and name the principle on the line that gives the recommendation; the criterion holds without it, and it is never a prerequisite; - the user asked for it\./);
+  // Delivery only proposes the safeguard; it never runs `correct` or creates an unapproved candidate.
+  assert.match(followUps, /Ask which to create, and pass only approved candidates with their evidence and source links to the calling workflow's create skill\./);
+  assert.doesNotMatch(followUps, /`correct`/);
+  assert.doesNotMatch(completion, noPrincipleLink);
+});
+
 test("recommendations consider removal and a smaller option without changing the stance baseline", async () => {
   const check = flat(await readText(path.join(localRoot, "shared-understanding", "SKILL.md")));
   assert.match(check, /Compare every recommended option with removal and a smaller option, keeping the baseline above; when you still recommend the larger one, its reason says in one line why the smaller one is insufficient\./);
