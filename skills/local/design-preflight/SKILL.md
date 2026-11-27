@@ -100,7 +100,8 @@ Prioritize one-way-door risks: public contracts, data models, architecture bound
 Base every recommended answer on the stance's baseline.
 Give each recommended answer a one-line reason. When viewpoints favor different answers, name each viewpoint and the answer it favors, such as short-term smallest change versus long-term maintainability, then give the overall recommendation from the stance's baseline and why.
 When the evidence supports no recommendation, say so in place of one.
-For durable: recommend from the target design and challenge compatibility-preserving defaults; ask whether compatibility is a real constraint or merely an assumed safe choice.
+Before recommending an addition, consider removal and a smaller change toward the stance's baseline; when you still recommend the larger one, say in one line why the smaller one is insufficient (`principle-subtract-before-you-add` and `principle-laziness-protocol` in the `principles` index, when installed).
+For durable: recommend from the target design and challenge compatibility-preserving defaults; ask whether compatibility is a real constraint or merely an assumed safe choice. Build a new requirement into the design as if it had been foundational (`principle-redesign-from-first-principles`, when installed).
 For conservative: recommend from the current structure and challenge changes that break existing behavior; ask whether a break is truly required.
 ```
 

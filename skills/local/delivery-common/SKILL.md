@@ -179,6 +179,26 @@ final report, re-read them and repeat the check when that hash differs.
 [Worker Dialogue](references/worker-dialogue.md) links this section instead of
 restating it.
 
+## Restraint in Implementation and Fixes
+
+In the implementation and in each fix of a local or hosted finding, remove
+before you add and make the smallest diff that solves the problem, within the
+task's scope; a removal outside the requested change becomes a follow-up
+candidate. For each mechanism, step, or guard the work adds, the full report
+gives one line on why removal or a smaller change was insufficient, and the
+coordinator checks those lines as it checks listed defaults. Fix a material
+finding or a failed verification at the first place the system went wrong, not
+where it surfaced, and fix its whole class under Local Review's Bug class rule.
+Under the `durable` stance, build a new requirement into the design as if it
+had been foundational; under `conservative`, record that design as a follow-up
+proposal. The `principle-subtract-before-you-add`,
+`principle-laziness-protocol`, `principle-fix-root-causes`, and
+`principle-redesign-from-first-principles` leaves of the `principles` index
+give these rules in full when installed; they are never a prerequisite.
+[Worker Dialogue](references/worker-dialogue.md) and
+[Local Review](references/local-review.md) link this section instead of
+restating it.
+
 ## Shared Scripts
 
 [`scripts/check-branch-name.mjs`](scripts/check-branch-name.mjs) is the shared

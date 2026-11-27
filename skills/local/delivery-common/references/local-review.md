@@ -242,6 +242,17 @@ evidence, applying these defaults:
   `duplicate` unless new evidence changes the assessment. Pass the earlier local
   and hosted dispositions from the progress record to hosted follow-up so it
   applies the same rule.
+- **Recurrence:** When a new finding shares its finding class with a finding
+  from an earlier round, counting local and hosted rounds as one sequence,
+  apply `principle-attack-the-premise` before the next fix. Record a
+  `[premise P<n>]` progress-record entry that quotes both rounds' findings,
+  writes down the premise their fixes share and the observation that tested
+  it, and lists the options, including removing the responsibility behind
+  them. Choose an option yourself only within the agreed decisions, scope, and
+  contracts, and record that you chose it; otherwise leave it open for the
+  user. The leaf of the `principles` index gives this rule in full when
+  installed, and the global rule on recurring failures gives its short form;
+  neither is a prerequisite.
 - **Self-closures:** Keep a self-closure list in the progress record so the user
   can check what the implementation owner closed alone. List each finding that
   ends without a reviewer-verified fix and is not left open for the user when
@@ -259,11 +270,13 @@ evidence, applying these defaults:
 Apply worthwhile fixes and record a concise reason for each explained, duplicate,
 stale, pre-existing, or skipped finding. Leave disputed material findings and
 design decisions open for the user. Keep fixes within the task's scope and
-backed by a finding.
+backed by a finding, and shape them under
+[Restraint in Implementation and Fixes](../SKILL.md#restraint-in-implementation-and-fixes).
 
 At the round limit, classify the remaining findings before reporting: mostly
 pre-existing (recommend proceeding with follow-up candidates), repeated in one
-area or approach (recommend revisiting the design through design-preflight), or
+area or approach (apply Recurrence and report its `[premise P<n>]` entries, with
+revisiting the design through design-preflight among the options), or
 genuinely new material defects (recommend extending the budget).
 
 ## Focused follow-up

@@ -31,7 +31,7 @@ workflow supplies each task's key, and the task's files live in
   and head, verification, the local review record under
   [Local Review](local-review.md), PR and published head, finding
   dispositions, the self-closure list under Local Review, follow-up candidates,
-  optional workflow runs under
+  premise entries under Local Review's Recurrence, optional workflow runs under
   [Optional Workflows](optional-workflows.md#record-and-report), the decision
   summary, and blockers. Begin each entry with its type and a
   stable id, such as `[disposition D3]`; an entry that changes an item reuses
@@ -99,6 +99,8 @@ keep it in the progress record, and keep it out of the PR body:
   and labelled Critical or High;
 - the self-closure list under [Local Review](local-review.md), or `none` when
   it is empty.
+- each `[premise P<n>]` entry whose option the coordinator chose itself under
+  Local Review's Recurrence, with its premise and the chosen option, or `none`.
 - the current project verification status and any uncovered changed paths,
   including a [skip before key capture](optional-workflows.md#record-and-report)
   when it applies to the reported verification.
