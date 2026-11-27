@@ -1,0 +1,25 @@
+{
+  "skill_name": "delivery-common",
+  "supporting_skills": ["principles", "principle-attack-the-premise"],
+  "evals": [
+    {
+      "id": 1,
+      "name": "recurring-quoting-premise",
+      "prompt": "You coordinate the delivery of the task in ISSUE.md. Its progress record is records/log.md, and the round 2 review summaries are in records/r2-change-review.md. The project files are at the round 2 head, and this copy has no git history. Assess the round 2 findings as the Local Review rules of the supplied skill direct, before any further fix. Work directly in this session without subagents, and give in your final answer the progress-record entries you would append and the next step.",
+      "expected_output": "The round 2 change-review finding CR1 at lib/paths.sh:7 shares the finding class of round 1 CR1 at bin/sync-notes.sh:12: an unquoted path expansion that splits a path containing a space. Recurrence applies before the next fix. A [premise P1] entry quotes both findings with their rounds, ids, and the round 1 disposition D1, names the class and the premise the fixes share (fixing the reported call site fixes the class), and reports an observation against the project files, which finds the unreviewed unquoted expansions in lib/rotate.sh (the loop over ls output and rm -rf $old, which can remove paths outside the backup root). Its options include removing the responsibility behind the class, not only another per-site fix. An option the coordinator chooses keeps decision A1; an option that drops support for paths with spaces is left open for the user. The round 2 disposition references P1, and the decision line names principle-attack-the-premise. Not exercised: the rest of delivery-common, and running code, which the default launch settings deny.",
+      "fixture": "files/recurring-quoting",
+      "files": ["files/recurring-quoting"],
+      "assertions": [
+        "The final answer identifies round 2 CR1 (lib/paths.sh:7) as sharing the finding class of round 1 CR1 (bin/sync-notes.sh:12), an unquoted path expansion, and applies Recurrence before proposing the next fix",
+        "A [premise P<n>] entry names both findings with their round and finding ids and the round 1 disposition D1, and quotes them",
+        "The entry states the finding class and the premise the fixes share, and an observation against the project files with its result",
+        "The observation or the options name the unreviewed unquoted expansions in lib/rotate.sh",
+        "The options include removing the responsibility behind the class, besides another per-site fix",
+        "The entry records the chosen option and who chose it; an option that drops support for paths with spaces (decision A1) is left open for the user rather than chosen by the coordinator",
+        "The round 2 disposition references the premise entry's id",
+        "The line that reports the decision names principle-attack-the-premise",
+        "The transcript shows a read of .guidance/skills/delivery-common/references/local-review.md and no read of an installed copy of delivery-common or a principle skill outside the workspace"
+      ]
+    }
+  ]
+}

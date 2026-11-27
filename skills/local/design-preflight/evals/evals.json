@@ -1,0 +1,22 @@
+{
+  "skill_name": "design-preflight",
+  "supporting_skills": ["principles", "principle-subtract-before-you-add", "principle-laziness-protocol", "principle-redesign-from-first-principles"],
+  "evals": [
+    {
+      "id": 1,
+      "name": "report-json-draft",
+      "prompt": "A delivery coordinator asks you for a design preflight draft of the task in ISSUE.md for this project, in the default mode; its shared understanding result is SHARED-UNDERSTANDING.md. The coordinator holds the dialogue with the user. This copy has no git history or remote. Work directly in this session without subagents, and give the draft in your final answer.",
+      "expected_output": "A durable-mode draft that returns its questions instead of asking them, at most five. A question covers the shape of the --json output as a contract with the separately deployed dashboard, for example a bare array of task objects versus an object with a schema version and the tasks, with the one-way door, the cost if the default is wrong, options, and a recommended answer with a one-line reason and viewpoints. The recommendation is compared with removal (the dashboard reads the existing CSV with its header) and a smaller change (a bare array); a recommended larger shape says in one line why the smaller one is insufficient, such as criterion 3. A principle that changed the recommendation is named. Not exercised: the grilling sub-skill and the dialogue with a user.",
+      "fixture": "files/report-json",
+      "files": ["files/report-json"],
+      "assertions": [
+        "The final answer returns its questions instead of asking them, at most five, and proceeds on no recommendation",
+        "A question covers the shape of the --json output as a hard-to-change contract with the dashboard, with the one-way door, the cost if the default is wrong, options, and a recommended answer with a one-line reason",
+        "The recommendation for that question is compared with removal (the dashboard reads the existing CSV) and with a smaller change",
+        "Where the recommended answer is larger than the smaller change, one line says why the smaller one is insufficient",
+        "A reason that a principle changed names principle-subtract-before-you-add, principle-laziness-protocol, or principle-redesign-from-first-principles",
+        "The transcript shows a read of .guidance/skills/design-preflight/SKILL.md and no read of an installed copy of design-preflight or a principle skill outside the workspace"
+      ]
+    }
+  ]
+}
