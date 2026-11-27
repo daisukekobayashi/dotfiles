@@ -493,32 +493,36 @@ test("Azure triage reports an incomplete overview before relying on returned can
   assert.match(skill, /^- Candidate Work Items: <count with a completeness warning when applicable>$/m);
 });
 
-// Upstream pstack's 24 principles, as titled in the principles index.
+// Upstream pstack's 24 principle skills at the pinned commit (pstack/skills/principle-<name>/).
 const pstackPrinciples = [
-  "Laziness Protocol", "Foundational Thinking", "Redesign from First Principles",
-  "Attack the Premise", "Subtract Before You Add", "Minimize Reader Load",
-  "Outcome-Oriented Execution", "Experience First", "Exhaust the Design Space",
-  "Build the Lever", "Model the Domain", "Boundary Discipline", "Type System Discipline",
-  "Make Operations Idempotent", "Migrate Callers Then Delete Legacy APIs",
-  "Separate Before Serializing Shared State", "Prove It Works", "Fix Root Causes",
-  "Sequence Work into Verifiable Units", "Test Behavior, Not Implementation",
-  "Explain the Number", "Guard the Context Window", "Never Block on the Human",
-  "Encode Lessons in Structure",
+  "attack-the-premise", "boundary-discipline", "build-the-lever", "encode-lessons-in-structure",
+  "exhaust-the-design-space", "experience-first", "explain-the-number", "fix-root-causes",
+  "foundational-thinking", "guard-the-context-window", "laziness-protocol",
+  "make-operations-idempotent", "migrate-callers-then-delete-legacy-apis", "minimize-reader-load",
+  "model-the-domain", "never-block-on-the-human", "outcome-oriented-execution", "prove-it-works",
+  "redesign-from-first-principles", "separate-before-serializing-shared-state",
+  "sequence-verifiable-units", "subtract-before-you-add", "test-behavior-not-implementation",
+  "type-system-discipline",
 ];
 const principleDispositions = ["Leaf:", "Covered:", "Not adopted:", "Deferred:"];
 
 test("the principles index gives every pstack principle one disposition with its evidence", async () => {
   const index = await readText(path.join(repoRoot, "skills", "local", "principles", "SKILL.md"));
   const description = index.match(/^description: (.*)$/m)[1];
-  assert.match(description, /or when a pstack principle is named, by its title or as `principle-<title>`\.$/);
-  assert.match(index, /0b46ec399d55f2829e88822998f53b84944837d3[^\n]*\n[^\n]*`Upstream:` quote is from that commit's\s+`pstack\/skills\/principle-<title>\/SKILL\.md`/);
+  assert.match(description, /or when a pstack principle is named, by its title or its upstream skill name\.$/);
+  const source = index.slice(index.indexOf("\n## Source\n"));
+  assert.match(source, /0b46ec399d55f2829e88822998f53b84944837d3[^\n]*\n[^\n]*`Upstream:` quote is from that commit's\s+`pstack\/skills\/principle-<title>\/SKILL\.md`, with the title in kebab case,/);
+  // A title whose kebab case is not its upstream name is named once in Source.
+  const renamed = new Map([...source.replace(/\s+/g, " ").matchAll(/except ([^,]+?), whose upstream skill is `principle-([a-z0-9-]+)`/g)]
+    .map(([, title, name]) => [title, name]));
 
   const rows = new Map();
   for (const [, title, body] of index.matchAll(/^- \*\*(.+?)\.\*\* ([\s\S]*?)(?=\n- \*\*|\n\n)/gm)) {
     assert.equal(rows.has(title), false, `${title} is listed twice`);
     rows.set(title, body.replace(/\s+/g, " "));
   }
-  assert.deepEqual([...rows.keys()].sort(), [...pstackPrinciples].sort());
+  const upstreamName = (title) => renamed.get(title) ?? title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  assert.deepEqual([...rows.keys()].map(upstreamName).sort(), [...pstackPrinciples].sort());
 
   for (const [title, row] of rows) {
     const found = principleDispositions.filter((label) => row.includes(label));

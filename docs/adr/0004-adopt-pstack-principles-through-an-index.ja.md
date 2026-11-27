@@ -10,7 +10,7 @@ status: accepted
 
 上流の pstack（[`cursor/plugins@0b46ec3`](https://github.com/cursor/plugins/tree/0b46ec399d55f2829e88822998f53b84944837d3/pstack)）
 には24の原則があり、それぞれが `disable-model-invocation: true` を持つ
-`principle-<title>` skill です。`poteto-mode` は Principles 節でそれらを一覧にし、
+`principle-*` skill です。`poteto-mode` は Principles 節でそれらを一覧にし、
 適用する原則の leaf を読み、原則名とそれが変えた判断を名指しします。
 
 [ADR 0001](0001-pstack-principles-in-delivery.ja.md) は pstack を、実物を確かめることと
@@ -50,7 +50,7 @@ leaf は、#255 の根拠で選んだ `principle-attack-the-premise`・
 setup を再実行すると、存在しなくなった skill へのリンクは外れます。
 
 agent が自分で起動する原則の skill は索引だけで、その description が leaf の適用
-場面を挙げ、pstack の原則が名前（title または `principle-<title>`）で言及されたときにも
+場面を挙げ、pstack の原則が名前（title または上流の skill 名）で言及されたときにも
 起動します。この名前の条件は言及があったときだけ当たるので、下で退けた作業開始時の
 条件とは違います。leaf は上流と同じく両 agent で明示起動のみ
 （`disable-model-invocation: true` と `allow_implicit_invocation: false`）で、

@@ -9,7 +9,7 @@ status: accepted
 ## Context
 
 Upstream pstack ([`cursor/plugins@0b46ec3`](https://github.com/cursor/plugins/tree/0b46ec399d55f2829e88822998f53b84944837d3/pstack))
-ships 24 principles, each as its own `principle-<title>` skill with
+ships 24 principles, each as its own `principle-*` skill with
 `disable-model-invocation: true`. `poteto-mode` lists them in its Principles
 section, reads the leaf of each principle it applies, and names the principle
 and the decision it changed.
@@ -57,7 +57,7 @@ longer exist.
 
 The index is the only principle skill an agent invokes by itself: its
 description names the situations in which the leaves apply, and also fires
-when a pstack principle is named, by its title or as `principle-<title>`. This
+when a pstack principle is named, by its title or its upstream skill name. This
 name trigger fires only on a mention, so it is not the start-of-task trigger
 rejected below. The leaves are
 explicit-only on both agents (`disable-model-invocation: true` and

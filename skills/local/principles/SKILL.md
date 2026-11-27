@@ -1,6 +1,6 @@
 ---
 name: principles
-description: Index of the working principles adopted from pstack. Consult when two or more fixes that share one premise have failed; when refactoring, sizing a diff, or sequencing an addition, refactor, or rewrite; when tempted to add an abstraction, layer, or signal threading; when integrating a new requirement into an existing design; when debugging; when planning verification, interpreting whether a check's evidence proves the requested behavior, or before declaring work done; before measuring, and before trusting, reporting, or acting on a measured number such as a speedup, regression, throughput, latency, or eval result; or when the same correction or instruction comes up a second time; or when a pstack principle is named, by its title or as `principle-<title>`.
+description: Index of the working principles adopted from pstack. Consult when two or more fixes that share one premise have failed; when refactoring, sizing a diff, or sequencing an addition, refactor, or rewrite; when tempted to add an abstraction, layer, or signal threading; when integrating a new requirement into an existing design; when debugging; when planning verification, interpreting whether a check's evidence proves the requested behavior, or before declaring work done; before measuring, and before trusting, reporting, or acting on a measured number such as a speedup, regression, throughput, latency, or eval result; or when the same correction or instruction comes up a second time; or when a pstack principle is named, by its title or its upstream skill name.
 license: MIT
 ---
 
@@ -61,7 +61,7 @@ explicit invocation.
 - **Outcome-Oriented Execution.** Planned rewrites and migrations with phase
   boundaries. Covered: the `durable` stance of `design-preflight`, which does
   not assume compatibility and accepts justified migration work. Upstream:
-  "Prioritize end-state integrity over transitional stability." Delta: full
+  "Prioritize end-state integrity over transitional stability". Delta: full
   verification at completion is `principle-prove-it-works`.
 - **Experience First.** Product, UX, or feature-scope tradeoffs. Not adopted:
   those tradeoffs are the user's intent, which `shared-understanding` asks
@@ -93,9 +93,12 @@ explicit invocation.
   Upstream: "Make the compiler reject impossible states, mismatched
   primitives, and unhandled variants."
 - **Make Operations Idempotent.** Steps that run amid crashes and retries.
-  Deferred: delivery's resume rules cover delivery only, and no recorded
-  failure asks for more. Upstream: "converge to the correct state however
-  many times it runs and wherever the previous run stopped."
+  Deferred: delivery's resume rules make delivery's own steps converge, but
+  nothing local guides the commands or loops an agent designs, which is the
+  case upstream names (unlike Guard the Context Window and Separate Before
+  Serializing Shared State, whose case is the agent's own work), and no
+  recorded failure asks for it. Upstream: "converge to the correct state
+  however many times it runs and wherever the previous run stopped."
 - **Migrate Callers Then Delete Legacy APIs.** A new internal API while old
   callers exist. Covered: the `durable` stance of `design-preflight`, which
   makes a breaking change instead of adding a compatibility shim and removes
@@ -106,7 +109,8 @@ explicit invocation.
   the same file, branch, key, or object. Covered: one target, one branch, and
   one worktree per worker in the start skills, and
   `local-runtime-port-isolation` for host ports. Upstream: "Default to giving
-  each actor its own file, key, branch, or state directory." Delta: shared
+  each actor its own file, key, branch, or state directory, and merge only
+  where the state is read." Delta: shared
   state outside those cases is not covered.
 
 ## Verification
@@ -124,7 +128,8 @@ explicit invocation.
 - **Test Behavior, Not Implementation.** Writing, changing, or keeping a
   test. Covered: `tdd`, whose tests verify behavior through public
   interfaces and name implementation-coupled tests an anti-pattern.
-  Upstream: "Assert what the code's users can observe."
+  Upstream: "Assert what the code's users can observe, so that the test
+  fails when that behavior breaks ..."
 - **Explain the Number.** Before measuring, and before trusting, reporting,
   or acting on a measured number. Leaf:
   [principle-explain-the-number](../principle-explain-the-number/SKILL.md).
@@ -153,7 +158,9 @@ explicit invocation.
 Adapted from the Principles section of Lauren Tan's
 [pstack poteto-mode](https://github.com/cursor/plugins/blob/0b46ec399d55f2829e88822998f53b84944837d3/pstack/skills/poteto-mode/SKILL.md).
 Each `Upstream:` quote is from that commit's
-`pstack/skills/principle-<title>/SKILL.md`, the leaf for that principle.
+`pstack/skills/principle-<title>/SKILL.md`, with the title in kebab case,
+except Sequence Work into Verifiable Units, whose upstream skill is
+`principle-sequence-verifiable-units`.
 Local changes: the index is its own skill, consulted by its description
 instead of a mode the user enters; each principle has a disposition, and only
 leaves link here. Principles are named on the line that reports the decision,
