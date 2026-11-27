@@ -98,8 +98,10 @@ The coordinator opens the full report only for named fields: the hosted
 cycle's Final Report `Not applied` items, which it records as the provider
 delivery skill says, and the
 [restraint lines](../SKILL.md#restraint-in-implementation-and-fixes) of the
-fixes the cycle applied; it assesses an unjustified addition as a local finding
-under Local Review's Assess findings. For the preview and the cleanup, it presents the targets
+fixes the cycle applied. It compares them with the additions in the delta the
+cycle pushed, read from Git, and assesses each added mechanism, step, or guard
+without an adequate line as a local finding under Local Review's Assess
+findings. For the preview and the cleanup, it presents the targets
 from the manifest file at the assigned path, not from the summary, and records
 the file's SHA-256 with the report.
 

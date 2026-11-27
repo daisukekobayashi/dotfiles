@@ -33,7 +33,7 @@ test("delivery-common applies the restraining principles to implementation and f
   assert.match(dialogue, anchor);
   const delegation = flat(await readText(path.join(commonDir, "references", "phase-delegation.md")));
   // The check runs once on what the cycle applied, not at each in-cycle edit point.
-  assert.match(delegation, /and the \[restraint lines\]\(\.\.\/SKILL\.md#restraint-in-implementation-and-fixes\) of the fixes the cycle applied; it assesses an unjustified addition as a local finding under Local Review's Assess findings\./);
+  assert.match(delegation, /and the \[restraint lines\]\(\.\.\/SKILL\.md#restraint-in-implementation-and-fixes\) of the fixes the cycle applied\. It compares them with the additions in the delta the cycle pushed, read from Git, and assesses each added mechanism, step, or guard without an adequate line as a local finding under Local Review's Assess findings\./);
   assert.match(delegation, /its full report holds the component skill's unchanged final report or output, plus a hosted cycle's restraint lines\./);
   assert.doesNotMatch(delegation, /in a prepared report, the restraint lines/);
   const localReview = await readText(path.join(commonDir, "references", "local-review.md"));
