@@ -64,7 +64,8 @@ takes to the task's `log.md` under Delivery Completion's
 The agent ends each turn with a report under
 [Report Handoff](report-handoff.md#report-file) and the
 [Worker summary](report-handoff.md#worker-summary), and its full report holds
-the component skill's unchanged final report or output. Its Completion is:
+the component skill's unchanged final report or output, plus a hosted cycle's
+restraint lines. Its Completion is:
 
 - `complete` when the call finished;
 - `question` before any action that its forwarded approvals do not cover, and
@@ -95,9 +96,10 @@ and the cleanup keeps its own confirmation after the merge.
 
 The coordinator opens the full report only for named fields: the hosted
 cycle's Final Report `Not applied` items, which it records as the provider
-delivery skill says, and, in a prepared report, the restraint lines under
-[Restraint in Implementation and Fixes](../SKILL.md#restraint-in-implementation-and-fixes)
-of each fix it would settle as `applied`, which it checks before settling. For the preview and the cleanup, it presents the targets
+delivery skill says, and the
+[restraint lines](../SKILL.md#restraint-in-implementation-and-fixes) of the
+fixes the cycle applied; it assesses an unjustified addition as a local finding
+under Local Review's Assess findings. For the preview and the cleanup, it presents the targets
 from the manifest file at the assigned path, not from the summary, and records
 the file's SHA-256 with the report.
 
