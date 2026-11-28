@@ -46,6 +46,17 @@ commands, file changes, and retained artifacts. Subjective comparisons use a
 fresh judge with neutral labels when available; coordinator-only review is
 identified as such. The workflow does not automatically edit the target skill.
 
+A suite's `supporting_skills` lists every sibling skill that the supplied
+guidance links to. Preparing `with-skill` scans every Markdown file the helper
+copies (each supplied skill, without `evals/`) and refuses the suite when a
+relative link leaves the supplied skills, naming the file and the link. The
+prepared Codex launch turns off the runner's hooks, memories, plugins, and
+apps, and disables each MCP server configured in `$CODEX_HOME/config.toml` by
+name, since `-c mcp_servers={}` leaves configured servers running. Global
+instructions such as `~/.codex/AGENTS.md` still load. The prepared Claude
+launch still passes the runner's own configuration through, such as hooks,
+plugins, MCP servers, and memories.
+
 Reusable cases remain in `skills/local/<target>/evals/evals.json`. The initial
 `maintain-verification-skill` suite covers an obsolete command, a product
 regression, and an unavailable prerequisite. Run-specific transcripts, scores,
@@ -85,13 +96,18 @@ the `change-adversarial-review` suite. The Codex arm pins the model and effort,
 sets the approval policy to `never`, and runs commands under a `skill_eval`
 permission profile. That profile limits writes to the workspace and the run's
 fresh `TMPDIR`, blocks the network, and blocks reads of the real repository,
-installed skills, and Codex session transcripts. Hooks, memories, plugins,
-apps, browser, computer use, and web search are off, and the pre-run check
-disables every configured MCP server. Before the runs, render the prompt with
+installed skills, and Codex session transcripts. The prepared launch
+arguments turn off hooks, memories, plugins, apps, and the configured MCP
+servers, and the suite also turns off browser, computer use, and web search.
+Before the runs, render the prompt with
 `codex debug prompt-input` and probe the profile with `codex sandbox -P
 skill_eval`, both with the same overrides, and record the results. A revision
 runs only the new skill and compares it with the baseline with-skill runs of the
-same agent; rerun the old snapshot when the model or CLI version changed.
+same agent; rerun the old snapshot when the model or CLI version changed. This
+suite and `change-adversarial-review` supply `delivery-common` and
+`worktree-runtime-cleanup` since #331, which their guidance links to, so their
+next comparison reruns the old snapshot under the new supplied set instead of
+reusing earlier baseline runs.
 
 The `github-issue-triage` suite checks that triage under the detail band, which
 reads issue text only where the recommendation depends on it, keeps the
@@ -142,17 +158,17 @@ its detail reads, and its `gh` bytes; bytes are measured, not gated.
 
 The `delivery-common`, `shared-understanding`, and `design-preflight` suites
 give delivery smoke one case each, and they have no `execution` object. Each
-case reads its synthetic fixture and answers in the final message. On either
-agent, the smoke launch passes the runner's own agent configuration through,
-such as hooks, plugins, MCP servers, and memories; isolating it is follow-up
-work. The
+case reads its synthetic fixture and answers in the final message. The smoke
+launch uses the prepared launch arguments, isolated as described above. The
 `delivery-common` case is a single prompt over a synthetic progress record and
 round 2 review summary, and needs no calling workflow; it checks Local Review's
 Recurrence rule and the `[premise P<n>]` entry. The other two cases ask for a
 coordinator draft, which never questions the user, and check the recommendation
 rules, including the comparison with removal and a smaller option. Each suite
 supplies the `principles` index and every leaf the index links, and
-`tests/skill_evals_test.py` derives that list from the index. Grading reads the
+`tests/skill_evals_test.py` derives that list from the index; each also
+supplies `benchmark-checklist`, and `delivery-common` supplies
+`worktree-runtime-cleanup`, because the supplied guidance links to them. Grading reads the
 final answer and the transcript. A run is contaminated when it reads outside
 the workspace, including an installed copy of the skill, or calls a memory or
 other MCP tool; a contaminated run is excluded and its case reported as missing

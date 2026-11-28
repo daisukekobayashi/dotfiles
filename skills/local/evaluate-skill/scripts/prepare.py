@@ -6,9 +6,16 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 import tomllib
+
+# Runner features that would let a candidate reach the runner's own hooks,
+# plugins, apps, or memories; MCP servers are disabled by name below.
+CODEX_DISABLED_FEATURES = ("hooks", "memories", "plugins", "apps")
+LINK = re.compile(r"\]\(([^)\s]+)\)")
+BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def digest_tree(root):
@@ -43,7 +50,34 @@ def codex_launch(workspace, skill, name):
         + str(entry.get("enabled", True)).lower() + "}"
         for entry in overrides
     )
-    return ["codex", "--cd", str(workspace), "-c", f"skills.config=[{encoded}]"]
+    argv = ["codex", "--cd", str(workspace), "-c", f"skills.config=[{encoded}]"]
+    for feature in CODEX_DISABLED_FEATURES:
+        argv += ["--disable", feature]
+    # `-c mcp_servers={}` leaves configured servers running, so each is disabled by name.
+    for server in sorted(config.get("mcp_servers", {})):
+        if not BARE_KEY.fullmatch(server):
+            raise ValueError(f"Cannot disable MCP server with a non-bare name: {server!r}")
+        argv += ["-c", f"mcp_servers.{server}.enabled=false"]
+    return argv
+
+
+def unsupplied_links(supplied):
+    """Return relative Markdown links in the supplied guidance that leave the supplied skills."""
+    names = {source.name for source in supplied}
+    root = supplied[0].parent
+    missing = set()
+    for source in supplied:
+        for page in sorted(source.rglob("*.md")):
+            if {"evals", "__pycache__"} & set(page.relative_to(source).parts):
+                continue
+            for target in LINK.findall(page.read_text()):
+                path = target.split("#", 1)[0]
+                if not path or re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", path):
+                    continue
+                resolved = Path(os.path.normpath(page.parent / path))
+                if not resolved.is_relative_to(root) or resolved.relative_to(root).parts[0] not in names:
+                    missing.add(f"{page.relative_to(root)} -> {path}")
+    return sorted(missing)
 
 
 def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
@@ -62,6 +96,11 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
     for source in supporting:
         if source.parent != skill.parent or not (source / "SKILL.md").is_file():
             raise ValueError(f"Missing sibling supporting skill: {source}")
+    if variant == "with-skill":
+        missing = unsupplied_links([skill, *supporting])
+        if missing:
+            raise ValueError("Supplied guidance links outside the supplied skills; "
+                             "add the target skills to supporting_skills: " + "; ".join(missing))
 
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -96,7 +135,7 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
         (output / "prompt.txt").write_text(prompt)
 
         # Both variants suppress the installed target; treatment is supplied above.
-        # Other ambient context is not isolated by this preparer.
+        # Codex also drops the runner's hooks, plugins, apps, memories, and MCP servers.
         name = suite["skill_name"]
         if agent == "codex":
             argv = codex_launch(workspace, skill, name)

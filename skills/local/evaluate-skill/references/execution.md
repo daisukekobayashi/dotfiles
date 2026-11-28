@@ -22,7 +22,9 @@ Keep durable cases under `skills/local/<name>/evals/evals.json`. Each case has
 `id`, `prompt`, `expected_output`, and concrete `assertions`, plus input `files`.
 The preparer uses two extra fields: `fixture` names a directory relative to
 `evals/`, and optional `overlay` supplies case-specific files on top of it.
-`supporting_skills` lists sibling skills needed by the supplied instructions.
+`supporting_skills` lists every sibling skill that the supplied instructions
+link to. `with-skill` preparation fails when a relative link in a copied
+Markdown file leaves the supplied skills.
 
 Use a new independent session for each run:
 
@@ -93,7 +95,11 @@ independent permitted work. Do not remove runtime guards, install tools, change
 global settings, copy credentials, or enable permission-bypass flags to force it.
 
 The Codex command disables the installed target for that invocation while
-preserving user-configured skill enable/disable entries. Claude uses
+preserving user-configured skill enable/disable entries. It also passes
+`--disable` for hooks, memories, plugins, and apps, and
+`-c mcp_servers.<name>.enabled=false` for each server in
+`$CODEX_HOME/config.toml`; it refuses a server name that a dotted key cannot
+spell. Claude uses
 `--disable-slash-commands` for both variants; the treatment still reads its
 explicitly supplied instruction file. These runs measure following the supplied
 workflow, **not native skill discovery or triggering**.

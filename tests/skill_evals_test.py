@@ -159,9 +159,71 @@ class SkillEvaluationTests(unittest.TestCase):
             if agent == "claude":
                 self.assertIn("--disable-slash-commands", argv)
             else:
-                self.assertIn("enabled=false", argv[-1])
+                self.assertIn("enabled=false", self.skills_override(argv))
+                for feature in PREPARE.CODEX_DISABLED_FEATURES:
+                    self.assertIn(["--disable", feature], self.pairs(argv))
             saved = json.loads(Path(result["prompt_file"]).with_name("run.json").read_text())
             self.assertEqual(saved, result)
+
+    @staticmethod
+    def pairs(argv):
+        return [argv[i:i + 2] for i in range(len(argv) - 1)]
+
+    @staticmethod
+    def skills_override(argv):
+        return next(value for flag, value in SkillEvaluationTests.pairs(argv)
+                    if flag == "-c" and value.startswith("skills.config="))
+
+    def test_codex_launch_disables_runner_features_and_each_mcp_server(self):
+        config = self.root / "config.toml"
+        config.write_text('[mcp_servers.memory-store]\ncommand = "x"\n[mcp_servers.repl_2]\nurl = "y"\n')
+        with mock.patch.object(PREPARE.os, "environ", {"CODEX_HOME": str(self.root)}):
+            argv = PREPARE.codex_launch(self.root, SUITE.parent.parent, "maintain-verification-skill")
+        self.assertEqual(argv[:3], ["codex", "--cd", str(self.root)])
+        for feature in ("hooks", "memories", "plugins", "apps"):
+            self.assertIn(["--disable", feature], self.pairs(argv))
+        self.assertIn(["-c", "mcp_servers.memory-store.enabled=false"], self.pairs(argv))
+        self.assertIn(["-c", "mcp_servers.repl_2.enabled=false"], self.pairs(argv))
+        # A name that a dotted -c key cannot spell is refused rather than left enabled.
+        config.write_text('[mcp_servers."a.b"]\ncommand = "x"\n')
+        with mock.patch.object(PREPARE.os, "environ", {"CODEX_HOME": str(self.root)}), \
+                self.assertRaises(ValueError):
+            PREPARE.codex_launch(self.root, SUITE.parent.parent, "maintain-verification-skill")
+
+    def test_with_skill_preparation_requires_the_link_closure_of_supplied_guidance(self):
+        skills = self.root / "skills"
+        target, helper, outside = skills / "target", skills / "helper", skills / "outside"
+        for skill in (target, helper, outside):
+            (skill / "references").mkdir(parents=True)
+            (skill / "SKILL.md").write_text(f"# {skill.name}\n")
+        (target / "SKILL.md").write_text(
+            "See [helper](../helper/SKILL.md#use), [local](references/a.md), "
+            "[site](https://example.com/x.md), and [top](#top).\n")
+        (target / "references/a.md").write_text("[outside](../../outside/SKILL.md)\n")
+        (target / "evals/files/case").mkdir(parents=True)
+        (target / "evals/notes.md").write_text("[ignored](../../outside/SKILL.md)\n")
+        suite = target / "evals/evals.json"
+        suite.write_text(json.dumps({"skill_name": "target", "supporting_skills": ["helper"],
+                                     "evals": [{"id": 1, "prompt": "Task.", "fixture": "files/case"}]}))
+        with self.assertRaisesRegex(ValueError, r"target/references/a\.md -> \.\./\.\./outside/SKILL\.md"):
+            PREPARE.prepare(suite, 1, "claude", "with-skill", self.root / "refused")
+        self.assertFalse((self.root / "refused").exists())
+        self.workspaces.append(Path(PREPARE.prepare(
+            suite, 1, "claude", "without-skill", self.root / "baseline")["workspace"]))
+        suite.write_text(json.dumps({"skill_name": "target", "supporting_skills": ["helper", "outside"],
+                                     "evals": [{"id": 1, "prompt": "Task.", "fixture": "files/case"}]}))
+        self.workspaces.append(Path(PREPARE.prepare(
+            suite, 1, "claude", "with-skill", self.root / "closed")["workspace"]))
+
+    def test_every_suite_supplies_the_link_closure_of_its_guidance(self):
+        suites = sorted((ROOT / "skills/local").glob("*/evals/evals.json"))
+        self.assertTrue(suites)
+        for suite in suites:
+            data = json.loads(suite.read_text())
+            skill = suite.parent.parent
+            supplied = [skill, *(skill.parent / name for name in data.get("supporting_skills", []))]
+            with self.subTest(suite=skill.name):
+                self.assertEqual(PREPARE.unsupplied_links(supplied), [])
 
     def test_codex_override_preserves_unrelated_skill_settings(self):
         config = self.root / "config.toml"
@@ -170,7 +232,7 @@ class SkillEvaluationTests(unittest.TestCase):
         )
         with mock.patch.object(PREPARE.os, "environ", {"CODEX_HOME": str(self.root)}):
             argv = PREPARE.codex_launch(self.root, SUITE.parent.parent, "maintain-verification-skill")
-        overrides = tomllib.loads(argv[-1])["skills"]["config"]
+        overrides = tomllib.loads(self.skills_override(argv))["skills"]["config"]
         self.assertIn({"path": "/skills/unrelated/SKILL.md", "enabled": False}, overrides)
         self.assertEqual(config.read_text(),
                          '[[skills.config]]\npath = "/skills/unrelated/SKILL.md"\nenabled = false\n')
@@ -205,11 +267,13 @@ class SkillEvaluationTests(unittest.TestCase):
                          {":root": "read", ":workspace_roots": "write", ":tmpdir": "write"})
         for denied in ("~/.dotfiles", "~/.claude", "~/.agents", "~/.codex/skills"):
             self.assertEqual(profile[denied], "none")
-        for feature in ("hooks", "memories", "plugins", "computer_use", "browser_use"):
-            self.assertIn(["--disable", feature],
-                          [codex["extra_args"][i:i + 2] for i in range(len(codex["extra_args"]))])
-        self.assertTrue(any("mcp_servers.<name>.enabled=false" in check
-                            for check in codex["pre_run_checks"]))
+        for feature in ("computer_use", "browser_use"):
+            self.assertIn(["--disable", feature], self.pairs(codex["extra_args"]))
+        # The prepared launch_argv owns runner isolation; a suite does not repeat it.
+        for feature in PREPARE.CODEX_DISABLED_FEATURES:
+            self.assertNotIn(["--disable", feature], self.pairs(codex["extra_args"]))
+        self.assertFalse(any("mcp_servers" in arg for arg in codex["extra_args"]))
+        self.assertFalse(any("mcp_servers" in check for check in codex["pre_run_checks"]))
         self.assertTrue(any("codex sandbox -P" in check for check in codex["pre_run_checks"]))
 
     def check_plain_fixture_suite(self, suite, private_names):
@@ -238,7 +302,8 @@ class SkillEvaluationTests(unittest.TestCase):
                         guidance = workspace / ".guidance/skills"
                         self.assertEqual(
                             sorted(p.name for p in guidance.iterdir()) if guidance.exists() else [],
-                            [data["skill_name"]] if variant == "with-skill" else [],
+                            sorted([data["skill_name"], *data["supporting_skills"]])
+                            if variant == "with-skill" else [],
                         )
                         applied = subprocess.run(
                             ["git", "apply", "--check", "change.patch"], cwd=workspace,
@@ -262,7 +327,7 @@ class SkillEvaluationTests(unittest.TestCase):
     def test_change_review_suite_runs_both_agents_under_equal_sandboxed_policies(self):
         suite = ROOT / "skills/local/change-review/evals/evals.json"
         data = json.loads(suite.read_text())
-        self.assertEqual(data["supporting_skills"], [])
+        self.assertEqual(data["supporting_skills"], ["delivery-common", "worktree-runtime-cleanup"])
         execution = data["execution"]
         self.assertEqual((execution["runs_per_condition"], execution["run_timeout_minutes"]), (3, 30))
         claude, codex = execution["agents"]["claude"], execution["agents"]["codex"]
@@ -277,15 +342,19 @@ class SkillEvaluationTests(unittest.TestCase):
         self.check_plain_fixture_suite(suite, [claude["claude_settings"]])
 
     def test_delivery_instruction_suites_prepare_for_default_launch_settings(self):
-        # A suite that supplies the principles index supplies every leaf it links,
-        # so no link in the supplied guidance points outside the workspace.
+        # Each suite supplies the principles index and every leaf it links; preparing
+        # with-skill also checks that no supplied Markdown links outside the supplied skills.
         index = (ROOT / "skills/local/principles/SKILL.md").read_text()
         leaves = re.findall(r"\]\(\.\./(principle-[a-z0-9-]+)/SKILL\.md\)", index)
         self.assertTrue(leaves)
-        expected = sorted(["principles", *leaves])
-        for name in ("delivery-common", "shared-understanding", "design-preflight"):
+        principles = ["principles", *leaves]
+        closure = {"delivery-common": ["benchmark-checklist", "worktree-runtime-cleanup"],
+                   "shared-understanding": ["benchmark-checklist"],
+                   "design-preflight": ["benchmark-checklist"]}
+        for name, linked in closure.items():
             suite = ROOT / f"skills/local/{name}/evals/evals.json"
             data = json.loads(suite.read_text())
+            expected = sorted([*principles, *linked])
             self.assertEqual((data["skill_name"], sorted(data["supporting_skills"])), (name, expected))
             # Delivery smoke runs these with the prepared launch arguments only.
             self.assertNotIn("execution", data)

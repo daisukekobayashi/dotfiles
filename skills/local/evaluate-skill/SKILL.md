@@ -88,7 +88,10 @@ resume an earlier conversation. Two concurrent candidates are enough; sequential
 fresh sessions are also valid. Do not permit unbounded nested delegation.
 
 Inspect ambient rules, memory, plugins, extra skill copies, and inherited settings
-before accepting a baseline. The helper isolates files, not all session context.
+before accepting a baseline. The helper isolates files and, on Codex, turns off
+the runner's hooks, plugins, apps, memories, and MCP servers; turning off these
+runner extensions is isolation, not a removed safety control. Keep its prepared
+arguments, and inspect what they leave on.
 If the target leaks into the baseline or conditions differ materially, report the
 comparison as inconclusive. Preserve safety controls and approval boundaries.
 Unavailable authentication, permissions, tools, or isolation are missing coverage,
