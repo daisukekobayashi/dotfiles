@@ -76,11 +76,16 @@ link.
   after the signals first shows, such as a child forked meanwhile, may be the
   run's: each is reported `unverified`, counts as a leftover, and is never
   signaled.
-- **Ancestry over the whole table.** A process under a parent that existed
-  before the run, wherever that parent's cwd is, or under a new parent outside
-  the target, is reported `left` and never signaled. Only pid 1 and 0 end the
-  chain without counting as pre-existing, because the run's leftovers are
-  orphans reparented there.
+- **Ancestry over the whole table.** An otherwise eligible new process with a
+  pre-existing parent, a new parent absent from the listing, or an ancestor
+  whose ownership cannot be established is reported `unverified` and receives
+  no signal. It counts as a leftover (exit 3). This corrects the earlier
+  `left` result in [#312](https://github.com/daisukekobayashi/dotfiles/issues/312).
+  Only pid 1 and 0 end the chain without counting as pre-existing, because the
+  run's leftovers are orphans reparented there.
+- **Observation.** The teardown result covers the processes returned by
+  `list-processes.sh` using cwd and `--cwd` evidence for the target. The result
+  cannot describe processes beyond that listing.
 - **Signals.** SIGTERM to the top of each started tree after rechecking its
   start time, then, after about 10 seconds, one more SIGTERM to each started
   process still running with the same start time, even reparented. Never
@@ -127,9 +132,8 @@ link.
 
 - A review stops, without asking, every tree its run started under the target,
   not only brokers.
-- On a host where orphans are reparented to a pre-existing subreaper rather
-  than pid 1, the run's leftovers are reported `left` and reach worktree
-  cleanup, as before.
+- On a host where orphans are reparented to a pre-existing subreaper, otherwise
+  eligible leftovers are reported `unverified` and reach worktree cleanup.
 - A process another session starts in the target during the run is left
   while its parent lives; once that parent exits, such as a background command
   whose shell ended or a detached daemon, it is stopped. Callers keep other

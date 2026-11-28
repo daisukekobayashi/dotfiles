@@ -727,8 +727,11 @@ test("Codex review runs stop only the process trees they started", async () => {
   assert.doesNotMatch(trees, /--writable|writable_roots/);
   assert.match(trees, /reports it as `unverified`, a leftover, and never signals it/);
   assert.match(trees, /While the run lasts, keep other work out of the target worktree\. The script reads ownership from the parent chain when it stops, so a process another session starts in the target during the run counts as started by the run once its parent has exited, and is stopped\./);
-  assert.match(trees, /its rows carry no command lines/);
-  assert.match(trees, /A `--cwd` argument alone, a process that existed before the run, and one under a parent that did or under a new parent outside the target never count/);
+  assert.match(trees, /Its rows omit command lines/);
+  assert.match(trees, /existed before the run, one in a nested worktree, one with a tty, and one matched only by a `--cwd` argument as `left`/);
+  assert.match(trees, /a child of a pre-existing parent, a child of a new parent absent from the listing, and a descendant of an unverified parent\. The script reports it as `unverified`, a leftover, and never signals it/);
+  assert.match(trees, /Within the scope of the process listing, exit 0 means/);
+  assert.match(trees, /Exit 3 means a process is still running or unverified, or the final check could not run\. In that case report teardown as unverified/);
   assert.match(trees, /never sends SIGKILL/);
   assert.match(trees, /Leftovers do not change the review result/);
   assert.match(trees, /Exit 1 means the teardown could not run and signaled nothing/);

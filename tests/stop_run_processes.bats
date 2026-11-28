@@ -300,38 +300,58 @@ stop_zombie_fixture() {
   alive "${pre}"
 }
 
-@test "stop-run-processes leaves a new process under a pre-existing or outside parent" {
-  local spawner="${BATS_TEST_TMPDIR}/spawner.sh" pre new child1 child2
+@test "stop-run-processes reports uncertain ancestry without signaling those processes" {
+  local spawner="${BATS_TEST_TMPDIR}/spawner.sh" pre new child1 child2 grandchild owned
   cat >"${spawner}" <<'EOF'
 #!/usr/bin/env bash
-# Waits for $1, then starts a sleep in $2 and writes its pid to $3.
+# Waits for $1, then starts a child in $2 and writes its pid to $3.
+# If $4 is supplied, that child starts a sleep and writes its pid to $4.
 while [[ ! -e "$1" ]]; do sleep 0.1; done
-(cd "$2" && exec sleep 300) &
+(
+  cd "$2" || exit
+  if [[ -n "${4:-}" ]]; then
+    sleep 300 &
+    echo "$!" >"$4"
+    wait
+  else
+    exec sleep 300
+  fi
+) &
 echo "$!" >"$3"
 wait
 EOF
   chmod +x "${spawner}"
   # Another session's shell: it existed before the run and its cwd is outside.
-  start_detached "${outside}" "${spawner}" "${BATS_TEST_TMPDIR}/go" "${target}" "${BATS_TEST_TMPDIR}/child1"
+  start_detached "${outside}" "${spawner}" "${BATS_TEST_TMPDIR}/go" "${target}" \
+    "${BATS_TEST_TMPDIR}/child1" "${BATS_TEST_TMPDIR}/grandchild"
   pre="${started_pid}"
   record_now
   touch "${BATS_TEST_TMPDIR}/go"
   wait_for_file "${BATS_TEST_TMPDIR}/child1"
+  wait_for_file "${BATS_TEST_TMPDIR}/grandchild"
   child1="$(cat "${BATS_TEST_TMPDIR}/child1")"
+  grandchild="$(cat "${BATS_TEST_TMPDIR}/grandchild")"
   # A process started during the run outside the target.
   start_detached "${outside}" "${spawner}" "${BATS_TEST_TMPDIR}/go" "${target}" "${BATS_TEST_TMPDIR}/child2"
   new="${started_pid}"
   wait_for_file "${BATS_TEST_TMPDIR}/child2"
   child2="$(cat "${BATS_TEST_TMPDIR}/child2")"
+  start_detached "${target}" sleep 300
+  owned="${started_pid}"
 
   run --separate-stderr node "${script}" stop "${target}" "${record}" --sha256 "${sum}" --wait 1
-  [ "${status}" -eq 0 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
-  [ "$(row_for "${child1}" | cut -f1,6)" = "$(printf 'left\tparent %s existed before the run' "${pre}")" ]
-  [ "$(row_for "${child2}" | cut -f1,6)" = "$(printf 'left\tparent %s is a new process outside the target' "${new}")" ]
+  [ "${status}" -eq 3 ] || { echo "status ${status}: ${output} ${stderr}"; return 1; }
+  [ "$(row_for "${child1}" | cut -f1,6)" = "$(printf 'unverified\tparent %s existed before the run' "${pre}")" ]
+  [ "$(row_for "${child2}" | cut -f1,6)" = "$(printf 'unverified\tnew parent %s was not listed' "${new}")" ]
+  [ "$(row_for "${grandchild}" | cut -f1,6)" = "$(printf 'unverified\tparent %s not stopped: parent %s existed before the run' "${child1}" "${pre}")" ]
+  [ "$(row_for "${owned}" | cut -f1)" = stopped ]
   [ -z "$(row_for "${pre}")" ]
   [ -z "$(row_for "${new}")" ]
+  [ "$(printf '%s\n' "${output}" | tail -n 1)" = "$(printf 'teardown\tleftovers')" ]
   alive "${child1}"
   alive "${child2}"
+  alive "${grandchild}"
+  gone "${owned}"
 }
 
 @test "stop-run-processes leaves a nested worktree process and reports an ambiguous cwd unverified" {

@@ -55,17 +55,18 @@
 //   signaled, and counts as a leftover. So does a process under the target
 //   first seen during the teardown, and, when any signal was sent, a process
 //   under the target that a listing after the signals shows and neither the
-//   record nor the first listing had, such as a child forked meanwhile. A
-//   process whose PID and start time match a zombie is already gone. Any other
-//   listed process is reported "left" with the reason and
-//   never signaled: one that existed before the run, one under a parent that
-//   did (such as another session's shell, wherever its cwd is), and one under a
-//   new parent outside the target. Ownership is read from the parent chain at
+//   record nor the first listing had, such as a child forked meanwhile. An
+//   otherwise eligible new process under a pre-existing parent, a new parent
+//   absent from the listing, or another parent whose ownership cannot be
+//   established is also unverified. A process whose PID and start time match a
+//   zombie is already gone. A listed process with a reason to exclude it,
+//   such as one that existed before the run, is reported "left" and receives
+//   no signal. Ownership is read from the parent chain at
 //   stop: a process another session starts in the target during the run
 //   whose parent has exited counts as started by the run, so the callers keep
 //   other work out of the target while the run lasts. On a host where an
 //   orphan is reparented to a pre-existing subreaper rather than pid 1, its
-//   tree is left and reported.
+//   tree is reported unverified.
 //   The tops of the started trees get SIGTERM first. Each one's start time
 //   and state are read together immediately before its signal. A changed
 //   start time or a zombie skips the signal. After --wait seconds (default
@@ -87,13 +88,13 @@
 //   unverified     not signaled, or its exit not confirmed: its start time
 //                  changed or differs between lookups, its cwd is not an
 //                  exact live path, it was first seen during or after the
-//                  teardown's signals, its parent was not found, or it could
-//                  not be read or signaled
-//   left           not started by the run; <reason> says why
+//                  teardown's signals, its ancestry could not establish
+//                  ownership, or it could not be read or signaled
+//   left           excluded from automatic teardown; <reason> says why
 //
 // Exit status:
-//   0  stop: every started process exited, or the run started none; record:
-//      written
+//   0  stop: within the listing's scope, every process attributed to the run
+//      exited or none was found, and no row is unverified; record: written
 //   1  could not run, and nothing was signaled: list-processes.sh, ps, or git
 //      failed, wrote to stderr, or ran past 120 seconds, --sha256 is missing,
 //      repeated, or malformed, or the record is unusable (its SHA-256 differs
@@ -512,13 +513,15 @@ const stop = async (target, file, expected, waitSeconds) => {
       const parent = table.get(ppid);
       if (ppid === "0" || ppid === "1") verdict = { status: "start" };
       else if (!parent) verdict = { status: "unverified", reason: `parent ${ppid} not found` };
-      else if (before.get(ppid) === parent.started) verdict = { status: "left", reason: `parent ${ppid} existed before the run` };
-      else if (!rows.has(ppid)) verdict = { status: "left", reason: `parent ${ppid} is a new process outside the target` };
+      else if (before.get(ppid) === parent.started) verdict = { status: "unverified", reason: `parent ${ppid} existed before the run` };
+      else if (!rows.has(ppid)) verdict = { status: "unverified", reason: `new parent ${ppid} was not listed` };
       else if (seen.has(pid)) verdict = { status: "unverified", reason: "parent cycle" };
       else {
         seen.add(pid);
         const up = decide(ppid, seen);
-        verdict = up.status === "start" ? { status: "start" } : { status: "left", reason: `parent ${ppid} not stopped: ${up.reason ?? up.status}` };
+        verdict = up.status === "start"
+          ? { status: "start" }
+          : { status: "unverified", reason: `parent ${ppid} not stopped: ${up.reason ?? up.status}` };
       }
     }
     verdicts.set(pid, verdict);
