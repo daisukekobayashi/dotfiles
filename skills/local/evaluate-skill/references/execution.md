@@ -106,7 +106,10 @@ preserving user-configured skill enable/disable entries. It also passes
 spell. Claude uses
 `--disable-slash-commands --safe-mode` for both variants; `--safe-mode` keeps
 `--settings` and permission rules but leaves built-in plugins and managed
-settings on. The treatment still reads its explicitly supplied instruction file. These runs measure following the supplied
+settings on. `prepare.py` builds these arguments; the rule for the runner
+extensions they turn off is in [SKILL.md](../SKILL.md#prepare-and-run-candidates),
+and this reference only describes them. The treatment still reads its
+explicitly supplied instruction file. These runs measure following the supplied
 workflow, **not native skill discovery or triggering**.
 
 Inspect active context before accepting a baseline. The preparer separates
