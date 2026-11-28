@@ -14,7 +14,15 @@ import tomllib
 # Runner features that would let a candidate reach the runner's own hooks,
 # plugins, apps, or memories; MCP servers are disabled by name below.
 CODEX_DISABLED_FEATURES = ("hooks", "memories", "plugins", "apps")
-LINK = re.compile(r"\]\(([^)\s]+)\)")
+# Destinations of inline (bare, titled, or <angle>) links, reference definitions,
+# and HTML href/src attributes.
+LINK = re.compile(
+    r"\]\(\s*(?:<([^>\n]*)>|([^)\s]+))"
+    r"|^ {0,3}\[[^\]\n]+\]:[ \t]*(?:<([^>\n]*)>|(\S+))"
+    r"|\b(?:href|src)\s*=\s*[\"']([^\"'\n]+)[\"']",
+    re.MULTILINE | re.IGNORECASE,
+)
+COPY_IGNORED = {"evals", "__pycache__"}
 BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 
 
@@ -68,14 +76,16 @@ def unsupplied_links(supplied):
     missing = set()
     for source in supplied:
         for page in sorted(source.rglob("*.md")):
-            if {"evals", "__pycache__"} & set(page.relative_to(source).parts):
+            if COPY_IGNORED & set(page.relative_to(source).parts):
                 continue
-            for target in LINK.findall(page.read_text()):
-                path = target.split("#", 1)[0]
+            for match in LINK.finditer(page.read_text()):
+                path = next((group for group in match.groups() if group), "").split("#", 1)[0]
                 if not path or re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", path):
                     continue
                 resolved = Path(os.path.normpath(page.parent / path))
-                if not resolved.is_relative_to(root) or resolved.relative_to(root).parts[0] not in names:
+                parts = resolved.relative_to(root).parts if resolved.is_relative_to(root) else ()
+                # The skills root itself, another skill, or a path the copy skips is not supplied.
+                if not parts or parts[0] not in names or COPY_IGNORED & set(parts[1:]):
                     missing.add(f"{page.relative_to(root)} -> {path}")
     return sorted(missing)
 
@@ -125,7 +135,7 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
             for source in [skill, *supporting]:
                 shutil.copytree(
                     source, guidance / source.name,
-                    ignore=shutil.ignore_patterns("evals", "__pycache__"),
+                    ignore=shutil.ignore_patterns(*COPY_IGNORED),
                 )
             guidance_files = digest_tree(guidance)
             prompt = (

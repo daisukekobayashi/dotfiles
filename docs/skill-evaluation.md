@@ -49,7 +49,8 @@ identified as such. The workflow does not automatically edit the target skill.
 A suite's `supporting_skills` lists every sibling skill that the supplied
 guidance links to. Preparing `with-skill` scans every Markdown file the helper
 copies (each supplied skill, without `evals/`) and refuses the suite when a
-relative link leaves the supplied skills, naming the file and the link. The
+relative inline, reference, or HTML link leaves the supplied skills or points
+into a path the copy skips, such as `evals/`, naming the file and the link. The
 prepared Codex launch turns off the runner's hooks, memories, plugins, and
 apps, and disables each MCP server configured in `$CODEX_HOME/config.toml` by
 name, since `-c mcp_servers={}` leaves configured servers running. Global
@@ -61,7 +62,9 @@ apply. It leaves on Claude Code's built-in plugins and their hooks, and the
 organization's managed settings and managed plugin hooks. Whether it skips
 the user's `~/.claude/CLAUDE.md` is unverified, because a control run without
 `--safe-mode` logged no line for that file either. These remaining items apply
-to both conditions alike; record them with the run.
+to both conditions alike; record them with the run. Memories and MCP servers
+are normally off, but these remaining layers on Claude, and Codex configuration
+layers other than `$CODEX_HOME/config.toml`, can still add them.
 
 Reusable cases remain in `skills/local/<target>/evals/evals.json`. The initial
 `maintain-verification-skill` suite covers an obsolete command, a product
@@ -176,10 +179,9 @@ supplies the `principles` index and every leaf the index links, and
 supplies `benchmark-checklist`, and `delivery-common` supplies
 `worktree-runtime-cleanup`, because the supplied guidance links to them. Grading reads the
 final answer and the transcript. A run is contaminated when it reads outside
-the workspace, including an installed copy of the skill; a contaminated run is
-excluded and its case reported as missing coverage. Memories and MCP servers
-are off in the prepared launch on both agents, so they are no longer a
-contamination case. Not covered: the user
+the workspace, including an installed copy of the skill, or calls a memory or
+other MCP tool, which the remaining configuration layers can still provide; a
+contaminated run is excluded and its case reported as missing coverage. Not covered: the user
 dialogue, the `grilling` sub-skill (not a sibling skill, so it cannot be
 supplied), and the parts that only `design-preflight-with-docs` adds.
 

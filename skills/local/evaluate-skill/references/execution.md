@@ -23,8 +23,9 @@ Keep durable cases under `skills/local/<name>/evals/evals.json`. Each case has
 The preparer uses two extra fields: `fixture` names a directory relative to
 `evals/`, and optional `overlay` supplies case-specific files on top of it.
 `supporting_skills` lists every sibling skill that the supplied instructions
-link to. `with-skill` preparation fails when a relative link in a copied
-Markdown file leaves the supplied skills.
+link to. `with-skill` preparation fails when a relative inline, reference, or
+HTML link in a copied Markdown file leaves the supplied skills or points into
+a path the copy skips, such as `evals/`.
 
 Use a new independent session for each run:
 

@@ -28,7 +28,7 @@
         "The entry records the chosen option and who chose it; an option that drops support for paths with spaces (decision A1) is left open for the user rather than chosen by the coordinator",
         "The round 2 disposition references the premise entry's id",
         "The line that reports the decision names principle-attack-the-premise",
-        "The transcript shows a read of .guidance/skills/delivery-common/references/local-review.md; a run that reads outside the workspace, including an installed copy of the skill, is contaminated; exclude a contaminated run from grading and report its case as missing coverage"
+        "The transcript shows a read of .guidance/skills/delivery-common/references/local-review.md; a run that reads outside the workspace, including an installed copy of the skill, or calls a memory or other MCP tool is contaminated; exclude a contaminated run from grading and report its case as missing coverage"
       ]
     }
   ]
