@@ -122,10 +122,14 @@ its parent has exited, and is stopped.
    registered below the target, it has no tty, and its parent is pid 1 or
    another process the run started. Paths are compared as the file system spells
    them, folding case on a case-insensitive volume, so a case alias hides
-   neither the target nor a nested worktree. A `--cwd` argument alone, a process
-   that existed before the run, and one under a parent that did or under a new
-   parent outside the target never count: the script reports them as `left` and
-   leaves them running. A new process under the target whose cwd is not an exact
+   neither the target nor a nested worktree. The script reports a process that
+   existed before the run, one in a nested worktree, one with a tty, and one
+   matched only by a `--cwd` argument as `left`. It leaves them running.
+   A new process under the target whose parent chain cannot establish ownership
+   may be the run's. Examples include a child of a pre-existing parent, a child
+   of a new parent absent from the listing, and a descendant of an unverified
+   parent. The script reports it as `unverified`, a leftover, and never signals
+   it. A new process under the target whose cwd is not an exact
    live path, such as one with a ` (deleted)` suffix, a removed one, or an
    ambiguous one, or one first seen during the teardown or in the listing it
    takes after its signals, may be the run's: the script reports it as
@@ -133,9 +137,12 @@ its parent has exited, and is stopped.
    of each started tree after rechecking its PID and start time, waits about 10
    seconds, sends SIGTERM once more to each started process still running whose
    PID and start time match, even if reparented, and never sends SIGKILL.
-3. Report its output with the review; its rows carry no command lines. Exit 0
-   means every started process exited, or the run started none; exit 3 means a
-   process is still running or unverified. Leftovers do not change the
+3. Report its output with the review. Its rows omit command lines. Within the
+   scope of the process listing, exit 0 means every process attributed to the run
+   exited or none was found, and there are no unverified rows. The listing
+   checks cwd and `--cwd` evidence for the target. Exit 3 means a process is
+   still running or unverified, or the final check could not run. In that
+   case report teardown as unverified. Leftovers do not change the
    review result; cleanup under
    [Dev Servers, Watchers, and Tool Daemons](#dev-servers-watchers-and-tool-daemons)
    handles them before the worktree is removed.
