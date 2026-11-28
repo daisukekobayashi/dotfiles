@@ -100,14 +100,15 @@ preserving user-configured skill enable/disable entries. It also passes
 `-c mcp_servers.<name>.enabled=false` for each server in
 `$CODEX_HOME/config.toml`; it refuses a server name that a dotted key cannot
 spell. Claude uses
-`--disable-slash-commands` for both variants; the treatment still reads its
-explicitly supplied instruction file. These runs measure following the supplied
+`--disable-slash-commands --safe-mode` for both variants; `--safe-mode` keeps
+`--settings` and permission rules but leaves built-in plugins and managed
+settings on. The treatment still reads its explicitly supplied instruction file. These runs measure following the supplied
 workflow, **not native skill discovery or triggering**.
 
 Inspect active context before accepting a baseline. The preparer separates
-files, not operating-system accounts or permissions: global rules, memory,
-plugins, admin settings, additional skill copies, and inherited environment may
-still affect a session. Do not use the parent chat's history for a baseline.
+files and turns off the runner extensions above, not operating-system accounts
+or permissions: global rules, built-in plugins, admin settings, additional skill
+copies, and inherited environment may still affect a session. Do not use the parent chat's history for a baseline.
 Record any extra configuration and apply it equally to both runs. If the target
 leaks into the baseline or equivalent conditions cannot be established, mark
 the comparison inconclusive. Do not disable safety controls or copy credentials

@@ -54,8 +54,14 @@ prepared Codex launch turns off the runner's hooks, memories, plugins, and
 apps, and disables each MCP server configured in `$CODEX_HOME/config.toml` by
 name, since `-c mcp_servers={}` leaves configured servers running. Global
 instructions such as `~/.codex/AGENTS.md` still load. The prepared Claude
-launch still passes the runner's own configuration through, such as hooks,
-plugins, MCP servers, and memories.
+launch adds `--safe-mode`, which turns off the runner's installed plugins,
+settings and plugin hooks, MCP servers including claude.ai connectors, and
+auto-memory, while `--settings`, the sandbox, and user permission rules still
+apply. It leaves on Claude Code's built-in plugins and their hooks, and the
+organization's managed settings and managed plugin hooks. Whether it skips
+the user's `~/.claude/CLAUDE.md` is unverified, because a control run without
+`--safe-mode` logged no line for that file either. These remaining items apply
+to both conditions alike; record them with the run.
 
 Reusable cases remain in `skills/local/<target>/evals/evals.json`. The initial
 `maintain-verification-skill` suite covers an obsolete command, a product
@@ -170,9 +176,10 @@ supplies the `principles` index and every leaf the index links, and
 supplies `benchmark-checklist`, and `delivery-common` supplies
 `worktree-runtime-cleanup`, because the supplied guidance links to them. Grading reads the
 final answer and the transcript. A run is contaminated when it reads outside
-the workspace, including an installed copy of the skill, or calls a memory or
-other MCP tool; a contaminated run is excluded and its case reported as missing
-coverage. Not covered: the user
+the workspace, including an installed copy of the skill; a contaminated run is
+excluded and its case reported as missing coverage. Memories and MCP servers
+are off in the prepared launch on both agents, so they are no longer a
+contamination case. Not covered: the user
 dialogue, the `grilling` sub-skill (not a sibling skill, so it cannot be
 supplied), and the parts that only `design-preflight-with-docs` adds.
 

@@ -157,7 +157,7 @@ class SkillEvaluationTests(unittest.TestCase):
             self.assertEqual(argv[0], agent)
             self.assertNotIn("danger", " ".join(argv))
             if agent == "claude":
-                self.assertIn("--disable-slash-commands", argv)
+                self.assertEqual(argv, ["claude", "--disable-slash-commands", "--safe-mode"])
             else:
                 self.assertIn("enabled=false", self.skills_override(argv))
                 for feature in PREPARE.CODEX_DISABLED_FEATURES:
@@ -555,7 +555,7 @@ class SkillEvaluationTests(unittest.TestCase):
         self.assertEqual(self.run_gh(env, ["repo", "view", "--json", "nameWithOwner,url,defaultBranchRef"]).returncode, 0)
 
         # The agent CLI is resolved before the fixed PATH applies, and only from trusted directories.
-        self.assertEqual(env["launch_argv"], [str(self.cli), "--disable-slash-commands"])
+        self.assertEqual(env["launch_argv"], [str(self.cli), "--disable-slash-commands", "--safe-mode"])
         for name, cli_path in (("missing", str(self.root / "empty-dir")),
                                ("in-tmpdir", str(self.fake_cli(tmpdir / "bin").parent)),
                                ("in-workspace", str(self.fake_cli(workspace / "cli").parent))):
@@ -597,7 +597,7 @@ class SkillEvaluationTests(unittest.TestCase):
         env_launch = STAGE.stage(run_json, str(self.root / "stage-env"), tmpdir, trusted)
         self.staged.append(self.root / "stage-env")
         self.assertEqual(env_launch["launch_argv"], [str(interpreter), str(launcher),
-                                                     "--disable-slash-commands"])
+                                                     "--disable-slash-commands", "--safe-mode"])
         planted = self.fake_cli(tmpdir / "interp", "fakeinterp")
         for name, shebang, cli_path in (
                 ("interpreter-missing", "#!/usr/bin/env missinginterp", str(launcher.parent)),

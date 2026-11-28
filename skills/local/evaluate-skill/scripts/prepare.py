@@ -135,12 +135,12 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
         (output / "prompt.txt").write_text(prompt)
 
         # Both variants suppress the installed target; treatment is supplied above.
-        # Codex also drops the runner's hooks, plugins, apps, memories, and MCP servers.
+        # Both also drop the runner's hooks, plugins, memories, and MCP servers.
         name = suite["skill_name"]
         if agent == "codex":
             argv = codex_launch(workspace, skill, name)
         else:
-            argv = ["claude", "--disable-slash-commands"]
+            argv = ["claude", "--disable-slash-commands", "--safe-mode"]
         metadata = {
             "agent": agent, "variant": variant, "case_id": case_id,
             "suite": str(suite_path), "workspace": str(workspace),
