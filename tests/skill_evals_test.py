@@ -51,6 +51,19 @@ class SkillEvaluationTests(unittest.TestCase):
         self.workspaces.append(Path(result["workspace"]))
         return result
 
+    def prepare_cli(self, output, *options):
+        result = subprocess.run(
+            [sys.executable, PREPARE.__file__, "--suite", str(SUITE),
+             "--case", "1", "--agent", "claude", "--variant", "with-skill",
+             "--output", str(output), *map(str, options)],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return result, None
+        metadata = json.loads(result.stdout)
+        self.workspaces.append(Path(metadata["workspace"]))
+        return result, metadata
+
     def test_both_agents_receive_identical_case_inputs_and_isolated_copies(self):
         source_before = PREPARE.digest_tree(SUITE.parent)
         for case in (1, 2, 3):
@@ -894,18 +907,85 @@ class SkillEvaluationTests(unittest.TestCase):
                 summary = STAGE.summarize((workspace / ".snapshot/gh-calls.jsonl").read_bytes(), snapshot)
                 self.assertEqual(summary["detail_issues"], sorted(issues))
 
-    def test_old_snapshot_is_supplied_without_the_judging_cases(self):
-        bundle = self.root / "snapshot"
-        for name in ("maintain-verification-skill", "principle-prove-it-works", "create-verification-skill"):
-            shutil.copytree(ROOT / "skills/local" / name, bundle / name,
-                            ignore=shutil.ignore_patterns("evals"))
-        old_skill = bundle / "maintain-verification-skill"
-        with (old_skill / "SKILL.md").open("a") as stream:
-            stream.write("\nSnapshot-specific instruction.\n")
-        result = self.prepare(1, skill_source=old_skill)
-        supplied = Path(result["workspace"]) / ".guidance/skills/maintain-verification-skill/SKILL.md"
-        self.assertEqual(supplied.read_bytes(), (old_skill / "SKILL.md").read_bytes())
-        self.assertIn("maintain-verification-skill/SKILL.md", result["guidance_files"])
+    def test_old_snapshot_uses_its_original_supporting_skill_names(self):
+        snapshot = ROOT / "tests/fixtures/evaluate-skill/pre-pr-321"
+        old_skill = snapshot / "maintain-verification-skill"
+        old_run, old = self.prepare_cli(
+            self.root / "old", "--skill-source", old_skill,
+            "--supporting-skills", "create-verification-skill", "prove-it-works",
+        )
+        self.assertEqual(old_run.returncode, 0, old_run.stderr)
+        current_run, current = self.prepare_cli(self.root / "current")
+        self.assertEqual(current_run.returncode, 0, current_run.stderr)
+        self.assertEqual(old["suite"], current["suite"])
+        self.assertEqual(old["case_id"], current["case_id"])
+        self.assertEqual(old["initial_files"], current["initial_files"])
+        self.assertEqual(
+            Path(old["prompt_file"]).read_bytes(), Path(current["prompt_file"]).read_bytes(),
+        )
+
+        guidance = Path(old["workspace"]) / ".guidance/skills"
+        self.assertCountEqual(
+            (path.name for path in guidance.iterdir()),
+            ["maintain-verification-skill", "create-verification-skill", "prove-it-works"],
+        )
+        for source, link in (
+            ("maintain-verification-skill", "../prove-it-works/SKILL.md"),
+            ("maintain-verification-skill", "../create-verification-skill/references/verification-contract.md"),
+            ("create-verification-skill", "../prove-it-works/SKILL.md"),
+        ):
+            with self.subTest(source=source, link=link):
+                copied = guidance / source / "SKILL.md"
+                self.assertEqual(copied.read_bytes(), (snapshot / source / "SKILL.md").read_bytes())
+                self.assertIn(f"({link})", copied.read_text())
+                self.assertEqual((copied.parent / link).read_bytes(), (snapshot / source / link).read_bytes())
+        self.assertFalse((guidance / old_skill.name / "evals").exists())
+        self.assertIn("principle-prove-it-works/SKILL.md", current["guidance_files"])
+
+        output = self.root / "incomplete"
+        incomplete, _ = self.prepare_cli(
+            output, "--skill-source", old_skill, "--supporting-skills", "create-verification-skill",
+        )
+        self.assertEqual(incomplete.returncode, 2, incomplete.stderr)
+        self.assertIn("../prove-it-works/SKILL.md", incomplete.stderr)
+        self.assertFalse(output.exists())
+
+    def test_an_empty_supporting_skill_override_replaces_the_suite_list(self):
+        old_skill = self.root / "snapshot/maintain-verification-skill"
+        old_skill.mkdir(parents=True)
+        (old_skill / "SKILL.md").write_text("# Standalone historical version\n")
+
+        omitted_output = self.root / "omitted"
+        omitted, _ = self.prepare_cli(omitted_output, "--skill-source", old_skill)
+        self.assertEqual(omitted.returncode, 2, omitted.stderr)
+        self.assertIn("Missing sibling supporting skill:", omitted.stderr)
+        self.assertFalse(omitted_output.exists())
+
+        empty, prepared = self.prepare_cli(
+            self.root / "empty", "--skill-source", old_skill, "--supporting-skills",
+        )
+        self.assertEqual(empty.returncode, 0, empty.stderr)
+        self.assertEqual(list(prepared["guidance_files"]), ["maintain-verification-skill/SKILL.md"])
+
+    def test_supporting_skill_override_requires_a_snapshot_and_names(self):
+        snapshot = ROOT / "tests/fixtures/evaluate-skill/pre-pr-321"
+        source = ("--skill-source", snapshot / "maintain-verification-skill")
+        output = self.root / "invalid"
+        failures = (
+            ((), (), "--supporting-skills requires --skill-source"),
+            (source, (snapshot / "prove-it-works",), "must be a sibling directory name"),
+            (source, ("../prove-it-works",), "must be a sibling directory name"),
+            (source, ("..\\prove-it-works",), "must be a sibling directory name"),
+            (source, ("maintain-verification-skill",), "Repeated skill name"),
+            (source, ("prove-it-works", "prove-it-works"), "Repeated skill name"),
+            (source, ("missing",), "Missing sibling supporting skill:"),
+        )
+        for source_options, names, error in failures:
+            with self.subTest(names=names):
+                result, _ = self.prepare_cli(output, *source_options, "--supporting-skills", *names)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(error, result.stderr)
+                self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

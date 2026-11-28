@@ -5,7 +5,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 import shutil
 import tempfile
@@ -107,7 +107,7 @@ def unsupplied_links(supplied, canonical_root=None):
     return sorted(missing)
 
 
-def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
+def prepare(suite_path, case_id, agent, variant, output, skill_source=None, *, supporting_skills=None):
     suite_path = suite_path.resolve()
     suite = json.loads(suite_path.read_text())
     case = next((item for item in suite["evals"] if item["id"] == case_id), None)
@@ -119,7 +119,21 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
     sources = [fixture_path(suite_path.parent, case["fixture"])]
     if case.get("overlay"):
         sources.append(fixture_path(suite_path.parent, case["overlay"]))
-    supporting = [skill.parent / name for name in suite.get("supporting_skills", [])]
+    if supporting_skills is None:
+        supporting_skills = suite.get("supporting_skills", [])
+        supporting_input = "supporting_skills"
+    else:
+        if skill_source is None:
+            raise ValueError("--supporting-skills requires --skill-source")
+        supporting_input = "--supporting-skills"
+        names = {skill.name}
+        for name in supporting_skills:
+            if not name or name == ".." or PureWindowsPath(name).name != name:
+                raise ValueError(f"Supporting skill must be a sibling directory name: {name!r}")
+            if name in names:
+                raise ValueError(f"Repeated skill name in --supporting-skills: {name!r}")
+            names.add(name)
+    supporting = [skill.parent / name for name in supporting_skills]
     for source in supporting:
         if source.parent != skill.parent or not (source / "SKILL.md").is_file():
             raise ValueError(f"Missing sibling supporting skill: {source}")
@@ -127,7 +141,7 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
         missing = unsupplied_links([skill, *supporting], suite_path.parent.parent.parent)
         if missing:
             raise ValueError("Supplied guidance refers to sibling skill content it does not "
-                             "contain; add those skills to supporting_skills: " + "; ".join(missing))
+                             f"contain; add those skills to {supporting_input}: " + "; ".join(missing))
 
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -193,10 +207,14 @@ def main():
     parser.add_argument("--variant", choices=("with-skill", "without-skill"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--skill-source", type=Path, help="Optional old-version snapshot")
+    parser.add_argument(
+        "--supporting-skills", nargs="*", metavar="NAME",
+        help="Replace the suite's supporting skill names for --skill-source",
+    )
     args = parser.parse_args()
     try:
         result = prepare(args.suite, args.case, args.agent, args.variant,
-                         args.output, args.skill_source)
+                         args.output, args.skill_source, supporting_skills=args.supporting_skills)
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, indent=2))

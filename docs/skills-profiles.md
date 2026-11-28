@@ -590,10 +590,9 @@ adoption in [ADR 0004](adr/0004-adopt-pstack-principles-through-an-index.md).
 `principle-explain-the-number` were named `prove-it-works`,
 `encode-lessons-in-structure`, and `explain-the-number` before #318; rerun the
 skills setup so the installed links follow the new names.
-To compare against a snapshot from before #318 with `evaluate-skill`, prepare
-the old version with that snapshot's own suite, which names its supporting
-skills by their old names, and check that both suites have the same cases,
-inputs, and criteria.
+To compare against a snapshot from before #318 with `evaluate-skill`, use the
+same suite for both runs and supply the old supporting skill names on the old
+run. See [revision comparison](../skills/local/evaluate-skill/references/execution.md#define-the-comparison).
 
 How delivery uses these skills is decided in
 [ADR 0001](adr/0001-pstack-principles-in-delivery.md). Delivery runs one of these
