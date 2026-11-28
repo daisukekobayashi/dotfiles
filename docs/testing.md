@@ -61,13 +61,22 @@ cache. The ordinary `pull_request` run tests the candidate scanner with
 synthetic inputs under the normal PR permissions. Push runs scan and test the
 pushed revision for advisory early detection.
 
-In Actions, look for the **Trusted scan for PR #… at …** run for the
-`pull_request_target` event and the PR's current head SHA. This run is review
-evidence. Automatic PR coverage requires an applicable repository Actions
-event policy allowing `pull_request_target` for
-`.github/workflows/sensitive-changes.yml`. Keep `push` and `pull_request`
-allowed on that path for the other runs. Review changes to the workflow or
-scanner under the repository review policy.
+Read the PR's recorded base and head with
+`gh pr view <number> --json number,baseRefOid,headRefOid`. The recorded base
+can differ from the current tip of the target branch. In Actions, match all
+three values to the **Trusted scan for PR #… base … head …** run from the
+`pull_request_target` event. A clean result requires a matching **Trusted PR
+secret scan** job that ran and succeeded. A missing or skipped job leaves
+coverage for that range unverified.
+
+The trusted scan runs for PR openings, head updates, reopenings, and edits
+that change the base ref or base SHA. GitHub may suppress
+[`pull_request_target` events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target)
+for some head branch names, including names that resemble a SHA. Automatic
+PR coverage requires an applicable repository Actions event policy allowing
+`pull_request_target` for `.github/workflows/sensitive-changes.yml`. Keep
+`push` and `pull_request` allowed on that path for the other runs. Review
+changes to the workflow or scanner under the repository review policy.
 
 ### Private denylist
 
