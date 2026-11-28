@@ -95,8 +95,18 @@ specifies the exact repository-relative `path`, `rule` (such as
 `secret:github-pat`), `line` (0 for a filename match), `contentSha256` for the
 selected file bytes, and a `reason`. Keep private values out of this file.
 The existing reviewed default-branch copy controls the scan. For a push to
-the default branch, the before commit supplies the policy. A change to the
-allowlist cannot exempt the same candidate change by itself.
+the default branch, the before commit supplies the policy. A first push of a
+different branch uses its verified comparison base. For other branch pushes
+and pull requests, CI reads the exact `refs/remotes/origin/<default>` ref and
+returns incomplete (exit 2) when Git cannot verify it points to a commit.
+A change to the allowlist cannot exempt the same candidate change by itself.
+
+The staged check reads the exact `refs/remotes/origin/main` ref. If Git
+confirms that ref is absent, the check runs with no allowlist exceptions.
+If the ref cannot be read or does not point to a commit, the check returns
+incomplete. A valid ref works on older Git. Git 2.43 or later can confirm
+absence with `git show-ref --exists`; without that option, a failed exact
+lookup returns incomplete.
 
 ## Routine checks
 

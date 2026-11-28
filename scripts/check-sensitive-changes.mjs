@@ -67,7 +67,7 @@ function oid(value) {
   return value;
 }
 
-function readCommit(value, { fetch = false } = {}) {
+function readCommit(value, { fetch = false, label = "An event commit" } = {}) {
   const id = oid(value);
   let result = gitResult(["cat-file", "-t", id]);
   if (result.status !== 0 && fetch) {
@@ -75,8 +75,18 @@ function readCommit(value, { fetch = false } = {}) {
     if (fetched.status === 0) result = gitResult(["cat-file", "-t", id]);
   }
   expect(result.status === 0 && result.stdout.toString().trim() === "commit",
-    "An event commit is missing or does not identify a commit.");
+    `${label} is missing or does not identify a commit.`);
   return id;
+}
+
+function readAllowlistCommit(ref, { allowMissing = false } = {}) {
+  const resolved = gitResult(["show-ref", "--verify", "--hash", ref]);
+  if (resolved.status === 0) {
+    return readCommit(resolved.stdout.toString().trim(), { label: "The reviewed allowlist revision" });
+  }
+  // Git reports an absent ref separately from other lookup failures.
+  if (allowMissing && gitResult(["show-ref", "--exists", ref]).status === 2) return null;
+  throw new Incomplete("The reviewed allowlist revision could not be read.");
 }
 
 function eventSelection() {
@@ -108,7 +118,7 @@ function eventSelection() {
       && event.ref === process.env.GITHUB_REF, "The scan requires a pull request or branch push event.");
     if (event.deleted === true) {
       expect(/^0{40}$|^0{64}$/.test(event.after), "The branch deletion has inconsistent event identities.");
-      return { commits: [], policy: null };
+      return { commits: [], policyCommit: null };
     }
     head = oid(event.after);
     expect(head === process.env.GITHUB_SHA, "The push head does not match the event SHA.");
@@ -141,7 +151,8 @@ function eventSelection() {
     .toString().trim().split("\n").filter(Boolean).map((line) => line.split(" ").map(oid));
   return {
     commits,
-    policy: firstPush || (eventName === "push" && event.ref === defaultRef) ? base : `refs/remotes/origin/${branch}`,
+    policyCommit: firstPush || (eventName === "push" && event.ref === defaultRef)
+      ? base : readAllowlistCommit(`refs/remotes/origin/${branch}`),
   };
 }
 
@@ -233,12 +244,8 @@ function localRules(root) {
   }
 }
 
-function allowlist(policy) {
-  if (policy === null) return [];
-  const resolved = gitResult(["rev-parse", "--verify", "--quiet", `${policy}^{commit}`]);
-  if (resolved.status === 1) return [];
-  expect(resolved.status === 0, "The reviewed allowlist revision could not be read.");
-  const commit = oid(resolved.stdout.toString().trim());
+function allowlist(commit) {
+  if (commit === null) return [];
   const entries = git(["ls-tree", "-z", commit, "--", allowlistPath]);
   if (!entries.length) return [];
   expect(/^100(?:644|755) blob /.test(entries.toString()), "The reviewed allowlist must be a regular file.");
@@ -352,10 +359,11 @@ function personalFindings(buffer, rules) {
 function main(mode) {
   expect(["staged", "ci"].includes(mode), "Use staged or ci.");
   const root = realpathSync(text(git(["rev-parse", "--show-toplevel"])).replace(/\r?\n$/, ""));
-  const { commits, policy } = mode === "staged"
-    ? { commits: [], policy: "refs/remotes/origin/main" } : eventSelection();
   const rules = mode === "staged" ? localRules(root) : [];
-  const exceptions = allowlist(policy);
+  const { commits, policyCommit } = mode === "staged"
+    ? { commits: [], policyCommit: readAllowlistCommit("refs/remotes/origin/main", { allowMissing: true }) }
+    : eventSelection();
+  const exceptions = allowlist(policyCommit);
   const scratch = mkdtempSync(path.join(tmpdir(), "dotfiles-sensitive-scan-"));
   try {
     const detectSecrets = scanner(scratch, mode);
