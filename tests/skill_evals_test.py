@@ -220,6 +220,7 @@ class SkillEvaluationTests(unittest.TestCase):
         for name in ("target", "outside"):
             (skills / name / "evals").mkdir(parents=True)
             (skills / name / "SKILL.md").write_text(f"# {name}\n")
+        (skills / "target/evals/evals.json").write_text("{}")
         refused = {
             "inline": "[x](../outside/SKILL.md)\n",
             "reference": "See [x][o].\n\n[o]: ../outside/SKILL.md\n",
@@ -235,6 +236,8 @@ class SkillEvaluationTests(unittest.TestCase):
             "percent-encoded": "[x](../out%73ide/SKILL.md)\n",
             "skills root": "[all](../)\n",
             "uncopied evals": "[cases](./evals/evals.json)\n",
+            "bare uncopied evals": "[cases](evals/evals.json)\n",
+            "bare uncopied evals directory": "See `evals/` for the cases.\n",
             "uncopied evals of another": "[cases](../target/evals/evals.json)\n",
         }
         for label, text in refused.items():
@@ -245,7 +248,7 @@ class SkillEvaluationTests(unittest.TestCase):
             "[self](./SKILL.md) [x](../outside/SKILL.md) `src=\"../example/diagram.png\"`\n"
             "```markdown\n[template]: ../example/SKILL.md\n```\n"
             "[home](~/.claude/skills/outside/SKILL.md) [web](https://example.com/../outside/a.md) "
-            "[up](../../docs/x.md)\n")
+            "[up](../../docs/x.md) `evals/missing.json` skills/local/x/evals/y.json\n")
         self.assertEqual(PREPARE.unsupplied_links([skills / "target", skills / "outside"]), [])
 
     def test_every_suite_supplies_the_link_closure_of_its_guidance(self):

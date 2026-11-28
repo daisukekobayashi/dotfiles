@@ -18,6 +18,9 @@ CODEX_DISABLED_FEATURES = ("hooks", "memories", "plugins", "apps")
 # Relative path text in any syntax: links, code, HTML attributes, or prose.
 RELATIVE_PATH = re.compile(r"(?<![\w./~%-])\.\.?/[^\s`'\"<>()\[\]{}|*]*")
 COPY_IGNORED = {"evals", "__pycache__"}
+# A bare relative path through a part the guidance copy skips, such as evals/x.
+BARE_IGNORED_PATH = re.compile(
+    r"(?<![\w./~%:-])(?:[\w.-]+/)*(?:evals|__pycache__)/[^\s`'\"<>()\[\]{}|*]*")
 BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 
 
@@ -74,7 +77,12 @@ def unsupplied_links(supplied):
         for page in sorted(source.rglob("*.md")):
             if COPY_IGNORED & set(page.relative_to(source).parts):
                 continue
-            for text in RELATIVE_PATH.findall(page.read_text()):
+            content = page.read_text()
+            # Only an existing bare path counts, so prose and examples do not.
+            for text in BARE_IGNORED_PATH.findall(content):
+                if (page.parent / re.split(r"[#?]", text, maxsplit=1)[0].rstrip(".,;:!")).exists():
+                    missing.add(f"{page.relative_to(root)} -> {text}")
+            for text in RELATIVE_PATH.findall(content):
                 path = unquote(re.split(r"[#?]", text, maxsplit=1)[0].rstrip(".,;:!"))
                 resolved = Path(os.path.normpath(page.parent / path))
                 if not resolved.is_relative_to(root):

@@ -53,7 +53,9 @@ relative path references to sibling skills: any `./` or `../` path text, in a
 link, code, an HTML attribute, or prose. It refuses the suite when such a path
 resolves to an existing skill that is not supplied, to the skills root itself,
 or into a path the copy skips, such as `evals/`, naming the file and the path.
-A path into no existing skill, such as a code example, is ignored. The
+A path into no existing skill, such as a code example, is ignored. A bare
+relative path such as `evals/evals.json` also fails when it exists and runs
+through a part the copy skips. The
 prepared Codex launch turns off the runner's hooks, memories, plugins, and
 apps, and disables each MCP server configured in `$CODEX_HOME/config.toml` by
 name, since `-c mcp_servers={}` leaves configured servers running. Global

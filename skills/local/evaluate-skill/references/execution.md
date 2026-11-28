@@ -26,7 +26,7 @@ The preparer uses two extra fields: `fixture` names a directory relative to
 refer to by relative path. `with-skill` preparation fails when `./` or `../`
 path text in any syntax of a copied Markdown file resolves to an existing skill
 that is not supplied, to the skills root, or into a path the copy skips, such
-as `evals/`.
+as `evals/`; an existing bare path such as `evals/evals.json` fails the same way.
 
 Use a new independent session for each run:
 
