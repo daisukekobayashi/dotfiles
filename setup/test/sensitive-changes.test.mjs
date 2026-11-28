@@ -327,6 +327,46 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   assert.match(missing.output, /event commit is missing/);
 });
 
+test("CI requires the exact allowlist ref for ordinary branch pushes and pull requests", { skip: windows }, (t) => {
+  const f = fixture(t);
+  const ref = "refs/remotes/origin/main";
+  f.write("base.txt", "baseline\n");
+  const base = f.commit("baseline");
+  const content = "SYNTHETIC_SECRET_SAMPLE\n";
+  f.write("candidate.txt", content);
+  const head = f.commit("candidate");
+  const scanPush = () => f.scan("ci", f.event(base, head, {}, firstRef));
+  const scanPr = () => f.scan("ci", {
+    ...f.event(base, head, { pull_request: {
+      base: { sha: base, repo: { full_name: repository } },
+      head: { sha: head },
+    } }),
+    GITHUB_EVENT_NAME: "pull_request",
+  });
+  for (const scan of [scanPush, scanPr]) {
+    const missing = scan();
+    assert.equal(missing.code, 2, missing.output);
+    assert.match(missing.output, /The reviewed allowlist revision could not be read/);
+  }
+  f.git("update-ref", `refs/tags/${ref}`, base);
+  for (const scan of [scanPush, scanPr]) {
+    const missing = scan();
+    assert.equal(missing.code, 2, missing.output);
+    assert.match(missing.output, /The reviewed allowlist revision could not be read/);
+  }
+  f.git("switch", "-qc", "approved-policy", base);
+  f.write("scripts/sensitive-scan-allowlist.json", JSON.stringify([{
+    path: "candidate.txt", rule: "secret:fixture", line: 1,
+    contentSha256: createHash("sha256").update(content).digest("hex"),
+    reason: "Approved synthetic fixture",
+  }]));
+  f.git("update-ref", ref, f.commit("approve exact finding"));
+  for (const scan of [scanPush, scanPr]) {
+    const approved = scan();
+    assert.equal(approved.code, 0, approved.output);
+  }
+});
+
 test("CI checks merge resolutions for secrets and ignores local denylist inputs", { skip: windows }, (t) => {
   const f = fixture(t);
   f.write("base.txt", "baseline\n");
@@ -382,12 +422,56 @@ test("a staged ignore file or unreviewed allowlist cannot exempt a finding", { s
   assert.equal(f.scan("staged").code, 21);
   f.git("reset", "--quiet", "--", "example.txt", ".betterleaksignore");
   f.git("commit", "-qm", "approve narrowly scoped exception");
-  f.git("update-ref", "refs/remotes/origin/main", f.git("rev-parse", "HEAD"));
+  const approved = f.git("rev-parse", "HEAD");
+  f.git("update-ref", "refs/remotes/origin/main", approved);
   f.git("add", "example.txt");
   assert.equal(f.scan("staged").code, 0);
+  f.git("update-ref", "refs/tags/refs/remotes/origin/main", approved);
+  f.git("update-ref", "-d", "refs/remotes/origin/main");
+  assert.equal(f.scan("staged").code, 21);
+  f.git("update-ref", "refs/remotes/origin/main", approved);
   f.write("example.txt", `${content}new content\n`);
   f.git("add", "example.txt");
   assert.equal(f.scan("staged").code, 21);
+});
+
+test("staged rejects invalid allowlist refs and uses older Git when the exact ref is valid", { skip: windows }, (t) => {
+  const f = fixture(t);
+  const ref = "refs/remotes/origin/main";
+  f.write("base.txt", "baseline\n");
+  const base = f.commit("baseline");
+  f.write("candidate.txt", "safe candidate input\n");
+  f.git("add", "candidate.txt");
+
+  const legacyBin = path.join(path.dirname(f.gitOnly), "legacy-bin");
+  mkdirSync(legacyBin);
+  writeFileSync(path.join(legacyBin, "git"), `#!/bin/sh
+for arg in "$@"; do
+  [ "$arg" != --exists ] || exit 129
+done
+exec "$DOTFILES_TEST_INSTALLED_GIT" "$@"
+`, { mode: 0o700 });
+  const legacy = {
+    PATH: `${legacyBin}${path.delimiter}${f.env.PATH}`,
+    DOTFILES_TEST_INSTALLED_GIT: path.join(f.gitOnly, "git"),
+  };
+  const noRef = f.scan("staged", legacy);
+  assert.equal(noRef.code, 2, noRef.output);
+  assert.match(noRef.output, /The reviewed allowlist revision could not be read/);
+
+  f.git("update-ref", ref, base);
+  const valid = f.scan("staged", legacy);
+  assert.equal(valid.code, 0, valid.output);
+
+  f.git("update-ref", ref, f.git("rev-parse", `${base}^{tree}`));
+  const noncommit = f.scan("staged");
+  assert.equal(noncommit.code, 2, noncommit.output);
+  assert.match(noncommit.output, /does not identify a commit/);
+
+  f.git("symbolic-ref", ref, "refs/heads/missing");
+  const dangling = f.scan("staged");
+  assert.equal(dangling.code, 2, dangling.output);
+  assert.match(dangling.output, /The reviewed allowlist revision could not be read/);
 });
 
 test("official CI scans prefiltered paths, binary and encoded blobs, and path-based rules", { skip: !realScanner }, (t) => {
