@@ -22,7 +22,13 @@ Keep durable cases under `skills/local/<name>/evals/evals.json`. Each case has
 `id`, `prompt`, `expected_output`, and concrete `assertions`, plus input `files`.
 The preparer uses two extra fields: `fixture` names a directory relative to
 `evals/`, and optional `overlay` supplies case-specific files on top of it.
-`supporting_skills` lists sibling skills needed by the supplied instructions.
+`supporting_skills` lists every sibling skill that the supplied instructions
+refer to by relative path. `with-skill` preparation fails when `./`, `../`, or
+`..` path text in any syntax of a copied Markdown file resolves to an existing skill
+that is not supplied, to the skills root, or into a path the copy skips, such
+as `evals/`; an existing bare path such as `evals/evals.json` fails the same way.
+With `--skill-source`, a sibling exists when the snapshot or the suite's skills
+directory has it.
 
 Use a new independent session for each run:
 
@@ -93,15 +99,23 @@ independent permitted work. Do not remove runtime guards, install tools, change
 global settings, copy credentials, or enable permission-bypass flags to force it.
 
 The Codex command disables the installed target for that invocation while
-preserving user-configured skill enable/disable entries. Claude uses
-`--disable-slash-commands` for both variants; the treatment still reads its
+preserving user-configured skill enable/disable entries. It also passes
+`--disable` for hooks, memories, plugins, and apps, and
+`-c mcp_servers.<name>.enabled=false` for each server in
+`$CODEX_HOME/config.toml`; it refuses a server name that a dotted key cannot
+spell. Claude uses
+`--disable-slash-commands --safe-mode` for both variants; `--safe-mode` keeps
+`--settings` and permission rules but leaves built-in plugins and managed
+settings on. `prepare.py` builds these arguments; the rule for the runner
+extensions they turn off is in [SKILL.md](../SKILL.md#prepare-and-run-candidates),
+and this reference only describes them. The treatment still reads its
 explicitly supplied instruction file. These runs measure following the supplied
 workflow, **not native skill discovery or triggering**.
 
 Inspect active context before accepting a baseline. The preparer separates
-files, not operating-system accounts or permissions: global rules, memory,
-plugins, admin settings, additional skill copies, and inherited environment may
-still affect a session. Do not use the parent chat's history for a baseline.
+files and turns off the runner extensions above, not operating-system accounts
+or permissions: global rules, built-in plugins, admin settings, additional skill
+copies, and inherited environment may still affect a session. Do not use the parent chat's history for a baseline.
 Record any extra configuration and apply it equally to both runs. If the target
 leaks into the baseline or equivalent conditions cannot be established, mark
 the comparison inconclusive. Do not disable safety controls or copy credentials

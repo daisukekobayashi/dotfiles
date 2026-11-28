@@ -8,7 +8,9 @@
                         "principle-laziness-protocol",
                         "principle-prove-it-works",
                         "principle-redesign-from-first-principles",
-                        "principle-subtract-before-you-add"],
+                        "principle-subtract-before-you-add",
+                        "benchmark-checklist",
+                        "worktree-runtime-cleanup"],
   "evals": [
     {
       "id": 1,

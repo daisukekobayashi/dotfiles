@@ -1,7 +1,10 @@
 {
   "skill_name": "github-pr-codex-review-cycle",
   "supporting_skills": [
-    "github-pr-ai-review-followup"
+    "github-pr-ai-review-followup",
+    "delivery-common",
+    "github-pr-review-request",
+    "worktree-runtime-cleanup"
   ],
   "evals": [
     {

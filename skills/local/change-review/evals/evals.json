@@ -1,6 +1,6 @@
 {
   "skill_name": "change-review",
-  "supporting_skills": [],
+  "supporting_skills": ["delivery-common", "worktree-runtime-cleanup"],
   "execution": {
     "runs_per_condition": 3,
     "run_timeout_minutes": 30,
@@ -51,14 +51,6 @@
           "-c",
           "permissions.skill_eval.filesystem={\":root\"=\"read\",\":workspace_roots\"=\"write\",\":tmpdir\"=\"write\",\"~/.dotfiles\"=\"none\",\"~/.claude\"=\"none\",\"~/.agents\"=\"none\",\"~/.codex/skills\"=\"none\",\"~/.codex/sessions\"=\"none\",\"~/.codex/archived_sessions\"=\"none\"}",
           "--disable",
-          "hooks",
-          "--disable",
-          "memories",
-          "--disable",
-          "apps",
-          "--disable",
-          "plugins",
-          "--disable",
           "remote_plugin",
           "--disable",
           "computer_use",
@@ -80,10 +72,9 @@
         "fresh_tmpdir": {
           "env": "TMPDIR"
         },
-        "policy": "Both conditions insert exec after codex in the prepared launch_argv, keep its arguments, then append extra_args, one -c mcp_servers.<name>.enabled=false per MCP server found by the pre-run check, and --skip-git-repo-check --json -, with no --sandbox, approval-bypass, or hook-trust-bypass flag. The skill_eval permission profile lets commands write only to the workspace and the run's temp directory, blocks the network, and blocks reads of ~/.dotfiles, ~/.claude, ~/.agents, and Codex's installed skills and session transcripts. Commands that need more fail instead of asking, because the approval policy is never. Each run gets a new, empty directory as TMPDIR. apply_patch stays available, so the file-hash assertion catches an edit.",
+        "policy": "Both conditions insert exec after codex in the prepared launch_argv, keep its arguments, then append extra_args and --skip-git-repo-check --json -, with no --sandbox, approval-bypass, or hook-trust-bypass flag. The skill_eval permission profile lets commands write only to the workspace and the run's temp directory, blocks the network, and blocks reads of ~/.dotfiles, ~/.claude, ~/.agents, and Codex's installed skills and session transcripts. Commands that need more fail instead of asking, because the approval policy is never. Each run gets a new, empty directory as TMPDIR. apply_patch stays available, so the file-hash assertion catches an edit.",
         "pre_run_checks": [
-          "List the MCP servers in the effective Codex config and disable each one for both conditions with -c mcp_servers.<name>.enabled=false; record the names.",
-          "From an empty scratch directory, run codex debug prompt-input with the same -c and --disable arguments before the subcommand: the permissions instructions show the denied reads, restricted network, and approval policy never, and the tool list has no browser, computer-use, web search, or MCP server tool; record the result and do not start runs otherwise.",
+          "From an empty scratch directory, run codex debug prompt-input with the -c and --disable arguments of the prepared launch_argv and extra_args before the subcommand: the permissions instructions show the denied reads, restricted network, and approval policy never, and the tool list has no browser, computer-use, web search, or MCP server tool; record the result and do not start runs otherwise.",
           "Run codex sandbox -P skill_eval with the same -c arguments from that directory: a write there succeeds, a write outside it fails, a read of each denied path fails, and a network request fails; record the result and do not start runs otherwise.",
           "Global instructions that Codex loads, such as ~/.codex/AGENTS.md, apply to both conditions; record their presence."
         ],
