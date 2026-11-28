@@ -16,7 +16,7 @@ from urllib.parse import unquote
 # plugins, apps, or memories; MCP servers are disabled by name below.
 CODEX_DISABLED_FEATURES = ("hooks", "memories", "plugins", "apps")
 # Relative path text in any syntax: links, code, HTML attributes, or prose.
-RELATIVE_PATH = re.compile(r"(?<![\w./~%-])\.\.?/[^\s`'\"<>()\[\]{}|*]*")
+RELATIVE_PATH = re.compile(r"(?<![\w./~%-])(?:\.\.?/|\.\.(?![\w.~%-]))[^\s`'\"<>()\[\]{}|*]*")
 COPY_IGNORED = {"evals", "__pycache__"}
 # A bare relative path through a part the guidance copy skips, such as evals/x.
 BARE_IGNORED_PATH = re.compile(
@@ -67,11 +67,21 @@ def codex_launch(workspace, skill, name):
     return argv
 
 
-def unsupplied_links(supplied):
+def path_text(text):
+    """Drop an anchor or query and trailing punctuation, keeping a final . or .. element."""
+    path = re.split(r"[#?]", text, maxsplit=1)[0]
+    while path and path[-1] in ".,;:!" and path.rsplit("/", 1)[-1] not in (".", ".."):
+        path = path[:-1]
+    return path
+
+
+def unsupplied_links(supplied, canonical_root=None):
     """Return relative path references in the supplied guidance to sibling skill
-    content that the guidance copy does not contain."""
+    content that the guidance copy does not contain. A sibling exists when it is
+    in the supplied skills' root or, for a snapshot, the suite's canonical root."""
     names = {source.name for source in supplied}
     root = supplied[0].parent
+    roots = {root, canonical_root or root}
     missing = set()
     for source in supplied:
         for page in sorted(source.rglob("*.md")):
@@ -80,16 +90,16 @@ def unsupplied_links(supplied):
             content = page.read_text()
             # Only an existing bare path counts, so prose and examples do not.
             for text in BARE_IGNORED_PATH.findall(content):
-                if (page.parent / re.split(r"[#?]", text, maxsplit=1)[0].rstrip(".,;:!")).exists():
+                if (page.parent / path_text(text)).exists():
                     missing.add(f"{page.relative_to(root)} -> {text}")
             for text in RELATIVE_PATH.findall(content):
-                path = unquote(re.split(r"[#?]", text, maxsplit=1)[0].rstrip(".,;:!"))
+                path = unquote(path_text(text))
                 resolved = Path(os.path.normpath(page.parent / path))
                 if not resolved.is_relative_to(root):
                     continue
                 parts = resolved.relative_to(root).parts
                 # Paths into no existing skill directory are examples, not references.
-                if parts and parts[0] not in names and not (root / parts[0]).is_dir():
+                if parts and parts[0] not in names and not any((r / parts[0]).is_dir() for r in roots):
                     continue
                 # The skills root itself, another skill, or a path the copy skips is not supplied.
                 if not parts or parts[0] not in names or COPY_IGNORED & set(parts[1:]):
@@ -114,7 +124,7 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
         if source.parent != skill.parent or not (source / "SKILL.md").is_file():
             raise ValueError(f"Missing sibling supporting skill: {source}")
     if variant == "with-skill":
-        missing = unsupplied_links([skill, *supporting])
+        missing = unsupplied_links([skill, *supporting], suite_path.parent.parent.parent)
         if missing:
             raise ValueError("Supplied guidance refers to sibling skill content it does not "
                              "contain; add those skills to supporting_skills: " + "; ".join(missing))

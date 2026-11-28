@@ -235,6 +235,9 @@ class SkillEvaluationTests(unittest.TestCase):
             "prose with anchor": "Read ../outside/SKILL.md#rules, then continue.\n",
             "percent-encoded": "[x](../out%73ide/SKILL.md)\n",
             "skills root": "[all](../)\n",
+            # Restored from 33c82e1, where the root link had no trailing slash.
+            "skills root without slash": "[all](..)\n",
+            "skills root with anchor": "[all](..#index), then\n",
             "uncopied evals": "[cases](./evals/evals.json)\n",
             "bare uncopied evals": "[cases](evals/evals.json)\n",
             "bare uncopied evals directory": "See `evals/` for the cases.\n",
@@ -244,12 +247,38 @@ class SkillEvaluationTests(unittest.TestCase):
             with self.subTest(form=label):
                 (skills / "target/SKILL.md").write_text(text)
                 self.assertEqual(len(PREPARE.unsupplied_links([skills / "target"])), 1, text)
+        (skills / "target/SKILL.md").write_text("# target\n")
+        (skills / "target/references").mkdir()
+        (skills / "target/references/a.md").write_text("[up](../..)\n")
+        self.assertEqual(PREPARE.unsupplied_links([skills / "target"]),
+                         ["target/references/a.md -> ../.."])
+        (skills / "target/references/a.md").unlink()
         (skills / "target/SKILL.md").write_text(
             "[self](./SKILL.md) [x](../outside/SKILL.md) `src=\"../example/diagram.png\"`\n"
             "```markdown\n[template]: ../example/SKILL.md\n```\n"
             "[home](~/.claude/skills/outside/SKILL.md) [web](https://example.com/../outside/a.md) "
             "[up](../../docs/x.md) `evals/missing.json` skills/local/x/evals/y.json\n")
         self.assertEqual(PREPARE.unsupplied_links([skills / "target", skills / "outside"]), [])
+
+    def test_snapshot_reference_to_a_sibling_missing_from_the_snapshot_is_refused(self):
+        canon, snap = self.root / "canon", self.root / "snap"
+        for root, names in ((canon, ("target", "helper", "legacy")), (snap, ("target", "helper"))):
+            for name in names:
+                (root / name).mkdir(parents=True)
+                (root / name / "SKILL.md").write_text(f"# {name}\n")
+        (canon / "target/evals/fx").mkdir(parents=True)
+        suite = canon / "target/evals/evals.json"
+        suite.write_text(json.dumps({"skill_name": "target", "supporting_skills": ["helper"],
+                                     "evals": [{"id": 1, "prompt": "Task.", "fixture": "fx"}]}))
+        (snap / "target/SKILL.md").write_text("See [h](../helper/SKILL.md) and [l](../legacy/SKILL.md).\n")
+        with self.assertRaisesRegex(ValueError, r"target/SKILL\.md -> \.\./legacy/SKILL\.md"):
+            PREPARE.prepare(suite, 1, "claude", "with-skill", self.root / "refused",
+                            skill_source=snap / "target")
+        self.assertFalse((self.root / "refused").exists())
+        (snap / "target/SKILL.md").write_text("See [h](../helper/SKILL.md).\n")
+        self.workspaces.append(Path(PREPARE.prepare(
+            suite, 1, "claude", "with-skill", self.root / "prepared",
+            skill_source=snap / "target")["workspace"]))
 
     def test_every_suite_supplies_the_link_closure_of_its_guidance(self):
         suites = sorted((ROOT / "skills/local").glob("*/evals/evals.json"))

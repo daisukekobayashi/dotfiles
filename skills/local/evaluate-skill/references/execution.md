@@ -23,10 +23,12 @@ Keep durable cases under `skills/local/<name>/evals/evals.json`. Each case has
 The preparer uses two extra fields: `fixture` names a directory relative to
 `evals/`, and optional `overlay` supplies case-specific files on top of it.
 `supporting_skills` lists every sibling skill that the supplied instructions
-refer to by relative path. `with-skill` preparation fails when `./` or `../`
-path text in any syntax of a copied Markdown file resolves to an existing skill
+refer to by relative path. `with-skill` preparation fails when `./`, `../`, or
+`..` path text in any syntax of a copied Markdown file resolves to an existing skill
 that is not supplied, to the skills root, or into a path the copy skips, such
 as `evals/`; an existing bare path such as `evals/evals.json` fails the same way.
+With `--skill-source`, a sibling exists when the snapshot or the suite's skills
+directory has it.
 
 Use a new independent session for each run:
 

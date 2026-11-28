@@ -49,11 +49,13 @@ identified as such. The workflow does not automatically edit the target skill.
 A suite's `supporting_skills` lists every sibling skill that the supplied
 guidance refers to by relative path. Preparing `with-skill` scans every
 Markdown file the helper copies (each supplied skill, without `evals/`) for
-relative path references to sibling skills: any `./` or `../` path text, in a
+relative path references to sibling skills: any path text that starts with `./`, `../`, or `..`, in a
 link, code, an HTML attribute, or prose. It refuses the suite when such a path
 resolves to an existing skill that is not supplied, to the skills root itself,
 or into a path the copy skips, such as `evals/`, naming the file and the path.
-A path into no existing skill, such as a code example, is ignored. A bare
+A path into no existing skill, such as a code example, is ignored; with
+`--skill-source`, a sibling counts as existing in the snapshot or in the
+suite's own skills directory. A bare
 relative path such as `evals/evals.json` also fails when it exists and runs
 through a part the copy skips. The
 prepared Codex launch turns off the runner's hooks, memories, plugins, and
