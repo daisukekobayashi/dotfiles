@@ -108,14 +108,18 @@ function eventSelection() {
   let base;
   let head;
   let firstPush = false;
-  if (eventName === "pull_request") {
+  let workflowCommit;
+  if (eventName === "pull_request_target") {
     const pull = event.pull_request;
     expect(pull?.base?.repo?.full_name === repository, "The pull request base repository does not match.");
     base = oid(pull.base.sha);
     head = oid(pull.head?.sha);
+    workflowCommit = readCommit(process.env.GITHUB_WORKFLOW_SHA, { label: "The reviewed workflow revision" });
+    expect(git(["rev-parse", "HEAD"]).toString().trim() === workflowCommit,
+      "The checkout does not match the reviewed workflow revision.");
   } else {
     expect(eventName === "push" && typeof event.ref === "string" && event.ref.startsWith("refs/heads/")
-      && event.ref === process.env.GITHUB_REF, "The scan requires a pull request or branch push event.");
+      && event.ref === process.env.GITHUB_REF, "The scan requires a trusted pull request or branch push event.");
     if (event.deleted === true) {
       expect(/^0{40}$|^0{64}$/.test(event.after), "The branch deletion has inconsistent event identities.");
       return { commits: [], policyCommit: null };
@@ -149,11 +153,9 @@ function eventSelection() {
   base = readCommit(base, { fetch: true });
   const commits = git(["rev-list", "--reverse", "--topo-order", "--parents", head, `^${base}`])
     .toString().trim().split("\n").filter(Boolean).map((line) => line.split(" ").map(oid));
-  return {
-    commits,
-    policyCommit: firstPush || (eventName === "push" && event.ref === defaultRef)
-      ? base : readAllowlistCommit(`refs/remotes/origin/${branch}`),
-  };
+  const policyCommit = workflowCommit ?? (firstPush || event.ref === defaultRef
+    ? base : readAllowlistCommit(`refs/remotes/origin/${branch}`));
+  return { commits, policyCommit };
 }
 
 function configuredRules(value) {

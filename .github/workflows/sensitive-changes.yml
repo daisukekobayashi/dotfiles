@@ -1,28 +1,45 @@
 name: Sensitive changes
+run-name: >-
+  ${{ github.event_name == 'pull_request_target'
+      && format('Trusted scan for PR #{0} base {1} head {2}', github.event.number,
+          github.event.pull_request.base.sha, github.event.pull_request.head.sha)
+      || github.event_name == 'pull_request'
+      && format('Candidate scanner tests for PR #{0}', github.event.number)
+      || format('Advisory push scan at {0}', github.sha) }}
 
 on:
   push:
     branches: ['**']
   pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
 
 jobs:
   secret-scan:
-    if: ${{ github.event_name != 'push' || !github.event.deleted }}
+    name: >-
+      ${{ github.event_name == 'pull_request_target' && 'Trusted PR secret scan'
+          || github.event_name == 'pull_request' && 'Candidate scanner tests'
+          || 'Advisory push secret scan' }}
+    if: >-
+      ${{ (github.event_name != 'push' || !github.event.deleted)
+          && (github.event_name != 'pull_request_target' || github.event.action != 'edited'
+              || github.event.changes.base.ref.from || github.event.changes.base.sha.from) }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event_name == 'pull_request_target' && github.workflow_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "24"
+          package-manager-cache: false
 
       - name: Verify and use Betterleaks 1.10.1
         shell: bash
@@ -38,9 +55,11 @@ jobs:
           printf '%s\n' "$bin" >> "$GITHUB_PATH"
 
       - name: Check published changes for secrets
+        if: github.event_name == 'push' || github.event_name == 'pull_request_target'
         run: node scripts/check-sensitive-changes.mjs ci
 
       - name: Test the pinned scanner with synthetic input
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         run: node --test setup/test/sensitive-changes.test.mjs
         env:
           DOTFILES_TEST_REAL_BETTERLEAKS: "1"
