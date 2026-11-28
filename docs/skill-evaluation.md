@@ -47,10 +47,13 @@ fresh judge with neutral labels when available; coordinator-only review is
 identified as such. The workflow does not automatically edit the target skill.
 
 A suite's `supporting_skills` lists every sibling skill that the supplied
-guidance links to. Preparing `with-skill` scans every Markdown file the helper
-copies (each supplied skill, without `evals/`) and refuses the suite when a
-relative inline, reference, or HTML link leaves the supplied skills or points
-into a path the copy skips, such as `evals/`, naming the file and the link. The
+guidance refers to by relative path. Preparing `with-skill` scans every
+Markdown file the helper copies (each supplied skill, without `evals/`) for
+relative path references to sibling skills: any `./` or `../` path text, in a
+link, code, an HTML attribute, or prose. It refuses the suite when such a path
+resolves to an existing skill that is not supplied, to the skills root itself,
+or into a path the copy skips, such as `evals/`, naming the file and the path.
+A path into no existing skill, such as a code example, is ignored. The
 prepared Codex launch turns off the runner's hooks, memories, plugins, and
 apps, and disables each MCP server configured in `$CODEX_HOME/config.toml` by
 name, since `-c mcp_servers={}` leaves configured servers running. Global
@@ -114,7 +117,7 @@ skill_eval`, both with the same overrides, and record the results. A revision
 runs only the new skill and compares it with the baseline with-skill runs of the
 same agent; rerun the old snapshot when the model or CLI version changed. This
 suite and `change-adversarial-review` supply `delivery-common` and
-`worktree-runtime-cleanup` since #331, which their guidance links to, so their
+`worktree-runtime-cleanup` since #331, which their guidance refers to, so their
 next comparison reruns the old snapshot under the new supplied set instead of
 reusing earlier baseline runs.
 
@@ -177,7 +180,7 @@ rules, including the comparison with removal and a smaller option. Each suite
 supplies the `principles` index and every leaf the index links, and
 `tests/skill_evals_test.py` derives that list from the index; each also
 supplies `benchmark-checklist`, and `delivery-common` supplies
-`worktree-runtime-cleanup`, because the supplied guidance links to them. Grading reads the
+`worktree-runtime-cleanup`, because the supplied guidance refers to them. Grading reads the
 final answer and the transcript. A run is contaminated when it reads outside
 the workspace, including an installed copy of the skill, or calls a memory or
 other MCP tool, which the remaining configuration layers can still provide; a

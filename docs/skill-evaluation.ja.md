@@ -44,10 +44,12 @@ worker head で指示が変わった場合に、Medium・High tier の Local Rev
 別工程で、利用できない認証・権限・実行機能があれば未完了の範囲を報告します。
 評価だけで対象スキルを自動修正することはありません。
 
-スイートの `supporting_skills` には、渡す指示がリンクする兄弟スキルをすべて挙げます。
+スイートの `supporting_skills` には、渡す指示が相対パスで参照する兄弟スキルをすべて挙げます。
 `with-skill` の準備では、補助スクリプトが写すすべての Markdown ファイル(渡す各スキルの
-`evals/` 以外)を調べ、インライン・参照・HTML の相対リンクが渡すスキルの外や、`evals/` などの
-写さないパスを指すと、そのファイルとリンクを示して準備を拒否します。準備した Codex の起動引数は、実行者の hooks・memories・plugins・apps を
+`evals/` 以外)から、兄弟スキルへの相対パスの参照を探します。リンク、コード、HTML の属性、
+本文のどこにあっても、`./` か `../` で始まるパスが対象です。そのパスが、渡していない既存の
+スキル、スキル群のルートそのもの、`evals/` などの写さないパスに解決されると、そのファイルと
+パスを示して準備を拒否します。既存のどのスキルも指さないパス(コード例など)は無視します。準備した Codex の起動引数は、実行者の hooks・memories・plugins・apps を
 無効にし、`$CODEX_HOME/config.toml` に設定された MCP サーバーを名前ごとに無効にします
 (`-c mcp_servers={}` では設定済みのサーバーが残るためです)。`~/.codex/AGENTS.md` などの
 グローバルな指示は引き続き読み込まれます。準備した Claude の起動引数は `--safe-mode` を加え、
@@ -105,7 +107,7 @@ hooks・memories・plugins・apps と設定済みの MCP サーバーは準備�
 プロファイルの確認を行い、結果を記録します。改訂の評価では新しいスキルだけを実行し、
 同じエージェントの基準の with-skill の実行と比べます。モデルや CLI の版が変わった場合は、
 旧版のスナップショットも再実行します。このスイートと `change-adversarial-review` は #331 から、
-指示がリンクする `delivery-common` と `worktree-runtime-cleanup` も渡すため、次の比較では
+指示が参照する `delivery-common` と `worktree-runtime-cleanup` も渡すため、次の比較では
 以前の基準の実行を使い回さず、新しい補助スキルの組で旧版のスナップショットを再実行します。
 
 `github-issue-triage` の課題は、推奨が本文に左右される issue だけを詳しく読む
@@ -158,7 +160,7 @@ delivery のスモーク実行用にそれぞれ 1 ケースを持ち、`executi
 `[premise P<n>]` の記録を確認します。ほかの 2 ケースはユーザーに質問しない進行役向けの
 ドラフトを求め、削除やより小さい選択肢との比較を含む推奨の規則を確認します。各スイートは
 `principles` の索引と、索引がリンクするすべての leaf を補助スキルとして渡し、
-`tests/skill_evals_test.py` はその一覧を索引から導きます。渡す指示がリンクするため、
+`tests/skill_evals_test.py` はその一覧を索引から導きます。渡す指示が参照するため、
 各スイートは `benchmark-checklist` も、`delivery-common` はさらに `worktree-runtime-cleanup` も
 渡します。採点は最終回答と実行記録で
 行います。ワークスペースの外を読んだ実行(インストールされたスキルの写しを含む)と、

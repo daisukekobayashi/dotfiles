@@ -10,18 +10,13 @@ import re
 import shutil
 import tempfile
 import tomllib
+from urllib.parse import unquote
 
 # Runner features that would let a candidate reach the runner's own hooks,
 # plugins, apps, or memories; MCP servers are disabled by name below.
 CODEX_DISABLED_FEATURES = ("hooks", "memories", "plugins", "apps")
-# Destinations of inline (bare, titled, or <angle>) links, reference definitions,
-# and HTML href/src attributes.
-LINK = re.compile(
-    r"\]\(\s*(?:<([^>\n]*)>|([^)\s]+))"
-    r"|^ {0,3}\[[^\]\n]+\]:[ \t]*(?:<([^>\n]*)>|(\S+))"
-    r"|\b(?:href|src)\s*=\s*[\"']([^\"'\n]+)[\"']",
-    re.MULTILINE | re.IGNORECASE,
-)
+# Relative path text in any syntax: links, code, HTML attributes, or prose.
+RELATIVE_PATH = re.compile(r"(?<![\w./~%-])\.\.?/[^\s`'\"<>()\[\]{}|*]*")
 COPY_IGNORED = {"evals", "__pycache__"}
 BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 
@@ -70,7 +65,8 @@ def codex_launch(workspace, skill, name):
 
 
 def unsupplied_links(supplied):
-    """Return relative Markdown links in the supplied guidance that leave the supplied skills."""
+    """Return relative path references in the supplied guidance to sibling skill
+    content that the guidance copy does not contain."""
     names = {source.name for source in supplied}
     root = supplied[0].parent
     missing = set()
@@ -78,15 +74,18 @@ def unsupplied_links(supplied):
         for page in sorted(source.rglob("*.md")):
             if COPY_IGNORED & set(page.relative_to(source).parts):
                 continue
-            for match in LINK.finditer(page.read_text()):
-                path = next((group for group in match.groups() if group), "").split("#", 1)[0]
-                if not path or re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", path):
-                    continue
+            for text in RELATIVE_PATH.findall(page.read_text()):
+                path = unquote(re.split(r"[#?]", text, maxsplit=1)[0].rstrip(".,;:!"))
                 resolved = Path(os.path.normpath(page.parent / path))
-                parts = resolved.relative_to(root).parts if resolved.is_relative_to(root) else ()
+                if not resolved.is_relative_to(root):
+                    continue
+                parts = resolved.relative_to(root).parts
+                # Paths into no existing skill directory are examples, not references.
+                if parts and parts[0] not in names and not (root / parts[0]).is_dir():
+                    continue
                 # The skills root itself, another skill, or a path the copy skips is not supplied.
                 if not parts or parts[0] not in names or COPY_IGNORED & set(parts[1:]):
-                    missing.add(f"{page.relative_to(root)} -> {path}")
+                    missing.add(f"{page.relative_to(root)} -> {text}")
     return sorted(missing)
 
 
@@ -109,8 +108,8 @@ def prepare(suite_path, case_id, agent, variant, output, skill_source=None):
     if variant == "with-skill":
         missing = unsupplied_links([skill, *supporting])
         if missing:
-            raise ValueError("Supplied guidance links outside the supplied skills; "
-                             "add the target skills to supporting_skills: " + "; ".join(missing))
+            raise ValueError("Supplied guidance refers to sibling skill content it does not "
+                             "contain; add those skills to supporting_skills: " + "; ".join(missing))
 
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)

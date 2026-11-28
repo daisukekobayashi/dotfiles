@@ -215,30 +215,37 @@ class SkillEvaluationTests(unittest.TestCase):
         self.workspaces.append(Path(PREPARE.prepare(
             suite, 1, "claude", "with-skill", self.root / "closed")["workspace"]))
 
-    def test_link_closure_reads_every_link_form_and_skips_uncopied_destinations(self):
+    def test_link_closure_reads_relative_paths_in_any_syntax(self):
         skills = self.root / "skills"
         for name in ("target", "outside"):
             (skills / name / "evals").mkdir(parents=True)
             (skills / name / "SKILL.md").write_text(f"# {name}\n")
-        cases = {
-            "inline": ("[x](../outside/SKILL.md)\n", "../outside/SKILL.md"),
-            "reference": ("See [x][o].\n\n[o]: ../outside/SKILL.md\n", "../outside/SKILL.md"),
-            "angle reference": ("[o]: <../outside/a b.md> \"Title\"\n", "../outside/a b.md"),
-            "titled": ('[x](../outside/SKILL.md "Outside")\n', "../outside/SKILL.md"),
-            "angle": ("[x](<../outside/a b.md>)\n", "../outside/a b.md"),
-            "html": ('<a href="../outside/SKILL.md">x</a> <img src=\'../outside/i.png\'>\n',
-                     "../outside/SKILL.md"),
-            "uncopied evals": ("[cases](evals/evals.json)\n", "evals/evals.json"),
-            "skills root": ("[all](..)\n", ".."),
+        refused = {
+            "inline": "[x](../outside/SKILL.md)\n",
+            "reference": "See [x][o].\n\n[o]: ../outside/SKILL.md\n",
+            "reference next line": "See [x][o].\n\n[o]:\n  ../outside/SKILL.md\n",
+            "blockquote reference": "> [o]: ../outside/SKILL.md\n",
+            "titled": '[x](../outside/SKILL.md "Outside")\n',
+            "angle": "[x](<../outside/SKILL.md>)\n",
+            "href quoted": '<a href="../outside/SKILL.md">x</a>\n',
+            "href unquoted": "<a href=../outside/SKILL.md>x</a>\n",
+            "code span": "Follow `../outside/SKILL.md` first.\n",
+            "fenced block": "```sh\ncat ../outside/references/a.md\n```\n",
+            "prose with anchor": "Read ../outside/SKILL.md#rules, then continue.\n",
+            "percent-encoded": "[x](../out%73ide/SKILL.md)\n",
+            "skills root": "[all](../)\n",
+            "uncopied evals": "[cases](./evals/evals.json)\n",
+            "uncopied evals of another": "[cases](../target/evals/evals.json)\n",
         }
-        for label, (text, expected) in cases.items():
+        for label, text in refused.items():
             with self.subTest(form=label):
                 (skills / "target/SKILL.md").write_text(text)
-                self.assertIn(f"target/SKILL.md -> {expected}",
-                              PREPARE.unsupplied_links([skills / "target"]))
+                self.assertEqual(len(PREPARE.unsupplied_links([skills / "target"])), 1, text)
         (skills / "target/SKILL.md").write_text(
-            "[self](SKILL.md) [x](../outside/SKILL.md \"t\") <a href=\"#top\">t</a> "
-            "[web](https://example.com/a.md)\n\n[o]: <../outside/SKILL.md>\n")
+            "[self](./SKILL.md) [x](../outside/SKILL.md) `src=\"../example/diagram.png\"`\n"
+            "```markdown\n[template]: ../example/SKILL.md\n```\n"
+            "[home](~/.claude/skills/outside/SKILL.md) [web](https://example.com/../outside/a.md) "
+            "[up](../../docs/x.md)\n")
         self.assertEqual(PREPARE.unsupplied_links([skills / "target", skills / "outside"]), [])
 
     def test_every_suite_supplies_the_link_closure_of_its_guidance(self):
