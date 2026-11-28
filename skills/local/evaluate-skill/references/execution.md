@@ -33,10 +33,15 @@ directory has it.
 Use a new independent session for each run:
 
 - New skill: run `without-skill` and `with-skill` on identical initial files.
-- Revision: run `with-skill` twice, supplying the old snapshot with
-  `--skill-source` for one run. Keep the original skill directory name and its
-  required sibling skills in that snapshot. Keep inputs and dependencies fixed
-  unless the dependency change is explicitly part of the comparison.
+- Revision: run `with-skill` twice with the same `--suite` and `--case`.
+  Supply the old snapshot with `--skill-source` for one run. Keep the original
+  skill directory name and its required siblings in that snapshot. If the old
+  version uses different supporting skills or names, pass the complete list of
+  original sibling directory names with `--supporting-skills`, for example
+  `--supporting-skills create-verification-skill prove-it-works`. Omit the
+  flag to use the suite's list. Pass it without names for an empty list.
+  The old snapshot can omit its `evals/` directory. Keep dependency contents
+  fixed unless dependency changes are part of the comparison.
 
 The maintain-verification suite has three starter cases: an obsolete command,
 a product regression, and a feature with an unavailable prerequisite. Fix the
