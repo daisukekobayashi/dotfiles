@@ -50,8 +50,24 @@ default branch that differs or cannot be read, or a checkout without the
 fetched default branch has no such base and is reported as incomplete.
 If a required object or range cannot be verified, CI reports the scan as
 incomplete. Commit messages, tags, old history sweeps and the contents of other
-repositories linked as submodules are outside this check. Review changes to
-the workflow or scanner itself under the repository review policy.
+repositories linked as submodules are outside this check.
+
+PR scanning uses `pull_request_target`. The reviewed workflow revision on the
+base repository's default branch supplies the executable scanner and
+allowlist. The scanner reads the event's exact base and head as Git objects.
+Candidate files are scanned as data. The job has read-only contents access and
+uses no repository secrets, persisted checkout credentials, or dependency
+cache. The ordinary `pull_request` run tests the candidate scanner with
+synthetic inputs under the normal PR permissions. Push runs scan and test the
+pushed revision for advisory early detection.
+
+In Actions, look for the **Trusted scan for PR #… at …** run for the
+`pull_request_target` event and the PR's current head SHA. This run is review
+evidence. Automatic PR coverage requires an applicable repository Actions
+event policy allowing `pull_request_target` for
+`.github/workflows/sensitive-changes.yml`. Keep `push` and `pull_request`
+allowed on that path for the other runs. Review changes to the workflow or
+scanner under the repository review policy.
 
 ### Private denylist
 
@@ -94,12 +110,13 @@ To approve a known benign match, add an entry to
 specifies the exact repository-relative `path`, `rule` (such as
 `secret:github-pat`), `line` (0 for a filename match), `contentSha256` for the
 selected file bytes, and a `reason`. Keep private values out of this file.
-The existing reviewed default-branch copy controls the scan. For a push to
-the default branch, the before commit supplies the policy. A first push of a
-different branch uses its verified comparison base. For other branch pushes
-and pull requests, CI reads the exact `refs/remotes/origin/<default>` ref and
+The reviewed workflow revision supplies the allowlist for the trusted PR
+scan. For a push to the default branch, the before commit supplies the policy.
+A first push of a different branch uses its verified comparison base. For
+other branch pushes, CI reads the exact `refs/remotes/origin/<default>` ref and
 returns incomplete (exit 2) when Git cannot verify it points to a commit.
-A change to the allowlist cannot exempt the same candidate change by itself.
+A candidate allowlist change takes effect for trusted PR scans after it is
+reviewed and reaches the default branch.
 
 The staged check reads the exact `refs/remotes/origin/main` ref. If Git
 confirms that ref is absent, the check runs with no allowlist exceptions.

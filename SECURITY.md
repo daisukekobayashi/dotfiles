@@ -30,6 +30,15 @@ actual values.
 
 The default attacker positions of the security review still apply.
 
+## CI secret scan
+
+The trusted PR scan gets its workflow, scanner, and allowlist from the same
+reviewed default-branch revision and reads PR commits as Git data. Confirm
+the run for the PR's current head in Actions. The push scan provides advisory
+detection after publication. The local staged scan checks contents before
+commit. See [Testing](docs/testing.md#sensitive-changes) for coverage and the
+Actions event policy.
+
 ## Sensitive paths
 
 This file names no sensitive paths. The root `AGENTS.md`

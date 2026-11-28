@@ -131,12 +131,23 @@ done
       GITHUB_SHA: after,
     };
   }
+  function pullRequest(base, head, workflow, headRepository = repository) {
+    return {
+      ...event(base, head, { pull_request: {
+        base: { sha: base, repo: { full_name: repository } },
+        head: { sha: head, repo: { full_name: headRepository } },
+      } }),
+      GITHUB_EVENT_NAME: "pull_request_target",
+      GITHUB_SHA: workflow,
+      GITHUB_WORKFLOW_SHA: workflow,
+    };
+  }
   function denylist(file = path.join(scratch, "private.json")) {
     writeFileSync(file, JSON.stringify([{ category: "hostname", value: marker }]), { mode: 0o600 });
     return file;
   }
   git("init", "-q", "-b", "main");
-  return { cwd, env: fakeEnv, gitOnly, git, write, commit, scan, event, denylist };
+  return { cwd, env: fakeEnv, gitOnly, git, write, commit, scan, event, pullRequest, denylist };
 }
 
 test("reads the staged index, handles an unborn HEAD and suppresses scanner internals", { skip: windows }, (t) => {
@@ -311,11 +322,9 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   assert.equal(merged.code, 0, merged.output);
   assert.match(merged.output, /sensitive changes: clean/);
 
-  const pr = f.event(base, head, { pull_request: {
-    base: { sha: base, repo: { full_name: repository } },
-    head: { sha: head, repo: { full_name: "contributor/fork" } },
-  } });
-  const fork = f.scan("ci", { ...pr, GITHUB_EVENT_NAME: "pull_request", DOTFILES_SCAN_PRIVATE_DENYLIST: marker });
+  f.git("switch", "--detach", base);
+  const pr = f.pullRequest(base, head, base, "contributor/fork");
+  const fork = f.scan("ci", { ...pr, DOTFILES_SCAN_PRIVATE_DENYLIST: marker });
   assert.equal(fork.code, 21, fork.output);
   assert.ok(fork.output.includes(middle));
   assert.ok(!fork.output.includes(marker));
@@ -327,7 +336,7 @@ test("branch pushes and fork PRs scan removed intermediate commits with exact ba
   assert.match(missing.output, /event commit is missing/);
 });
 
-test("CI requires the exact allowlist ref for ordinary branch pushes and pull requests", { skip: windows }, (t) => {
+test("CI requires the exact allowlist ref for ordinary branch pushes", { skip: windows }, (t) => {
   const f = fixture(t);
   const ref = "refs/remotes/origin/main";
   f.write("base.txt", "baseline\n");
@@ -336,24 +345,14 @@ test("CI requires the exact allowlist ref for ordinary branch pushes and pull re
   f.write("candidate.txt", content);
   const head = f.commit("candidate");
   const scanPush = () => f.scan("ci", f.event(base, head, {}, firstRef));
-  const scanPr = () => f.scan("ci", {
-    ...f.event(base, head, { pull_request: {
-      base: { sha: base, repo: { full_name: repository } },
-      head: { sha: head },
-    } }),
-    GITHUB_EVENT_NAME: "pull_request",
-  });
-  for (const scan of [scanPush, scanPr]) {
-    const missing = scan();
-    assert.equal(missing.code, 2, missing.output);
-    assert.match(missing.output, /The reviewed allowlist revision could not be read/);
-  }
+  const missing = scanPush();
+  assert.equal(missing.code, 2, missing.output);
+  assert.match(missing.output, /The reviewed allowlist revision could not be read/);
+
   f.git("update-ref", `refs/tags/${ref}`, base);
-  for (const scan of [scanPush, scanPr]) {
-    const missing = scan();
-    assert.equal(missing.code, 2, missing.output);
-    assert.match(missing.output, /The reviewed allowlist revision could not be read/);
-  }
+  const substitute = scanPush();
+  assert.equal(substitute.code, 2, substitute.output);
+  assert.match(substitute.output, /The reviewed allowlist revision could not be read/);
   f.git("switch", "-qc", "approved-policy", base);
   f.write("scripts/sensitive-scan-allowlist.json", JSON.stringify([{
     path: "candidate.txt", rule: "secret:fixture", line: 1,
@@ -361,10 +360,61 @@ test("CI requires the exact allowlist ref for ordinary branch pushes and pull re
     reason: "Approved synthetic fixture",
   }]));
   f.git("update-ref", ref, f.commit("approve exact finding"));
-  for (const scan of [scanPush, scanPr]) {
-    const approved = scan();
-    assert.equal(approved.code, 0, approved.output);
+  const approved = scanPush();
+  assert.equal(approved.code, 0, approved.output);
+});
+
+test("trusted PRs require the workflow checkout and use its allowlist for the event range", { skip: windows }, (t) => {
+  const f = fixture(t);
+  f.write("base.txt", "baseline\n");
+  const base = f.commit("baseline");
+  const content = "SYNTHETIC_SECRET_SAMPLE\n";
+  function allow(file) {
+    f.write("scripts/sensitive-scan-allowlist.json", JSON.stringify([{
+      path: file, rule: "secret:fixture", line: 1,
+      contentSha256: createHash("sha256").update(content).digest("hex"),
+      reason: "Approved synthetic fixture",
+    }]));
   }
+
+  f.git("switch", "-qc", "topic");
+  f.write("unreviewed.txt", content);
+  allow("unreviewed.txt");
+  const intermediate = f.commit("candidate policy");
+  f.write("reviewed.txt", content);
+  f.write("unreviewed.txt", "removed test marker\n");
+  const head = f.commit("candidate head");
+
+  f.git("switch", "main");
+  allow("reviewed.txt");
+  const workflow = f.commit("reviewed workflow policy");
+  f.git("switch", "--detach", workflow);
+  f.git("update-ref", "refs/remotes/origin/main", base);
+
+  const pr = f.pullRequest(base, head, workflow);
+  const scanned = f.scan("ci", pr);
+  assert.equal(scanned.code, 21, scanned.output);
+  assert.ok(scanned.output.includes(`finding secret:fixture ${intermediate}`), scanned.output);
+  assert.ok(!scanned.output.includes(`finding secret:fixture ${head}`), scanned.output);
+
+  const unavailable = "1".repeat(40);
+  for (const [workflowSha, reason] of [
+    ["", /event does not contain a valid Git object ID/],
+    [unavailable, /reviewed workflow revision is missing/],
+    [base, /checkout does not match the reviewed workflow revision/],
+  ]) {
+    const rejected = f.scan("ci", { ...pr, GITHUB_WORKFLOW_SHA: workflowSha });
+    assert.equal(rejected.code, 2, rejected.output);
+    assert.match(rejected.output, reason);
+  }
+
+  const ordinary = f.scan("ci", { ...pr, GITHUB_EVENT_NAME: "pull_request" });
+  assert.equal(ordinary.code, 2, ordinary.output);
+  assert.match(ordinary.output, /scan requires a trusted pull request or branch push event/);
+
+  const missing = f.scan("ci", f.pullRequest(base, unavailable, workflow));
+  assert.equal(missing.code, 2, missing.output);
+  assert.match(missing.output, /event commit is missing/);
 });
 
 test("CI checks merge resolutions for secrets and ignores local denylist inputs", { skip: windows }, (t) => {
